@@ -32,14 +32,15 @@ This folder is the complete spec. The build agent (Claude Opus) should read it i
 | 11 | [11-build-prompts.md](11-build-prompts.md) | Copy-paste prompts, one per work package, in build order |
 | 12 | [12-testing-and-quality.md](12-testing-and-quality.md) | Test strategy, performance budgets, CI gates |
 | 13 | [13-references.md](13-references.md) | Sources, upstream code to study, license cautions |
+| 14 | [14-feature-parity.md](14-feature-parity.md) | **Every SitePing and BugPin feature mapped to Annota, with build status** |
 | — | [templates/CLAUDE.md](templates/CLAUDE.md) | Drop-in agent instructions for the new repo's root |
 | — | [templates/env.example](templates/env.example) | Every environment variable, documented |
 
 ## Kick-off prompt (paste into a fresh Opus session)
 
 ```
-You are building Annota from the blueprint in <path-to>/annota-blueprint.
-Read README.md, then files 00 through 13 in order, then templates/CLAUDE.md.
+You are building Annota from the blueprint in E:/projects/annota/blueprint (the repo is E:/projects/annota).
+Read README.md, then files 00 through 14 in order, then templates/CLAUDE.md.
 Do not write code until you have read all of them.
 Then create a new git repository at <target path>, copy templates/CLAUDE.md to its root,
 and execute the prompts in 11-build-prompts.md one work package at a time, in order.

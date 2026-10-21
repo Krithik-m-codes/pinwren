@@ -200,3 +200,38 @@ All AI features are **off by default**, require an explicit provider configurati
 ## G. Explicit non-features for v1
 
 Native mobile SDKs, public roadmaps/voting, heat maps, analytics, video recording of the screen (use replay instead), proxy-rendering third-party sites without a script, on-premise AI model hosting.
+
+---
+
+## H. Parity additions (from the SitePing + BugPin review in [14-feature-parity.md](14-feature-parity.md))
+
+### F-015 Right-click comment — *All (opt-in per project)*
+- Right-click on the page opens the comment composer at the cursor, anchored to the element under it; Android long-press does the same.
+- Never hijacks context menus opened with a modifier key (Ctrl/Cmd/Shift/Alt) or from the keyboard, and never on inputs, textareas, contenteditable or links.
+
+### F-016 Panel actions — *All*
+- Project setting: a list of custom buttons/links shown on a feedback's detail in the widget panel and the dashboard (e.g. "Create Jira ticket", "Send to agent", "Open in Sentry").
+- Link actions interpolate `{id}`, `{number}`, `{url}`, `{projectSlug}`; webhook actions POST the feedback (signed, like F-075) and show the response message.
+
+### F-017 Read-only widget — *All*
+- `data-readonly` / `Annota.init({ readOnly: true })`: visitors see pins and threads but cannot create or reply. Used for stakeholder walkthroughs.
+
+### F-018 Widget export — *All*
+- Panel button: download the current page's (or project's, if public read) feedback as CSV or JSON, with anchors and links back to the dashboard.
+
+### F-019 Consent notice — *All (configurable text, default on in EU privacy mode)*
+- Before the first submission, show what will be sent (screenshot, console errors, failed requests, browser info, page URL) with a link to the project's privacy URL. Remember acceptance per browser.
+
+### F-020 Custom email templates — *All*
+- Admin UI to edit subject/body of every notification email (React Email base + Markdown body with variables), with preview and "send test". Free in Annota (Enterprise in BugPin).
+
+### F-021 EU privacy mode — *All*
+- One switch that: truncates stored IPs, disables any third-party call (update check, telemetry, AI), forces consent notice, masks all text inputs in screenshots, and shortens default retention to 90 days.
+
+### Launcher & dialog customisation (extends F-001) — *All*
+- Position (4 corners + offset), shape (round / pill with text), icon (bug, comment, custom SVG upload sanitised), button text, tooltip on/off + text, light/dark colours for button, text, hover, dialog accent; hover-scale effect toggle; per-project, previewed live in the dashboard.
+
+### Capture additions (extends F-003/F-004)
+- Full-page capture option, element capture, and a user-initiated screen-share fallback (`getDisplayMedia`).
+- Editor tools add ellipse and text labels to the built rectangle, arrow, pen, blur and undo.
+- Drafts persisted in IndexedDB (text + screenshot + attachments) so a closed tab or crash never loses a report.

@@ -41,8 +41,9 @@ Durations assume one developer working with an AI build agent full-time. Each ph
 | WP-18 | API tokens, public REST API, `@annota/sdk`, MCP server (HTTP + stdio) | F-080, F-081 |
 | WP-19 | Session replay (record buffer + player + timeline sync) | F-007 |
 | WP-20 | i18n (8 locales), guest portal, review links, identify/metadata API, `@annota/react` | F-008, F-012, F-013, 06 §7 |
+| WP-30 | Widget parity extras: right-click comments, panel actions, read-only, export, "Mine" filter | F-015–F-018, [14](14-feature-parity.md) |
 
-**Exit:** an agency can run a full client review round with guests and review links, route to Slack and GitHub, and a developer can fix an item end-to-end from Claude Code via MCP.
+**Exit:** every SitePing and BugPin row in [14-feature-parity.md](14-feature-parity.md) is ✅ or explicitly deferred; an agency can run a full client review round with guests and review links, route to Slack and GitHub, and a developer can fix an item end-to-end from Claude Code via MCP.
 
 ## Phase 3 — Cloud & monetisation (≈ 6 weeks) → `v1.0.0`
 

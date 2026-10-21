@@ -296,6 +296,16 @@ API reference (from OpenAPI), MCP guide, changelog, comparison pages (honest, so
 
 ---
 
+### WP-30 — Widget parity extras (SitePing + BugPin)
+```
+Close every ⬜ row in 14-feature-parity.md that names WP-30: right-click comments (F-015), panel actions (F-016),
+read-only mode (F-017), widget export (F-018), "Mine" filter, focus-trap/modal handling. Then re-check the whole
+parity file: every row is ✅, explicitly deferred with a reason, or assigned to a later WP. Flip statuses in the same
+commit and add a test per ✅ row.
+```
+
+---
+
 ## Phase 4 — AI, scale, polish
 
 ### WP-27 — AI features

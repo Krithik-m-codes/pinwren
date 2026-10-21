@@ -2,12 +2,15 @@
 
 Annota is a visual feedback and bug-reporting platform: an embeddable widget (anchored comment pins + annotated bug reports with console/network/replay) and a triage dashboard, shipped as AGPL self-host, commercial Enterprise (`ee/`) and multi-tenant Cloud from one codebase.
 
-The full specification lives in the blueprint folder (`annota-blueprint/`, files 00–13). When code and blueprint disagree, the blueprint wins unless an ADR in `docs/adr/` says otherwise.
+The full specification lives in `blueprint/` (files 00–14). `blueprint/14-feature-parity.md` is the checklist of every SitePing and BugPin feature Annota must match — flip a row's status in the same commit that ships it. When code and blueprint disagree, the blueprint wins unless an ADR in `docs/adr/` says otherwise.
 
 ## Commands
 
 - `pnpm i` — install
-- `pnpm dev` — server + dashboard + widget watch (needs `DATABASE_URL`; `pnpm db:up` starts a local Postgres container)
+- `pnpm db:up` — local Postgres on 127.0.0.1:5433 (`docker/compose.dev.yml`)
+- `pnpm --filter @annota/widget build` then `pnpm --filter @annota/web dev -- -p 3100` — dashboard + API (port 3000 is taken on the owner's machine)
+- `node scripts/smoke.mjs http://localhost:3100` — 20-check end-to-end API test
+- `docker compose -f docker/compose.yml --env-file docker/.env up -d --build` — self-host stack
 - `pnpm build` — all packages (Turborepo, cached)
 - `pnpm lint` / `pnpm lint:fix` — Biome + dependency-boundary check
 - `pnpm typecheck`
@@ -18,6 +21,8 @@ The full specification lives in the blueprint folder (`annota-blueprint/`, files
 - `pnpm openapi` — regenerate `apps/server/openapi.json` (commit the diff)
 
 ## Architecture rules
+
+- Dashboard is Next.js 16 (App Router, Cache Components) with the Hono API from `packages/api` mounted at `/api` and `/w` (ADR 0012). Dashboard screens are client components calling `/api`; no server component reads cookies.
 
 - `packages/*` never import `ee/` or `apps/`. `ee/*` imports only `packages/*`. `apps/server` reaches `ee/` only through `ee/index.ts` behind `requireEntitlement()`.
 - Wire types come from Zod schemas in `packages/core` — never hand-write a request/response type.
