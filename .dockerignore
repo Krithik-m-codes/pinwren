@@ -1,0 +1,11 @@
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/.env
+**/.env.local
+.git
+data
+.dev.log
+apps/web/public/widget.js
+apps/web/public/widget-capture.js

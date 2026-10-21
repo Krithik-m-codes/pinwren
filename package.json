@@ -1,0 +1,25 @@
+{
+  "name": "annota",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "packageManager": "pnpm@12.6.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "db:generate": "pnpm --filter @annota/db generate",
+    "db:migrate": "pnpm --filter @annota/db migrate",
+    "db:up": "docker compose -f docker/compose.dev.yml up -d"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.0",
+    "turbo": "^2.6.0",
+    "typescript": "^5.9.3"
+  }
+}

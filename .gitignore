@@ -1,0 +1,12 @@
+node_modules
+.next
+dist
+.turbo
+.env
+.env.local
+*.tsbuildinfo
+next-env.d.ts
+/data
+apps/web/public/widget.js
+apps/web/public/widget-capture.js
+.dev.log
