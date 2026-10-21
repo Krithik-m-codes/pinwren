@@ -1,4 +1,4 @@
-import { getDb, rateLimit } from "@annota/db";
+import { getDb, rateLimit } from "@pinwren/db";
 import { sql } from "drizzle-orm";
 
 /**

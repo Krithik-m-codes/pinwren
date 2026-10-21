@@ -2,7 +2,7 @@
 
 ## 1. Guiding constraints
 
-1. **Same code, three deployments.** Community self-host, Enterprise self-host and multi-tenant Cloud run the same build. Differences are configuration (`ANNOTA_MODE=selfhost|cloud`) plus the presence of a valid licence or cloud flag that unlocks `ee/` features.
+1. **Same code, three deployments.** Community self-host, Enterprise self-host and multi-tenant Cloud run the same build. Differences are configuration (`PINWREN_MODE=selfhost|cloud`) plus the presence of a valid licence or cloud flag that unlocks `ee/` features.
 2. **Boring, portable infrastructure.** Postgres is the only required service. Background jobs, real-time fan-out, rate limiting and caching all run on Postgres in self-host, with optional Redis in Cloud for scale.
 3. **TypeScript end to end**, strict mode, shared Zod schemas as the single source of truth for API types.
 4. **The widget is a separate product** with its own size, performance and compatibility budgets (see [05-widget-spec.md](05-widget-spec.md)).
@@ -28,7 +28,7 @@
 | Annotation canvas | Custom canvas layer + **perfect-freehand** (MIT) | Small, touch-friendly |
 | Replay | **rrweb** record (widget) + **rrweb-player** (dashboard) | Standard, MIT |
 | Selectors | **@medv/finder** (MIT) + custom stability heuristics | Proven in SitePing |
-| MCP | **@modelcontextprotocol/sdk** — Streamable HTTP at `/mcp` + `@annota/mcp` stdio package | Claude Code / Cursor compatible |
+| MCP | **@modelcontextprotocol/sdk** — Streamable HTTP at `/mcp` + `@pinwren/mcp` stdio package | Claude Code / Cursor compatible |
 | Billing (Cloud) | **Stripe** Billing + Customer Portal + webhooks | Industry default |
 | Validation | **Zod 4** shared between server, dashboard, widget (widget uses a tree-shaken subset or Valibot if size demands) | One schema source |
 | Logging / telemetry | **pino** + **OpenTelemetry** (optional OTLP export) | Ops-friendly |
@@ -39,7 +39,7 @@
 ## 3. Monorepo layout
 
 ```
-annota/
+pinwren/
 ├─ apps/
 │  ├─ server/            # Hono API + serves dashboard static build + widget bundle + MCP endpoint
 │  ├─ dashboard/         # React SPA (Vite)
@@ -48,10 +48,10 @@ annota/
 ├─ packages/
 │  ├─ core/              # Shared Zod schemas, types, constants, error codes (internal)
 │  ├─ db/                # Drizzle schema, migrations, query helpers, RLS policies
-│  ├─ widget/            # @annota/widget — the embeddable widget (MIT)
-│  ├─ widget-react/      # @annota/react — <Annota/> component + hooks (MIT)
-│  ├─ sdk-js/            # @annota/sdk — typed REST client (MIT)
-│  ├─ mcp/               # @annota/mcp — stdio MCP server wrapping sdk-js (MIT)
+│  ├─ widget/            # @pinwren/widget — the embeddable widget (MIT)
+│  ├─ widget-react/      # @pinwren/react — <Pinwren/> component + hooks (MIT)
+│  ├─ sdk-js/            # @pinwren/sdk — typed REST client (MIT)
+│  ├─ mcp/               # @pinwren/mcp — stdio MCP server wrapping sdk-js (MIT)
 │  ├─ anchoring/         # Anchor capture + re-attach engine, framework-free, unit-tested (MIT)
 │  ├─ capture/           # Screenshot, console, network, replay buffers (MIT)
 │  ├─ email/             # React Email templates + renderer
@@ -86,7 +86,7 @@ Dependency rule (enforced by a lint script): `apps/* → packages/*`, `ee/* → 
 ### Self-host (Community / Enterprise)
 
 ```
-Browser (host site) ──widget.js──▶  annota container ──▶ Postgres
+Browser (host site) ──widget.js──▶  pinwren container ──▶ Postgres
                     ◀──REST/SSE──   ├─ Hono API (/api, /w = widget API, /mcp)
 Team browser ───────dashboard────▶  ├─ Static dashboard (/)
                                     ├─ Static widget bundle (/widget.js, /w/*.js chunks)
@@ -94,20 +94,20 @@ Team browser ───────dashboard────▶  ├─ Static dashbo
                                     └─ Storage driver → /data (volume) or S3
 ```
 
-- One process by default. `ANNOTA_ROLE=all|web|worker` lets larger installs split web and worker replicas against the same database.
+- One process by default. `PINWREN_ROLE=all|web|worker` lets larger installs split web and worker replicas against the same database.
 - Migrations run on boot behind an advisory lock (safe with multiple replicas).
 
 ### Cloud
 
 ```
-Cloudflare (CDN for widget + assets, WAF) ─▶ web replicas (ANNOTA_ROLE=web) ─▶ Postgres (managed, PITR)
-                                           └▶ worker replicas (ANNOTA_ROLE=worker)
+Cloudflare (CDN for widget + assets, WAF) ─▶ web replicas (PINWREN_ROLE=web) ─▶ Postgres (managed, PITR)
+                                           └▶ worker replicas (PINWREN_ROLE=worker)
                                               ├─ S3/R2 for assets
                                               └─ Redis (optional: rate limits, SSE fan-out at scale)
 ```
 
 - Multi-tenant: shared schema, `org_id` on every tenant row, Postgres **row-level security** as defence in depth (the app sets `app.current_org` per transaction).
-- Widget bundle served from a CDN domain (`cdn.annota.app/w/v1/widget.js`) with immutable versioned chunks.
+- Widget bundle served from a CDN domain (`cdn.pinwren.app/w/v1/widget.js`) with immutable versioned chunks.
 
 ## 5. Key request flows
 
@@ -125,13 +125,13 @@ Cloudflare (CDN for widget + assets, WAF) ─▶ web replicas (ANNOTA_ROLE=web) 
 
 ### 5.3 Integrations (two-way)
 
-Outbound via jobs with retries (exponential, max 24 h), delivery log rows. Inbound via provider webhooks (`/api/integrations/:provider/webhook`, signature verified) → map external status to Annota status.
+Outbound via jobs with retries (exponential, max 24 h), delivery log rows. Inbound via provider webhooks (`/api/integrations/:provider/webhook`, signature verified) → map external status to Pinwren status.
 
 ## 6. Configuration model
 
 - **Environment variables** for infrastructure only (database, storage, SMTP, secrets, URLs, licence path). See [templates/env.example](templates/env.example).
 - **Database settings** for everything an admin changes in the UI (branding, notification defaults, integrations). Environment variables, when set, **override** and lock the matching UI field (shown as "Managed by environment").
-- Secrets stored in the DB (integration tokens, SMTP password set via UI) are encrypted with AES-256-GCM using `ANNOTA_ENCRYPTION_KEY` (key rotation supported via key IDs).
+- Secrets stored in the DB (integration tokens, SMTP password set via UI) are encrypted with AES-256-GCM using `PINWREN_ENCRYPTION_KEY` (key rotation supported via key IDs).
 
 ## 7. Editions & entitlements
 

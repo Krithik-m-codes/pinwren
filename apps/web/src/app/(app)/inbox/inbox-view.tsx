@@ -1,6 +1,6 @@
 "use client";
 
-import { FEEDBACK_STATUSES, type FeedbackStatus, isClosedStatus } from "@annota/core";
+import { FEEDBACK_STATUSES, type FeedbackStatus, isClosedStatus } from "@pinwren/core";
 import { useQuery } from "@tanstack/react-query";
 import {
   Camera,

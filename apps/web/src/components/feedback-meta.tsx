@@ -1,4 +1,4 @@
-import type { FeedbackKind, FeedbackStatus, Priority } from "@annota/core";
+import type { FeedbackKind, FeedbackStatus, Priority } from "@pinwren/core";
 import {
   Bug,
   CircleCheck,

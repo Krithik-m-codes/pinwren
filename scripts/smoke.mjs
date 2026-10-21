@@ -1,6 +1,6 @@
 // End-to-end API smoke test: node scripts/smoke.mjs [baseUrl]
 //
-// Instance-admin checks need the server started with ANNOTA_ADMIN_EMAILS=smoke-admin@example.com
+// Instance-admin checks need the server started with PINWREN_ADMIN_EMAILS=smoke-admin@example.com
 // (or SMOKE_ADMIN_EMAIL / SMOKE_ADMIN_PASSWORD pointing at an existing admin); otherwise they are
 // skipped. Webhook checks start a local HTTP receiver, so the server must be able to reach 127.0.0.1.
 import { createHmac } from "node:crypto";
@@ -95,7 +95,7 @@ const W = (path, opts = {}) =>
   call(path, {
     ...opts,
     jar: { cookie: "" },
-    headers: { "x-annota-key": publicKey, origin: site, ...(opts.headers ?? {}) },
+    headers: { "x-pinwren-key": publicKey, origin: site, ...(opts.headers ?? {}) },
   });
 r = await W("/w/config");
 check("widget config from allowed origin", r.status === 200, r.status);
@@ -245,13 +245,13 @@ check(
 r = await W(`/w/feedback/${fid2}`, {
   method: "PATCH",
   json: { status: "resolved" },
-  headers: { "x-annota-reporter-token": `${token2.slice(0, -2)}xx` },
+  headers: { "x-pinwren-reporter-token": `${token2.slice(0, -2)}xx` },
 });
 check("resolve with a wrong token is 403", r.status === 403, r.status);
 r = await W(`/w/feedback/${fid2}`, {
   method: "PATCH",
   json: { status: "resolved" },
-  headers: { "x-annota-reporter-token": token2 },
+  headers: { "x-pinwren-reporter-token": token2 },
 });
 check(
   "reporter resolves with their token",
@@ -467,9 +467,9 @@ const listenHost = receiverHost === "127.0.0.1" ? "127.0.0.1" : "0.0.0.0";
 await new Promise((resolve) => receiver.listen(0, listenHost, resolve));
 const hookBase = `http://${receiverHost}:${receiver.address().port}`;
 const verify = (req, secret) => {
-  const ts = req.headers["annota-timestamp"];
+  const ts = req.headers["pinwren-timestamp"];
   const expected = `v1=${createHmac("sha256", secret).update(`${ts}.${req.body}`).digest("hex")}`;
-  return req.headers["annota-signature"] === expected && Math.abs(Date.now() / 1000 - Number(ts)) < 300;
+  return req.headers["pinwren-signature"] === expected && Math.abs(Date.now() / 1000 - Number(ts)) < 300;
 };
 
 try {
@@ -502,7 +502,7 @@ try {
   );
 
   r = await call(`/api/webhooks/${hookId}/test`, { method: "POST" });
-  const ping = received.find((x) => x.headers["annota-event"] === "ping");
+  const ping = received.find((x) => x.headers["pinwren-event"] === "ping");
   check(
     "test delivery succeeds",
     r.status === 200 && r.body.delivery?.status === "success" && r.body.delivery?.responseCode === 200,
@@ -534,7 +534,7 @@ try {
   });
   const fid4 = r.body.feedback?.id;
   const created = await waitFor(() =>
-    received.find((x) => x.headers["annota-event"] === "feedback.created" && x.body.includes(fid4)),
+    received.find((x) => x.headers["pinwren-event"] === "feedback.created" && x.body.includes(fid4)),
   );
   check("feedback.created delivered by the job queue", !!created, created ? "" : "timeout");
   check("delivery signature verifies", created && verify(created, secret));
@@ -658,7 +658,7 @@ if (Array.isArray(r.body) && r.body[0]) {
 }
 r = await call("/api/admin/settings/email", { jar: adminJar });
 if (r.status === 403) {
-  skip("instance email settings", "start the server with ANNOTA_ADMIN_EMAILS=smoke-admin@example.com");
+  skip("instance email settings", "start the server with PINWREN_ADMIN_EMAILS=smoke-admin@example.com");
 } else {
   const smtpFromEnv = r.body.email?.locked?.host;
   check("admin reads email settings", r.status === 200 && typeof r.body.email?.configured === "boolean");
@@ -723,7 +723,7 @@ const fakeServer = createServer((req, res) => {
     if (p.endsWith("/releases/latest")) {
       return json(200, {
         tag_name: "v99.0.0",
-        html_url: "https://github.com/annota-dev/annota/releases/tag/v99.0.0",
+        html_url: "https://github.com/pinwren-dev/pinwren/releases/tag/v99.0.0",
       });
     }
     const gh = /^\/repos\/([^/]+)\/([^/]+)(\/issues(?:\/(\d+))?)?$/.exec(p);
@@ -1036,7 +1036,7 @@ try {
     call(path, {
       ...opts,
       jar: { cookie: "" },
-      headers: { "x-annota-key": privacyProject.publicKey, origin: site, ...(opts.headers ?? {}) },
+      headers: { "x-pinwren-key": privacyProject.publicKey, origin: site, ...(opts.headers ?? {}) },
     });
   r = await call(`/api/projects/${privacyProject.id}`, {
     method: "PATCH",
@@ -1097,7 +1097,7 @@ try {
   if (security?.trustProxy === false) {
     skip(
       "IP truncation shares one rate-limit bucket per /24",
-      "start the server with ANNOTA_TRUST_PROXY=true",
+      "start the server with PINWREN_TRUST_PROXY=true",
     );
   } else {
     r = await PW("/w/feedback", {
@@ -1217,12 +1217,12 @@ try {
       r.body.activity?.some((a) => a.type === "issue_linked"),
   );
 
-  // Annota → GitHub: resolving closes the issue (job).
+  // Pinwren → GitHub: resolving closes the issue (job).
   await call(`/api/feedback/${fid2}`, { method: "PATCH", json: { status: "resolved" } });
   const closed = await waitFor(() => fake.issues.get(`gh:${manual?.number}`)?.state === "closed");
-  check("resolving in Annota closes the GitHub issue", !!closed, closed ? "" : "timeout");
+  check("resolving in Pinwren closes the GitHub issue", !!closed, closed ? "" : "timeout");
 
-  // GitHub → Annota: signed webhooks reopen / close the item.
+  // GitHub → Pinwren: signed webhooks reopen / close the item.
   const hook = async (payload, { secret = ghSecret, event = "issues" } = {}) => {
     const raw = JSON.stringify(payload);
     return call("/api/integrations/github/webhook", {
@@ -1286,7 +1286,7 @@ try {
       token: "glpat-wrong-token-000",
       repo: "grp/sub/site",
       apiUrl: `${fakeBase}/gitlab`,
-      labels: ["feedback", "annota"],
+      labels: ["feedback", "pinwren"],
     },
   });
   const gl = r.body.integration;
@@ -1308,7 +1308,7 @@ try {
   const glStored = glIssue ? fake.issues.get(`gl:${glIssue.number}`) : null;
   check(
     "Send to GitLab",
-    r.status === 201 && glIssue?.provider === "gitlab" && glStored?.labels === "feedback,annota",
+    r.status === 201 && glIssue?.provider === "gitlab" && glStored?.labels === "feedback,pinwren",
     r.status,
   );
   const glHook = (payload, token = glSecret) =>
@@ -1336,7 +1336,7 @@ try {
   );
   await call(`/api/feedback/${fid3}`, { method: "PATCH", json: { status: "open" } });
   const glReopened = await waitFor(() => fake.issues.get(`gl:${glIssue?.number}`)?.state === "opened");
-  check("reopening in Annota reopens the GitLab issue", !!glReopened, glReopened ? "" : "timeout");
+  check("reopening in Pinwren reopens the GitLab issue", !!glReopened, glReopened ? "" : "timeout");
 
   // --- Instance security ----------------------------------------------------------------------------
   console.log("\n— instance security");
@@ -1345,7 +1345,7 @@ try {
   if (!isInstanceAdmin) {
     skip(
       "security settings, update check",
-      "start the server with ANNOTA_ADMIN_EMAILS=smoke-admin@example.com",
+      "start the server with PINWREN_ADMIN_EMAILS=smoke-admin@example.com",
     );
   } else {
     check(
@@ -1353,7 +1353,7 @@ try {
       typeof security.sessionDays === "number" && "enforceHttps" in security,
     );
     if (security.locked.sessionDays) {
-      skip("session lifetime", "ANNOTA_SESSION_DAYS locks it");
+      skip("session lifetime", "PINWREN_SESSION_DAYS locks it");
     } else {
       r = await call("/api/admin/settings/security", {
         method: "PATCH",
@@ -1420,7 +1420,7 @@ try {
 
     // HTTPS enforcement: forwarded headers count only behind a trusted proxy.
     if (!security.trustProxy) {
-      skip("HTTPS enforcement", "start the server with ANNOTA_TRUST_PROXY=true");
+      skip("HTTPS enforcement", "start the server with PINWREN_TRUST_PROXY=true");
     } else {
       const fwd = (proto) => ({ "x-forwarded-proto": proto, "x-forwarded-host": "feedback.example.com" });
       if (security.enforceHttps) {

@@ -19,12 +19,12 @@ const scrypt = promisify(scryptCb) as (
 ) => Promise<Buffer>;
 
 // --- Secrets at rest (SMTP password, webhook signing secrets) ----------------------------------------
-// AES-256-GCM with a key derived from ANNOTA_SECRET by HKDF. Format: `v1.<iv>.<tag>.<ciphertext>`
-// (base64url). Rotating ANNOTA_SECRET makes stored secrets unreadable; they must be re-entered.
+// AES-256-GCM with a key derived from PINWREN_SECRET by HKDF. Format: `v1.<iv>.<tag>.<ciphertext>`
+// (base64url). Rotating PINWREN_SECRET makes stored secrets unreadable; they must be re-entered.
 
 let key: Buffer | undefined;
 function secretsKey(): Buffer {
-  key ??= Buffer.from(hkdfSync("sha256", env().ANNOTA_SECRET, "annota", "secrets-at-rest v1", 32));
+  key ??= Buffer.from(hkdfSync("sha256", env().PINWREN_SECRET, "pinwren", "secrets-at-rest v1", 32));
   return key;
 }
 

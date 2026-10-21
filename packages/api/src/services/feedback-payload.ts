@@ -1,10 +1,10 @@
-import { comment, feedback, getDb, page, project, type ReporterGuest, user } from "@annota/db";
+import { comment, feedback, getDb, page, project, type ReporterGuest, user } from "@pinwren/db";
 import { eq } from "drizzle-orm";
 import { env } from "../env";
 import type { CommentPayload, FeedbackPayload } from "../webhooks/format";
 
 export const feedbackLink = (id: string) =>
-  `${env().ANNOTA_URL.replace(/\/$/, "")}/inbox?status=all&item=${encodeURIComponent(id)}`;
+  `${env().PINWREN_URL.replace(/\/$/, "")}/inbox?status=all&item=${encodeURIComponent(id)}`;
 
 export type FeedbackContext = {
   payload: FeedbackPayload;

@@ -1,5 +1,5 @@
-# Annota — single self-hostable image: dashboard, API, widget bundles, migrations.
-#   docker build -f docker/Dockerfile -t annota .
+# Pinwren — single self-hostable image: dashboard, API, widget bundles, migrations.
+#   docker build -f docker/Dockerfile -t pinwren .
 FROM node:22-alpine AS base
 RUN corepack enable
 WORKDIR /repo
@@ -18,7 +18,7 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS build
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm --filter @annota/widget build && pnpm --filter @annota/web build
+RUN pnpm --filter @pinwren/widget build && pnpm --filter @pinwren/web build
 
 # --- runtime ---------------------------------------------------------------------------------------------
 FROM node:22-alpine AS runtime
@@ -26,9 +26,9 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
-    ANNOTA_DATA_DIR=/data \
-    ANNOTA_MIGRATIONS_DIR=/app/migrations \
-    ANNOTA_WORKERS=2
+    PINWREN_DATA_DIR=/data \
+    PINWREN_MIGRATIONS_DIR=/app/migrations \
+    PINWREN_WORKERS=2
 WORKDIR /app
 COPY --from=build --chown=node:node /repo/apps/web/.next/standalone ./
 COPY --from=build --chown=node:node /repo/apps/web/.next/static ./apps/web/.next/static

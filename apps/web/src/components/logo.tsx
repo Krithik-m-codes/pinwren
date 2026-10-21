@@ -16,7 +16,7 @@ export function Logo({ className, compact = false }: { className?: string; compa
           <circle cx="12" cy="9.5" r="2.4" fill="currentColor" stroke="none" />
         </svg>
       </span>
-      {!compact && <span className="text-[15px]">Annota</span>}
+      {!compact && <span className="text-[15px]">Pinwren</span>}
     </div>
   );
 }

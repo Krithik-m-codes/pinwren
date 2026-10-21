@@ -15,7 +15,7 @@ export default {
   hideComments: "टिप्पणियाँ छिपाएँ",
   showComments: "टिप्पणियाँ दिखाएँ",
   pinsOnPage: "पेज पर पिन",
-  poweredBy: "Annota द्वारा संचालित",
+  poweredBy: "Pinwren द्वारा संचालित",
   queued_one: "{n} रिपोर्ट भेजे जाने की प्रतीक्षा में",
   queued_other: "{n} रिपोर्ट भेजे जाने की प्रतीक्षा में",
   queuedSub: "ऑनलाइन वापस आने पर यह अपने आप भेज दी जाएगी",

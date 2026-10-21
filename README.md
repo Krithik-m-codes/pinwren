@@ -1,4 +1,4 @@
-# Annota
+# Pinwren
 
 Pinned feedback and bug reports for any website. One script tag adds a widget that lets clients and
 teammates **pin comments on exact page elements** or **send an annotated screenshot bug report** with
@@ -11,11 +11,11 @@ Self-host it with Docker in one container plus Postgres.
 ## Self-host with Docker
 
 ```bash
-cp docker/.env.example docker/.env      # set ANNOTA_URL, ANNOTA_SECRET, POSTGRES_PASSWORD
+cp docker/.env.example docker/.env      # set PINWREN_URL, PINWREN_SECRET, POSTGRES_PASSWORD
 docker compose -f docker/compose.yml --env-file docker/.env up -d --build
 ```
 
-Open `ANNOTA_URL`, create an account and a workspace, create a project for your site, then paste the
+Open `PINWREN_URL`, create an account and a workspace, create a project for your site, then paste the
 snippet it shows before `</body>`:
 
 ```html
@@ -23,7 +23,7 @@ snippet it shows before `</body>`:
 ```
 
 Put a TLS reverse proxy (Caddy, Traefik, nginx) in front and allow request bodies of at least 12 MB
-(screenshots). Data lives in two volumes: `annota-db` (Postgres) and `annota-data` (screenshots).
+(screenshots). Data lives in two volumes: `pinwren-db` (Postgres) and `pinwren-data` (screenshots).
 
 ## Develop
 
@@ -33,8 +33,8 @@ Requirements: Node 22+, pnpm, Docker (for Postgres).
 pnpm install
 pnpm db:up                                # Postgres on 127.0.0.1:5433
 cp apps/web/.env.example apps/web/.env.local
-pnpm --filter @annota/widget build        # widget.js into apps/web/public
-pnpm --filter @annota/web dev -- -p 3100  # migrations run on start
+pnpm --filter @pinwren/widget build        # widget.js into apps/web/public
+pnpm --filter @pinwren/web dev -- -p 3100  # migrations run on start
 ```
 
 Try the widget on the demo site: add `localhost:5173` to a project's allowed sites, run

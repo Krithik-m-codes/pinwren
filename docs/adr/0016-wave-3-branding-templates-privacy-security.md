@@ -29,13 +29,13 @@ Several details were left open by the blueprint.
    widget (their URLs may be private). They are signed exactly like generic webhooks with a per-project secret
    (encrypted, revealable by org admins, rotatable, created on first use). Link URLs are templates with a fixed
    http(s) prefix; placeholders are URL-encoded on substitution.
-5. **Instance security:** session lifetime is an instance setting (`ANNOTA_SESSION_DAYS` locks it). Better Auth's
+5. **Instance security:** session lifetime is an instance setting (`PINWREN_SESSION_DAYS` locks it). Better Auth's
    cookie lives up to 90 days with refresh disabled; a `session.create` hook stamps each new session's expiry, so
-   the lifetime is a hard limit from sign-in and changes apply to new sessions. `ANNOTA_ENFORCE_HTTPS` is env-only
+   the lifetime is a hard limit from sign-in and changes apply to new sessions. `PINWREN_ENFORCE_HTTPS` is env-only
    (a DB toggle could lock admins out): the Next.js proxy and the Hono app redirect plain-HTTP GET/HEAD (308) and
    refuse other methods (403 `HTTPS_REQUIRED`), exempt localhost, honour `X-Forwarded-*` only with
-   `ANNOTA_TRUST_PROXY`, and send HSTS over https. The update check is a daily `update.check` job reading
-   `GET {GITHUB_API_URL}/repos/{ANNOTA_UPDATE_REPO}/releases/latest` (5 s timeout, never throws); instance admins
+   `PINWREN_TRUST_PROXY`, and send HSTS over https. The update check is a daily `update.check` job reading
+   `GET {GITHUB_API_URL}/repos/{PINWREN_UPDATE_REPO}/releases/latest` (5 s timeout, never throws); instance admins
    see "Update available" from `/api/me`.
 
 ## Consequences

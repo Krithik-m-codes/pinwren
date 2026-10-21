@@ -16,7 +16,7 @@ export function BrandTheme() {
   return <style data-testid="brand-theme">{`:root,.dark{${vars}}`}</style>;
 }
 
-/** The product mark in the sidebar: the uploaded logo, or Annota's. */
+/** The product mark in the sidebar: the uploaded logo, or Pinwren's. */
 export function BrandMark({ className }: { className?: string }) {
   const b = useBranding().data?.branding;
   if (b?.logoUrl) {
@@ -34,5 +34,5 @@ export function BrandMark({ className }: { className?: string }) {
 }
 
 export function useProductName() {
-  return useBranding().data?.branding.productName ?? "Annota";
+  return useBranding().data?.branding.productName ?? "Pinwren";
 }

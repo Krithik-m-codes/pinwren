@@ -6,16 +6,16 @@ All endpoints are defined with `@hono/zod-openapi`; the OpenAPI 3.1 document is 
 
 | Prefix | Caller | Auth | CORS |
 |---|---|---|---|
-| `/w/*` | Widget in a visitor's browser | Public project key (`X-Annota-Key`) + `Origin` allowlist, optional review-link token, optional signed identity | Reflect allowed origins only |
+| `/w/*` | Widget in a visitor's browser | Public project key (`X-Pinwren-Key`) + `Origin` allowlist, optional review-link token, optional signed identity | Reflect allowed origins only |
 | `/api/*` | Dashboard SPA | Session cookie (`HttpOnly`, `SameSite=Lax`, `Secure`) + CSRF token header for mutations | Same-origin only |
 | `/api/v1/*` | Public REST API, SDK, MCP | `Authorization: Bearer ann_…` scoped API token | None (server-to-server) |
 | `/mcp` | AI agents (Streamable HTTP MCP) | Bearer API token | None |
 | `/api/integrations/:provider/webhook` | GitHub, GitLab, Linear, Jira, Slack, Stripe | Provider signature | None |
-| `/healthz`, `/readyz`, `/metrics` | Ops | none / none / bearer `ANNOTA_METRICS_TOKEN` | — |
+| `/healthz`, `/readyz`, `/metrics` | Ops | none / none / bearer `PINWREN_METRICS_TOKEN` | — |
 
 Error format everywhere (RFC 9457 problem details):
 ```json
-{ "type": "https://annota.dev/errors/origin-not-allowed", "title": "Origin not allowed",
+{ "type": "https://pinwren.dev/errors/origin-not-allowed", "title": "Origin not allowed",
   "status": 403, "code": "ORIGIN_NOT_ALLOWED", "detail": "…", "requestId": "…" }
 ```
 
@@ -94,13 +94,13 @@ Mirrors the read/write feedback, comments, labels, projects (read) endpoints wit
 
 Events: `feedback.created`, `feedback.updated`, `feedback.status_changed`, `feedback.assigned`, `feedback.deleted`, `comment.created`, `review_round.closed`.
 
-Headers: `Annota-Event`, `Annota-Delivery`, `Annota-Timestamp`, `Annota-Signature: v1=<hex HMAC-SHA256(secret, timestamp + "." + body)>`. Receivers must reject timestamps older than 5 minutes. Payloads are versioned (`"apiVersion": "2026-11-01"`).
+Headers: `Pinwren-Event`, `Pinwren-Delivery`, `Pinwren-Timestamp`, `Pinwren-Signature: v1=<hex HMAC-SHA256(secret, timestamp + "." + body)>`. Receivers must reject timestamps older than 5 minutes. Payloads are versioned (`"apiVersion": "2026-11-01"`).
 
 Retries: 1 m, 5 m, 30 m, 2 h, 6 h, 12 h (then mark failed, alert admins). Endpoint auto-disabled after 3 days of continuous failure.
 
 ## 6. MCP server
 
-Exposed at `/mcp` (Streamable HTTP) and as `npx @annota/mcp` (stdio, reads `ANNOTA_URL` + `ANNOTA_TOKEN`).
+Exposed at `/mcp` (Streamable HTTP) and as `npx @pinwren/mcp` (stdio, reads `PINWREN_URL` + `PINWREN_TOKEN`).
 
 | Tool | Description |
 |---|---|
@@ -112,9 +112,9 @@ Exposed at `/mcp` (Streamable HTTP) and as `npx @annota/mcp` (stdio, reads `ANNO
 | `add_comment` | Internal note or public reply |
 | `resolve_feedback` | Resolve with a resolution note (e.g. commit SHA / PR URL) |
 
-Resources: `annota://project/{id}/open` (open items digest). Prompts: `triage_inbox`, `fix_feedback` (instructs the agent to locate the element via the selector in the repo, reproduce, fix, and resolve with the PR link).
+Resources: `pinwren://project/{id}/open` (open items digest). Prompts: `triage_inbox`, `fix_feedback` (instructs the agent to locate the element via the selector in the repo, reproduce, fix, and resolve with the PR link).
 
 ## 7. Versioning & compatibility
 
-- Widget ↔ server protocol carries `X-Annota-Widget: <semver>`; the server accepts the current and previous major. Old widgets get a soft "update available" log, never a hard failure.
+- Widget ↔ server protocol carries `X-Pinwren-Widget: <semver>`; the server accepts the current and previous major. Old widgets get a soft "update available" log, never a hard failure.
 - Public API is date-versioned; breaking changes only in a new `/api/v2`.

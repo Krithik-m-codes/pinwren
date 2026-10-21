@@ -101,7 +101,7 @@ test.describe("settings", () => {
         });
       });
       await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
-      url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/hooks/annota`;
+      url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/hooks/pinwren`;
     });
     test.afterAll(() => new Promise<void>((r) => server.close(() => r())));
 
@@ -134,8 +134,8 @@ test.describe("settings", () => {
       const log = sheet.getByTestId("deliveries");
       await expect(log.locator('[data-delivery="ping"]')).toHaveCount(1);
       await expect(log.getByText("success")).toBeVisible();
-      expect(received.at(-1)?.headers["annota-event"]).toBe("ping");
-      expect(String(received.at(-1)?.headers["annota-signature"])).toMatch(/^v1=[0-9a-f]{64}$/);
+      expect(received.at(-1)?.headers["pinwren-event"]).toBe("ping");
+      expect(String(received.at(-1)?.headers["pinwren-signature"])).toMatch(/^v1=[0-9a-f]{64}$/);
       await shoot(page, "settings-webhook-detail");
 
       await log.getByRole("button", { name: "Redeliver" }).first().click();

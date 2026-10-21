@@ -3,12 +3,12 @@ services:
   db:
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: annota
-      POSTGRES_PASSWORD: annota
-      POSTGRES_DB: annota
+      POSTGRES_USER: pinwren
+      POSTGRES_PASSWORD: pinwren
+      POSTGRES_DB: pinwren
     ports:
       - "127.0.0.1:5433:5432"
     volumes:
-      - annota-dev-db:/var/lib/postgresql/data
+      - pinwren-dev-db:/var/lib/postgresql/data
 volumes:
-  annota-dev-db:
+  pinwren-dev-db:

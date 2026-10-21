@@ -2,7 +2,7 @@
 
 ## One-liner
 
-**Annota lets anyone point at a live website and say "this is wrong" — and gives the team everything they need to fix it.**
+**Pinwren lets anyone point at a live website and say "this is wrong" — and gives the team everything they need to fix it.**
 
 ## The problem
 
@@ -69,7 +69,7 @@ Differentiators, in priority order:
 4. **AI-ready** — MCP server, structured reproduction context, optional AI triage (dedupe, summarise, suggest severity) with bring-your-own model key.
 5. **Modern, fast UI** — Linear-grade inbox, real-time updates, keyboard-first, dark mode, accessible.
 
-## Scope boundaries (what Annota is not)
+## Scope boundaries (what Pinwren is not)
 
 - Not a product-analytics or heat-map tool (no PostHog/Hotjar clone).
 - Not a public roadmap / feature-voting board (Canny, Quackback) — maybe a later add-on, not v1.

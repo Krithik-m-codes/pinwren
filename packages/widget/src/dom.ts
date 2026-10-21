@@ -7,9 +7,9 @@ export const guard =
   (e) => {
     try {
       const r = fn(e) as unknown;
-      if (r instanceof Promise) r.catch((err) => console.warn("[annota]", err));
+      if (r instanceof Promise) r.catch((err) => console.warn("[pinwren]", err));
     } catch (err) {
-      console.warn("[annota]", err);
+      console.warn("[pinwren]", err);
     }
   };
 

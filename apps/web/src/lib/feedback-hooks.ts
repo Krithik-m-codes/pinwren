@@ -1,6 +1,6 @@
 "use client";
 
-import type { FeedbackStatus, Priority } from "@annota/core";
+import type { FeedbackStatus, Priority } from "@pinwren/core";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {

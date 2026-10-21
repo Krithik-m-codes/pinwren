@@ -19,7 +19,7 @@ function write(key: string, value: unknown) {
   } catch {}
 }
 
-const REPORTER = "annota:reporter";
+const REPORTER = "pinwren:reporter";
 
 export const store = {
   reporter: (): Reporter => {
@@ -33,15 +33,15 @@ export const store = {
 
   /** Feedback this browser sent, with the one-time reporter token that lets it resolve its own items. */
   mine: (project: string): Mine[] => {
-    const list = read<unknown>(`annota:mine:${project}`, []);
+    const list = read<unknown>(`pinwren:mine:${project}`, []);
     return Array.isArray(list) ? list.filter((m): m is Mine => typeof m?.id === "string") : [];
   },
   addMine: (project: string, m: Mine) => {
     const list = store.mine(project).filter((x) => x.id !== m.id);
     list.unshift(m);
-    write(`annota:mine:${project}`, list.slice(0, 300));
+    write(`pinwren:mine:${project}`, list.slice(0, 300));
   },
 
-  consented: (project: string) => read<boolean>(`annota:consent:${project}`, false) === true,
-  setConsented: (project: string) => write(`annota:consent:${project}`, true),
+  consented: (project: string) => read<boolean>(`pinwren:consent:${project}`, false) === true,
+  setConsented: (project: string) => write(`pinwren:consent:${project}`, true),
 };

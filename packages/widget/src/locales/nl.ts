@@ -15,7 +15,7 @@ export default {
   hideComments: "Opmerkingen verbergen",
   showComments: "Opmerkingen tonen",
   pinsOnPage: "Pins op de pagina",
-  poweredBy: "Mogelijk gemaakt door Annota",
+  poweredBy: "Mogelijk gemaakt door Pinwren",
   queued_one: "{n} melding wacht op verzending",
   queued_other: "{n} meldingen wachten op verzending",
   queuedSub: "Wordt automatisch verstuurd zodra je weer online bent",

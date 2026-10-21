@@ -10,15 +10,15 @@ import { applyRetention, cleanupTrash } from "./maintenance";
 
 export { enqueue, getBoss, QUEUES } from "./boss";
 
-const g = globalThis as unknown as { __annotaWorkers?: Promise<void> };
+const g = globalThis as unknown as { __pinwrenWorkers?: Promise<void> };
 
 /**
  * Start the job workers in this process (called from the Next.js Node instrumentation hook).
- * Safe to call more than once. `ANNOTA_ROLE=web` processes only enqueue.
+ * Safe to call more than once. `PINWREN_ROLE=web` processes only enqueue.
  */
 export function startJobs(): Promise<void> {
-  g.__annotaWorkers ??= (async () => {
-    if (env().ANNOTA_ROLE === "web") return;
+  g.__pinwrenWorkers ??= (async () => {
+    if (env().PINWREN_ROLE === "web") return;
     const boss = await getBoss();
     const each =
       <T>(fn: (data: T) => Promise<unknown>) =>
@@ -53,19 +53,19 @@ export function startJobs(): Promise<void> {
     await boss.schedule(QUEUES.retention, "15 3 * * *");
     await boss.schedule(QUEUES.cleanup, "45 3 * * *");
     await boss.schedule(QUEUES.update, "30 4 * * *");
-    console.log("[annota] job workers started");
+    console.log("[pinwren] job workers started");
   })().catch((err) => {
-    g.__annotaWorkers = undefined;
-    console.error("[annota] job workers failed to start", err);
+    g.__pinwrenWorkers = undefined;
+    console.error("[pinwren] job workers failed to start", err);
   });
-  return g.__annotaWorkers;
+  return g.__pinwrenWorkers;
 }
 
 /** Stop workers and close the queue's pool (graceful shutdown, tests). */
 export async function stopJobs(): Promise<void> {
-  const g2 = globalThis as unknown as { __annotaBoss?: Promise<{ stop: (o?: object) => Promise<void> }> };
-  const boss = await g2.__annotaBoss?.catch(() => undefined);
+  const g2 = globalThis as unknown as { __pinwrenBoss?: Promise<{ stop: (o?: object) => Promise<void> }> };
+  const boss = await g2.__pinwrenBoss?.catch(() => undefined);
   await boss?.stop({ graceful: true, timeout: 10_000 });
-  g2.__annotaBoss = undefined;
-  g.__annotaWorkers = undefined;
+  g2.__pinwrenBoss = undefined;
+  g.__pinwrenWorkers = undefined;
 }

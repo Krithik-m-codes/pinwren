@@ -1,4 +1,4 @@
-import type { EmailTemplateKey } from "@annota/core";
+import type { EmailTemplateKey } from "@pinwren/core";
 import { esc, renderMarkdown, renderSubject, safeHref, VARIABLE, variablesIn } from "./markdown";
 
 // Email templates (F-020): each one is a subject + Markdown body with `{{variable}}` placeholders.
@@ -12,7 +12,7 @@ export type Rendered = { subject: string; html: string; text: string };
 
 /** Organisation branding applied to every email (F-094). */
 export type EmailBrand = { productName: string; accent: string; logoUrl: string | null };
-export const DEFAULT_BRAND: EmailBrand = { productName: "Annota", accent: "#5b5bd6", logoUrl: null };
+export const DEFAULT_BRAND: EmailBrand = { productName: "Pinwren", accent: "#5b5bd6", logoUrl: null };
 
 export type TemplateVariable = { name: string; description: string; sample: string };
 
@@ -34,7 +34,7 @@ const v = (name: string, description: string, sample: string): TemplateVariable 
 });
 
 /** Available in every template. */
-const COMMON = [v("productName", "Your product name from Settings › Branding", "Annota")];
+const COMMON = [v("productName", "Your product name from Settings › Branding", "Pinwren")];
 
 const FEEDBACK = [
   v("projectName", "Project name", "Marketing site"),

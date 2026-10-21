@@ -1,4 +1,4 @@
-import { feedback, feedbackAsset, getDb, notification, project, rateLimit } from "@annota/db";
+import { feedback, feedbackAsset, getDb, notification, project, rateLimit } from "@pinwren/db";
 import { and, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { storage } from "../storage";
 import { pruneDeliveries } from "../webhooks/deliver";
@@ -21,7 +21,7 @@ export async function purgeFeedback(ids: string[]): Promise<number> {
     if (!a.key) continue;
     await storage()
       .remove(a.key)
-      .catch((err) => console.warn(`[annota] could not remove asset ${a.key}`, err));
+      .catch((err) => console.warn(`[pinwren] could not remove asset ${a.key}`, err));
   }
   return deleted.length;
 }
@@ -50,7 +50,7 @@ export async function applyRetention(): Promise<{ feedback: number; deliveries: 
   await db.delete(notification).where(sql`${notification.readAt} < now() - interval '90 days'`);
   await db.delete(rateLimit).where(lt(rateLimit.resetAt, sql`now() - interval '1 hour'`));
   if (total || deliveries)
-    console.info(`[annota] retention: ${total} feedback, ${deliveries} deliveries removed`);
+    console.info(`[pinwren] retention: ${total} feedback, ${deliveries} deliveries removed`);
   return { feedback: total, deliveries };
 }
 

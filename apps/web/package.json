@@ -1,5 +1,5 @@
 {
-  "name": "@annota/web",
+  "name": "@pinwren/web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,9 +10,9 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@annota/api": "workspace:*",
-    "@annota/core": "workspace:*",
-    "@annota/db": "workspace:*",
+    "@pinwren/api": "workspace:*",
+    "@pinwren/core": "workspace:*",
+    "@pinwren/db": "workspace:*",
     "@base-ui/react": "^1.9.0",
     "@tanstack/react-query": "^5.104.5",
     "better-auth": "^1.7.12",

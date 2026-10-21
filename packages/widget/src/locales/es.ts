@@ -15,7 +15,7 @@ export default {
   hideComments: "Ocultar comentarios",
   showComments: "Mostrar comentarios",
   pinsOnPage: "Marcadores en la página",
-  poweredBy: "Con tecnología de Annota",
+  poweredBy: "Con tecnología de Pinwren",
   queued_one: "{n} informe pendiente de envío",
   queued_other: "{n} informes pendientes de envío",
   queuedSub: "Se enviará solo cuando vuelvas a tener conexión",

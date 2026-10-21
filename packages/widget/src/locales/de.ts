@@ -15,7 +15,7 @@ export default {
   hideComments: "Kommentare ausblenden",
   showComments: "Kommentare einblenden",
   pinsOnPage: "Markierungen auf der Seite",
-  poweredBy: "Bereitgestellt von Annota",
+  poweredBy: "Bereitgestellt von Pinwren",
   queued_one: "{n} Bericht wartet auf Versand",
   queued_other: "{n} Berichte warten auf Versand",
   queuedSub: "Wird automatisch gesendet, sobald du wieder online bist",

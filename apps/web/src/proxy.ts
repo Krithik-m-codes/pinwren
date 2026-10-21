@@ -1,21 +1,21 @@
-import { HSTS_HEADER, httpsDecision } from "@annota/core";
+import { HSTS_HEADER, httpsDecision } from "@pinwren/core";
 import { type NextRequest, NextResponse } from "next/server";
 
-// ANNOTA_ENFORCE_HTTPS for every route (pages, /api, /w): plain-HTTP requests that don't come from
+// PINWREN_ENFORCE_HTTPS for every route (pages, /api, /w): plain-HTTP requests that don't come from
 // localhost are redirected (GET/HEAD) or refused. Forwarded headers count only with
-// ANNOTA_TRUST_PROXY. Read straight from the environment: the proxy must not depend on app modules.
+// PINWREN_TRUST_PROXY. Read straight from the environment: the proxy must not depend on app modules.
 const flag = (v: string | undefined) => v === "true" || v === "1";
 
 export function proxy(request: NextRequest) {
   const d = httpsDecision(request, {
-    enforce: flag(process.env.ANNOTA_ENFORCE_HTTPS),
-    trustProxy: flag(process.env.ANNOTA_TRUST_PROXY),
+    enforce: flag(process.env.PINWREN_ENFORCE_HTTPS),
+    trustProxy: flag(process.env.PINWREN_TRUST_PROXY),
   });
   if (d.action === "redirect") return NextResponse.redirect(d.location, 308);
   if (d.action === "refuse") {
     return NextResponse.json(
       {
-        type: "https://annota.dev/errors/https-required",
+        type: "https://pinwren.dev/errors/https-required",
         title: "This server only accepts HTTPS",
         status: 403,
         code: "HTTPS_REQUIRED",

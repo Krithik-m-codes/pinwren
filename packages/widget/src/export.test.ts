@@ -41,14 +41,14 @@ describe("csvCell", () => {
 });
 
 describe("rows, CSV and JSON", () => {
-  const page = "https://lumen.example/shop?sort=price&annota=fb_9#grid";
+  const page = "https://lumen.example/shop?sort=price&pinwren=fb_9#grid";
 
   it("drops our own deep-link parameter from the page URL and builds per-item deep links", () => {
     expect(cleanPageUrl(page)).toBe("https://lumen.example/shop?sort=price#grid");
     expect(deepLink("https://lumen.example/shop?sort=price#grid", "fb_1")).toBe(
-      "https://lumen.example/shop?sort=price&annota=fb_1#grid",
+      "https://lumen.example/shop?sort=price&pinwren=fb_1#grid",
     );
-    expect(deepLink("https://lumen.example/", "a b")).toBe("https://lumen.example/?annota=a+b");
+    expect(deepLink("https://lumen.example/", "a b")).toBe("https://lumen.example/?pinwren=a+b");
   });
 
   it("maps pins to the contract's columns", () => {
@@ -62,7 +62,7 @@ describe("rows, CSV and JSON", () => {
       author: "",
       created: "2026-10-21T10:00:00.000Z",
       pageUrl: "https://lumen.example/shop?sort=price#grid",
-      deepLink: "https://lumen.example/shop?sort=price&annota=fb_1#grid",
+      deepLink: "https://lumen.example/shop?sort=price&pinwren=fb_1#grid",
     });
   });
 
@@ -80,7 +80,7 @@ describe("rows, CSV and JSON", () => {
     const lines = csv.slice(1).split("\r\n");
     expect(lines[0]).toBe("Number,Kind,Status,Title,Body,Author,Created,Page URL,Deep link");
     expect(lines[1]).toBe(
-      "1,comment,open,,Logo too small,Sarah Miller,2026-10-21T10:00:00.000Z,https://lumen.example/shop?sort=price#grid,https://lumen.example/shop?sort=price&annota=fb_1#grid",
+      "1,comment,open,,Logo too small,Sarah Miller,2026-10-21T10:00:00.000Z,https://lumen.example/shop?sort=price#grid,https://lumen.example/shop?sort=price&pinwren=fb_1#grid",
     );
     expect(csv).toContain('"Price says ""₹0"", should be ₹780\non mobile"');
     expect(csv.endsWith("\r\n")).toBe(true);
@@ -95,14 +95,14 @@ describe("rows, CSV and JSON", () => {
     const data = JSON.parse(toJson(toRows([pin({ title: "=1+1" })], page)));
     expect(data).toHaveLength(1);
     expect(data[0].title).toBe("=1+1");
-    expect(data[0].deepLink).toContain("annota=fb_1");
+    expect(data[0].deepLink).toContain("pinwren=fb_1");
   });
 
   it("names the file after the site and the day", () => {
     const d = new Date("2026-10-21T23:00:00Z");
     expect(fileName("https://www.lumen.example/shop", "csv", d)).toBe(
-      "annota-www.lumen.example-2026-10-21.csv",
+      "pinwren-www.lumen.example-2026-10-21.csv",
     );
-    expect(fileName("not a url", "json", d)).toBe("annota-page-2026-10-21.json");
+    expect(fileName("not a url", "json", d)).toBe("pinwren-page-2026-10-21.json");
   });
 });

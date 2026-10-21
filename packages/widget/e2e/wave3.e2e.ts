@@ -12,11 +12,11 @@ const shot = (page: Page, name: string) =>
 
 const HERO = "Small-batch coffee, roasted every Monday.";
 const BLOCK = [161, 161, 170]; // mask.ts BLOCK_FILL #a1a1aa
-const launcher = (page: Page) => page.locator("annota-root .launcher");
+const launcher = (page: Page) => page.locator("pinwren-root .launcher");
 const composer = (page: Page) => page.getByRole("dialog", { name: "New comment" });
 const report = (page: Page) => page.getByRole("dialog", { name: "Report a bug" });
-const canvas = (page: Page) => page.locator("annota-root .ed canvas");
-const toast = (page: Page) => page.locator("annota-root .toast").last();
+const canvas = (page: Page) => page.locator("pinwren-root .ed canvas");
+const toast = (page: Page) => page.locator("pinwren-root .toast").last();
 
 async function box(l: Locator) {
   const b = await l.boundingBox();
@@ -32,7 +32,7 @@ async function ready(page: Page, url = "/") {
 /** Description of whatever has focus, looking inside the widget's (test-opened) shadow root. */
 const active = (page: Page) =>
   page.evaluate(() => {
-    const a = document.querySelector("annota-root")?.shadowRoot?.activeElement ?? document.activeElement;
+    const a = document.querySelector("pinwren-root")?.shadowRoot?.activeElement ?? document.activeElement;
     return a
       ? `${a.tagName.toLowerCase()}|${a.getAttribute("aria-label") ?? a.textContent?.trim() ?? ""}`
       : "";
@@ -41,7 +41,7 @@ const active = (page: Page) =>
 /** True when focus is inside the element matching `sel` in the widget's shadow root. */
 const focusIn = (page: Page, sel: string) =>
   page.evaluate((s) => {
-    const r = document.querySelector("annota-root")?.shadowRoot;
+    const r = document.querySelector("pinwren-root")?.shadowRoot;
     const a = r?.activeElement;
     return !!a && !!r?.querySelector(s)?.contains(a);
   }, sel);
@@ -77,7 +77,7 @@ const imagePixel = (page: Page, src: string, x: number, y: number) =>
   );
 
 const openBug = (page: Page) =>
-  page.evaluate(() => (window as unknown as { Annota: { open(m: string): void } }).Annota.open("bug"));
+  page.evaluate(() => (window as unknown as { Pinwren: { open(m: string): void } }).Pinwren.open("bug"));
 
 const close = (rgb: number[], want: number[], tol = 6) =>
   rgb.every((v, i) => Math.abs(v - (want[i] ?? 0)) <= tol);
@@ -130,7 +130,7 @@ test("panel action link opens the substituted, URL-encoded URL in a new tab with
     },
     items: [seed({ number: 7, anchor: anchorFor("hero-title", "h1", HERO, { xPct: 60, yPct: 40 }) })],
   });
-  await ready(page, "/?annota=fb_7");
+  await ready(page, "/?pinwren=fb_7");
   const thread = page.getByRole("dialog", { name: "Comment #7" });
   await expect(thread).toBeVisible();
   // The card's stylesheet comes with the lazy chunk even when the side panel was never opened.
@@ -144,7 +144,7 @@ test("panel action link opens the substituted, URL-encoded URL in a new tab with
 
   const [tab] = await Promise.all([context.waitForEvent("page"), link.click()]);
   await tab.waitForLoadState();
-  // {url} is the page without our ?annota= deep-link parameter.
+  // {url} is the page without our ?pinwren= deep-link parameter.
   expect(tab.url()).toBe(
     "https://tickets.example/new?ref=fb_7&n=7&page=http%3A%2F%2Flocalhost%3A5180%2F&p=lumen",
   );
@@ -329,7 +329,7 @@ test("panel export downloads CSV (BOM, escaping, formula-safe) and JSON", async 
     page.waitForEvent("download"),
     panel.getByRole("menuitem", { name: "CSV (Excel, Sheets)" }).click(),
   ]);
-  expect(csvDl.suggestedFilename()).toMatch(/^annota-localhost-\d{4}-\d\d-\d\d\.csv$/);
+  expect(csvDl.suggestedFilename()).toMatch(/^pinwren-localhost-\d{4}-\d\d-\d\d\.csv$/);
   const bytes = await readFile(await csvDl.path());
   expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
   const csv = bytes.toString("utf8").slice(1);
@@ -338,7 +338,7 @@ test("panel export downloads CSV (BOM, escaping, formula-safe) and JSON", async 
   // Newest first, as the panel lists them.
   expect(csv).toContain('2,bug,open,"Price, again","Says ""₹0""\non mobile",Dev Patel,');
   expect(csv).toContain(`1,comment,open,,"'=HYPERLINK(""http://evil.test"",""click"")",Sarah Miller,`);
-  expect(csv).toContain(",http://localhost:5180/,http://localhost:5180/?annota=fb_1\r\n");
+  expect(csv).toContain(",http://localhost:5180/,http://localhost:5180/?pinwren=fb_1\r\n");
 
   await panel.getByRole("button", { name: "Export" }).click();
   const [jsonDl] = await Promise.all([
@@ -349,7 +349,7 @@ test("panel export downloads CSV (BOM, escaping, formula-safe) and JSON", async 
   const data = JSON.parse(await readFile(await jsonDl.path(), "utf8"));
   expect(data.map((r: { number: number }) => r.number)).toEqual([2, 1]);
   expect(data[1].body).toBe('=HYPERLINK("http://evil.test","click")');
-  expect(data[0].deepLink).toBe("http://localhost:5180/?annota=fb_2");
+  expect(data[0].deepLink).toBe("http://localhost:5180/?pinwren=fb_2");
 
   // Export follows the list: a search that matches nothing exports nothing.
   await panel.getByLabel("Search comments").fill("zzz");
@@ -422,7 +422,7 @@ test("comment on selection: offer, quote, textRange, and the quote highlighted o
   await ready(page);
   const sel = await selectHero(page, 20, 40); // "roasted every Monday"
   await page.keyboard.press("c");
-  const offer = page.locator("annota-root .selbtn");
+  const offer = page.locator("pinwren-root .selbtn");
   await expect(offer).toHaveText("Comment on selection");
   await shot(page, "36-selection-offer");
   await offer.click();
@@ -440,7 +440,7 @@ test("comment on selection: offer, quote, textRange, and the quote highlighted o
   expect(anchor.textRange).toEqual({ startOffset: 20, endOffset: 40, quote: "roasted every Monday" });
 
   // The highlight sits on the quoted words.
-  const hls = page.locator("annota-root .hl");
+  const hls = page.locator("pinwren-root .hl");
   await expect(hls.first()).toBeVisible();
   const hb = await box(hls.first());
   expect(hb.y).toBeLessThanOrEqual(sel.y + sel.h);
@@ -453,7 +453,7 @@ test("comment on selection: offer, quote, textRange, and the quote highlighted o
 
   await page.reload();
   await expect(launcher(page)).toBeVisible();
-  await expect(page.locator("annota-root .hl").first()).toBeVisible();
+  await expect(page.locator("pinwren-root .hl").first()).toBeVisible();
   await page.getByRole("button", { name: /Comment 1 by/ }).click();
   const thread = page.getByRole("dialog", { name: "Comment #1" });
   await expect(thread.getByLabel("Selected text")).toHaveText("roasted every Monday");
@@ -477,7 +477,7 @@ test("a quote that is no longer on the page is not highlighted; right-click offe
   });
   await ready(page);
   await expect(page.getByRole("button", { name: /Comment 1 by/ })).toBeVisible();
-  await expect(page.locator("annota-root .hl")).toHaveCount(0);
+  await expect(page.locator("pinwren-root .hl")).toHaveCount(0);
 
   await page.evaluate(() =>
     addEventListener("contextmenu", (e) => {
@@ -489,7 +489,7 @@ test("a quote that is no longer on the page is not highlighted; right-click offe
   // The browser's own menu (Copy) is left alone…
   expect(await page.evaluate(() => (window as unknown as { prevented: boolean }).prevented)).toBe(false);
   // …and the offer appears beside it.
-  await page.locator("annota-root .selbtn").click();
+  await page.locator("pinwren-root .selbtn").click();
   await expect(composer(page).getByLabel("Selected text")).toHaveText("Small-batch");
 });
 
@@ -579,7 +579,7 @@ test("ready event (queued before load and added late) and destroy() restores con
     w.readyCalls = 0;
     w.origError = console.error;
     w.origFetch = window.fetch;
-    w.Annota = { q: [["on", "ready", () => (w.readyCalls as number)++]] };
+    w.Pinwren = { q: [["on", "ready", () => (w.readyCalls as number)++]] };
   });
   await mockApi(page);
   await ready(page);
@@ -592,7 +592,7 @@ test("ready event (queued before load and added late) and destroy() restores con
   const late = await page.evaluate(
     () =>
       new Promise<boolean>((resolve) =>
-        (window as unknown as { Annota: { on(e: string, cb: () => void): void } }).Annota.on("ready", () =>
+        (window as unknown as { Pinwren: { on(e: string, cb: () => void): void } }).Pinwren.on("ready", () =>
           resolve(true),
         ),
       ),
@@ -602,8 +602,8 @@ test("ready event (queued before load and added late) and destroy() restores con
   await launcher(page).click();
   await page.getByRole("menuitem", { name: /View comments/ }).click();
   await page.getByRole("button", { name: "Export" }).click();
-  await page.evaluate(() => (window as unknown as { Annota: { destroy(): void } }).Annota.destroy());
-  await expect(page.locator("annota-root")).toHaveCount(0);
+  await page.evaluate(() => (window as unknown as { Pinwren: { destroy(): void } }).Pinwren.destroy());
+  await expect(page.locator("pinwren-root")).toHaveCount(0);
   const restored = await page.evaluate(() => {
     const w = window as unknown as { origError: unknown; origFetch: unknown };
     return [console.error === w.origError, window.fetch === w.origFetch];
@@ -642,9 +642,9 @@ test.describe("touch", () => {
 
   async function startCommentMode(page: Page) {
     await page.evaluate(() =>
-      (window as unknown as { Annota: { open(m: string): void } }).Annota.open("comment"),
+      (window as unknown as { Pinwren: { open(m: string): void } }).Pinwren.open("comment"),
     );
-    await expect(page.locator("annota-root .hint")).toContainText("Long-press to comment");
+    await expect(page.locator("pinwren-root .hint")).toContainText("Long-press to comment");
   }
 
   test("long-press pins a comment; a quick tap does not", async ({ page }) => {
@@ -689,7 +689,7 @@ test.describe("touch", () => {
     await t.down(x, y);
     await page.waitForTimeout(650);
     await t.move(x, y, x + 180, y + 70);
-    await expect(page.locator("annota-root .area.draft")).toBeVisible();
+    await expect(page.locator("pinwren-root .area.draft")).toBeVisible();
     await shot(page, "40-touch-drag");
     await t.up();
     const c = composer(page);

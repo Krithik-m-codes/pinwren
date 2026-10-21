@@ -8,7 +8,7 @@ export const SEED_FILE = join(AUTH_DIR, "seed.json");
 export const SHOTS = join(__dirname, "__screenshots__");
 export const SITE_ORIGIN = "https://e2e.example.com";
 
-/** Listed in ANNOTA_ADMIN_EMAILS (playwright.config.ts) so the instance-admin screens are reachable. */
+/** Listed in PINWREN_ADMIN_EMAILS (playwright.config.ts) so the instance-admin screens are reachable. */
 export const ADMIN = { name: "Avery Admin", email: "e2e-admin@example.com", password: "e2e-password-123" };
 
 type Item = { id: string; number: number };

@@ -17,7 +17,7 @@ One prompt per work package (WP). Run them **in order**, each in a session that 
 
 ### WP-00 — Repository scaffold
 ```
-Create the Annota monorepo exactly as laid out in 02-architecture.md §3.
+Create the Pinwren monorepo exactly as laid out in 02-architecture.md §3.
 - pnpm workspaces + Turborepo; Node 24 (.nvmrc, engines); TypeScript strict (shared tsconfig in packages/config:
   strict, exactOptionalPropertyTypes, noUncheckedIndexedAccess, verbatimModuleSyntax).
 - Biome for lint+format; Vitest workspace config; Playwright config with a "smoke" project; Changesets.
@@ -58,7 +58,7 @@ Build apps/server per 02 and 04.
   organisation plugin mapped to our org table; sessions in Postgres; CSRF double-submit for /api mutations;
   security headers per 09 §4.
 - Encryption helper (AES-256-GCM with key ids) for secrets at rest.
-- pg-boss initialised (packages/jobs) with graceful shutdown; ANNOTA_ROLE=all|web|worker.
+- pg-boss initialised (packages/jobs) with graceful shutdown; PINWREN_ROLE=all|web|worker.
 - Serve the dashboard static build at / with SPA fallback and immutable caching for hashed assets.
 - Tests: auth flows (integration), CSRF rejection, problem-details shape, config validation messages.
 ```
@@ -111,10 +111,10 @@ attribution only if you copy code.
 ### WP-06 — Widget core (comment mode)
 ```
 Build packages/widget per 05-widget-spec.md §§1–5, 8, 9 (capture/replay come later).
-- Loader (<3 KB) + core (Preact + signals) in closed Shadow DOM under <annota-root>; constructed stylesheets.
+- Loader (<3 KB) + core (Preact + signals) in closed Shadow DOM under <pinwren-root>; constructed stylesheets.
 - Launcher, menu, picking (hover outline, Shift=parent, arrow-key DOM walk, touch long-press), region select,
   text-selection comment, composer (markdown-lite, attachments placeholder until WP-07), pins rendering with
-  numbered markers, side panel (list/filter/thread/reply), deep link ?annota=<id>.
+  numbered markers, side panel (list/filter/thread/reply), deep link ?pinwren=<id>.
 - Visibility rules (F-012), public JS API with pre-load queue (05 §8), identify/metadata stubs.
 - i18n scaffolding (en only now; message catalogue keys).
 - Global error guard; destroy() fully restores the page.
@@ -181,7 +181,7 @@ Every email has a plain-text part, List-Unsubscribe for digests, and is rendered
 ### WP-12 — Packaging and self-host experience
 ```
 Implement 08-self-hosting.md: multi-arch Dockerfile (bundled server, non-root, read-only rootfs), compose files
-(base, caddy, traefik, minio, external-db), install.sh, setup wizard with ANNOTA_SETUP_TOKEN, `annota doctor`
+(base, caddy, traefik, minio, external-db), install.sh, setup wizard with PINWREN_SETUP_TOKEN, `pinwren doctor`
 CLI, backup job (pg_dump + storage sync to S3) with restore docs, upgrade/downgrade protection.
 CI: build image, run e2e smoke against the built image, publish to GHCR on tags with SBOM + cosign.
 Acceptance: fresh VM → install.sh → first report in < 5 minutes (scripted test in CI with compose).
@@ -229,9 +229,9 @@ two-way status via webhooks), GitLab (OAuth + webhooks), Linear (OAuth + webhook
 
 ### WP-18 — Public API, SDK and MCP
 ```
-API tokens (argon2id-hashed, scopes, prefix display), /api/v1 per 04 §4 with Idempotency-Key, @annota/sdk
+API tokens (argon2id-hashed, scopes, prefix display), /api/v1 per 04 §4 with Idempotency-Key, @pinwren/sdk
 generated types from OpenAPI + hand-written ergonomic client, MCP server per 04 §6 (Streamable HTTP at /mcp and
-stdio package @annota/mcp), docs with Claude Code and Cursor setup snippets. E2E: an MCP client lists, reads and
+stdio package @pinwren/mcp), docs with Claude Code and Cursor setup snippets. E2E: an MCP client lists, reads and
 resolves an item.
 ```
 
@@ -246,7 +246,7 @@ synced to console/network panes. Perf test on reference SPA: CPU overhead < 3 %.
 ```
 Locales en, es, fr, de, pt-BR, it, ja, hi for widget + emails (+ dashboard en first, structure for more).
 Guest portal (06 §7), review links (03 review_link) that enable the widget via token, signed identity
-(HMAC identify), @annota/react package with <Annota/> and useAnnota(). Tag v0.5.0-beta.
+(HMAC identify), @pinwren/react package with <Pinwren/> and useAnnota(). Tag v0.5.0-beta.
 ```
 
 ---
@@ -255,7 +255,7 @@ Guest portal (06 §7), review links (03 review_link) that enable the widget via 
 
 ### WP-21 — Cloud mode
 ```
-ANNOTA_MODE=cloud: enforce RLS on every tenant query path, cross-tenant test suite that calls every endpoint
+PINWREN_MODE=cloud: enforce RLS on every tenant query path, cross-tenant test suite that calls every endpoint
 as another org and expects 404/403, org signup flow, CDN widget delivery with versioned paths, remote kill
 switch for widget versions, per-org rate limits, Redis optional adapter for rate limiting and SSE fan-out.
 ```

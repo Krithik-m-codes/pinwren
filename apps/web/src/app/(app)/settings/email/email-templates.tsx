@@ -1,6 +1,6 @@
 "use client";
 
-import type { EmailTemplateKey } from "@annota/core";
+import type { EmailTemplateKey } from "@pinwren/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleCheck, CircleX, RotateCcw, Send } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";

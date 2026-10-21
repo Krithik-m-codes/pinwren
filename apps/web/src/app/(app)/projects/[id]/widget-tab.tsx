@@ -1,6 +1,6 @@
 "use client";
 
-import { mergeConfig, type WidgetConfig, type WidgetConfigInput, widgetConfig } from "@annota/core";
+import { mergeConfig, type WidgetConfig, type WidgetConfigInput, widgetConfig } from "@pinwren/core";
 import { useEffect, useState } from "react";
 import { ColorPicker } from "@/components/color-picker";
 import { NumberInput } from "@/components/number-input";
@@ -235,7 +235,7 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
               <SettingRow
                 label="Hide the launcher"
                 htmlFor="launcher-hidden"
-                description="Open the widget only with a keyboard shortcut or Annota.open() from your code."
+                description="Open the widget only with a keyboard shortcut or Pinwren.open() from your code."
               >
                 <Switch
                   id="launcher-hidden"

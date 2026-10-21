@@ -1,4 +1,4 @@
-import { app } from "@annota/api";
+import { app } from "@pinwren/api";
 
 // The whole API (auth, dashboard, widget) is one Hono app; Next only hands it the request.
 const handle = (request: Request) => app.fetch(request);

@@ -1,4 +1,4 @@
-import { getDb, project, setting } from "@annota/db";
+import { getDb, project, setting } from "@pinwren/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { env } from "../env";
 
@@ -57,16 +57,16 @@ export async function getSecuritySettings(): Promise<SecuritySettingsView> {
   const stored = await readSetting<StoredSecurity>(SECURITY_SETTING_KEY);
   const update = await readSetting<Partial<UpdateState>>(UPDATE_STATE_KEY);
   return {
-    sessionDays: e.ANNOTA_SESSION_DAYS ?? stored.sessionDays ?? DEFAULT_SESSION_DAYS,
-    updateCheck: e.ANNOTA_UPDATE_CHECK ?? stored.updateCheck ?? true,
-    enforceHttps: e.ANNOTA_ENFORCE_HTTPS,
-    trustProxy: e.ANNOTA_TRUST_PROXY,
+    sessionDays: e.PINWREN_SESSION_DAYS ?? stored.sessionDays ?? DEFAULT_SESSION_DAYS,
+    updateCheck: e.PINWREN_UPDATE_CHECK ?? stored.updateCheck ?? true,
+    enforceHttps: e.PINWREN_ENFORCE_HTTPS,
+    trustProxy: e.PINWREN_TRUST_PROXY,
     locked: {
-      sessionDays: e.ANNOTA_SESSION_DAYS !== undefined,
-      updateCheck: e.ANNOTA_UPDATE_CHECK !== undefined,
+      sessionDays: e.PINWREN_SESSION_DAYS !== undefined,
+      updateCheck: e.PINWREN_UPDATE_CHECK !== undefined,
     },
     privacyModeProjects: await countPrivacyModeProjects(),
-    version: e.ANNOTA_VERSION,
+    version: e.PINWREN_VERSION,
     update: update.checkedAt ? (update as UpdateState) : null,
   };
 }
@@ -78,8 +78,8 @@ export async function updateSecuritySettings(
 ): Promise<string[]> {
   const e = env();
   const rejected: string[] = [];
-  if (patch.sessionDays !== undefined && e.ANNOTA_SESSION_DAYS !== undefined) rejected.push("sessionDays");
-  if (patch.updateCheck !== undefined && e.ANNOTA_UPDATE_CHECK !== undefined) rejected.push("updateCheck");
+  if (patch.sessionDays !== undefined && e.PINWREN_SESSION_DAYS !== undefined) rejected.push("sessionDays");
+  if (patch.updateCheck !== undefined && e.PINWREN_UPDATE_CHECK !== undefined) rejected.push("updateCheck");
   if (rejected.length) return rejected;
   const stored = await readSetting<StoredSecurity>(SECURITY_SETTING_KEY);
   const next: StoredSecurity = { ...stored };
@@ -95,7 +95,7 @@ export async function updateSecuritySettings(
 let lifetimeCache: { days: number; until: number } | undefined;
 export async function sessionLifetimeDays(): Promise<number> {
   const e = env();
-  if (e.ANNOTA_SESSION_DAYS !== undefined) return e.ANNOTA_SESSION_DAYS;
+  if (e.PINWREN_SESSION_DAYS !== undefined) return e.PINWREN_SESSION_DAYS;
   if (lifetimeCache && lifetimeCache.until > Date.now()) return lifetimeCache.days;
   let days = DEFAULT_SESSION_DAYS;
   try {
@@ -132,7 +132,7 @@ export type UpdateCheckResult =
   | { checked: false; reason: "disabled" | "privacy_mode" };
 
 /**
- * `update.check` (daily): read the latest GitHub release of ANNOTA_UPDATE_REPO. Skipped when the
+ * `update.check` (daily): read the latest GitHub release of PINWREN_UPDATE_REPO. Skipped when the
  * admin switched it off or any project uses privacy mode (no third-party calls, F-021). Never
  * throws: offline instances just record the error.
  */
@@ -150,8 +150,8 @@ export async function runUpdateCheck(fetchImpl: typeof fetch = fetch): Promise<U
     error: null,
   };
   try {
-    const res = await fetchImpl(`${base}/repos/${e.ANNOTA_UPDATE_REPO}/releases/latest`, {
-      headers: { accept: "application/vnd.github+json", "user-agent": `Annota/${e.ANNOTA_VERSION}` },
+    const res = await fetchImpl(`${base}/repos/${e.PINWREN_UPDATE_REPO}/releases/latest`, {
+      headers: { accept: "application/vnd.github+json", "user-agent": `Pinwren/${e.PINWREN_VERSION}` },
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -161,7 +161,7 @@ export async function runUpdateCheck(fetchImpl: typeof fetch = fetch): Promise<U
       typeof body.html_url === "string" && /^https?:\/\//.test(body.html_url) ? body.html_url : null;
     state.latest = tag;
     state.url = url;
-    state.available = !!tag && isNewerVersion(tag, e.ANNOTA_VERSION);
+    state.available = !!tag && isNewerVersion(tag, e.PINWREN_VERSION);
   } catch (err) {
     state.error = err instanceof Error ? err.message.slice(0, 200) : "check failed";
   }

@@ -1,25 +1,25 @@
-# Annota self-host: the app + Postgres. Put a TLS reverse proxy in front for production.
+# Pinwren self-host: the app + Postgres. Put a TLS reverse proxy in front for production.
 #   cp docker/.env.example docker/.env   # fill in the values
 #   docker compose -f docker/compose.yml --env-file docker/.env up -d
 services:
-  annota:
-    image: ${ANNOTA_IMAGE:-annota:latest}
+  pinwren:
+    image: ${PINWREN_IMAGE:-pinwren:latest}
     build:
       context: ..
       dockerfile: docker/Dockerfile
     restart: unless-stopped
     ports:
-      - "${ANNOTA_BIND:-127.0.0.1}:${ANNOTA_PORT:-3000}:3000"
+      - "${PINWREN_BIND:-127.0.0.1}:${PINWREN_PORT:-3000}:3000"
     environment:
-      ANNOTA_URL: ${ANNOTA_URL:?Set ANNOTA_URL to the public URL, e.g. https://feedback.example.com}
-      ANNOTA_SECRET: ${ANNOTA_SECRET:?Set ANNOTA_SECRET (openssl rand -base64 48)}
-      DATABASE_URL: postgres://annota:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/annota
-      ANNOTA_TRUST_PROXY: ${ANNOTA_TRUST_PROXY:-1}
-      ANNOTA_DISABLE_SIGNUP: ${ANNOTA_DISABLE_SIGNUP:-false}
+      PINWREN_URL: ${PINWREN_URL:?Set PINWREN_URL to the public URL, e.g. https://feedback.example.com}
+      PINWREN_SECRET: ${PINWREN_SECRET:?Set PINWREN_SECRET (openssl rand -base64 48)}
+      DATABASE_URL: postgres://pinwren:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/pinwren
+      PINWREN_TRUST_PROXY: ${PINWREN_TRUST_PROXY:-1}
+      PINWREN_DISABLE_SIGNUP: ${PINWREN_DISABLE_SIGNUP:-false}
       # Node processes serving requests; roughly one per CPU core you give the container.
-      ANNOTA_WORKERS: ${ANNOTA_WORKERS:-2}
+      PINWREN_WORKERS: ${PINWREN_WORKERS:-2}
     volumes:
-      - annota-data:/data
+      - pinwren-data:/data
     depends_on:
       db:
         condition: service_healthy
@@ -27,15 +27,15 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: annota
+      POSTGRES_USER: pinwren
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: annota
+      POSTGRES_DB: pinwren
     volumes:
-      - annota-db:/var/lib/postgresql/data
+      - pinwren-db:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U annota"]
+      test: ["CMD-SHELL", "pg_isready -U pinwren"]
       interval: 5s
       retries: 10
 volumes:
-  annota-data:
-  annota-db:
+  pinwren-data:
+  pinwren-db:

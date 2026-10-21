@@ -1,4 +1,4 @@
-import type { AnchorBundle } from "@annota/core";
+import type { AnchorBundle } from "@pinwren/core";
 import { finder } from "@medv/finder";
 
 // Anchor capture and re-attachment (blueprint F-030/F-031). A pin is stored with several
@@ -57,7 +57,7 @@ export function captureAnchor(el: Element, clientX: number, clientY: number): An
     css = finder(el, {
       className: (c) => !UNSTABLE_CLASS.test(c),
       idName: (id) => !UNSTABLE_ID.test(id),
-      attr: (name) => name === "data-testid" || name === "data-annota-anchor" || name === "aria-label",
+      attr: (name) => name === "data-testid" || name === "data-pinwren-anchor" || name === "aria-label",
       timeoutMs: 300,
     });
   } catch {
@@ -65,7 +65,7 @@ export function captureAnchor(el: Element, clientX: number, clientY: number): An
   }
   const pct = (v: number, size: number) => (size > 0 ? Math.min(100, Math.max(0, (v / size) * 100)) : 50);
   const attrs = {
-    annotaAnchor: el.getAttribute("data-annota-anchor") ?? undefined,
+    pinwrenAnchor: el.getAttribute("data-pinwren-anchor") ?? undefined,
     testId: el.getAttribute("data-testid") ?? undefined,
     id: el.id && !UNSTABLE_ID.test(el.id) ? el.id : undefined,
     ariaLabel: el.getAttribute("aria-label") ?? undefined,
@@ -146,7 +146,7 @@ export function resolveAnchor(a: AnchorBundle): Resolved {
   const textOk = (el: Element) => !text || similarity(textOf(el), text) >= 0.6;
 
   const explicit = [
-    a.attrs?.annotaAnchor && `[data-annota-anchor="${CSS.escape(a.attrs.annotaAnchor)}"]`,
+    a.attrs?.pinwrenAnchor && `[data-pinwren-anchor="${CSS.escape(a.attrs.pinwrenAnchor)}"]`,
     a.attrs?.testId && `[data-testid="${CSS.escape(a.attrs.testId)}"]`,
     a.attrs?.id && `#${CSS.escape(a.attrs.id)}`,
   ].filter(Boolean) as string[];
@@ -166,7 +166,7 @@ export function resolveAnchor(a: AnchorBundle): Resolved {
   if (!text) return null;
   let best: Resolved = null;
   for (const el of safeQueryAll(a.tag)) {
-    if (el.closest("annota-root")) continue;
+    if (el.closest("pinwren-root")) continue;
     const t = similarity(textOf(el), text);
     if (t < 0.4) continue;
     const prev = similarity(siblingText(el, "prev"), a.text.prefix);

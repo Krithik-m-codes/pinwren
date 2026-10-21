@@ -1,18 +1,18 @@
-# 05 — Widget specification (`@annota/widget`, MIT)
+# 05 — Widget specification (`@pinwren/widget`, MIT)
 
 The widget is the product most people touch and the one place a bug can hurt a customer's own site. It gets the strictest budgets.
 
 ## 1. Delivery
 
 ```html
-<script src="https://annota.example.com/widget.js" data-project="pk_live_xxx" async></script>
+<script src="https://pinwren.example.com/widget.js" data-project="pk_live_xxx" async></script>
 ```
 or
 ```ts
-import { init } from '@annota/widget';
-init({ projectKey: 'pk_live_xxx', endpoint: 'https://annota.example.com' });
+import { init } from '@pinwren/widget';
+init({ projectKey: 'pk_live_xxx', endpoint: 'https://pinwren.example.com' });
 ```
-or React: `<Annota projectKey="…" />` from `@annota/react`.
+or React: `<Pinwren projectKey="…" />` from `@pinwren/react`.
 
 - `widget.js` is a tiny **loader** (< 3 KB gzip) that reads `data-*` attributes, checks visibility rules locally where possible, then imports the versioned core (`/w/v1/core.<hash>.js`).
 - Lazy chunks: `editor` (annotation), `capture` (SnapDOM), `replay` (rrweb record), `panel` (thread list), `i18n/<locale>`.
@@ -33,12 +33,12 @@ or React: `<Annota projectKey="…" />` from `@annota/react`.
 
 ## 3. Isolation rules
 
-- All UI lives in a **closed Shadow DOM** attached to a single host element `<annota-root>` appended to `document.documentElement` (not `body`, survives body re-renders).
+- All UI lives in a **closed Shadow DOM** attached to a single host element `<pinwren-root>` appended to `document.documentElement` (not `body`, survives body re-renders).
 - Styles via constructed `CSSStyleSheet` + `adoptedStyleSheets`; fallback `<style>` inside the shadow root. Reset with `:host { all: initial }`.
 - Overlays that must sit above the page (hover outline, region selection, pins) are rendered in a fixed-position layer inside the shadow root with `z-index: 2147483000+` and `pointer-events` only while active.
-- **No globals** except `window.Annota` (queue + API). No prototype patching except the opt-in, reversible `fetch`/`XHR`/`console` wrappers in capture, each guarded so a second instance or an uninstall restores originals.
+- **No globals** except `window.Pinwren` (queue + API). No prototype patching except the opt-in, reversible `fetch`/`XHR`/`console` wrappers in capture, each guarded so a second instance or an uninstall restores originals.
 - Every public entry point is wrapped: exceptions are caught, reported to `/w/telemetry` (sampled, opt-out), and never rethrown into host code.
-- Respect host CSP: no `eval`, no inline scripts; document the required CSP (`script-src`, `connect-src`, `img-src` for the Annota origin) and a nonce option (`data-nonce`).
+- Respect host CSP: no `eval`, no inline scripts; document the required CSP (`script-src`, `connect-src`, `img-src` for the Pinwren origin) and a nonce option (`data-nonce`).
 - Works with: plain HTML, React/Next.js (App Router), Vue/Nuxt, Svelte/SvelteKit, Angular, Astro, WordPress, Webflow, Shopify. E2E fixture sites cover the first six.
 
 ## 4. Modes and state machine
@@ -60,7 +60,7 @@ idle ──launcher/shortcut──▶ menu ──"Comment"──▶ picking ─�
 ```ts
 interface AnchorBundle {
   v: 1;
-  attrs?: { annotaAnchor?: string; testId?: string; id?: string; ariaLabel?: string; name?: string };
+  attrs?: { pinwrenAnchor?: string; testId?: string; id?: string; ariaLabel?: string; name?: string };
   css: string;                 // stable selector (avoid hashed classes)
   xpath: string;
   text: { content: string; prefix: string; suffix: string };   // normalised, truncated
@@ -72,13 +72,13 @@ interface AnchorBundle {
 }
 ```
 
-Stable-selector heuristics (build on SitePing's approach, MIT): skip class names matching `/^(css|sc|jsx|emotion|svelte)-[\w-]{4,}$/`, CSS-module hashes (`_[a-z0-9]{5,}$`), Tailwind arbitrary-value classes, and IDs that look generated (`:r1:`, UUIDs, long digit runs). Prefer `data-annota-anchor` > `data-testid` > `id` > `aria-label` > semantic tag path.
+Stable-selector heuristics (build on SitePing's approach, MIT): skip class names matching `/^(css|sc|jsx|emotion|svelte)-[\w-]{4,}$/`, CSS-module hashes (`_[a-z0-9]{5,}$`), Tailwind arbitrary-value classes, and IDs that look generated (`:r1:`, UUIDs, long digit runs). Prefer `data-pinwren-anchor` > `data-testid` > `id` > `aria-label` > semantic tag path.
 
 The re-attach algorithm and scoring live in `packages/anchoring` (framework-free, 100 % unit-tested, see F-031).
 
 ## 6. Capture pipeline
 
-1. **Mask first.** Before capture, apply masking: elements matching `[data-annota-mask]`, `input[type=password]`, `[autocomplete^=cc-]`, project-configured selectors → replaced in the clone with a solid block; `[data-annota-ignore]` → removed.
+1. **Mask first.** Before capture, apply masking: elements matching `[data-pinwren-mask]`, `input[type=password]`, `[autocomplete^=cc-]`, project-configured selectors → replaced in the clone with a solid block; `[data-pinwren-ignore]` → removed.
 2. **Capture** with SnapDOM (`clip` = viewport by default, element or full page optional), `scale = min(devicePixelRatio, 2)`, WebP 0.85 (PNG fallback).
 3. **Cross-origin images/fonts** that block capture: retry those resources through the server's capture proxy (`/w/proxy?url=` — allowlisted to the project's origins and their declared asset hosts, size-capped, image/font MIME only). If still blocked, render a labelled placeholder rather than failing.
 4. **Fallback**: if SnapDOM throws or exceeds 4 s, offer "Capture with screen share" (`getDisplayMedia`, user-initiated) or "Submit without screenshot".
@@ -89,22 +89,22 @@ The re-attach algorithm and scoring live in `packages/anchoring` (framework-free
 - Console: ring buffer (default 100 entries, 4 KB per entry), args serialised with a safe serializer (depth 4, 50 keys, strings 1 KB, circular-safe, DOM nodes as `<tag#id.class>`).
 - Network: ring buffer (default 50 entries) of failed (status ≥ 400 or network error) and slow (> 3 s) requests; URL query values redacted by default for keys matching `/token|key|secret|password|auth|session|code/i`.
 - Errors: `window.onerror`, `unhandledrejection`, with stack and source mapping hints.
-- Replay: rrweb with `maskAllInputs: true`, `blockClass: 'annota-block'`, `maskTextClass: 'annota-mask'`, sampling (mousemove 50 ms, scroll 150 ms), `checkoutEveryNms: 10_000` so the buffer can drop old segments; gzip with `CompressionStream` before upload.
+- Replay: rrweb with `maskAllInputs: true`, `blockClass: 'pinwren-block'`, `maskTextClass: 'pinwren-mask'`, sampling (mousemove 50 ms, scroll 150 ms), `checkoutEveryNms: 10_000` so the buffer can drop old segments; gzip with `CompressionStream` before upload.
 
 ## 8. Public JS API
 
 ```ts
-Annota.init(options)            // when not using data attributes
-Annota.open(mode?: 'comment'|'bug'|'panel')
-Annota.close()
-Annota.show() / Annota.hide()   // launcher visibility
-Annota.identify(user, { signature? })
-Annota.setMetadata(obj)
-Annota.setPageScope({ urlPattern })
-Annota.on(event, handler)       // 'open','close','submit','error','ready'
-Annota.destroy()                // full teardown: listeners, wrappers, DOM
+Pinwren.init(options)            // when not using data attributes
+Pinwren.open(mode?: 'comment'|'bug'|'panel')
+Pinwren.close()
+Pinwren.show() / Pinwren.hide()   // launcher visibility
+Pinwren.identify(user, { signature? })
+Pinwren.setMetadata(obj)
+Pinwren.setPageScope({ urlPattern })
+Pinwren.on(event, handler)       // 'open','close','submit','error','ready'
+Pinwren.destroy()                // full teardown: listeners, wrappers, DOM
 ```
-Before the core loads, calls are queued on `window.Annota.q` (snippet-style).
+Before the core loads, calls are queued on `window.Pinwren.q` (snippet-style).
 
 ## 9. Accessibility
 

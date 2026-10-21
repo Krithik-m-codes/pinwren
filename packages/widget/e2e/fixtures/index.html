@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Lumen Coffee — Annota E2E fixture</title>
+    <title>Lumen Coffee — Pinwren E2E fixture</title>
     <style>
       :root { --ink: #1c1917; --muted: #78716c; --line: #e7e5e4; --accent: #b45309; }
       * { box-sizing: border-box; }
@@ -29,7 +29,7 @@
       // ?hostile=1 — a page stylesheet that tries to flatten everything, including the widget host.
       if (location.search.includes("hostile")) {
         const s = document.createElement("style");
-        s.textContent = "* { all: unset !important; } annota-root { display: none; }";
+        s.textContent = "* { all: unset !important; } pinwren-root { display: none; }";
         document.head.append(s);
       }
     </script>
@@ -54,7 +54,7 @@
     </section>
     <form onsubmit="return false"><input id="email" placeholder="you@example.com" aria-label="Newsletter email" /><button class="cta" type="submit">Join</button></form>
     <p class="note" data-testid="secret">Account 4242 4242 4242 4242</p>
-    <p class="note">Fixture page for the Annota widget E2E suite.</p>
+    <p class="note">Fixture page for the Pinwren widget E2E suite.</p>
     <script>
       // ?locale=fr sets data-locale, like a site would on its script tag.
       const w = document.createElement("script");

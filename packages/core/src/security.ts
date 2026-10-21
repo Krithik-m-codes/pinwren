@@ -8,7 +8,7 @@ export type HttpsDecision =
   | { action: "refuse" };
 
 /**
- * `ANNOTA_ENFORCE_HTTPS`: plain-HTTP requests are redirected (GET/HEAD) or refused (anything else,
+ * `PINWREN_ENFORCE_HTTPS`: plain-HTTP requests are redirected (GET/HEAD) or refused (anything else,
  * so a form post never silently loses its body). Requests to localhost are exempt so health checks
  * and local development keep working. `X-Forwarded-Proto` / `X-Forwarded-Host` count only behind a
  * trusted proxy — otherwise any client could claim https.

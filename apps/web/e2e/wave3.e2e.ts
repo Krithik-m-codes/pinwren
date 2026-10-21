@@ -103,16 +103,16 @@ test.describe("wave 3", () => {
       await expect(page.getByText("Agent picked it up (run 42)").first()).toBeVisible();
       const hit = receiver.seen.find((s) => s.url === "/hook");
       expect(hit).toBeTruthy();
-      const ts = String(hit?.headers["annota-timestamp"]);
+      const ts = String(hit?.headers["pinwren-timestamp"]);
       const expected = `v1=${createHmac("sha256", secret).update(`${ts}.${hit?.body}`).digest("hex")}`;
-      expect(hit?.headers["annota-signature"]).toBe(expected);
+      expect(hit?.headers["pinwren-signature"]).toBe(expected);
       const timeline = page.getByTestId("feedback-detail").getByRole("region", { name: "Activity" });
       await expect(timeline.getByText(/ran “Send to agent”/)).toBeVisible();
       await shoot(page, "inbox-actions");
 
       // Webhook actions never reach the widget.
       const cfg = await request.get("/w/config", {
-        headers: { "x-annota-key": seed().publicKey, origin: SITE_ORIGIN },
+        headers: { "x-pinwren-key": seed().publicKey, origin: SITE_ORIGIN },
       });
       const body = await cfg.text();
       expect(body).toContain("Create Jira ticket");
@@ -230,7 +230,7 @@ test.describe("wave 3", () => {
     await page.getByRole("switch", { name: "Privacy mode" }).click();
     await expect(page.getByText("Privacy mode on").first()).toBeVisible();
     const cfg = await request.get("/w/config", {
-      headers: { "x-annota-key": publicKey, origin: SITE_ORIGIN },
+      headers: { "x-pinwren-key": publicKey, origin: SITE_ORIGIN },
     });
     const { widget, capture } = (await cfg.json()) as {
       widget: { privacyMode: boolean; consent: { enabled: boolean } };

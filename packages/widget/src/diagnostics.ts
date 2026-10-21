@@ -192,14 +192,14 @@ function installNetwork(cfg: Pick<CaptureCfg, "network">, live: { on: boolean })
     live,
   );
 
-  type Xhr = XMLHttpRequest & { __annota?: { m: string; u: string } };
+  type Xhr = XMLHttpRequest & { __pinwren?: { m: string; u: string } };
   const proto = XMLHttpRequest.prototype;
   wrap(
     proto,
     "open",
     (open) =>
       function (this: Xhr, method: string, url: string | URL, ...rest: unknown[]) {
-        this.__annota = { m: method.toUpperCase(), u: String(url) };
+        this.__pinwren = { m: method.toUpperCase(), u: String(url) };
         // biome-ignore lint/suspicious/noExplicitAny: forwarding the original variadic signature
         return (open as any).call(this, method, url, ...rest);
       } as typeof proto.open,
@@ -210,7 +210,7 @@ function installNetwork(cfg: Pick<CaptureCfg, "network">, live: { on: boolean })
     "send",
     (send) =>
       function (this: Xhr, body?: Document | XMLHttpRequestBodyInit | null) {
-        const meta = this.__annota;
+        const meta = this.__pinwren;
         const started = performance.now();
         if (meta) {
           this.addEventListener("loadend", () => {

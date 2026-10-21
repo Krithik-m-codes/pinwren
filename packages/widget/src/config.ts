@@ -1,5 +1,5 @@
 // Widget configuration as served by `GET /w/config` (docs/contracts/wave-1.md §1, wave-3.md §1–§3).
-// The type and its defaults are mirrored here rather than imported from `@annota/core` (which doesn't export
+// The type and its defaults are mirrored here rather than imported from `@pinwren/core` (which doesn't export
 // the wave-3 fields yet): the server fills defaults too, but the widget must never trust that every key is
 // present or valid — this file is the last line of defence before values reach the DOM.
 
@@ -127,7 +127,7 @@ export function sanitizeActions(raw: unknown): PanelAction[] {
 
 /**
  * Branding from the server. The accent becomes a CSS custom property (plain hex only) and the logo an <img
- * src>: only https URLs, or the Annota server's own `/api/assets/…` / `/api/brand-assets/…` (which may be
+ * src>: only https URLs, or the Pinwren server's own `/api/assets/…` / `/api/brand-assets/…` (which may be
  * plain http on a development or LAN install).
  */
 export function resolveBranding(raw: unknown, endpoint: string): Branding {
@@ -165,7 +165,7 @@ export function readableOn(hex: string): "#ffffff" | "#18181b" {
   return 1.05 / (lum + 0.05) >= (lum + 0.05) / 0.06 ? "#ffffff" : "#18181b";
 }
 
-// `capture` block of `GET /w/config` (contract §1, `captureConfig` in @annota/core).
+// `capture` block of `GET /w/config` (contract §1, `captureConfig` in @pinwren/core).
 export type CaptureCfg = {
   console: "off" | "errors" | "warnings" | "all";
   network: "off" | "failures";

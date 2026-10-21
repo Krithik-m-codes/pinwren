@@ -25,7 +25,7 @@ Durations assume one developer working with an AI build agent full-time. Each ph
 | WP-09 | Capture (SnapDOM + masking + proxy + fallback) + annotation editor + bug report mode | F-003, F-004 |
 | WP-10 | Console, network, error capture + dashboard panes | F-005, F-006 |
 | WP-11 | Email (SMTP/Resend) + in-app notifications + preferences + digests | F-054, F-070 |
-| WP-12 | Docker image, compose variants, setup wizard, `annota doctor`, backups | 08 |
+| WP-12 | Docker image, compose variants, setup wizard, `pinwren doctor`, backups | 08 |
 | WP-13 | Hardening: rate limits, security headers, sanitisation, E2E matrix, size budgets, docs | 09, 12 |
 
 **Exit:** `docker compose up` → first pinned comment and first bug report (with screenshot, annotations, console, network) visible in the inbox within 5 minutes; emails delivered via SMTP; anchoring suite ≥ 90 %; widget budgets met; no known high-severity security issues.
@@ -38,9 +38,9 @@ Durations assume one developer working with an AI build agent full-time. Each ph
 | WP-15 | Board, Pages, Review rounds, Saved views, bulk actions, duplicate (basic) | F-052, F-053, F-055, F-056 |
 | WP-16 | Webhooks (signed, retries, delivery log) + Slack, Discord, Teams, Telegram, ntfy | F-071–F-075 |
 | WP-17 | GitHub, GitLab, Linear two-way sync | F-076–F-078 |
-| WP-18 | API tokens, public REST API, `@annota/sdk`, MCP server (HTTP + stdio) | F-080, F-081 |
+| WP-18 | API tokens, public REST API, `@pinwren/sdk`, MCP server (HTTP + stdio) | F-080, F-081 |
 | WP-19 | Session replay (record buffer + player + timeline sync) | F-007 |
-| WP-20 | i18n (8 locales), guest portal, review links, identify/metadata API, `@annota/react` | F-008, F-012, F-013, 06 §7 |
+| WP-20 | i18n (8 locales), guest portal, review links, identify/metadata API, `@pinwren/react` | F-008, F-012, F-013, 06 §7 |
 | WP-30 | Widget parity extras: right-click comments, panel actions, read-only, export, "Mine" filter | F-015–F-018, [14](14-feature-parity.md) |
 
 **Exit:** every SitePing and BugPin row in [14-feature-parity.md](14-feature-parity.md) is ✅ or explicitly deferred; an agency can run a full client review round with guests and review links, route to Slack and GitHub, and a developer can fix an item end-to-end from Claude Code via MCP.
@@ -84,7 +84,7 @@ Durations assume one developer working with an AI build agent full-time. Each ph
 | Risk | Impact | Mitigation |
 |---|---|---|
 | Screenshot fidelity on complex sites (cross-origin assets, canvas, iframes) | Reports look wrong → trust loss | Proxy for assets, placeholders, screen-share fallback, fixture suite of hard pages |
-| Anchoring drift on heavy SPAs | Pins in wrong place | Confidence scoring, "moved?" UI, re-pin, explicit `data-annota-anchor` docs |
+| Anchoring drift on heavy SPAs | Pins in wrong place | Confidence scoring, "moved?" UI, re-pin, explicit `data-pinwren-anchor` docs |
 | Widget breaks a customer site | Churn, reputation | Isolation, error guard, size budgets, framework E2E matrix, remote kill switch |
 | Spam on public endpoints | Cost, noise | Rate limits, challenge, pause intake |
 | AGPL scares some enterprises | Lost deals | Commercial licence for Enterprise customers covers the whole codebase |

@@ -34,7 +34,7 @@ function transportFor(c: SmtpConfig): Transporter {
 export async function sendEmail(msg: EmailMessage): Promise<SendResult> {
   const config = await resolveSmtp();
   if (!config) {
-    console.info(`[annota] email skipped (SMTP not configured): "${msg.subject}"`);
+    console.info(`[pinwren] email skipped (SMTP not configured): "${msg.subject}"`);
     return { sent: false, reason: "SMTP is not configured" };
   }
   const info = await transportFor(config).sendMail({

@@ -1,5 +1,5 @@
-import { webhookCreate, webhookUpdate } from "@annota/core";
-import { getDb, project, webhookDelivery, webhookEndpoint } from "@annota/db";
+import { webhookCreate, webhookUpdate } from "@pinwren/core";
+import { getDb, project, webhookDelivery, webhookEndpoint } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
@@ -65,18 +65,18 @@ function pingPayload(): WebhookPayload {
         id: "00000000-0000-0000-0000-000000000000",
         number: 0,
         projectId: "00000000-0000-0000-0000-000000000000",
-        projectName: "Annota",
+        projectName: "Pinwren",
         kind: "comment",
         status: "open",
         priority: "none",
         title: "Test delivery",
-        body: "This is a test delivery from Annota. If you can read this, the webhook works.",
+        body: "This is a test delivery from Pinwren. If you can read this, the webhook works.",
         pageUrl: null,
         reporterName: null,
         assigneeIds: [],
         createdAt: now,
         updatedAt: now,
-        url: `${env().ANNOTA_URL.replace(/\/$/, "")}/settings`,
+        url: `${env().PINWREN_URL.replace(/\/$/, "")}/settings`,
       },
     },
   };

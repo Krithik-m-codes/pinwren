@@ -72,7 +72,7 @@ test.describe("inbox", () => {
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toContain(`item=${items.pin.id}`);
     const open = detail.getByRole("link", { name: "Open on page" });
-    await expect(open).toHaveAttribute("href", `https://e2e.example.com/pricing?annota=${items.pin.id}`);
+    await expect(open).toHaveAttribute("href", `https://e2e.example.com/pricing?pinwren=${items.pin.id}`);
   });
 
   test("region comment shows its capture, anchor and the bug's attachments", async ({ page }) => {

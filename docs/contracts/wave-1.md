@@ -2,7 +2,7 @@
 
 Shared by the widget agent (owns `packages/widget`) and the backend agent (owns `packages/api`, `packages/db`,
 `packages/core`). Types live in `packages/core` (backend agent writes them first); the widget imports them from
-`@annota/core`. If you must change this contract, change this file in the same edit and say so in your report.
+`@pinwren/core`. If you must change this contract, change this file in the same edit and say so in your report.
 
 ## 1. Widget config — `GET /w/config`
 
@@ -83,17 +83,17 @@ POST shares the report rate limit and returns `403 READ_ONLY` when `widget.readO
 
 Body `{ status: "resolved" | "open" }`. Allowed when **either** `widget.visitorsCanResolve` is true (and the project
 has `publicRead` on and `widget.readOnly` off — visitors can't act on what they can't see) **or** the request carries
-header `x-annota-reporter-token` matching that feedback (works regardless of those settings). Writes an `activity`
+header `x-pinwren-reporter-token` matching that feedback (works regardless of those settings). Writes an `activity`
 row (`type: "status_changed"`, `actor_kind: "guest"`, `data: { from, to, via: "reporter" | "visitor" }`).
 `403 RESOLVE_NOT_ALLOWED` otherwise. Returns `{ feedback: { id, status } }` (also when the status was already the
 requested one — no activity row then). `409 CONFLICT` if the status changed concurrently. CORS allows `PATCH` and
-the `x-annota-reporter-token` header. `REPORTER_TOKEN_HEADER` is exported from `@annota/core`.
+the `x-pinwren-reporter-token` header. `REPORTER_TOKEN_HEADER` is exported from `@pinwren/core`.
 
 ## 6. Errors
 
 Problem-details JSON (existing). Widget shows `title` to the user.
 
-## 7. Types exported by `@annota/core` (backend, done)
+## 7. Types exported by `@pinwren/core` (backend, done)
 
 `widgetConfig`, `captureConfig` (Zod, every field defaulted — `widgetConfig.parse({})` is the full default),
 `WidgetConfig`, `CaptureConfig`, `WidgetConfigInput`/`CaptureConfigInput` (partial input), `parseWidgetConfig()` /
@@ -103,7 +103,7 @@ Problem-details JSON (existing). Widget shows `title` to the user.
 
 ## 8. Dashboard API added in wave 1 (for the dashboard agent)
 
-All under `/api`, session cookie, problem-details errors. Request schemas are in `@annota/core`.
+All under `/api`, session cookie, problem-details errors. Request schemas are in `@pinwren/core`.
 
 | Endpoint | Notes |
 |---|---|
@@ -125,12 +125,12 @@ All under `/api`, session cookie, problem-details errors. Request schemas are in
 | `GET /api/webhooks/:id/deliveries` | `{ deliveries: [{ id, eventId, event, attempt, status: pending|success|retrying|failed, responseCode, responseBody, error, durationMs, nextRetryAt, createdAt }] }` — one row per attempt. |
 | `POST /api/webhook-deliveries/:id/redeliver` | Re-sends now (same event id); `{ delivery }`. |
 | `GET/POST /api/tokens`, `DELETE /api/tokens/:id` | Own tokens. Create `{ name, scopes: (feedback:read|feedback:write|comments:write)[], expiresInDays? }` → `201 { token: { id, name, prefix, scopes, lastUsedAt, expiresAt, createdAt }, secret }` (**shown once**). |
-| `GET/PATCH /api/admin/settings/email`, `POST /api/admin/settings/email/test` | Instance admins only (`ANNOTA_ADMIN_EMAILS`, else the first user): `{ email: { host, port, user, secure, from, passwordSet, locked: {field: bool}, configured } }`. PATCH fields (`password` write-only; null clears); env-locked fields → `409 SETTING_LOCKED`. Test → `{ sent: true, to }` or `{ sent: false, skipped, reason }` (never an HTTP error). |
+| `GET/PATCH /api/admin/settings/email`, `POST /api/admin/settings/email/test` | Instance admins only (`PINWREN_ADMIN_EMAILS`, else the first user): `{ email: { host, port, user, secure, from, passwordSet, locked: {field: bool}, configured } }`. PATCH fields (`password` write-only; null clears); env-locked fields → `409 SETTING_LOCKED`. Test → `{ sent: true, to }` or `{ sent: false, skipped, reason }` (never an HTTP error). |
 
 Public API (`Authorization: Bearer ann_…`): `GET /api/v1/feedback`, `GET/PATCH /api/v1/feedback/:id`,
 `POST /api/v1/feedback/:id/comments` — same shapes as the dashboard routes; `401 INVALID_TOKEN`,
 `403 INSUFFICIENT_SCOPE`.
 
 Webhook payloads (generic): `{ id, event, apiVersion: "2026-11-01", createdAt, data: { feedback, comment?, changes?, actor } }`,
-headers `Annota-Event`, `Annota-Delivery` (event id, stable across retries), `Annota-Timestamp`,
-`Annota-Signature: v1=<hex HMAC-SHA256(secret, timestamp + "." + body)>`.
+headers `Pinwren-Event`, `Pinwren-Delivery` (event id, stable across retries), `Pinwren-Timestamp`,
+`Pinwren-Signature: v1=<hex HMAC-SHA256(secret, timestamp + "." + body)>`.

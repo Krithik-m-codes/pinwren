@@ -1,5 +1,5 @@
-import { parseWidgetConfig } from "@annota/core";
-import { activity, feedback, getDb, project } from "@annota/db";
+import { parseWidgetConfig } from "@pinwren/core";
+import { activity, feedback, getDb, project } from "@pinwren/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { decryptSecret, encryptSecret, randomToken } from "../crypto";
 import { ApiError, notFound } from "../errors";
@@ -22,7 +22,7 @@ export async function ensureActionSecret(p: Pick<ProjectRow, "id" | "actionSecre
     try {
       return decryptSecret(p.actionSecret);
     } catch {
-      // Unreadable after an ANNOTA_SECRET change: issue a new one below.
+      // Unreadable after an PINWREN_SECRET change: issue a new one below.
     }
   }
   return rotateActionSecret(p.id);

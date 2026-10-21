@@ -45,7 +45,7 @@ export type WebhookPayload = {
   };
 };
 
-/** `Annota-Signature: v1=<hex HMAC-SHA256(secret, timestamp + "." + body)>`. */
+/** `Pinwren-Signature: v1=<hex HMAC-SHA256(secret, timestamp + "." + body)>`. */
 export function signBody(secret: string, timestamp: number, body: string): string {
   return `v1=${hmacSha256Hex(secret, `${timestamp}.${body}`)}`;
 }
@@ -160,14 +160,14 @@ export function buildRequest(
 ): OutboundRequest {
   const headers: Record<string, string> = {
     "content-type": "application/json",
-    "user-agent": "Annota-Webhooks/1",
+    "user-agent": "Pinwren-Webhooks/1",
   };
   if (kind === "slack") return { body: JSON.stringify(slackBody(payload)), headers };
   if (kind === "discord") return { body: JSON.stringify(discordBody(payload)), headers };
   const body = JSON.stringify(payload);
-  headers["annota-event"] = payload.event;
-  headers["annota-delivery"] = payload.id;
-  headers["annota-timestamp"] = String(now);
-  if (secret) headers["annota-signature"] = signBody(secret, now, body);
+  headers["pinwren-event"] = payload.event;
+  headers["pinwren-delivery"] = payload.id;
+  headers["pinwren-timestamp"] = String(now);
+  if (secret) headers["pinwren-signature"] = signBody(secret, now, body);
   return { body, headers };
 }

@@ -16,7 +16,7 @@ export const en = {
   hideComments: "Hide comments",
   showComments: "Show comments",
   pinsOnPage: "Pins on the page",
-  poweredBy: "Powered by Annota",
+  poweredBy: "Powered by Pinwren",
   queued_one: "{n} report waiting to send",
   queued_other: "{n} reports waiting to send",
   queuedSub: "It sends by itself when you're back online",

@@ -13,13 +13,13 @@ function createDb(url: string) {
 export type Database = ReturnType<typeof createDb>;
 
 // One pool per process. Next.js dev reloads modules, so keep it on globalThis.
-const globalForDb = globalThis as unknown as { __annotaDb?: Database };
+const globalForDb = globalThis as unknown as { __pinwrenDb?: Database };
 
 export function getDb(): Database {
-  if (!globalForDb.__annotaDb) {
+  if (!globalForDb.__pinwrenDb) {
     const url = process.env.DATABASE_URL;
     if (!url) throw new Error("DATABASE_URL is not set");
-    globalForDb.__annotaDb = createDb(url);
+    globalForDb.__pinwrenDb = createDb(url);
   }
-  return globalForDb.__annotaDb;
+  return globalForDb.__pinwrenDb;
 }

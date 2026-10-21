@@ -1,5 +1,5 @@
-import { type ApiTokenScope, apiCommentCreate, feedbackListQuery, feedbackUpdate } from "@annota/core";
-import { apiToken, getDb, member } from "@annota/db";
+import { type ApiTokenScope, apiCommentCreate, feedbackListQuery, feedbackUpdate } from "@pinwren/core";
+import { apiToken, getDb, member } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";

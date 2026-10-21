@@ -1,4 +1,4 @@
-import type { PanelAction } from "@annota/core";
+import type { PanelAction } from "@pinwren/core";
 import { ArrowUpRight, Bot, ExternalLink, Link2, type LucideIcon, Ticket, Zap } from "lucide-react";
 
 export const PANEL_ACTION_ICON_META: Record<

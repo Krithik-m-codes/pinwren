@@ -13,8 +13,8 @@ import {
   widgetCommentCreate,
   widgetFeedbackCreate,
   widgetFeedbackStatusUpdate,
-} from "@annota/core";
-import { activity, comment, diagnostics, feedback, feedbackAsset, getDb, page, project } from "@annota/db";
+} from "@pinwren/core";
+import { activity, comment, diagnostics, feedback, feedbackAsset, getDb, page, project } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
@@ -33,7 +33,7 @@ type WidgetVars = { project: typeof project.$inferSelect; origin: string };
 const corsHeaders = (origin: string) => ({
   "access-control-allow-origin": origin,
   "access-control-allow-methods": "GET, POST, PATCH, OPTIONS",
-  "access-control-allow-headers": `content-type, x-annota-key, ${REPORTER_TOKEN_HEADER}`,
+  "access-control-allow-headers": `content-type, x-pinwren-key, ${REPORTER_TOKEN_HEADER}`,
   "access-control-max-age": "600",
   vary: "Origin",
 });
@@ -95,9 +95,9 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
     return origin ? c.body(null, 204, corsHeaders(origin)) : c.body(null, 204);
   })
   .use("*", async (c, next) => {
-    const key = c.req.header("x-annota-key") ?? c.req.query("key");
+    const key = c.req.header("x-pinwren-key") ?? c.req.query("key");
     const origin = c.req.header("origin");
-    if (!key) throw new ApiError(401, "MISSING_PROJECT_KEY", "x-annota-key header is required");
+    if (!key) throw new ApiError(401, "MISSING_PROJECT_KEY", "x-pinwren-key header is required");
     const [p] = await getDb()
       .select()
       .from(project)

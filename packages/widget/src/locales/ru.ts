@@ -16,7 +16,7 @@ export default {
   hideComments: "Скрыть комментарии",
   showComments: "Показать комментарии",
   pinsOnPage: "Метки на странице",
-  poweredBy: "Работает на Annota",
+  poweredBy: "Работает на Pinwren",
   queued_one: "{n} отчёт ждёт отправки",
   queued_few: "{n} отчёта ждут отправки",
   queued_many: "{n} отчётов ждут отправки",

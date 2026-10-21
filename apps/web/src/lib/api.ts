@@ -14,7 +14,7 @@ import type {
   WEBHOOK_KINDS,
   WidgetBranding,
   WidgetConfig,
-} from "@annota/core";
+} from "@pinwren/core";
 
 /** Thrown for any non-2xx answer; carries the problem-details code (blueprint 04 §1). */
 export class ApiRequestError extends Error {

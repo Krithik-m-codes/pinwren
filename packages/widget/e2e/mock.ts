@@ -175,7 +175,7 @@ export async function mockApi(
     }
     if (req.method() === "PATCH") {
       const allowed =
-        widget.visitorsCanResolve !== false || headers["x-annota-reporter-token"] === item.token;
+        widget.visitorsCanResolve !== false || headers["x-pinwren-reporter-token"] === item.token;
       if (!allowed) return json(route, 403, { title: "You can't resolve this", code: "RESOLVE_NOT_ALLOWED" });
       item.status = body.status;
       return json(route, 200, { feedback: { id: item.id, status: item.status } });

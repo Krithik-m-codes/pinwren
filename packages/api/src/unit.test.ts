@@ -3,8 +3,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 beforeAll(() => {
   process.env.DATABASE_URL ??= "postgres://unused";
-  process.env.ANNOTA_URL ??= "http://localhost:3100";
-  process.env.ANNOTA_SECRET ??= "x".repeat(48);
+  process.env.PINWREN_URL ??= "http://localhost:3100";
+  process.env.PINWREN_SECRET ??= "x".repeat(48);
 });
 
 describe("secrets at rest", () => {
@@ -60,9 +60,9 @@ describe("webhook formatting", () => {
     const { buildRequest } = await import("./webhooks/format");
     const req = buildRequest("generic", payload, "whsec_test", 1_700_000_000);
     const expected = createHmac("sha256", "whsec_test").update(`1700000000.${req.body}`).digest("hex");
-    expect(req.headers["annota-signature"]).toBe(`v1=${expected}`);
-    expect(req.headers["annota-timestamp"]).toBe("1700000000");
-    expect(req.headers["annota-event"]).toBe("feedback.created");
+    expect(req.headers["pinwren-signature"]).toBe(`v1=${expected}`);
+    expect(req.headers["pinwren-timestamp"]).toBe("1700000000");
+    expect(req.headers["pinwren-event"]).toBe("feedback.created");
   });
 
   it("never lets Slack see a raw mention", async () => {
@@ -163,12 +163,12 @@ describe("issue sync", () => {
       reporterName: "@octocat",
       environment: { browser: "Chrome 140", os: "macOS", viewport: { w: 1280, h: 800 } },
       link: "http://localhost:3100/inbox?item=1",
-      productName: "Annota",
+      productName: "Pinwren",
     });
     expect(body).not.toContain("<script>");
     expect(body).not.toMatch(/@everyone|@octocat|#1\b/);
     expect(body).not.toContain("[x](javascript");
-    expect(body).toContain("[Open #7 in Annota](http://localhost:3100/inbox?item=1)");
+    expect(body).toContain("[Open #7 in Pinwren](http://localhost:3100/inbox?item=1)");
     expect(body).toContain("1280 × 800");
     expect(issueTitle({ number: 7, title: null, body: "a\nb" })).toBe("#7 a b");
   });
@@ -258,7 +258,7 @@ describe("privacy helpers", () => {
 describe("S3 driver", () => {
   const opts = {
     endpoint: "https://s3.example.com",
-    bucket: "annota",
+    bucket: "pinwren",
     region: "auto",
     accessKeyId: "AKID",
     secretAccessKey: "SECRET",
@@ -277,9 +277,9 @@ describe("S3 driver", () => {
     expect(await s3.get("p1/abc.png")).toBeNull();
     await s3.remove("p1/abc.png");
     expect(seen.map((r) => `${r.method} ${r.url}`)).toEqual([
-      "PUT https://s3.example.com/annota/p1/abc.png",
-      "GET https://s3.example.com/annota/p1/abc.png",
-      "DELETE https://s3.example.com/annota/p1/abc.png",
+      "PUT https://s3.example.com/pinwren/p1/abc.png",
+      "GET https://s3.example.com/pinwren/p1/abc.png",
+      "DELETE https://s3.example.com/pinwren/p1/abc.png",
     ]);
     expect(seen[0]?.headers.get("authorization")).toMatch(/^AWS4-HMAC-SHA256 Credential=AKID\//);
   });
@@ -294,7 +294,7 @@ describe("S3 driver", () => {
     const s3 = s3Driver({ ...opts, forcePathStyle: false }, fake);
     const got = await s3.get("p1/abc.pdf");
     expect(got?.bytes).toBe(2);
-    expect(urls[0]).toBe("https://annota.s3.example.com/p1/abc.pdf");
+    expect(urls[0]).toBe("https://pinwren.s3.example.com/p1/abc.pdf");
     await expect(s3.get("../etc/passwd")).rejects.toThrow();
   });
 });

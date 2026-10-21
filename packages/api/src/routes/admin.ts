@@ -1,5 +1,5 @@
-import { emailSettingsUpdate, emailTest, securitySettingsUpdate } from "@annota/core";
-import { getDb, user } from "@annota/db";
+import { emailSettingsUpdate, emailTest, securitySettingsUpdate } from "@pinwren/core";
+import { getDb, user } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";

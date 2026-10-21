@@ -9,7 +9,7 @@ export const STYLES = /* css */ `
 [hidden] { display: none !important; }
 .root {
   --bg: #ffffff; --fg: #18181b; --muted: #6b6b76; --line: #e4e4e7; --soft: #f4f4f5;
-  --accent: var(--annota-accent, #5b5bd6); --accent-fg: #fff; --danger: #d93036; --ok: #218358; --warn: #ad5700;
+  --accent: var(--pinwren-accent, #5b5bd6); --accent-fg: #fff; --danger: #d93036; --ok: #218358; --warn: #ad5700;
   --shadow: 0 12px 32px -12px rgba(0,0,0,.28), 0 2px 6px -2px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.06);
   font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--fg); -webkit-font-smoothing: antialiased; text-align: left; letter-spacing: normal;
@@ -158,7 +158,7 @@ textarea { min-height: 76px; field-sizing: content; max-height: 220px; }
 .ib:hover { background: var(--soft); color: var(--fg); }
 
 /* Branding (wave-3 §2): dialogs may use their own accent; the text colour on it is picked for contrast. */
-.card, .modal, .panel { --accent: var(--annota-dialog-accent, var(--annota-accent, #5b5bd6)); --accent-fg: var(--annota-dialog-accent-fg, #fff); }
+.card, .modal, .panel { --accent: var(--pinwren-dialog-accent, var(--pinwren-accent, #5b5bd6)); --accent-fg: var(--pinwren-dialog-accent-fg, #fff); }
 
 
 /* Comment on selection: highlighted quote on the page, the offer chip, the quote in cards */

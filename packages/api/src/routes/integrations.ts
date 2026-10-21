@@ -1,5 +1,5 @@
-import { issueCreate, issueIntegrationCreate, issueIntegrationUpdate } from "@annota/core";
-import { getDb, issueIntegration, project } from "@annota/db";
+import { issueCreate, issueIntegrationCreate, issueIntegrationUpdate } from "@pinwren/core";
+import { getDb, issueIntegration, project } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, eq } from "drizzle-orm";
 import { Hono } from "hono";

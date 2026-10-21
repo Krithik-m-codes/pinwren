@@ -6,7 +6,7 @@ import {
   type PanelAction,
   panelAction,
   widgetConfig,
-} from "@annota/core";
+} from "@pinwren/core";
 import { useMutation } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Eye, KeyRound, Pencil, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
 import { useState } from "react";
@@ -56,7 +56,7 @@ function uniqueId(base: string, taken: string[]) {
 
 /**
  * Panel actions (F-016): custom buttons on a feedback item — links that open a URL with the item's
- * details filled in, or webhooks Annota calls (signed) from the dashboard.
+ * details filled in, or webhooks Pinwren calls (signed) from the dashboard.
  */
 export function ActionsTab({ project }: { project: ProjectDetail }) {
   const save = useProjectPatch(project.id);
@@ -296,7 +296,7 @@ function ActionDialog({
             <p className="text-xs text-muted-foreground">
               {d.kind === "link"
                 ? "Opens in a new tab with the placeholders filled in."
-                : "Annota POSTs the item as JSON, signed with this project's secret, and shows the reply's “message”."}
+                : "Pinwren POSTs the item as JSON, signed with this project's secret, and shows the reply's “message”."}
             </p>
           </div>
           <div className="grid gap-1.5">
@@ -312,7 +312,7 @@ function ActionDialog({
               placeholder={
                 d.kind === "link"
                   ? "https://jira.example.com/create?summary={number}"
-                  : "https://hooks.example.com/annota"
+                  : "https://hooks.example.com/pinwren"
               }
               aria-invalid={!!errors.url || undefined}
               onChange={(e) => set("url", e.target.value)}
@@ -362,7 +362,7 @@ function ActionDialog({
   );
 }
 
-/** Revealable, rotatable secret that signs webhook actions (`Annota-Signature: v1=…`). */
+/** Revealable, rotatable secret that signs webhook actions (`Pinwren-Signature: v1=…`). */
 function SigningSecretCard({ project }: { project: ProjectDetail }) {
   const [secret, setSecret] = useState<string | null>(null);
   const [confirmRotate, setConfirmRotate] = useState(false);
@@ -387,8 +387,8 @@ function SigningSecretCard({ project }: { project: ProjectDetail }) {
         <CardTitle>Signing secret</CardTitle>
         <CardDescription>
           Webhook actions carry{" "}
-          <code className="font-mono text-xs">Annota-Signature: v1=HMAC-SHA256(secret, timestamp.body)</code>{" "}
-          and <code className="font-mono text-xs">Annota-Timestamp</code> — the same scheme as outgoing
+          <code className="font-mono text-xs">Pinwren-Signature: v1=HMAC-SHA256(secret, timestamp.body)</code>{" "}
+          and <code className="font-mono text-xs">Pinwren-Timestamp</code> — the same scheme as outgoing
           webhooks. Verify it before acting.
         </CardDescription>
       </CardHeader>

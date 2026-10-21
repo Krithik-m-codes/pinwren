@@ -1,5 +1,5 @@
 // What the core shares with its lazy chunks (see chunks.ts). index.ts puts this object on
-// `window.__annotaLib`; build.mjs rewrites a chunk's imports of these modules to read from it, so state such
+// `window.__pinwrenLib`; build.mjs rewrites a chunk's imports of these modules to read from it, so state such
 // as the active locale and the diagnostics buffers exists once. A chunk importing a name missing here fails
 // the build — add it here rather than letting the chunk bundle a second copy.
 export { loadChunk, preload } from "./chunks";

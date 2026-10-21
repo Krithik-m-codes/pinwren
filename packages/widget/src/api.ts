@@ -1,4 +1,4 @@
-import type { WidgetFeedbackCreate } from "@annota/core";
+import type { WidgetFeedbackCreate } from "@pinwren/core";
 import {
   type Branding,
   type CaptureCfg,
@@ -51,7 +51,7 @@ export class WidgetApi {
       res = await fetch(`${this.endpoint}/w${path}`, {
         method: init?.method ?? "GET",
         headers: {
-          "x-annota-key": this.key,
+          "x-pinwren-key": this.key,
           ...(init?.json ? { "content-type": "application/json" } : {}),
           ...init?.headers,
         },
@@ -105,7 +105,7 @@ export class WidgetApi {
     return this.req<{ feedback: { id: string; status: string } }>(`/feedback/${encodeURIComponent(id)}`, {
       method: "PATCH",
       json: { status },
-      headers: reporterToken ? { "x-annota-reporter-token": reporterToken } : {},
+      headers: reporterToken ? { "x-pinwren-reporter-token": reporterToken } : {},
     });
   }
 

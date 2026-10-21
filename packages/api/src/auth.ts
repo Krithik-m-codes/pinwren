@@ -1,5 +1,5 @@
-import { MAX_SESSION_DAYS } from "@annota/core";
-import { getDb, schema } from "@annota/db";
+import { MAX_SESSION_DAYS } from "@pinwren/core";
+import { getDb, schema } from "@pinwren/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization } from "better-auth/plugins/organization";
@@ -10,18 +10,18 @@ import { sessionLifetimeDays } from "./settings/instance";
 
 /** Dashboard page that accepts an invitation (calls Better Auth's accept-invitation endpoint). */
 export const acceptInvitationUrl = (id: string) =>
-  `${env().ANNOTA_URL.replace(/\/$/, "")}/accept-invitation/${encodeURIComponent(id)}`;
+  `${env().PINWREN_URL.replace(/\/$/, "")}/accept-invitation/${encodeURIComponent(id)}`;
 
 function createAuth() {
   const e = env();
   return betterAuth({
-    baseURL: e.ANNOTA_URL,
+    baseURL: e.PINWREN_URL,
     basePath: "/api/auth",
-    secret: e.ANNOTA_SECRET,
+    secret: e.PINWREN_SECRET,
     database: drizzleAdapter(getDb(), { provider: "pg", schema }),
     emailAndPassword: {
       enabled: true,
-      disableSignUp: e.ANNOTA_DISABLE_SIGNUP,
+      disableSignUp: e.PINWREN_DISABLE_SIGNUP,
       minPasswordLength: 8,
     },
     plugins: [
@@ -68,15 +68,15 @@ function createAuth() {
       },
     },
     advanced: { database: { generateId: () => crypto.randomUUID() } },
-    trustedOrigins: [e.ANNOTA_URL],
+    trustedOrigins: [e.PINWREN_URL],
   });
 }
 
 export type Auth = ReturnType<typeof createAuth>;
 
-const g = globalThis as unknown as { __annotaAuth?: Auth };
+const g = globalThis as unknown as { __pinwrenAuth?: Auth };
 
 export function getAuth(): Auth {
-  g.__annotaAuth ??= createAuth();
-  return g.__annotaAuth;
+  g.__pinwrenAuth ??= createAuth();
+  return g.__pinwrenAuth;
 }

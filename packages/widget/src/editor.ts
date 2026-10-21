@@ -71,7 +71,7 @@ export class Editor {
     try {
       this.onChange?.();
     } catch (err) {
-      console.warn("[annota]", err);
+      console.warn("[pinwren]", err);
     }
   }
 

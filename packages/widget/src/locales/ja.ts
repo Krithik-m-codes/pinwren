@@ -15,7 +15,7 @@ export default {
   hideComments: "コメントを非表示",
   showComments: "コメントを表示",
   pinsOnPage: "ページ上のピン",
-  poweredBy: "Powered by Annota",
+  poweredBy: "Powered by Pinwren",
   queued_one: "送信待ちのレポート {n} 件",
   queued_other: "送信待ちのレポート {n} 件",
   queuedSub: "オンラインに戻ると自動で送信されます",

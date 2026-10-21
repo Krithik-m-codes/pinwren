@@ -4,7 +4,7 @@ import type { enReport } from "./locales/en-report";
 
 // Widget i18n (F-013). The core's English ships in widget.js and each lazy chunk brings its own English
 // (`addEnglish`); every other catalogue is a small separate file (`widget-i18n-<code>.js`, built next to
-// widget.js) that registers itself on `window.__annotaI18n`, so a visitor only downloads their own language.
+// widget.js) that registers itself on `window.__pinwrenI18n`, so a visitor only downloads their own language.
 
 export type English = typeof en & typeof enPanel & typeof enReport;
 export type Key = keyof English;
@@ -77,8 +77,8 @@ export function tn(stem: string, n: number, vars?: Vars): string {
 /** Load a non-English catalogue from `<endpoint>/widget-i18n-<code>.js`. Never throws; English stays on failure. */
 export async function loadLocale(code: Locale, endpoint: string, timeoutMs = 3000): Promise<void> {
   if (code === "en") return setCatalog("en", base);
-  const w = window as unknown as { __annotaI18n?: Record<string, Partial<Catalog>> };
-  if (!w.__annotaI18n?.[code]) {
+  const w = window as unknown as { __pinwrenI18n?: Record<string, Partial<Catalog>> };
+  if (!w.__pinwrenI18n?.[code]) {
     try {
       await new Promise<void>((resolve, reject) => {
         const s = document.createElement("script");
@@ -90,9 +90,9 @@ export async function loadLocale(code: Locale, endpoint: string, timeoutMs = 300
         document.head.append(s);
       });
     } catch (err) {
-      console.warn("[annota]", err instanceof Error ? err.message : err);
+      console.warn("[pinwren]", err instanceof Error ? err.message : err);
     }
   }
-  const c = w.__annotaI18n?.[code];
+  const c = w.__pinwrenI18n?.[code];
   if (c) setCatalog(code, c);
 }

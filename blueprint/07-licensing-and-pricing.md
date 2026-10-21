@@ -42,7 +42,7 @@ Prices are **proposals** to validate with 10–20 target customers before launch
 | MCP server + REST API | ✓ | API read-only | ✓ | ✓ | ✓ |
 | AI features | BYO key | — | 500 calls/mo | 5,000 calls/mo | BYO or contract |
 | Storage | Local disk or any S3 | Included | Included | Included | Customer bucket option |
-| "Powered by Annota" removal / white-label | — | — | Remove badge | Full white-label | ✓ |
+| "Powered by Pinwren" removal / white-label | — | — | Remove badge | Full white-label | ✓ |
 | Audit log | — | — | — | 30 days | ✓ + SIEM stream |
 | SSO (SAML/OIDC), SCIM, enforced SSO | — | — | — | — | ✓ |
 | Custom roles | — | — | — | — | ✓ |

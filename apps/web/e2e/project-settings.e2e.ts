@@ -52,7 +52,7 @@ test.describe("project settings", () => {
     await expect
       .poll(async () => {
         const r = await request.get("/w/config", {
-          headers: { "x-annota-key": publicKey, origin: SITE_ORIGIN },
+          headers: { "x-pinwren-key": publicKey, origin: SITE_ORIGIN },
         });
         const { widget } = (await r.json()) as { widget: Record<string, Record<string, unknown>> };
         return {

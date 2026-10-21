@@ -5,7 +5,7 @@ import {
   mergeConfig,
   type WidgetBrandingInput,
   type WidgetConfigInput,
-} from "@annota/core";
+} from "@pinwren/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api, type ProjectDetail, qk } from "@/lib/api";

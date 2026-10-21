@@ -97,7 +97,7 @@ export function EmailSettingsForm() {
           <EmptyState
             icon={Lock}
             title="Instance admins only"
-            description="SMTP is configured by whoever runs this Annota server (ANNOTA_ADMIN_EMAILS)."
+            description="SMTP is configured by whoever runs this Pinwren server (PINWREN_ADMIN_EMAILS)."
           />
         </CardContent>
       </Card>
@@ -115,7 +115,7 @@ export function EmailSettingsForm() {
     if (draft.host && !/^[a-z0-9.-]+$/i.test(draft.host.trim()))
       next.host = "A hostname like smtp.example.com";
     if (draft.from && !/\S+@\S+\.\S+/.test(draft.from))
-      next.from = "An address like Annota <noreply@example.com>";
+      next.from = "An address like Pinwren <noreply@example.com>";
     setErrors(next);
     if (Object.keys(next).length) return;
     const patch: Record<string, unknown> = {};
@@ -253,7 +253,7 @@ export function EmailSettingsForm() {
                     id="smtp-from"
                     value={draft.from}
                     disabled={locked.from}
-                    placeholder="Annota <noreply@example.com>"
+                    placeholder="Pinwren <noreply@example.com>"
                     aria-invalid={!!errors.from || undefined}
                     onChange={(e) => set("from", e.target.value)}
                   />

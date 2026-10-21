@@ -1,6 +1,6 @@
 "use client";
 
-import { FEEDBACK_STATUSES, type FeedbackStatus, PRIORITIES, type Priority } from "@annota/core";
+import { FEEDBACK_STATUSES, type FeedbackStatus, PRIORITIES, type Priority } from "@pinwren/core";
 import {
   Crosshair,
   Download,
@@ -105,7 +105,7 @@ export function FeedbackDetailPanel({
     { value: "unassigned", label: "Unassigned" },
     ...(members.data?.members.map((m) => ({ value: m.id, label: m.name })) ?? []),
   ];
-  const openOnPage = f.pageUrl ? withParam(f.pageUrl, "annota", f.id) : null;
+  const openOnPage = f.pageUrl ? withParam(f.pageUrl, "pinwren", f.id) : null;
   const patch = (p: FeedbackPatch) => update.mutate({ ids: [id], patch: p });
 
   return (
@@ -443,9 +443,9 @@ function ContextTabs({ data }: { data: FeedbackDetail }) {
             </Meta>
             <Meta label="Element">
               <code className="font-mono text-xs break-all">&lt;{a.tag}&gt;</code>
-              {a.attrs?.annotaAnchor && (
+              {a.attrs?.pinwrenAnchor && (
                 <code className="ml-2 font-mono text-xs">
-                  data-annota-anchor=&quot;{a.attrs.annotaAnchor}&quot;
+                  data-pinwren-anchor=&quot;{a.attrs.pinwrenAnchor}&quot;
                 </code>
               )}
             </Meta>

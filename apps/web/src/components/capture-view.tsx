@@ -1,7 +1,7 @@
 "use client";
 
-import type { FeedbackStatus } from "@annota/core";
-import { isClosedStatus } from "@annota/core";
+import type { FeedbackStatus } from "@pinwren/core";
+import { isClosedStatus } from "@pinwren/core";
 import type { Placement } from "@/lib/geometry";
 import { cn } from "@/lib/utils";
 

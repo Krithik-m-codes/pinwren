@@ -18,23 +18,23 @@ export const QUEUES = {
   cleanup: "assets.cleanup",
   /** GitHub/GitLab: create an issue, or push a close/reopen (retried with backoff). */
   issues: "issues.sync",
-  /** Daily: look for a newer Annota release (skipped in privacy mode). */
+  /** Daily: look for a newer Pinwren release (skipped in privacy mode). */
   update: "update.check",
 } as const;
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 
-const g = globalThis as unknown as { __annotaBoss?: Promise<PgBoss> };
+const g = globalThis as unknown as { __pinwrenBoss?: Promise<PgBoss> };
 
 /** The process-wide PgBoss instance, started (and its schema installed) on first use. */
 export function getBoss(): Promise<PgBoss> {
-  g.__annotaBoss ??= (async () => {
+  g.__pinwrenBoss ??= (async () => {
     const boss = new PgBoss({
       connectionString: env().DATABASE_URL,
       schema: "pgboss",
-      max: Number(process.env.ANNOTA_JOBS_POOL_MAX ?? 3),
-      application_name: "annota-jobs",
+      max: Number(process.env.PINWREN_JOBS_POOL_MAX ?? 3),
+      application_name: "pinwren-jobs",
     });
-    boss.on("error", (err) => console.error("[annota] job queue error", err));
+    boss.on("error", (err) => console.error("[pinwren] job queue error", err));
     await boss.start();
     // Queue definitions are idempotent; retries are per-queue defaults (webhooks retry themselves).
     await Promise.all([
@@ -48,10 +48,10 @@ export function getBoss(): Promise<PgBoss> {
     ]);
     return boss;
   })().catch((err) => {
-    g.__annotaBoss = undefined;
+    g.__pinwrenBoss = undefined;
     throw err;
   });
-  return g.__annotaBoss;
+  return g.__pinwrenBoss;
 }
 
 /**
@@ -63,7 +63,7 @@ export async function enqueue(name: QueueName, data: object, options: SendOption
     const boss = await getBoss();
     await boss.send(name, data, options);
   } catch (err) {
-    console.error(`[annota] could not enqueue ${name}`, err);
+    console.error(`[pinwren] could not enqueue ${name}`, err);
   }
 }
 
@@ -72,6 +72,6 @@ export async function enqueueAfter(name: QueueName, data: object, seconds: numbe
     const boss = await getBoss();
     await boss.sendAfter(name, data, null, seconds);
   } catch (err) {
-    console.error(`[annota] could not enqueue ${name}`, err);
+    console.error(`[pinwren] could not enqueue ${name}`, err);
   }
 }

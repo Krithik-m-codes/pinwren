@@ -38,22 +38,22 @@ export const COLUMNS: [keyof ExportRow, string][] = [
   ["deepLink", "Deep link"],
 ];
 
-/** The page URL without our own `?annota=` deep-link parameter. */
+/** The page URL without our own `?pinwren=` deep-link parameter. */
 export function cleanPageUrl(href: string): string {
   try {
     const u = new URL(href);
-    u.searchParams.delete("annota");
+    u.searchParams.delete("pinwren");
     return u.href;
   } catch {
     return href;
   }
 }
 
-/** `<page url>?annota=<id>` — keeps the page's own query string and hash. */
+/** `<page url>?pinwren=<id>` — keeps the page's own query string and hash. */
 export function deepLink(pageUrl: string, id: string): string {
   try {
     const u = new URL(pageUrl);
-    u.searchParams.set("annota", id);
+    u.searchParams.set("pinwren", id);
     return u.href;
   } catch {
     return pageUrl;
@@ -94,13 +94,13 @@ export function toJson(rows: readonly ExportRow[]): string {
   return `${JSON.stringify(rows, null, 2)}\n`;
 }
 
-/** `annota-<host>-<yyyy-mm-dd>.<ext>`, safe on every file system. */
+/** `pinwren-<host>-<yyyy-mm-dd>.<ext>`, safe on every file system. */
 export function fileName(pageUrl: string, ext: "csv" | "json", now = new Date()): string {
   let host = "page";
   try {
     host = new URL(pageUrl).hostname.replace(/[^a-z0-9.-]/gi, "") || "page";
   } catch {}
-  return `annota-${host}-${now.toISOString().slice(0, 10)}.${ext}`;
+  return `pinwren-${host}-${now.toISOString().slice(0, 10)}.${ext}`;
 }
 
 /** Hand the text to the browser as a download. `at` is where the temporary link lives (our shadow root). */

@@ -6,7 +6,7 @@ import {
   notificationPreference,
   user,
   webhookEndpoint,
-} from "@annota/db";
+} from "@pinwren/db";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { renderEmail } from "../email/render";
 import { excerpt, type FeedbackSummary, feedbackVars, type Rendered, statusLabel } from "../email/templates";

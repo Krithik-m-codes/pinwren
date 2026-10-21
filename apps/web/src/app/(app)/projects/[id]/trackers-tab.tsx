@@ -1,6 +1,6 @@
 "use client";
 
-import type { ISSUE_AUTO_CREATE, IssueProvider } from "@annota/core";
+import type { ISSUE_AUTO_CREATE, IssueProvider } from "@pinwren/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleAlert, CircleCheck, Eye, PlugZap, Trash2 } from "lucide-react";
 import { useState } from "react";

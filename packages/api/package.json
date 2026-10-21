@@ -1,5 +1,5 @@
 {
-  "name": "@annota/api",
+  "name": "@pinwren/api",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,8 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@annota/core": "workspace:*",
-    "@annota/db": "workspace:*",
+    "@pinwren/core": "workspace:*",
+    "@pinwren/db": "workspace:*",
     "@hono/zod-validator": "^0.7.0",
     "aws4fetch": "^1.0.20",
     "better-auth": "^1.7.12",

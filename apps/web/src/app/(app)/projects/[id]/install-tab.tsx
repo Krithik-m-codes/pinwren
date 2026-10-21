@@ -1,6 +1,6 @@
 "use client";
 
-import { originMatches } from "@annota/core";
+import { originMatches } from "@pinwren/core";
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { CopyButton } from "@/components/copy-button";

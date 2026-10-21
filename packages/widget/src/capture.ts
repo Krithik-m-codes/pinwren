@@ -7,7 +7,7 @@ import { blockGeometry, MASKS, maskedRects, paintBlocks, type Rect } from "./mas
 export type CaptureMode = "visible" | "full" | "element";
 
 /** Left out of the picture entirely: the widget itself and opted-out nodes. */
-const HIDE = ["annota-root", "[data-annota-ignore]"];
+const HIDE = ["pinwren-root", "[data-pinwren-ignore]"];
 /** The colour behind `el`: its own or the nearest ancestor's background, else white — so transparent areas of
  * a full-page or element capture don't come out black. */
 function backgroundOf(el: Element): string {
@@ -119,4 +119,4 @@ export type CaptureModule = {
   Editor: typeof Editor;
 };
 
-(window as unknown as { __annotaCapture: CaptureModule }).__annotaCapture = { capture, screenShare, Editor };
+(window as unknown as { __pinwrenCapture: CaptureModule }).__pinwrenCapture = { capture, screenShare, Editor };

@@ -1,4 +1,4 @@
-import type { AnchorBundle, WidgetFeedbackCreate } from "@annota/core";
+import type { AnchorBundle, WidgetFeedbackCreate } from "@pinwren/core";
 import { captureAnchor, resolveAnchor } from "./anchor";
 import { type Created, type Pin, WidgetApi } from "./api";
 import { loadChunk, preload } from "./chunks";
@@ -73,9 +73,9 @@ const PANEL_W = 360;
 const errText = (err: unknown) => errOr(err, t("genericError"));
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-export class AnnotaWidget {
+export class PinwrenWidget {
   private readonly api: WidgetApi;
-  private readonly host = document.createElement("annota-root");
+  private readonly host = document.createElement("pinwren-root");
   private readonly root: HTMLDivElement;
   private cfg: WidgetConfig = DEFAULT_CONFIG;
   private publicRead = true;
@@ -141,7 +141,7 @@ export class AnnotaWidget {
     try {
       [loaded] = await Promise.all([this.api.config(this.opts.accent), loadLocale(lang, this.opts.endpoint)]);
     } catch (err) {
-      console.warn("[annota] widget disabled:", errText(err));
+      console.warn("[pinwren] widget disabled:", errText(err));
       this.destroy();
       return;
     }
@@ -153,11 +153,11 @@ export class AnnotaWidget {
     this.projectSlug = loaded.project.slug;
     this.root.lang = lang;
     this.publicRead = loaded.project.publicRead;
-    this.root.style.setProperty("--annota-accent", this.cfg.launcher.accent);
+    this.root.style.setProperty("--pinwren-accent", this.cfg.launcher.accent);
     const dialog = this.branding.dialogAccent;
     if (dialog) {
-      this.root.style.setProperty("--annota-dialog-accent", dialog);
-      this.root.style.setProperty("--annota-dialog-accent-fg", readableOn(dialog));
+      this.root.style.setProperty("--pinwren-dialog-accent", dialog);
+      this.root.style.setProperty("--pinwren-dialog-accent-fg", readableOn(dialog));
     }
 
     const reposition = () => this.schedule();
@@ -226,7 +226,7 @@ export class AnnotaWidget {
 
     this.ready = true;
     this.emit("ready");
-    const deepLink = new URLSearchParams(location.search).get("annota");
+    const deepLink = new URLSearchParams(location.search).get("pinwren");
     if (deepLink) setTimeout(() => void this.focusPin(deepLink), 300);
     if (this.pending) {
       const { mode } = this.pending;
@@ -292,7 +292,7 @@ export class AnnotaWidget {
     try {
       this.opts.emit?.(event, data);
     } catch (err) {
-      console.warn("[annota] event handler failed", err);
+      console.warn("[pinwren] event handler failed", err);
     }
   }
 
@@ -324,7 +324,7 @@ export class AnnotaWidget {
       try {
         fn(e as E);
       } catch (err) {
-        console.warn("[annota]", err);
+        console.warn("[pinwren]", err);
       }
     };
     target.addEventListener(type, safe, opts);
@@ -634,7 +634,7 @@ export class AnnotaWidget {
       try {
         this.frame();
       } catch (err) {
-        console.warn("[annota]", err);
+        console.warn("[pinwren]", err);
       }
     });
   }
@@ -1073,7 +1073,7 @@ export class AnnotaWidget {
     try {
       return await loadChunk<PanelModule>(this.opts.endpoint, "panel");
     } catch (err) {
-      console.warn("[annota]", err);
+      console.warn("[pinwren]", err);
       if (!this.destroyed) this.toast(t("loadFailed"));
       return null;
     }
@@ -1144,7 +1144,7 @@ export class AnnotaWidget {
     try {
       mod = await loadChunk<PanelModule>(this.opts.endpoint, "panel");
     } catch (err) {
-      console.warn("[annota]", err);
+      console.warn("[pinwren]", err);
       if (want === this.panelWant && !this.destroyed) this.toast(t("loadFailed"));
       return;
     } finally {
@@ -1248,7 +1248,7 @@ export class AnnotaWidget {
     try {
       mod = await loadChunk<ReportModule>(this.opts.endpoint, "report");
     } catch (err) {
-      console.warn("[annota]", err);
+      console.warn("[pinwren]", err);
       if (want === this.reportWant && !this.destroyed) {
         this.toast(t("loadFailed"));
         this.emit("error", { message: t("loadFailed") });
@@ -1295,7 +1295,7 @@ export class AnnotaWidget {
     try {
       await report.start();
     } catch (err) {
-      console.warn("[annota]", err);
+      console.warn("[pinwren]", err);
       report.close(false);
     }
   }

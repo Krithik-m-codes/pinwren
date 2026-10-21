@@ -1,4 +1,4 @@
-import { brandAsset, getDb, issueIntegration } from "@annota/db";
+import { brandAsset, getDb, issueIntegration } from "@pinwren/db";
 import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { decryptSecret, hmacSha256Hex, safeEqualStr as timingSafeEqualStr } from "../crypto";

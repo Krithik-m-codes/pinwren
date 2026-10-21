@@ -1,8 +1,8 @@
-# Annota — build blueprint
+# Pinwren — build blueprint
 
-> **Codename:** `Annota` (placeholder — check trademark/domain before launch; every doc uses this name so a find-and-replace renames it).
+> **Codename:** `Pinwren` (placeholder — check trademark/domain before launch; every doc uses this name so a find-and-replace renames it).
 
-Annota is a visual feedback and bug-reporting platform. A single script tag (or npm package) adds a widget to any website. Clients and teammates **pin comments onto live page elements** (SitePing-style, DOM-anchored, threaded), or **file a full bug report** with an annotated screenshot, console logs, network errors and an optional session replay (BugPin/Marker.io-style). Everything lands in a fast, keyboard-first triage inbox and is routed to email, chat, issue trackers and AI coding agents.
+Pinwren is a visual feedback and bug-reporting platform. A single script tag (or npm package) adds a widget to any website. Clients and teammates **pin comments onto live page elements** (SitePing-style, DOM-anchored, threaded), or **file a full bug report** with an annotated screenshot, console logs, network errors and an optional session replay (BugPin/Marker.io-style). Everything lands in a fast, keyboard-first triage inbox and is routed to email, chat, issue trackers and AI coding agents.
 
 It ships three ways from one codebase:
 
@@ -32,14 +32,14 @@ This folder is the complete spec. The build agent (Claude Opus) should read it i
 | 11 | [11-build-prompts.md](11-build-prompts.md) | Copy-paste prompts, one per work package, in build order |
 | 12 | [12-testing-and-quality.md](12-testing-and-quality.md) | Test strategy, performance budgets, CI gates |
 | 13 | [13-references.md](13-references.md) | Sources, upstream code to study, license cautions |
-| 14 | [14-feature-parity.md](14-feature-parity.md) | **Every SitePing and BugPin feature mapped to Annota, with build status** |
+| 14 | [14-feature-parity.md](14-feature-parity.md) | **Every SitePing and BugPin feature mapped to Pinwren, with build status** |
 | — | [templates/CLAUDE.md](templates/CLAUDE.md) | Drop-in agent instructions for the new repo's root |
 | — | [templates/env.example](templates/env.example) | Every environment variable, documented |
 
 ## Kick-off prompt (paste into a fresh Opus session)
 
 ```
-You are building Annota from the blueprint in E:/projects/annota/blueprint (the repo is E:/projects/annota).
+You are building Pinwren from the blueprint in E:/projects/pinwren/blueprint (the repo is E:/projects/pinwren).
 Read README.md, then files 00 through 14 in order, then templates/CLAUDE.md.
 Do not write code until you have read all of them.
 Then create a new git repository at <target path>, copy templates/CLAUDE.md to its root,

@@ -1,4 +1,4 @@
-import type { WidgetFeedbackCreate } from "@annota/core";
+import type { WidgetFeedbackCreate } from "@pinwren/core";
 import type { Created } from "./api";
 import { type Attachment, MAX_FILES, readFile, sanitizeAttachments, validateFiles } from "./attachments";
 import type { CaptureMode, CaptureModule } from "./capture";
@@ -166,7 +166,7 @@ export class BugReport {
       this.base = await timeout(this.mod.capture("visible", this.ctx.capture.maskSelectors), CAPTURE_TIMEOUT);
       this.state = "ready";
     } catch (err) {
-      console.warn("[annota] screenshot failed:", err);
+      console.warn("[pinwren] screenshot failed:", err);
       this.state = "failed";
     } finally {
       this.ctx.root.style.visibility = "";
@@ -370,7 +370,7 @@ export class BugReport {
         try {
           fn(e as E);
         } catch (err) {
-          console.warn("[annota]", err);
+          console.warn("[pinwren]", err);
         }
       };
       target.addEventListener(type, safe, capture);
@@ -439,7 +439,7 @@ export class BugReport {
           this.saveSoon();
         };
       } catch (err) {
-        console.warn("[annota]", err);
+        console.warn("[pinwren]", err);
         state = this.state = "failed";
       }
     }
@@ -620,7 +620,7 @@ export class BugReport {
     if (!m || !this.modal) return;
     const prev = { base: this.base, state: this.state, mode: this.mode, shapes: this.editor?.shapes ?? [] };
     const fail = (err: unknown) => {
-      console.warn("[annota] screenshot failed:", err);
+      console.warn("[pinwren] screenshot failed:", err);
       if (mode === "screen") {
         this.ctx.toast(t("screenCancelled"));
         // A cancelled share keeps whatever was there before.
@@ -697,7 +697,7 @@ export class BugReport {
         const a = await readFile(f);
         if (this.attachments.length < MAX_FILES) this.attachments.push(a);
       } catch (err) {
-        console.warn("[annota]", err);
+        console.warn("[pinwren]", err);
       }
     }
     this.renderFiles();
@@ -881,4 +881,4 @@ export class BugReport {
 }
 
 export type ReportModule = { BugReport: typeof BugReport };
-(window as unknown as { __annotaReport: ReportModule }).__annotaReport = { BugReport };
+(window as unknown as { __pinwrenReport: ReportModule }).__pinwrenReport = { BugReport };

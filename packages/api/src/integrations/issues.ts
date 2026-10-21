@@ -1,5 +1,5 @@
-import { CLOSED_STATUSES, type FeedbackStatus, isClosedStatus } from "@annota/core";
-import { activity, feedback, getDb, issueIntegration, issueLink } from "@annota/db";
+import { CLOSED_STATUSES, type FeedbackStatus, isClosedStatus } from "@pinwren/core";
+import { activity, feedback, getDb, issueIntegration, issueLink } from "@pinwren/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { decryptSecret } from "../crypto";
 import { env } from "../env";
@@ -29,7 +29,7 @@ export function trackerConfig(i: Integration): TrackerConfig {
     token = decryptSecret(i.token);
   } catch {
     throw new TrackerError(
-      "The stored token can't be decrypted (ANNOTA_SECRET changed?) — enter it again",
+      "The stored token can't be decrypted (PINWREN_SECRET changed?) — enter it again",
       null,
     );
   }
@@ -37,7 +37,7 @@ export function trackerConfig(i: Integration): TrackerConfig {
 }
 
 export const webhookUrlFor = (provider: Integration["provider"]) =>
-  `${env().ANNOTA_URL.replace(/\/$/, "")}/api/integrations/${provider}/webhook`;
+  `${env().PINWREN_URL.replace(/\/$/, "")}/api/integrations/${provider}/webhook`;
 
 const truncate = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
@@ -180,7 +180,7 @@ export async function createIssueFor(feedbackId: string, integrationId: string):
     type: "issue_linked",
     data: { provider: i.provider, number: ref.number, url: ref.url, via: i.provider },
   });
-  // Already closed in Annota (e.g. sent after resolving): close the new issue too.
+  // Already closed in Pinwren (e.g. sent after resolving): close the new issue too.
   if (row && isClosedStatus(row.status)) {
     await enqueue(QUEUES.issues, { type: "state", linkId: link.id, state: "closed" } satisfies IssueJob);
   }
@@ -204,7 +204,7 @@ export async function autoCreateIssues(ctx: FeedbackContext): Promise<void> {
   }
 }
 
-/** On an Annota status change: close or reopen linked issues whose state differs. */
+/** On an Pinwren status change: close or reopen linked issues whose state differs. */
 export async function syncIssueState(feedbackId: string, status: string): Promise<void> {
   const want = isClosedStatus(status as FeedbackStatus) ? "closed" : "open";
   const links = await getDb()
@@ -244,7 +244,7 @@ export async function runIssueJob(job: IssueJob): Promise<void> {
 }
 
 /**
- * Inbound (tracker → Annota): the issue was closed or reopened. Closing resolves an open item;
+ * Inbound (tracker → Pinwren): the issue was closed or reopened. Closing resolves an open item;
  * reopening reopens a closed one. Written as the integration (no user), and the resulting event is
  * not pushed back to the tracker.
  */

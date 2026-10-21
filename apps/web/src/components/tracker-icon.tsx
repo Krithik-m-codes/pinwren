@@ -1,4 +1,4 @@
-import type { IssueProvider } from "@annota/core";
+import type { IssueProvider } from "@pinwren/core";
 import { CircleDot, Hexagon } from "lucide-react";
 
 export const TRACKER_NAMES: Record<IssueProvider, string> = { github: "GitHub", gitlab: "GitLab" };

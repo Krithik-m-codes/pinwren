@@ -69,7 +69,7 @@ describe("locateQuote / rangeAt / findQuote", () => {
 describe("pageSelection", () => {
   it("returns the page selection and its common ancestor, not ours or a field's", () => {
     const p = setup(
-      `<p id="p">Some <b>bold</b> text</p><annota-root id="host"><span id="in">x</span></annota-root>`,
+      `<p id="p">Some <b>bold</b> text</p><pinwren-root id="host"><span id="in">x</span></pinwren-root>`,
     );
     const host = document.getElementById("host") as HTMLElement;
     const sel = getSelection() as Selection;

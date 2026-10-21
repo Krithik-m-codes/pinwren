@@ -1,5 +1,5 @@
-import { apiTokenCreate } from "@annota/core";
-import { apiToken, getDb } from "@annota/db";
+import { apiTokenCreate } from "@pinwren/core";
+import { apiToken, getDb } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";

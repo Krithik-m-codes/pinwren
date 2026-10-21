@@ -1,6 +1,6 @@
 "use client";
 
-import { isClosedStatus } from "@annota/core";
+import { isClosedStatus } from "@pinwren/core";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ExternalLink, FileStack, ImageOff, Layers, MessageSquare, Settings } from "lucide-react";
 import Link from "next/link";

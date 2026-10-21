@@ -1,6 +1,6 @@
 "use client";
 
-import { substituteActionUrl } from "@annota/core";
+import { substituteActionUrl } from "@pinwren/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";

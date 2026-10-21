@@ -5,13 +5,13 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   // A second dev server in the same checkout (e.g. a parallel test run on another port) needs its own
   // build folder: Next refuses two dev servers on one dist dir. Default unchanged.
-  distDir: process.env.ANNOTA_NEXT_DIST_DIR || ".next",
+  distDir: process.env.PINWREN_NEXT_DIST_DIR || ".next",
   partialPrefetching: true,
   // One self-contained server for the Docker image (blueprint 08).
   output: "standalone",
   outputFileTracingRoot: fileURLToPath(new URL("../..", import.meta.url)),
   // Workspace packages ship TypeScript source.
-  transpilePackages: ["@annota/api", "@annota/core", "@annota/db"],
+  transpilePackages: ["@pinwren/api", "@pinwren/core", "@pinwren/db"],
   poweredByHeader: false,
   turbopack: {
     root: fileURLToPath(new URL("../..", import.meta.url)),

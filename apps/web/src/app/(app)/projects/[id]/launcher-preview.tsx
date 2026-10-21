@@ -1,6 +1,6 @@
 "use client";
 
-import type { WidgetConfig } from "@annota/core";
+import type { WidgetConfig } from "@pinwren/core";
 import { Bug, EyeOff, MapPin, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -111,7 +111,7 @@ export function LauncherPreview({ config }: { config: WidgetConfig }) {
           {launcher.hidden ? (
             <>
               <EyeOff className="size-3 shrink-0" /> Hidden — opened with a shortcut or{" "}
-              <code className="font-mono">Annota.open()</code>
+              <code className="font-mono">Pinwren.open()</code>
             </>
           ) : modes.length ? (
             <>Menu: {modes.join(" · ")}</>

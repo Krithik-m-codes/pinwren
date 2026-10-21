@@ -1,4 +1,4 @@
-import { getDb, member, user } from "@annota/db";
+import { getDb, member, user } from "@pinwren/db";
 import { and, asc, eq } from "drizzle-orm";
 import { createMiddleware } from "hono/factory";
 import { getAuth } from "./auth";
@@ -43,11 +43,11 @@ export const requireOrgAdmin = createMiddleware<{ Variables: SessionVars }>(asyn
 });
 
 /**
- * Instance admin (self-host settings such as SMTP): listed in ANNOTA_ADMIN_EMAILS, or — when that
+ * Instance admin (self-host settings such as SMTP): listed in PINWREN_ADMIN_EMAILS, or — when that
  * is unset — the first user who signed up (the operator who installed the instance).
  */
 export async function isInstanceAdmin(userId: string): Promise<boolean> {
-  const listed = env().ANNOTA_ADMIN_EMAILS;
+  const listed = env().PINWREN_ADMIN_EMAILS;
   const db = getDb();
   if (listed) {
     const [u] = await db.select({ email: user.email }).from(user).where(eq(user.id, userId));

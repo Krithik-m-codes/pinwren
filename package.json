@@ -1,5 +1,5 @@
 {
-  "name": "annota",
+  "name": "pinwren",
   "private": true,
   "license": "AGPL-3.0-only",
   "packageManager": "pnpm@12.6.0",
@@ -13,8 +13,8 @@
     "test": "turbo run test",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "db:generate": "pnpm --filter @annota/db generate",
-    "db:migrate": "pnpm --filter @annota/db migrate",
+    "db:generate": "pnpm --filter @pinwren/db generate",
+    "db:migrate": "pnpm --filter @pinwren/db migrate",
     "db:up": "docker compose -f docker/compose.dev.yml up -d"
   },
   "devDependencies": {

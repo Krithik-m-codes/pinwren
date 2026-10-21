@@ -1,4 +1,4 @@
-import type { WidgetFeedbackCreate } from "@annota/core";
+import type { WidgetFeedbackCreate } from "@pinwren/core";
 
 export function uuid(): string {
   return (

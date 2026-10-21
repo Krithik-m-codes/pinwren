@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Lumen Coffee — Annota demo site</title>
+    <title>Lumen Coffee — Pinwren demo site</title>
     <style>
       :root { --ink: #1c1917; --muted: #78716c; --line: #e7e5e4; --accent: #b45309; }
       * { box-sizing: border-box; }
@@ -43,11 +43,11 @@
       <article><h3>Kenya Nyeri</h3><p>Blackcurrant, grapefruit.</p><p class="price">₹840 / 250 g</p></article>
     </section>
     <p class="note">
-      Demo page for trying the Annota widget. The subscribe button deliberately fails (500 + console error) so a
+      Demo page for trying the Pinwren widget. The subscribe button deliberately fails (500 + console error) so a
       bug report has something to capture.
     </p>
     <script>
-      // Load the widget against a local Annota: ?key=pk_…&host=http://localhost:3100
+      // Load the widget against a local Pinwren: ?key=pk_…&host=http://localhost:3100
       const p = new URLSearchParams(location.search);
       const key = p.get("key");
       const host = p.get("host") || "http://localhost:3100";

@@ -9,7 +9,7 @@ Each feature has an ID (`F-xxx`) used by the roadmap and build prompts.
 ## A. Widget — capture
 
 ### F-001 Launcher
-- Floating button (position: 4 corners, offset configurable), keyboard shortcut (default `Alt+Shift+F`), or fully hidden with a JS API `annota.open()` for custom triggers.
+- Floating button (position: 4 corners, offset configurable), keyboard shortcut (default `Alt+Shift+F`), or fully hidden with a JS API `pinwren.open()` for custom triggers.
 - Brandable colours, icon, label, shape; light/dark/auto theme. Respects `prefers-reduced-motion`.
 - **Acceptance:** renders inside a closed Shadow DOM; zero CSS leaks either way (verified by visual-regression test against a page with aggressive global CSS such as `* { all: unset }`).
 
@@ -42,14 +42,14 @@ Each feature has an ID (`F-xxx`) used by the roadmap and build prompts.
 
 ### F-007 Session replay buffer — *C, E, P, B, X (not F)*
 - rrweb-based rolling buffer of the last 30 s (configurable up to 120 s), recorded only while the widget is enabled on the page; flushed only when a report is submitted.
-- Privacy: masks all inputs by default, honours `data-annota-mask`, `data-annota-block`, and per-project selector lists.
+- Privacy: masks all inputs by default, honours `data-pinwren-mask`, `data-pinwren-block`, and per-project selector lists.
 - Lazy-loaded; recording starts after `requestIdleCallback`; can be disabled per project or per page.
 - **Acceptance:** CPU overhead < 3 % on a reference SPA; buffer memory capped (default 5 MB).
 
 ### F-008 Identify & metadata API — *All*
-- `annota.identify({ id, name, email, avatar })` pre-fills reporter identity (signed identity via HMAC optional, F-041).
-- `annota.setMetadata({ plan: 'pro', build: 'a1b2c3' })` attached to every report.
-- `annota.setPageScope({ urlPattern: '/products/:id' })` groups pins across dynamic URLs.
+- `pinwren.identify({ id, name, email, avatar })` pre-fills reporter identity (signed identity via HMAC optional, F-041).
+- `pinwren.setMetadata({ plan: 'pro', build: 'a1b2c3' })` attached to every report.
+- `pinwren.setPageScope({ urlPattern: '/products/:id' })` groups pins across dynamic URLs.
 
 ### F-009 Guest identity
 - Anonymous reporters may optionally give a name/email; stored in localStorage per project. "My feedback" filter in the widget panel uses a locally remembered list of IDs (no server-side enumeration).
@@ -59,10 +59,10 @@ Each feature has an ID (`F-xxx`) used by the roadmap and build prompts.
 
 ### F-011 Widget panel
 - Side panel listing feedback for the current page (and, toggled, the whole project if the project allows public read): filters (open/resolved/mine), search, thread view, reply, resolve/reopen (if permitted).
-- Deep link: `?annota=<feedbackId>` opens the page, scrolls to and pulses the pin.
+- Deep link: `?pinwren=<feedbackId>` opens the page, scrolls to and pulses the pin.
 
 ### F-012 Visibility rules — *All*
-- Show widget: always / only for identified users / only when `?annota` query param present / only on listed URL patterns / only on staging hostnames / via JS `annota.show()`.
+- Show widget: always / only for identified users / only when `?pinwren` query param present / only on listed URL patterns / only on staging hostnames / via JS `pinwren.show()`.
 - "Review links": the dashboard generates a URL with a short-lived token that enables the widget for a guest on a site where it is otherwise hidden.
 
 ### F-013 Localisation — *All*
@@ -76,7 +76,7 @@ Each feature has an ID (`F-xxx`) used by the roadmap and build prompts.
 For the target element, store all of:
 1. Robust CSS selector (shortest unique, avoiding hashed class names like `css-1x2y3z`, `sc-*`, Tailwind arbitrary values).
 2. XPath (positional fallback).
-3. `data-annota-anchor` / `data-testid` / `id` / `aria-label` / `name` if present (highest priority).
+3. `data-pinwren-anchor` / `data-testid` / `id` / `aria-label` / `name` if present (highest priority).
 4. Text fingerprint: element's normalised text (≤ 120 chars), text before/after (≤ 32 chars each), tag, role.
 5. Structural fingerprint: tag path depth, sibling index, a hash of child tag sequence.
 6. Geometry: bounding box at capture (page coords + viewport size), offset of the pin as % of the box.
@@ -214,7 +214,7 @@ Native mobile SDKs, public roadmaps/voting, heat maps, analytics, video recordin
 - Link actions interpolate `{id}`, `{number}`, `{url}`, `{projectSlug}`; webhook actions POST the feedback (signed, like F-075) and show the response message.
 
 ### F-017 Read-only widget — *All*
-- `data-readonly` / `Annota.init({ readOnly: true })`: visitors see pins and threads but cannot create or reply. Used for stakeholder walkthroughs.
+- `data-readonly` / `Pinwren.init({ readOnly: true })`: visitors see pins and threads but cannot create or reply. Used for stakeholder walkthroughs.
 
 ### F-018 Widget export — *All*
 - Panel button: download the current page's (or project's, if public read) feedback as CSV or JSON, with anchors and links back to the dashboard.
@@ -223,7 +223,7 @@ Native mobile SDKs, public roadmaps/voting, heat maps, analytics, video recordin
 - Before the first submission, show what will be sent (screenshot, console errors, failed requests, browser info, page URL) with a link to the project's privacy URL. Remember acceptance per browser.
 
 ### F-020 Custom email templates — *All*
-- Admin UI to edit subject/body of every notification email (React Email base + Markdown body with variables), with preview and "send test". Free in Annota (Enterprise in BugPin).
+- Admin UI to edit subject/body of every notification email (React Email base + Markdown body with variables), with preview and "send test". Free in Pinwren (Enterprise in BugPin).
 
 ### F-021 EU privacy mode — *All*
 - One switch that: truncates stored IPs, disables any third-party call (update check, telemetry, AI), forces consent notice, masks all text inputs in screenshots, and shortens default retention to 90 days.

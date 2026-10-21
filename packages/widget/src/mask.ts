@@ -5,7 +5,7 @@
 export type Rect = { left: number; top: number; width: number; height: number };
 
 /** Built-in masks: opted-in nodes and fields that may hold secrets. */
-export const MASKS = ["[data-annota-mask]", "input[type=password]", "[autocomplete^=cc-]"];
+export const MASKS = ["[data-pinwren-mask]", "input[type=password]", "[autocomplete^=cc-]"];
 
 /** Privacy mode (wave-3 §3): every field a person can type into. */
 export const PRIVACY_MASKS = [
@@ -51,7 +51,7 @@ export function maskedRects(selectors: readonly string[], root: ParentNode = doc
       continue;
     }
     for (const el of found) {
-      if (seen.has(el) || el.closest("annota-root, [data-annota-ignore]")) continue;
+      if (seen.has(el) || el.closest("pinwren-root, [data-pinwren-ignore]")) continue;
       seen.add(el);
       const r = el.getBoundingClientRect();
       if (r.width > 0 && r.height > 0)

@@ -123,9 +123,9 @@ describe("panel actions (wave-3 §1)", () => {
 });
 
 describe("branding (wave-3 §2)", () => {
-  const api = "https://annota.example.com";
+  const api = "https://pinwren.example.com";
 
-  it("defaults to Annota's own branding", () => {
+  it("defaults to Pinwren's own branding", () => {
     expect(resolveBranding(undefined, api)).toEqual({
       hidePoweredBy: false,
       dialogAccent: null,
@@ -142,7 +142,7 @@ describe("branding (wave-3 §2)", () => {
 
   it("accepts https logos and the server's own /api/assets/ URLs, nothing else", () => {
     expect(safeLogoUrl("https://cdn.example.com/logo.png", api)).toBe("https://cdn.example.com/logo.png");
-    expect(safeLogoUrl("/api/assets/abc", api)).toBe("https://annota.example.com/api/assets/abc");
+    expect(safeLogoUrl("/api/assets/abc", api)).toBe("https://pinwren.example.com/api/assets/abc");
     // Plain-http dev server: its own asset URLs work, other http URLs don't.
     expect(safeLogoUrl("/api/assets/abc", "http://localhost:3100")).toBe(
       "http://localhost:3100/api/assets/abc",

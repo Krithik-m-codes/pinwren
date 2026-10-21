@@ -116,7 +116,7 @@ export function storage(): StorageDriver {
           secretAccessKey: e.S3_SECRET_ACCESS_KEY as string,
           forcePathStyle: e.S3_FORCE_PATH_STYLE,
         })
-      : fsDriver(e.ANNOTA_DATA_DIR);
+      : fsDriver(e.PINWREN_DATA_DIR);
   return driver;
 }
 

@@ -15,12 +15,12 @@ Each simulated visitor sends its own `X-Forwarded-For`, so the per-IP rate limit
 
 ```powershell
 # PowerShell (Git Bash rewrites the /scripts path inside the container)
-docker compose -p annota-load -f docker/compose.yml -f docker/compose.loadtest.yml `
+docker compose -p pinwren-load -f docker/compose.yml -f docker/compose.loadtest.yml `
   --env-file <env file> up --build --abort-on-container-exit --exit-code-from k6
 ```
 
-The env file needs `ANNOTA_URL=http://annota:3000`, `ANNOTA_SECRET`, `POSTGRES_PASSWORD`, `ANNOTA_IMAGE`.
-Knobs: `ANNOTA_CPUS`, `ANNOTA_WORKERS`, `DATABASE_POOL_MAX`, `K6_DURATION`, `K6_READ_RPS`, `K6_INGEST_RPS`,
+The env file needs `PINWREN_URL=http://pinwren:3000`, `PINWREN_SECRET`, `POSTGRES_PASSWORD`, `PINWREN_IMAGE`.
+Knobs: `PINWREN_CPUS`, `PINWREN_WORKERS`, `DATABASE_POOL_MAX`, `K6_DURATION`, `K6_READ_RPS`, `K6_INGEST_RPS`,
 `K6_DASH_RPS`. Thresholds fail the run (exit 99) if p95 or error budgets are missed.
 
 No Redis is needed: rate limits and (later) background jobs live in Postgres by design (blueprint ADRs 0001/0003).
@@ -49,14 +49,14 @@ was answered `429`.
    round trips while the event loop was busy queued ~30 connections behind it. The number, report, diagnostics,
    screenshot record and activity entry are now written in one SQL statement, so the lock lasts microseconds.
 
-After that the limit was CPU: one Node process uses one core. `docker/cluster.cjs` now runs `ANNOTA_WORKERS`
+After that the limit was CPU: one Node process uses one core. `docker/cluster.cjs` now runs `PINWREN_WORKERS`
 processes (default 2) sharing the port.
 
 ### Sizing guide
 
 | Server | Settings | Comfortable load |
 |---|---|---|
-| 1–2 vCPU, 1 GB | `ANNOTA_WORKERS=2` | ~70 req/s ≈ thousands of daily active widget visitors |
-| 4 vCPU, 2 GB | `ANNOTA_WORKERS=4` | 130+ req/s with p95 < 100 ms |
+| 1–2 vCPU, 1 GB | `PINWREN_WORKERS=2` | ~70 req/s ≈ thousands of daily active widget visitors |
+| 4 vCPU, 2 GB | `PINWREN_WORKERS=4` | 130+ req/s with p95 < 100 ms |
 
 A widget visitor costs about two requests per page view; a report adds one. Screenshots are the heaviest request.

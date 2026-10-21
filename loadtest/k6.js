@@ -1,4 +1,4 @@
-// Load test for a running Annota stack. Run through docker/compose.loadtest.yml, or locally:
+// Load test for a running Pinwren stack. Run through docker/compose.loadtest.yml, or locally:
 //   k6 run -e BASE=http://localhost:3200 loadtest/k6.js
 //
 // Scenarios (run concurrently):
@@ -11,7 +11,7 @@ import encoding from "k6/encoding";
 import http from "k6/http";
 import { Counter, Rate, Trend } from "k6/metrics";
 
-const BASE = __ENV.BASE || "http://annota:3000";
+const BASE = __ENV.BASE || "http://pinwren:3000";
 const SITE = "http://loadtest.local";
 const DURATION = __ENV.DURATION || "2m";
 
@@ -132,7 +132,7 @@ export function setup() {
 }
 
 function widgetHeaders(key, ip) {
-  return { "x-annota-key": key, origin: SITE, "x-forwarded-for": ip };
+  return { "x-pinwren-key": key, origin: SITE, "x-forwarded-for": ip };
 }
 
 export function widgetRead(data) {

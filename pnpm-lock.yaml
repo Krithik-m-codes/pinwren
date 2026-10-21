@@ -178,13 +178,13 @@ importers:
 
   apps/web:
     dependencies:
-      '@annota/api':
+      '@pinwren/api':
         specifier: workspace:*
         version: link:../../packages/api
-      '@annota/core':
+      '@pinwren/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@annota/db':
+      '@pinwren/db':
         specifier: workspace:*
         version: link:../../packages/db
       '@base-ui/react':
@@ -254,10 +254,10 @@ importers:
 
   packages/api:
     dependencies:
-      '@annota/core':
+      '@pinwren/core':
         specifier: workspace:*
         version: link:../core
-      '@annota/db':
+      '@pinwren/db':
         specifier: workspace:*
         version: link:../db
       '@hono/zod-validator':
@@ -310,7 +310,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@annota/core':
+      '@pinwren/core':
         specifier: workspace:*
         version: link:../core
       '@opentelemetry/api':
@@ -335,7 +335,7 @@ importers:
 
   packages/widget:
     devDependencies:
-      '@annota/core':
+      '@pinwren/core':
         specifier: workspace:*
         version: link:../core
       '@medv/finder':

@@ -1,4 +1,4 @@
-import type { IssueProvider } from "@annota/core";
+import type { IssueProvider } from "@pinwren/core";
 import { env } from "../env";
 
 // GitHub and GitLab REST clients for issue sync (F-076/F-077). Authenticated with a personal or
@@ -35,7 +35,7 @@ export function apiBase(cfg: Pick<TrackerConfig, "provider" | "apiUrl">): string
 function headers(cfg: TrackerConfig): Record<string, string> {
   const h: Record<string, string> = {
     "content-type": "application/json",
-    "user-agent": `Annota/${env().ANNOTA_VERSION}`,
+    "user-agent": `Pinwren/${env().PINWREN_VERSION}`,
   };
   if (cfg.provider === "github") {
     h.authorization = `Bearer ${cfg.token}`;

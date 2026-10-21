@@ -1,5 +1,5 @@
-import type { EmailTemplateKey } from "@annota/core";
-import { emailTemplate, getDb } from "@annota/db";
+import type { EmailTemplateKey } from "@pinwren/core";
+import { emailTemplate, getDb } from "@pinwren/db";
 import { and, eq } from "drizzle-orm";
 import { emailBrand } from "../services/branding";
 import { type Rendered, renderTemplate, TEMPLATES } from "./templates";
@@ -30,7 +30,7 @@ export async function renderEmail(
     try {
       source = (await templateOverride(orgId, key)) ?? source;
     } catch (err) {
-      console.warn("[annota] email template lookup failed; using the default", err);
+      console.warn("[pinwren] email template lookup failed; using the default", err);
     }
   }
   return renderTemplate(key, source, vars, await emailBrand(orgId));

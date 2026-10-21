@@ -52,7 +52,7 @@ describe("maskedRects", () => {
   it("finds built-in and privacy masks, skipping ignored subtrees and bad selectors", () => {
     document.body.innerHTML = `
       <input id="name"><input type="checkbox" id="cb"><input type="hidden" id="hid"><textarea id="ta"></textarea>
-      <div data-annota-ignore><input id="ignored"></div><p contenteditable="true" id="ce">x</p>`;
+      <div data-pinwren-ignore><input id="ignored"></div><p contenteditable="true" id="ce">x</p>`;
     const seen: string[] = [];
     const orig = Element.prototype.getBoundingClientRect;
     Element.prototype.getBoundingClientRect = function (this: Element) {

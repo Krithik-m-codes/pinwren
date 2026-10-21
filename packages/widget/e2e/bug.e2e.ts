@@ -9,8 +9,8 @@ const shot = (page: Page, name: string) =>
   page.screenshot({ path: `${SHOTS}${name}.png`, animations: "disabled" });
 
 const report = (page: Page) => page.getByRole("dialog", { name: "Report a bug" });
-const canvas = (page: Page) => page.locator("annota-root .ed canvas");
-const toast = (page: Page) => page.locator("annota-root .toast").last();
+const canvas = (page: Page) => page.locator("pinwren-root .ed canvas");
+const toast = (page: Page) => page.locator("pinwren-root .toast").last();
 
 // 1×1 PNG.
 const PNG = Buffer.from(
@@ -26,11 +26,11 @@ async function box(l: Locator) {
 
 async function ready(page: Page, url = "/") {
   await page.goto(url);
-  await expect(page.locator("annota-root .launcher")).toBeVisible();
+  await expect(page.locator("pinwren-root .launcher")).toBeVisible();
 }
 
 async function openReport(page: Page) {
-  await page.locator("annota-root .launcher").click();
+  await page.locator("pinwren-root .launcher").click();
   await page.getByRole("menuitem", { name: /Report a bug/ }).click();
   await expect(report(page)).toBeVisible();
 }
@@ -66,7 +66,7 @@ async function breakDomCapture(page: Page) {
   await page.route("**/widget-capture.js", async (route) => {
     const res = await route.fetch();
     const body = `${await res.text()}
-;(() => { const m = window.__annotaCapture; m.capture = () => Promise.reject(new Error("DOM capture blocked")); })();`;
+;(() => { const m = window.__pinwrenCapture; m.capture = () => Promise.reject(new Error("DOM capture blocked")); })();`;
     await route.fulfill({ response: res, body });
   });
 }
@@ -199,7 +199,7 @@ test("full-page and element capture", async ({ page }) => {
 
   await dlg.getByRole("button", { name: "Element" }).click();
   await expect(report(page)).toBeHidden();
-  await expect(page.locator("annota-root .hint")).toContainText("Click the part of the page to capture");
+  await expect(page.locator("pinwren-root .hint")).toContainText("Click the part of the page to capture");
   const h1 = await box(page.getByTestId("hero-title"));
   await page.mouse.move(h1.x + 30, h1.y + 20);
   await shot(page, "23-element-pick");
@@ -234,7 +234,7 @@ test("DOM capture fails → screen share fallback (tracks stopped) or send witho
   expect(await page.evaluate(() => (window as unknown as { __stopped: number }).__stopped)).toBeGreaterThan(
     0,
   );
-  await expect(page.locator("annota-root")).toHaveCSS("visibility", "visible");
+  await expect(page.locator("pinwren-root")).toHaveCSS("visibility", "visible");
   await drawOn(page, [0.1, 0.1], [0.6, 0.6]);
   await dlg.getByLabel("Describe the bug").fill("Captured by screen share");
   await dlg.getByRole("button", { name: "Send report" }).click();
@@ -335,8 +335,8 @@ test("offline submit is queued, shown, and flushed when the network comes back",
   await dlg.getByRole("button", { name: "Send report" }).click();
   await expect(toast(page)).toContainText("You're offline");
   await expect(report(page)).toHaveCount(0);
-  await expect(page.locator("annota-root .launcher")).toHaveClass(/queued/);
-  await page.locator("annota-root .launcher").click();
+  await expect(page.locator("pinwren-root .launcher")).toHaveClass(/queued/);
+  await page.locator("pinwren-root .launcher").click();
   await expect(page.getByRole("menuitem", { name: /1 report waiting to send/ })).toBeVisible();
   await shot(page, "26-queued-menu");
   await page.keyboard.press("Escape");
@@ -346,7 +346,7 @@ test("offline submit is queued, shown, and flushed when the network comes back",
   await context.setOffline(false); // fires `online`
   await expect.poll(() => mock.items.length).toBe(1);
   await expect(toast(page)).toContainText("Saved report #1 sent");
-  await expect(page.locator("annota-root .launcher")).not.toHaveClass(/queued/);
+  await expect(page.locator("pinwren-root .launcher")).not.toHaveClass(/queued/);
   expect(mock.items[0]?.body).toBe("Sent while offline");
 });
 
@@ -369,7 +369,7 @@ test("a 5xx submit is queued and retried with the same clientId on the next page
   expect(new Set(ids).size).toBe(1);
   // Nothing left: another reload sends nothing new.
   await page.reload();
-  await expect(page.locator("annota-root .launcher")).toBeVisible();
+  await expect(page.locator("pinwren-root .launcher")).toBeVisible();
   await page.waitForTimeout(300);
   expect(mock.requests.filter((r) => r.method === "POST")).toHaveLength(posts.length);
 });
@@ -389,9 +389,9 @@ test("draft survives a reload and resumes with text, annotations and attachments
   await expect(dlg.locator(".file")).toHaveCount(1);
   await page.waitForTimeout(700); // drafts save 400 ms after the last change
   await page.reload();
-  await expect(page.locator("annota-root .launcher")).toBeVisible();
+  await expect(page.locator("pinwren-root .launcher")).toBeVisible();
 
-  await page.locator("annota-root .launcher").click();
+  await page.locator("pinwren-root .launcher").click();
   await expect(page.getByRole("menuitem", { name: /Report a bug/ })).toContainText(
     "You have an unsent draft",
   );
@@ -450,7 +450,7 @@ test("French UI from data-locale, lazy-loaded catalogue", async ({ page }) => {
   page.on("request", (r) => requested.push(new URL(r.url()).pathname));
   await ready(page, "/?locale=fr");
   expect(requested).toContain("/widget-i18n-fr.js");
-  await page.locator("annota-root .launcher").click();
+  await page.locator("pinwren-root .launcher").click();
   await expect(page.getByRole("menuitem", { name: /Ajouter un commentaire/ })).toBeVisible();
   await page.getByRole("menuitem", { name: /Signaler un bug/ }).click();
   const dlg = page.getByRole("dialog", { name: "Signaler un bug" });
@@ -461,7 +461,7 @@ test("French UI from data-locale, lazy-loaded catalogue", async ({ page }) => {
   await shot(page, "28-report-fr");
   await page.keyboard.press("Escape");
   await page.keyboard.press("c");
-  await expect(page.locator("annota-root .hint")).toContainText("Cliquez pour commenter");
+  await expect(page.locator("pinwren-root .hint")).toContainText("Cliquez pour commenter");
 });
 
 test.describe("browser language", () => {
@@ -469,7 +469,7 @@ test.describe("browser language", () => {
   test("German from navigator.language; English pages never load a catalogue", async ({ page }) => {
     await mockApi(page);
     await ready(page);
-    await page.locator("annota-root .launcher").click();
+    await page.locator("pinwren-root .launcher").click();
     await expect(page.getByRole("menuitem", { name: /Fehler melden/ })).toBeVisible();
   });
 });
@@ -491,6 +491,6 @@ test("dark mode report and destroy() tears the modal down", async ({ page }) => 
   await report(page).getByLabel("Describe the bug").fill("Dark mode check");
   await drawOn(page, [0.2, 0.2], [0.5, 0.45]);
   await shot(page, "29-report-dark");
-  await page.evaluate(() => (window as unknown as { Annota: { destroy(): void } }).Annota.destroy());
-  await expect(page.locator("annota-root")).toHaveCount(0);
+  await page.evaluate(() => (window as unknown as { Pinwren: { destroy(): void } }).Pinwren.destroy());
+  await expect(page.locator("pinwren-root")).toHaveCount(0);
 });

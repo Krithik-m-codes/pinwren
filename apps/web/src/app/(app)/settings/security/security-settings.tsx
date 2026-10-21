@@ -1,6 +1,6 @@
 "use client";
 
-import { MAX_SESSION_DAYS, MIN_SESSION_DAYS } from "@annota/core";
+import { MAX_SESSION_DAYS, MIN_SESSION_DAYS } from "@pinwren/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpCircle, CircleCheck, Lock, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -76,7 +76,7 @@ export function SecuritySettingsForm() {
           <EmptyState
             icon={Lock}
             title="Instance admins only"
-            description="These settings belong to whoever runs this server (ANNOTA_ADMIN_EMAILS)."
+            description="These settings belong to whoever runs this server (PINWREN_ADMIN_EMAILS)."
           />
         </CardContent>
       </Card>
@@ -121,7 +121,7 @@ export function SecuritySettingsForm() {
                   })
                 }
               />
-              {s.locked.sessionDays && <EnvBadge name="ANNOTA_SESSION_DAYS" />}
+              {s.locked.sessionDays && <EnvBadge name="PINWREN_SESSION_DAYS" />}
             </div>
           </SettingRow>
         </CardContent>
@@ -148,7 +148,7 @@ export function SecuritySettingsForm() {
                     <ShieldAlert className="size-3.5 text-amber-600" /> Off
                   </Badge>
                 )}
-                <code className="font-mono text-xs text-muted-foreground">ANNOTA_ENFORCE_HTTPS=true</code>
+                <code className="font-mono text-xs text-muted-foreground">PINWREN_ENFORCE_HTTPS=true</code>
               </div>
             </SettingRow>
             <SettingRow
@@ -159,7 +159,7 @@ export function SecuritySettingsForm() {
                 <Badge variant={s.trustProxy ? "secondary" : "outline"} className="font-normal">
                   {s.trustProxy ? "Trusted" : "Not trusted"}
                 </Badge>
-                <code className="font-mono text-xs text-muted-foreground">ANNOTA_TRUST_PROXY=true</code>
+                <code className="font-mono text-xs text-muted-foreground">PINWREN_TRUST_PROXY=true</code>
               </div>
             </SettingRow>
           </SettingGroup>
@@ -188,7 +188,7 @@ export function SecuritySettingsForm() {
               }
             >
               <div className="flex items-center gap-2">
-                {s.locked.updateCheck && <EnvBadge name="ANNOTA_UPDATE_CHECK" />}
+                {s.locked.updateCheck && <EnvBadge name="PINWREN_UPDATE_CHECK" />}
                 <Switch
                   id="update-check"
                   checked={s.updateCheck}

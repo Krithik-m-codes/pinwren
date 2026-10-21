@@ -1,4 +1,4 @@
-import type { AnchorBundle } from "@annota/core";
+import type { AnchorBundle } from "@pinwren/core";
 
 // Pin geometry on a viewport screenshot. The widget stores the anchor element's box in page
 // coordinates (`rect.x/y` include scroll) plus the viewport size and scroll position at capture time,

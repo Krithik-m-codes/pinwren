@@ -5,7 +5,7 @@ import {
   ISSUE_PROVIDERS,
   PRIORITIES,
   WEBHOOK_KINDS,
-} from "@annota/core";
+} from "@pinwren/core";
 import { sql } from "drizzle-orm";
 import {
   boolean,

@@ -273,4 +273,4 @@ export class Panel {
 }
 
 export type PanelModule = { Panel: typeof Panel; threadCard: typeof threadCard };
-(window as unknown as { __annotaPanel: PanelModule }).__annotaPanel = { Panel, threadCard };
+(window as unknown as { __pinwrenPanel: PanelModule }).__pinwrenPanel = { Panel, threadCard };

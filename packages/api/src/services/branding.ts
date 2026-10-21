@@ -1,5 +1,5 @@
-import { BRAND_ASSET_TYPES, MAX_BRAND_ASSET_BYTES, type OrgBrandingUpdate } from "@annota/core";
-import { brandAsset, getDb, orgSetting } from "@annota/db";
+import { BRAND_ASSET_TYPES, MAX_BRAND_ASSET_BYTES, type OrgBrandingUpdate } from "@pinwren/core";
+import { brandAsset, getDb, orgSetting } from "@pinwren/db";
 import { and, eq } from "drizzle-orm";
 import { DEFAULT_BRAND, type EmailBrand } from "../email/templates";
 import { env } from "../env";
@@ -23,7 +23,7 @@ export type OrgBranding = {
 type Stored = { productName?: string | null; accent?: string | null; logoAssetId?: string | null };
 
 export const brandAssetUrl = (id: string) =>
-  `${env().ANNOTA_URL.replace(/\/$/, "")}/api/brand-assets/${encodeURIComponent(id)}`;
+  `${env().PINWREN_URL.replace(/\/$/, "")}/api/brand-assets/${encodeURIComponent(id)}`;
 
 export async function getOrgBranding(orgId: string): Promise<OrgBranding> {
   const [row] = await getDb()

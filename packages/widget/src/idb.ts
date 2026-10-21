@@ -1,4 +1,4 @@
-// Minimal async key-value store over IndexedDB (database "annota", one object store per use). IndexedDB can
+// Minimal async key-value store over IndexedDB (database "pinwren", one object store per use). IndexedDB can
 // be missing, blocked or throw (private mode, storage pressure); then the store silently falls back to
 // memory, so drafts and the outbox still work for the lifetime of the page.
 
@@ -15,7 +15,7 @@ let db: Promise<IDBDatabase | null> | null = null;
 function open(): Promise<IDBDatabase | null> {
   db ??= new Promise((resolve) => {
     try {
-      const req = indexedDB.open("annota", 1);
+      const req = indexedDB.open("pinwren", 1);
       req.onupgradeneeded = () => {
         for (const s of STORES) if (!req.result.objectStoreNames.contains(s)) req.result.createObjectStore(s);
       };

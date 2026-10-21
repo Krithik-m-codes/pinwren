@@ -28,6 +28,6 @@ export default defineConfig({
     url: `${BASE}/api/health`,
     reuseExistingServer: true,
     timeout: 120_000,
-    env: { ANNOTA_ADMIN_EMAILS: "smoke-admin@example.com,e2e-admin@example.com" },
+    env: { PINWREN_ADMIN_EMAILS: "smoke-admin@example.com,e2e-admin@example.com" },
   },
 });

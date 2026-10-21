@@ -1,5 +1,5 @@
-import type { EmailSettingsUpdate } from "@annota/core";
-import { getDb, setting } from "@annota/db";
+import type { EmailSettingsUpdate } from "@pinwren/core";
+import { getDb, setting } from "@pinwren/db";
 import { eq } from "drizzle-orm";
 import { decryptSecret, encryptSecret } from "../crypto";
 import { env } from "../env";
@@ -69,7 +69,7 @@ export async function resolveSmtp(): Promise<SmtpConfig | null> {
     try {
       password = decryptSecret(secret);
     } catch {
-      console.warn("[annota] stored SMTP password cannot be decrypted (ANNOTA_SECRET changed?)");
+      console.warn("[pinwren] stored SMTP password cannot be decrypted (PINWREN_SECRET changed?)");
     }
   }
   return {

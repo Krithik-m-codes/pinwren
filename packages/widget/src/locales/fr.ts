@@ -15,7 +15,7 @@ export default {
   hideComments: "Masquer les commentaires",
   showComments: "Afficher les commentaires",
   pinsOnPage: "Repères sur la page",
-  poweredBy: "Propulsé par Annota",
+  poweredBy: "Propulsé par Pinwren",
   queued_one: "{n} rapport en attente d'envoi",
   queued_other: "{n} rapports en attente d'envoi",
   queuedSub: "Il sera envoyé automatiquement dès votre retour en ligne",

@@ -6,8 +6,8 @@ import {
   emailTemplateTest,
   emailTemplateUpdate,
   orgBrandingUpdate,
-} from "@annota/core";
-import { emailTemplate, getDb, user } from "@annota/db";
+} from "@pinwren/core";
+import { emailTemplate, getDb, user } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";

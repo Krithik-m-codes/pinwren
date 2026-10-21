@@ -1,14 +1,14 @@
 import * as lib from "./lib";
 import type { Reporter } from "./store";
-import { AnnotaWidget, type Mode, type WidgetEvent, type WidgetOptions } from "./widget";
+import { PinwrenWidget, type Mode, type WidgetEvent, type WidgetOptions } from "./widget";
 
 // Script-tag entry:
 //   <script src="https://feedback.example.com/widget.js" data-project="pk_…" async></script>
 // Optional: data-accent="#5b5bd6", data-endpoint="https://…" (defaults to the script's origin),
 // data-locale="fr" (otherwise the browser's language; English fallback).
 //
-// Public API (blueprint 05 §8): Annota.init / open / close / on / identify / destroy. Calls made before
-// this script loads can be queued as `window.Annota = { q: [["open", "comment"], …] }`.
+// Public API (blueprint 05 §8): Pinwren.init / open / close / on / identify / destroy. Calls made before
+// this script loads can be queued as `window.Pinwren = { q: [["open", "comment"], …] }`.
 // Events: open, close, submit, error, ready. A `ready` handler added after the widget is ready still runs.
 
 type Handler = (data?: unknown) => void;
@@ -23,12 +23,12 @@ type Api = {
 };
 
 const g = window as unknown as {
-  Annota?: Api & { q?: unknown[] };
-  __annotaInstance?: AnnotaWidget;
-  __annotaLib?: typeof lib;
+  Pinwren?: Api & { q?: unknown[] };
+  __pinwrenInstance?: PinwrenWidget;
+  __pinwrenLib?: typeof lib;
 };
 // Shared with the lazy chunks (see chunks.ts / build.mjs).
-g.__annotaLib = lib;
+g.__pinwrenLib = lib;
 const handlers = new Map<WidgetEvent, Set<Handler>>();
 let identity: Reporter = {};
 let pendingOpen: [Mode | undefined] | null = null;
@@ -38,7 +38,7 @@ const call = (cb: Handler, data?: unknown) => {
   try {
     cb(data);
   } catch (err) {
-    console.warn("[annota] event handler failed", err);
+    console.warn("[pinwren] event handler failed", err);
   }
 };
 
@@ -54,32 +54,32 @@ const safe =
     try {
       return fn(...a);
     } catch (err) {
-      console.warn("[annota]", err);
+      console.warn("[pinwren]", err);
       return fallback;
     }
   };
 
 const init = safe((opts: InitOptions) => {
-  if (g.__annotaInstance) return; // one widget per page
-  const w = new AnnotaWidget({ ...opts, emit, identity });
-  g.__annotaInstance = w;
-  void w.start().catch((err) => console.warn("[annota]", err));
+  if (g.__pinwrenInstance) return; // one widget per page
+  const w = new PinwrenWidget({ ...opts, emit, identity });
+  g.__pinwrenInstance = w;
+  void w.start().catch((err) => console.warn("[pinwren]", err));
   if (pendingOpen) w.open(pendingOpen[0]);
   pendingOpen = null;
 }, undefined);
 
-const queued = Array.isArray(g.Annota?.q) ? g.Annota.q : [];
+const queued = Array.isArray(g.Pinwren?.q) ? g.Pinwren.q : [];
 const noop = () => {};
 
 const api: Api = {
   init,
   open: safe((mode?: Mode) => {
-    if (g.__annotaInstance) g.__annotaInstance.open(mode);
+    if (g.__pinwrenInstance) g.__pinwrenInstance.open(mode);
     else pendingOpen = [mode];
   }, undefined),
   close: safe(() => {
     pendingOpen = null;
-    g.__annotaInstance?.close();
+    g.__pinwrenInstance?.close();
   }, undefined),
   on: safe((event: WidgetEvent, cb: Handler) => {
     if (typeof cb !== "function") return noop;
@@ -94,15 +94,15 @@ const api: Api = {
       name: typeof user?.name === "string" ? user.name.slice(0, 120) : undefined,
       email: typeof user?.email === "string" ? user.email.slice(0, 254) : undefined,
     };
-    g.__annotaInstance?.identify(identity);
+    g.__pinwrenInstance?.identify(identity);
   }, undefined),
   destroy: safe(() => {
-    g.__annotaInstance?.destroy();
-    g.__annotaInstance = undefined;
+    g.__pinwrenInstance?.destroy();
+    g.__pinwrenInstance = undefined;
     isReady = false;
   }, undefined),
 };
-g.Annota = api;
+g.Pinwren = api;
 
 for (const call of queued) {
   if (!Array.isArray(call)) continue;

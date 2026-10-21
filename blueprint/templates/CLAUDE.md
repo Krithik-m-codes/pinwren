@@ -1,14 +1,14 @@
-# Annota — agent instructions
+# Pinwren — agent instructions
 
-Annota is a visual feedback and bug-reporting platform: an embeddable widget (anchored comment pins + annotated bug reports with console/network/replay) and a triage dashboard, shipped as AGPL self-host, commercial Enterprise (`ee/`) and multi-tenant Cloud from one codebase.
+Pinwren is a visual feedback and bug-reporting platform: an embeddable widget (anchored comment pins + annotated bug reports with console/network/replay) and a triage dashboard, shipped as AGPL self-host, commercial Enterprise (`ee/`) and multi-tenant Cloud from one codebase.
 
-The full specification lives in `blueprint/` (files 00–14). `blueprint/14-feature-parity.md` is the checklist of every SitePing and BugPin feature Annota must match — flip a row's status in the same commit that ships it. When code and blueprint disagree, the blueprint wins unless an ADR in `docs/adr/` says otherwise.
+The full specification lives in `blueprint/` (files 00–14). `blueprint/14-feature-parity.md` is the checklist of every SitePing and BugPin feature Pinwren must match — flip a row's status in the same commit that ships it. When code and blueprint disagree, the blueprint wins unless an ADR in `docs/adr/` says otherwise.
 
 ## Commands
 
 - `pnpm i` — install
 - `pnpm db:up` — local Postgres on 127.0.0.1:5433 (`docker/compose.dev.yml`)
-- `pnpm --filter @annota/widget build` then `pnpm --filter @annota/web dev -- -p 3100` — dashboard + API (port 3000 is taken on the owner's machine)
+- `pnpm --filter @pinwren/widget build` then `pnpm --filter @pinwren/web dev -- -p 3100` — dashboard + API (port 3000 is taken on the owner's machine)
 - `node scripts/smoke.mjs http://localhost:3100` — 20-check end-to-end API test
 - `docker compose -f docker/compose.yml --env-file docker/.env up -d --build` — self-host stack
 - `pnpm build` — all packages (Turborepo, cached)

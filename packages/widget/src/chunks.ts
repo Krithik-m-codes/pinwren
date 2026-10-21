@@ -7,14 +7,14 @@
 //   widget-capture.js  SnapDOM + annotation editor
 //
 // Chunks don't bundle their own copies of the shared modules (i18n state, diagnostics buffers, DOM helpers):
-// build.mjs points those imports at `window.__annotaLib`, which index.ts fills from lib.ts.
+// build.mjs points those imports at `window.__pinwrenLib`, which index.ts fills from lib.ts.
 
 export type ChunkName = "capture" | "report" | "panel";
 
 const GLOBALS: Record<ChunkName, string> = {
-  capture: "__annotaCapture",
-  report: "__annotaReport",
-  panel: "__annotaPanel",
+  capture: "__pinwrenCapture",
+  report: "__pinwrenReport",
+  panel: "__pinwrenPanel",
 };
 
 const pending = new Map<ChunkName, Promise<unknown>>();

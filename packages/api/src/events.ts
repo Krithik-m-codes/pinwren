@@ -1,4 +1,4 @@
-import type { WebhookEvent } from "@annota/core";
+import type { WebhookEvent } from "@pinwren/core";
 import { enqueue, QUEUES } from "./jobs/boss";
 
 /** A domain event, fanned out by the `events.dispatch` job to notifications, email and webhooks. */

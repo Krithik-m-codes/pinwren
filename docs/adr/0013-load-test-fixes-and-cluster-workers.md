@@ -16,7 +16,7 @@ the app container sat at one full core.
    SQL statement (data-modifying CTEs). Screenshot bytes are written to storage before it, and removed if it fails.
    Racing retries of the same `clientId` resolve through the unique index to the stored record.
 4. Cache Better Auth sessions in a signed cookie for 60 s.
-5. Run the standalone Next.js server under `node:cluster` (`docker/cluster.cjs`, `ANNOTA_WORKERS`, default 2).
+5. Run the standalone Next.js server under `node:cluster` (`docker/cluster.cjs`, `PINWREN_WORKERS`, default 2).
 6. Widget pins: closed items excluded by default (`?include=closed` to get them), bodies truncated to 500 chars,
    at most 100 per page.
 

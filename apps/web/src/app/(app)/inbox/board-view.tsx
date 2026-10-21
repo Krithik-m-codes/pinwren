@@ -1,6 +1,6 @@
 "use client";
 
-import { FEEDBACK_STATUSES, type FeedbackStatus } from "@annota/core";
+import { FEEDBACK_STATUSES, type FeedbackStatus } from "@pinwren/core";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { ArrowRightLeft, MessageSquare, Paperclip } from "lucide-react";
 import { useState } from "react";
@@ -22,7 +22,7 @@ import { assetUrl, type FeedbackList, type FeedbackRow, type Member } from "@/li
 import { useThumbnail } from "@/lib/feedback-hooks";
 import { cn } from "@/lib/utils";
 
-const DRAG_TYPE = "application/x-annota-feedback";
+const DRAG_TYPE = "application/x-pinwren-feedback";
 
 /**
  * Kanban by status (blueprint 06 §3.3). Drag and drop with the pointer; every card also has a

@@ -30,7 +30,7 @@ export function WidgetBrandingCard({ project }: { project: ProjectDetail }) {
       <CardContent>
         <SettingGroup>
           <SettingRow
-            label="Hide “Powered by Annota”"
+            label="Hide “Powered by Pinwren”"
             htmlFor="hide-powered-by"
             description="Removes the credit line from the widget's cards and dialogs."
           >

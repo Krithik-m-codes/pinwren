@@ -1,4 +1,4 @@
-import { truncateIp } from "@annota/core";
+import { truncateIp } from "@pinwren/core";
 import type { Context } from "hono";
 import { env } from "./env";
 
@@ -9,7 +9,7 @@ import { env } from "./env";
  */
 export function clientIp(c: Context, opts: { privacy?: boolean } = {}): string {
   let ip: string | undefined;
-  if (env().ANNOTA_TRUST_PROXY) ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || undefined;
+  if (env().PINWREN_TRUST_PROXY) ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || undefined;
   ip ??= c.req.header("x-real-ip") ?? "unknown";
   return opts.privacy && ip !== "unknown" ? truncateIp(ip) : ip;
 }

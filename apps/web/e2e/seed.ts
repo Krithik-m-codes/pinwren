@@ -117,7 +117,7 @@ export default async function seed(config: FullConfig) {
   });
   const post = async (body: Record<string, unknown>) => {
     const r = await api.post("/w/feedback", {
-      headers: { "x-annota-key": project.publicKey, origin: SITE_ORIGIN },
+      headers: { "x-pinwren-key": project.publicKey, origin: SITE_ORIGIN },
       data: { clientId: randomUUID(), ...body },
     });
     if (!r.ok()) throw new Error(`widget post failed: ${r.status()} ${await r.text()}`);

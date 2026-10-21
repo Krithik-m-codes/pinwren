@@ -1,6 +1,6 @@
 "use client";
 
-import { WEBHOOK_EVENTS } from "@annota/core";
+import { WEBHOOK_EVENTS } from "@pinwren/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronRight,
@@ -61,14 +61,14 @@ const EVENT_LABELS: Record<WebhookEvent, string> = {
 };
 const KIND_LABELS: Record<WebhookKind, string> = { generic: "Webhook", slack: "Slack", discord: "Discord" };
 const URL_HINT: Record<WebhookKind, string> = {
-  generic: "https://example.com/hooks/annota",
+  generic: "https://example.com/hooks/pinwren",
   slack: "https://hooks.slack.com/services/…",
   discord: "https://discord.com/api/webhooks/…",
 };
 
 const webhooksKey = ["webhooks"] as const;
 const SECRET_HELP =
-  "Verify the Annota-Signature header with it: v1 = HMAC-SHA256(secret, timestamp + '.' + body).";
+  "Verify the Pinwren-Signature header with it: v1 = HMAC-SHA256(secret, timestamp + '.' + body).";
 const deliveriesKey = (id: string) => ["webhooks", id, "deliveries"] as const;
 
 export function IntegrationsSettings() {
@@ -328,7 +328,7 @@ function CreateWebhookDialog({
         >
           <DialogHeader>
             <DialogTitle>Add a webhook</DialogTitle>
-            <DialogDescription>Annota posts each selected event to this URL.</DialogDescription>
+            <DialogDescription>Pinwren posts each selected event to this URL.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
             <Label>Type</Label>

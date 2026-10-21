@@ -32,7 +32,7 @@ export const anchorBundle = z.object({
   v: z.literal(1),
   attrs: z
     .object({
-      annotaAnchor: z.string().max(200).optional(),
+      pinwrenAnchor: z.string().max(200).optional(),
       testId: z.string().max(200).optional(),
       id: z.string().max(200).optional(),
       ariaLabel: z.string().max(200).optional(),
@@ -225,7 +225,7 @@ export const widgetCommentCreate = z.object({
 export const widgetFeedbackStatusUpdate = z.object({
   status: z.enum(["resolved", "open"]),
 });
-export const REPORTER_TOKEN_HEADER = "x-annota-reporter-token";
+export const REPORTER_TOKEN_HEADER = "x-pinwren-reporter-token";
 
 // --- Notifications ---------------------------------------------------------------------------------
 
@@ -320,7 +320,7 @@ export const apiCommentCreate = commentCreate;
 const hex = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Use a hex colour like #5b5bd6");
 
 export const orgBrandingUpdate = z.object({
-  /** Replaces "Annota" in the dashboard header and in emails. null = default. */
+  /** Replaces "Pinwren" in the dashboard header and in emails. null = default. */
   productName: z.string().trim().min(1).max(40).nullable().optional(),
   accent: hex.nullable().optional(),
   /** A brand asset uploaded with `POST /api/branding/assets`. null removes the logo. */

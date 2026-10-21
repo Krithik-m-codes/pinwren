@@ -1,5 +1,5 @@
 {
-  "name": "@annota/db",
+  "name": "@pinwren/db",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "migrate": "tsx src/migrate-cli.ts"
   },
   "dependencies": {
-    "@annota/core": "workspace:*",
+    "@pinwren/core": "workspace:*",
     "@opentelemetry/api": "^1.9.1",
     "drizzle-orm": "^0.45.4",
     "postgres": "^3.4.7"

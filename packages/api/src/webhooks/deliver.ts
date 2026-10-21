@@ -1,4 +1,4 @@
-import { getDb, webhookDelivery, webhookEndpoint } from "@annota/db";
+import { getDb, webhookDelivery, webhookEndpoint } from "@pinwren/db";
 import { and, eq, lt, sql } from "drizzle-orm";
 import { decryptSecret } from "../crypto";
 import { enqueue, enqueueAfter, QUEUES } from "../jobs/boss";
@@ -44,7 +44,7 @@ export async function sendOnce(
         ok: false,
         responseCode: null,
         durationMs: 0,
-        error: "signing secret unreadable (ANNOTA_SECRET changed?)",
+        error: "signing secret unreadable (PINWREN_SECRET changed?)",
         responseBody: null,
       };
     }
@@ -152,7 +152,7 @@ export async function runDelivery(
     } else if (Date.now() - e.failingSince.getTime() > DISABLE_AFTER_MS) {
       // Three days of continuous failure: stop sending until an admin re-enables it.
       await db.update(webhookEndpoint).set({ active: false }).where(eq(webhookEndpoint.id, e.id));
-      console.warn(`[annota] webhook ${e.id} disabled after 3 days of failures`);
+      console.warn(`[pinwren] webhook ${e.id} disabled after 3 days of failures`);
     }
   }
 

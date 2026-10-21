@@ -74,16 +74,16 @@ export function BrandingSettings() {
     }
     save.mutate({
       patch: { productName: v || null },
-      message: v ? `Now called ${v}` : "Name reset to Annota",
+      message: v ? `Now called ${v}` : "Name reset to Pinwren",
     });
   };
-  const shownName = name.trim() || "Annota";
+  const shownName = name.trim() || "Pinwren";
 
   return (
     <div className="grid gap-4">
       <SectionTitle
         title="Branding"
-        description="Your name, logo and colour replace Annota's in the dashboard header and in every email this workspace sends."
+        description="Your name, logo and colour replace Pinwren's in the dashboard header and in every email this workspace sends."
       />
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <Card>
@@ -96,14 +96,14 @@ export function BrandingSettings() {
               <SettingRow
                 label="Product name"
                 htmlFor="brand-name"
-                description="Up to 40 characters. Empty uses “Annota”."
+                description="Up to 40 characters. Empty uses “Pinwren”."
               >
                 <Input
                   id="brand-name"
                   className="w-full sm:w-64"
                   value={name}
                   maxLength={40}
-                  placeholder="Annota"
+                  placeholder="Pinwren"
                   onChange={(e) => setName(e.target.value)}
                   onBlur={commitName}
                   onKeyDown={(e) => e.key === "Enter" && commitName()}

@@ -1,4 +1,4 @@
-import { app } from "@annota/api";
+import { app } from "@pinwren/api";
 
 // Public widget API (/w/*), served by the same Hono app as /api.
 const handle = (request: Request) => app.fetch(request);

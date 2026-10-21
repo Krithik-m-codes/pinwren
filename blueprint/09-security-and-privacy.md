@@ -19,9 +19,9 @@
 
 ## 2. Privacy by design
 
-- **Masking defaults:** password, credit-card autocomplete fields and `[data-annota-mask]` are always masked in screenshots and replay; replay masks *all* inputs by default.
+- **Masking defaults:** password, credit-card autocomplete fields and `[data-pinwren-mask]` are always masked in screenshots and replay; replay masks *all* inputs by default.
 - **Minimisation:** network bodies are never captured unless explicitly enabled; query strings redacted for sensitive keys; IP addresses stored truncated (/24 IPv4, /48 IPv6) unless the admin opts in.
-- **Consent hooks:** `Annota.setConsent({ replay: false })` lets sites wire Annota into their CMP; replay and diagnostics stay off until granted when `requireConsent: true`.
+- **Consent hooks:** `Pinwren.setConsent({ replay: false })` lets sites wire Pinwren into their CMP; replay and diagnostics stay off until granted when `requireConsent: true`.
 - **Reporter rights:** GDPR erase/export by email (admin action + API); retention policies per project.
 - **EU mode:** Cloud EU region keeps data and backups in the EU; DPA template and sub-processor list published.
 - **AI:** off by default; screenshots/replay never sent to a model unless the admin enables it per project; prompts and responses logged in the audit trail; zero-retention provider settings documented.

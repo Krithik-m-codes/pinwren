@@ -1,4 +1,4 @@
-import { HSTS_HEADER, httpsDecision } from "@annota/core";
+import { HSTS_HEADER, httpsDecision } from "@pinwren/core";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
@@ -15,15 +15,15 @@ export { env } from "./env";
 export { startJobs, stopJobs } from "./jobs";
 
 /**
- * The whole Annota HTTP API. Mounted by the Next.js app under /api and /w, and runnable on its own
+ * The whole Pinwren HTTP API. Mounted by the Next.js app under /api and /w, and runnable on its own
  * with any Fetch-API server.
  */
 export const app = new Hono()
-  // ANNOTA_ENFORCE_HTTPS (the Next.js proxy applies the same rule to pages; this covers the API when
+  // PINWREN_ENFORCE_HTTPS (the Next.js proxy applies the same rule to pages; this covers the API when
   // it runs on its own).
   .use("*", async (c, next) => {
     const e = env();
-    const d = httpsDecision(c.req.raw, { enforce: e.ANNOTA_ENFORCE_HTTPS, trustProxy: e.ANNOTA_TRUST_PROXY });
+    const d = httpsDecision(c.req.raw, { enforce: e.PINWREN_ENFORCE_HTTPS, trustProxy: e.PINWREN_TRUST_PROXY });
     if (d.action === "redirect") return c.redirect(d.location, 308);
     if (d.action === "refuse") return problem(c, 403, "HTTPS_REQUIRED", "This server only accepts HTTPS");
     await next();
@@ -51,7 +51,7 @@ export const app = new Hono()
     // A malformed id in the path (Postgres "invalid input syntax", e.g. for uuid) is a 404, not a crash.
     const e = err as { code?: string; cause?: { code?: string } };
     if ((e.cause?.code ?? e.code) === "22P02") return problem(c, 404, "NOT_FOUND", "Not found");
-    console.error("[annota] unhandled error", err);
+    console.error("[pinwren] unhandled error", err);
     return problem(c, 500, "INTERNAL_ERROR", "Something went wrong");
   });
 

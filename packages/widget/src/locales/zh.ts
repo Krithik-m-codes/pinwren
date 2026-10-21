@@ -15,7 +15,7 @@ export default {
   hideComments: "隐藏评论",
   showComments: "显示评论",
   pinsOnPage: "页面上的标记",
-  poweredBy: "由 Annota 提供支持",
+  poweredBy: "由 Pinwren 提供支持",
   queued_one: "{n} 份报告等待发送",
   queued_other: "{n} 份报告等待发送",
   queuedSub: "恢复联网后将自动发送",

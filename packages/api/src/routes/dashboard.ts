@@ -15,7 +15,7 @@ import {
   projectUpdate,
   widgetBranding,
   widgetConfig,
-} from "@annota/core";
+} from "@pinwren/core";
 import {
   activity,
   comment,
@@ -28,7 +28,7 @@ import {
   notificationPreference,
   project,
   user,
-} from "@annota/db";
+} from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, count, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";

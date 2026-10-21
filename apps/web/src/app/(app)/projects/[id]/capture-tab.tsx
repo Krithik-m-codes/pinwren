@@ -1,6 +1,6 @@
 "use client";
 
-import type { CaptureConfigInput } from "@annota/core";
+import type { CaptureConfigInput } from "@pinwren/core";
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { Segmented } from "@/components/segmented";
@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import type { ProjectDetail } from "@/lib/api";
 import { useProjectPatch } from "./use-project";
 
-const ALWAYS_MASKED = ["input[type=password]", "[autocomplete^=cc-]", "[data-annota-mask]"];
+const ALWAYS_MASKED = ["input[type=password]", "[autocomplete^=cc-]", "[data-pinwren-mask]"];
 
 /** Throws on an invalid CSS selector — the browser is the best validator. */
 function selectorError(s: string): string | null {

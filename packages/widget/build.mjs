@@ -15,7 +15,7 @@ const LOCALES = ["es", "fr", "de", "pt-BR", "it", "ja", "hi", "nl", "zh", "ru"];
 const CHUNKS = ["panel", "report", "capture"];
 const src = fileURLToPath(new URL("./src", import.meta.url));
 
-// Chunks share the core's modules through `window.__annotaLib` (src/lib.ts) instead of bundling copies:
+// Chunks share the core's modules through `window.__pinwrenLib` (src/lib.ts) instead of bundling copies:
 // an import of one of these from a chunk becomes a read of the object the core put there.
 const SHARED = /^\.\/(chunks|config|diagnostics|dom|env|form|i18n|idb|picker|queue|store|ui)$/;
 const lib = await build({
@@ -28,11 +28,11 @@ const lib = await build({
 });
 const libNames = Object.values(lib.metafile.outputs)[0].exports;
 const shared = {
-  name: "annota-shared",
+  name: "pinwren-shared",
   setup(b) {
-    b.onResolve({ filter: SHARED }, (a) => ({ path: a.path, namespace: "annota-lib" }));
-    b.onLoad({ filter: /.*/, namespace: "annota-lib" }, () => ({
-      contents: `export const { ${libNames.join(", ")} } = window.__annotaLib;`,
+    b.onResolve({ filter: SHARED }, (a) => ({ path: a.path, namespace: "pinwren-lib" }));
+    b.onLoad({ filter: /.*/, namespace: "pinwren-lib" }, () => ({
+      contents: `export const { ${libNames.join(", ")} } = window.__pinwrenLib;`,
       loader: "js",
     }));
   },
@@ -42,7 +42,7 @@ const shared = {
 // strip comments and collapse whitespace there ourselves. Selectors keep a space before `:` (descendant vs.
 // pseudo-class), so only the unambiguous spaces go.
 const minifyCss = {
-  name: "annota-css",
+  name: "pinwren-css",
   setup(b) {
     b.onLoad({ filter: /styles\.ts$/ }, async (a) => {
       const text = await readFile(a.path, "utf8");
@@ -71,7 +71,7 @@ const configs = outdirs
     })),
     ...LOCALES.map((code) => ({
       stdin: {
-        contents: `import c from "./locales/${code}"; (window.__annotaI18n ||= {})[${JSON.stringify(code)}] = c;`,
+        contents: `import c from "./locales/${code}"; (window.__pinwrenI18n ||= {})[${JSON.stringify(code)}] = c;`,
         resolveDir: src,
         loader: "ts",
       },

@@ -1,4 +1,4 @@
-import { type FeedbackListQuery, type FeedbackUpdate, isClosedStatus, parseWidgetConfig } from "@annota/core";
+import { type FeedbackListQuery, type FeedbackUpdate, isClosedStatus, parseWidgetConfig } from "@pinwren/core";
 import {
   activity,
   comment,
@@ -12,7 +12,7 @@ import {
   page,
   project,
   user,
-} from "@annota/db";
+} from "@pinwren/db";
 import { and, asc, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { ApiError, notFound } from "../errors";
 import { emit, updateEvents } from "../events";
