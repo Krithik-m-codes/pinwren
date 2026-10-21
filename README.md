@@ -6,7 +6,7 @@ console errors, failed requests and browser details. Everything lands in a fast 
 
 Self-host it with Docker in one container plus Postgres.
 
-> Status: early alpha (Phase 1 of the roadmap in `../robosphere/annota-blueprint`).
+> Status: early alpha. Product spec and roadmap: [blueprint/](blueprint/README.md); feature checklist against SitePing and BugPin: [blueprint/14-feature-parity.md](blueprint/14-feature-parity.md).
 
 ## Self-host with Docker
 
@@ -45,6 +45,10 @@ API smoke test (20 end-to-end checks against a running instance):
 ```bash
 node scripts/smoke.mjs http://localhost:3100
 ```
+
+## Load testing
+
+k6 against the Docker stack, with results and sizing: [loadtest/README.md](loadtest/README.md).
 
 ## Layout
 

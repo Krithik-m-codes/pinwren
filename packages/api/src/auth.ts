@@ -17,6 +17,9 @@ function createAuth() {
       minPasswordLength: 8,
     },
     plugins: [organization({ allowUserToCreateOrganization: true })],
+    // Signed session cache in a cookie: most dashboard requests skip the session lookup in Postgres.
+    // Revocation (sign-out elsewhere) takes effect within maxAge.
+    session: { cookieCache: { enabled: true, maxAge: 60 } },
     advanced: { database: { generateId: () => crypto.randomUUID() } },
     trustedOrigins: [e.ANNOTA_URL],
   });

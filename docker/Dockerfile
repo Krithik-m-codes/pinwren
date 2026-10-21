@@ -27,15 +27,17 @@ ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
     ANNOTA_DATA_DIR=/data \
-    ANNOTA_MIGRATIONS_DIR=/app/migrations
+    ANNOTA_MIGRATIONS_DIR=/app/migrations \
+    ANNOTA_WORKERS=2
 WORKDIR /app
 COPY --from=build --chown=node:node /repo/apps/web/.next/standalone ./
 COPY --from=build --chown=node:node /repo/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build --chown=node:node /repo/apps/web/public ./apps/web/public
 COPY --from=build --chown=node:node /repo/packages/db/drizzle ./migrations
+COPY --chown=node:node docker/cluster.cjs ./cluster.cjs
 RUN mkdir -p /data && chown node:node /data
 USER node
 VOLUME /data
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
-CMD ["node", "apps/web/server.js"]
+CMD ["node", "cluster.cjs"]

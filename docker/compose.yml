@@ -16,6 +16,8 @@ services:
       DATABASE_URL: postgres://annota:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/annota
       ANNOTA_TRUST_PROXY: ${ANNOTA_TRUST_PROXY:-1}
       ANNOTA_DISABLE_SIGNUP: ${ANNOTA_DISABLE_SIGNUP:-false}
+      # Node processes serving requests; roughly one per CPU core you give the container.
+      ANNOTA_WORKERS: ${ANNOTA_WORKERS:-2}
     volumes:
       - annota-data:/data
     depends_on:

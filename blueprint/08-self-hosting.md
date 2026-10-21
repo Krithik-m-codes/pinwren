@@ -69,7 +69,8 @@ Everything else is optional — see [templates/env.example](templates/env.exampl
 
 | Size | Setup |
 |---|---|
-| Small (≤ 20 users, ≤ 10k reports/month) | Defaults: 1 container, 1 vCPU, 1 GB RAM |
+| Small (≤ 20 users, ≤ 10k reports/month) | Defaults: 1 container, 2 vCPU, 1 GB RAM, `ANNOTA_WORKERS=2` — measured ~70 req/s at p95 ≤ 50 ms (`loadtest/README.md`) |
+| Medium-small | 4 vCPU, `ANNOTA_WORKERS=4` — measured 130 req/s at p95 < 100 ms |
 | Medium | `ANNOTA_ROLE=web` × 2 behind a load balancer + `ANNOTA_ROLE=worker` × 1, S3 storage |
 | Large | Same + managed Postgres with read replica (`DATABASE_READ_URL`), optional Redis for rate limits/SSE (`REDIS_URL`) |
 

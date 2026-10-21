@@ -9,6 +9,8 @@ import { ApiError, notFound } from "../errors";
 import { consume } from "../rate-limit";
 import { decodeImageDataUrl, storage } from "../storage";
 
+const LAST_SEEN_INTERVAL_MS = 60_000;
+
 type WidgetVars = { project: typeof project.$inferSelect; origin: string };
 
 const corsHeaders = (origin: string) => ({
@@ -57,7 +59,11 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
   .get("/config", async (c) => {
     const p = c.var.project;
     // Mark the project as installed — powers the dashboard's live "verify install" check.
-    await getDb().update(project).set({ lastSeenAt: new Date() }).where(eq(project.id, p.id));
+    // Only write when stale: an UPDATE on every widget load turns the project row into a lock hot
+    // spot under traffic (found by the k6 load test).
+    if (!p.lastSeenAt || Date.now() - p.lastSeenAt.getTime() > LAST_SEEN_INTERVAL_MS) {
+      await getDb().update(project).set({ lastSeenAt: new Date() }).where(eq(project.id, p.id));
+    }
     return c.json({
       project: { name: p.name, publicRead: p.publicRead },
       widget: p.widgetConfig,
@@ -70,6 +76,10 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
     if (!p.publicRead) return c.json({ items: [] });
     const url = c.req.query("url");
     const where = [eq(feedback.projectId, p.id), isNull(feedback.deletedAt)];
+    // Closed items stay off the page unless asked for; the widget only pins what is still open.
+    if (c.req.query("include") !== "closed") {
+      where.push(inArray(feedback.status, ["open", "in_progress", "in_review"]));
+    }
     if (url) {
       const [pg] = await getDb()
         .select({ id: page.id })
@@ -84,7 +94,7 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
         number: feedback.number,
         kind: feedback.kind,
         status: feedback.status,
-        body: feedback.body,
+        body: sql<string>`left(${feedback.body}, 500)`,
         anchor: feedback.anchor,
         createdAt: feedback.createdAt,
         reporterName: sql<string | null>`${feedback.reporterGuest}->>'name'`,
@@ -93,7 +103,7 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       .from(feedback)
       .where(and(...where))
       .orderBy(desc(feedback.createdAt))
-      .limit(200);
+      .limit(100);
     return c.json({ items });
   })
 
@@ -153,77 +163,94 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
     }
     const pageUrl = normalizePageUrl(input.page.url);
 
-    const created = await db.transaction(async (tx) => {
-      const [pg] = await tx
-        .insert(page)
-        .values({
-          orgId: p.orgId,
-          projectId: p.id,
-          url: pageUrl,
-          urlPattern: input.page.urlPattern,
-          title: input.page.title,
-        })
-        .onConflictDoUpdate({
-          target: [page.projectId, page.url],
-          set: { lastSeenAt: new Date(), title: input.page.title ?? sql`${page.title}` },
-        })
-        .returning({ id: page.id });
-
-      const [counter] = await tx
-        .update(project)
-        .set({ feedbackCounter: sql`${project.feedbackCounter} + 1` })
-        .where(eq(project.id, p.id))
-        .returning({ n: project.feedbackCounter });
-
-      const [f] = await tx
-        .insert(feedback)
-        .values({
-          orgId: p.orgId,
-          projectId: p.id,
-          pageId: pg?.id,
-          number: counter?.n ?? 0,
-          kind: input.kind,
-          title: input.title,
-          body: input.body,
-          priority: input.priority ?? "none",
-          clientId: input.clientId,
-          anchor: input.anchor,
-          environment: input.environment,
-          metadata: input.metadata,
-          reporterGuest: input.reporter,
-        })
-        .returning();
-      if (!f) throw new Error("insert failed");
-
-      if (input.diagnostics) {
-        await tx.insert(diagnostics).values({
-          feedbackId: f.id,
-          console: input.diagnostics.console ?? null,
-          network: input.diagnostics.network ?? null,
-        });
-      }
-      if (shot) {
-        const ext = shot.contentType.split("/")[1] === "jpeg" ? "jpg" : shot.contentType.split("/")[1];
-        const key = `${p.id}/${crypto.randomUUID()}.${ext}`;
-        await storage().put(key, shot.bytes, shot.contentType);
-        await tx.insert(feedbackAsset).values({
-          orgId: p.orgId,
-          feedbackId: f.id,
-          kind: "screenshot",
-          storageKey: key,
-          contentType: shot.contentType,
-          bytes: shot.bytes.length,
-        });
-      }
-      await tx.insert(activity).values({
+    // Resolve the page outside the transaction and without touching an existing row: an upsert
+    // that updates the row locks it, and every report on a busy page would queue behind it.
+    const [inserted] = await db
+      .insert(page)
+      .values({
         orgId: p.orgId,
-        feedbackId: f.id,
-        actorKind: "guest",
-        type: "created",
-        data: { source: "widget" },
-      });
-      return f;
-    });
+        projectId: p.id,
+        url: pageUrl,
+        urlPattern: input.page.urlPattern,
+        title: input.page.title,
+      })
+      .onConflictDoNothing({ target: [page.projectId, page.url] })
+      .returning({ id: page.id });
+    const pageId =
+      inserted?.id ??
+      (
+        await db
+          .select({ id: page.id })
+          .from(page)
+          .where(and(eq(page.projectId, p.id), eq(page.url, pageUrl)))
+      )[0]?.id;
+
+    // Write the screenshot before opening the transaction, so the per-project counter row is
+    // locked only for a few inserts, never for disk I/O.
+    let asset: { key: string; contentType: string; bytes: number } | null = null;
+    if (shot) {
+      const ext = shot.contentType === "image/jpeg" ? "jpg" : shot.contentType.split("/")[1];
+      asset = {
+        key: `${p.id}/${crypto.randomUUID()}.${ext}`,
+        contentType: shot.contentType,
+        bytes: shot.bytes.length,
+      };
+      await storage().put(asset.key, shot.bytes, shot.contentType);
+    }
+
+    // One statement allocates the per-project number and writes the report with its diagnostics,
+    // screenshot record and activity entry. The counter row is locked only for the length of this
+    // statement; with separate round trips a busy event loop held it long enough for reports to
+    // queue behind each other (k6 load test: ~30 connections waiting on that one row).
+    const json = (v: unknown) => (v === undefined || v === null ? null : JSON.stringify(v));
+    const diag = input.diagnostics;
+    let created: { id: string; number: number } | undefined;
+    try {
+      const rows = await db.execute<{ id: string; number: number }>(sql`
+        with counter as (
+          update ${project} set feedback_counter = feedback_counter + 1
+          where id = ${p.id}
+          returning feedback_counter as n
+        ), f as (
+          insert into ${feedback}
+            (org_id, project_id, page_id, number, kind, title, body, priority, client_id,
+             anchor, environment, metadata, reporter_guest)
+          select ${p.orgId}, ${p.id}, ${pageId ?? null}, counter.n, ${input.kind}::feedback_kind,
+             ${input.title ?? null}, ${input.body}, ${input.priority ?? "none"}::priority, ${input.clientId},
+             ${json(input.anchor)}::jsonb, ${json(input.environment)}::jsonb, ${json(input.metadata)}::jsonb,
+             ${json(input.reporter)}::jsonb
+          from counter
+          returning id, number
+        ), d as (
+          insert into ${diagnostics} (feedback_id, console, network)
+          select f.id, ${json(diag?.console)}::jsonb, ${json(diag?.network)}::jsonb
+          from f where ${diag !== undefined}
+        ), a as (
+          insert into ${feedbackAsset} (org_id, feedback_id, kind, storage_key, content_type, bytes)
+          select ${p.orgId}, f.id, 'screenshot', ${asset?.key ?? ""}, ${asset?.contentType ?? ""}, ${asset?.bytes ?? 0}
+          from f where ${asset !== null}
+        ), act as (
+          insert into ${activity} (org_id, feedback_id, actor_kind, type, data)
+          select ${p.orgId}, f.id, 'guest', 'created', '{"source":"widget"}'::jsonb from f
+        )
+        select id, number from f
+      `);
+      created = rows[0];
+      if (!created) throw new Error("insert failed");
+    } catch (err) {
+      if (asset)
+        await storage()
+          .remove(asset.key)
+          .catch(() => {});
+      // Two retries of the same report racing each other: the unique (project, clientId) index
+      // lets exactly one win; answer the other with the stored record.
+      const [dup] = await db
+        .select({ id: feedback.id, number: feedback.number })
+        .from(feedback)
+        .where(and(eq(feedback.projectId, p.id), eq(feedback.clientId, input.clientId)));
+      if (dup) return c.json({ feedback: dup }, 200);
+      throw err;
+    }
 
     return c.json({ feedback: { id: created.id, number: created.number } }, 201);
   })
