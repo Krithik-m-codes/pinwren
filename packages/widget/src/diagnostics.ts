@@ -1,0 +1,156 @@
+// Console + failed-network ring buffers (blueprint F-005/F-006). Wrappers are transparent: they
+// call the original first, never change arguments or results, and never throw.
+
+type ConsoleEntry = { level: "error" | "warn" | "info" | "log" | "debug"; message: string; at: number };
+type NetworkEntry = { method: string; url: string; status: number; durationMs: number; at: number };
+
+const MAX_CONSOLE = 100;
+const MAX_NETWORK = 50;
+const SENSITIVE_PARAM = /token|key|secret|pass(word)?|auth|session|code|sig/i;
+
+const consoleBuf: ConsoleEntry[] = [];
+const networkBuf: NetworkEntry[] = [];
+let installed = false;
+
+function push<T>(buf: T[], item: T, max: number) {
+  buf.push(item);
+  if (buf.length > max) buf.shift();
+}
+
+function serialize(value: unknown, depth = 0): string {
+  try {
+    if (typeof value === "string") return value.slice(0, 1000);
+    if (value instanceof Error) return `${value.name}: ${value.message}\n${value.stack ?? ""}`.slice(0, 2000);
+    if (value instanceof Element) return `<${value.tagName.toLowerCase()}${value.id ? `#${value.id}` : ""}>`;
+    if (typeof value !== "object" || value === null) return String(value);
+    if (depth > 2) return "[Object]";
+    const seen = new WeakSet();
+    return (
+      JSON.stringify(value, (_k, v) => {
+        if (typeof v === "object" && v !== null) {
+          if (seen.has(v)) return "[Circular]";
+          seen.add(v);
+        }
+        return v;
+      })?.slice(0, 1000) ?? String(value)
+    );
+  } catch {
+    return "[Unserializable]";
+  }
+}
+
+export function redactUrl(raw: string): string {
+  try {
+    const u = new URL(raw, location.href);
+    for (const k of Array.from(u.searchParams.keys())) {
+      if (SENSITIVE_PARAM.test(k)) u.searchParams.set(k, "[redacted]");
+    }
+    return u.origin === location.origin ? u.pathname + u.search : u.toString();
+  } catch {
+    return raw.slice(0, 500);
+  }
+}
+
+export function installDiagnostics() {
+  if (installed) return;
+  installed = true;
+
+  for (const level of ["error", "warn"] as const) {
+    const original = console[level];
+    console[level] = function (...args: unknown[]) {
+      original.apply(this, args);
+      try {
+        push(
+          consoleBuf,
+          {
+            level,
+            message: args
+              .map((a) => serialize(a))
+              .join(" ")
+              .slice(0, 4000),
+            at: Date.now(),
+          },
+          MAX_CONSOLE,
+        );
+      } catch {}
+    };
+  }
+
+  addEventListener("error", (e) => {
+    push(
+      consoleBuf,
+      { level: "error", message: serialize(e.error ?? e.message), at: Date.now() },
+      MAX_CONSOLE,
+    );
+  });
+  addEventListener("unhandledrejection", (e) => {
+    push(
+      consoleBuf,
+      { level: "error", message: `Unhandled rejection: ${serialize(e.reason)}`, at: Date.now() },
+      MAX_CONSOLE,
+    );
+  });
+
+  const originalFetch = window.fetch;
+  window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
+    const started = performance.now();
+    const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+    const url = input instanceof Request ? input.url : String(input);
+    try {
+      const res = await originalFetch.call(this, input, init);
+      const ms = performance.now() - started;
+      if ((res.status >= 400 || ms > 3000) && !url.includes("/w/")) {
+        push(
+          networkBuf,
+          { method, url: redactUrl(url), status: res.status, durationMs: ms, at: Date.now() },
+          MAX_NETWORK,
+        );
+      }
+      return res;
+    } catch (err) {
+      push(
+        networkBuf,
+        { method, url: redactUrl(url), status: 0, durationMs: performance.now() - started, at: Date.now() },
+        MAX_NETWORK,
+      );
+      throw err;
+    }
+  };
+
+  const open = XMLHttpRequest.prototype.open;
+  const send = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (
+    this: XMLHttpRequest & { __annota?: { m: string; u: string } },
+    method: string,
+    url: string | URL,
+    ...rest: unknown[]
+  ) {
+    this.__annota = { m: method.toUpperCase(), u: String(url) };
+    // biome-ignore lint/suspicious/noExplicitAny: forwarding the original variadic signature
+    return (open as any).call(this, method, url, ...rest);
+  } as typeof XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.send = function (
+    this: XMLHttpRequest & { __annota?: { m: string; u: string } },
+    body?: Document | XMLHttpRequestBodyInit | null,
+  ) {
+    const meta = this.__annota;
+    const started = performance.now();
+    if (meta) {
+      this.addEventListener("loadend", () => {
+        const ms = performance.now() - started;
+        if (this.status >= 400 || this.status === 0 || ms > 3000) {
+          push(
+            networkBuf,
+            { method: meta.m, url: redactUrl(meta.u), status: this.status, durationMs: ms, at: Date.now() },
+            MAX_NETWORK,
+          );
+        }
+      });
+    }
+    return send.call(this, body);
+  };
+}
+
+export function snapshotDiagnostics() {
+  return { console: consoleBuf.slice(), network: networkBuf.slice() };
+}

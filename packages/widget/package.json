@@ -1,0 +1,25 @@
+{
+  "name": "@annota/widget",
+  "version": "0.1.0",
+  "description": "Annota feedback widget: pinned comments and bug reports for any website",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@annota/core": "workspace:*",
+    "@medv/finder": "^4.0.2",
+    "@zumer/snapdom": "^3.3.6",
+    "@types/node": "^22",
+    "esbuild": "^0.28.2",
+    "happy-dom": "^20.0.0",
+    "vitest": "^4.0.0"
+  }
+}
