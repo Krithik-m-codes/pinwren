@@ -460,8 +460,12 @@ const receiver = createServer((req, res) => {
     res.end(req.url === "/fail" ? "nope" : "ok");
   });
 });
-await new Promise((resolve) => receiver.listen(0, "127.0.0.1", resolve));
-const hookBase = `http://127.0.0.1:${receiver.address().port}`;
+// SMOKE_RECEIVER_HOST: the address the server uses to reach this script — 127.0.0.1 locally, the smoke
+// container's name when the server runs in Docker (the receiver then listens on all interfaces).
+const receiverHost = process.env.SMOKE_RECEIVER_HOST ?? "127.0.0.1";
+const listenHost = receiverHost === "127.0.0.1" ? "127.0.0.1" : "0.0.0.0";
+await new Promise((resolve) => receiver.listen(0, listenHost, resolve));
+const hookBase = `http://${receiverHost}:${receiver.address().port}`;
 const verify = (req, secret) => {
   const ts = req.headers["annota-timestamp"];
   const expected = `v1=${createHmac("sha256", secret).update(`${ts}.${req.body}`).digest("hex")}`;

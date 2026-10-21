@@ -186,11 +186,12 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
 
   .patch("/projects/:id", zValidator("json", projectUpdate), async (c) => {
     const db = getDb();
-    const { widgetConfig: widgetPatch, captureConfig: capturePatch, ...rest } = c.req.valid("json");
+    const { widgetConfig: widgetPatch, captureConfig: capturePatch, archived, ...rest } = c.req.valid("json");
     const where = and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId));
     const [current] = await db.select().from(project).where(where);
     if (!current) throw notFound("Project");
     const set: Partial<typeof project.$inferInsert> = { ...rest };
+    if (archived !== undefined) set.archivedAt = archived ? (current.archivedAt ?? new Date()) : null;
     if (widgetPatch) {
       set.widgetConfig = mergeAndValidate(
         widgetConfig,

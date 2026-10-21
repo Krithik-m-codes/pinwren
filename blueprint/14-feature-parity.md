@@ -11,7 +11,7 @@ Sources: SitePing — the MIT source and docs in the local fork (`E:\Shubpy\Site
 behaviour observed on the self-hosted instance at `bugs.shubpy.com` (routes, settings, widget modules). BugPin is
 AGPL: **study behaviour only, never copy code** (ADR 0011).
 
-_Last updated: 2026-10-21 (after Phase-1 build)._
+_Last updated: 2026-10-21 (after wave 2: widget comments + bug reports, backend, dashboard)._
 
 ---
 
@@ -33,7 +33,7 @@ _Last updated: 2026-10-21 (after Phase-1 build)._
 | Panel actions | Custom buttons/links in the detail view (create ticket, hand to agent) | F-016 | ⬜ | WP-30 |
 | Screenshots of the annotated area with privacy masking | Opt-in capture, masked fields | F-003 + masking (05 §6) | ✅ viewport capture, password/cc/`data-annota-mask` hidden | — |
 | Console + network diagnostics (opt-in) | Errors and failed requests attached | F-005/F-006 | ✅ errors, warnings, failed/slow requests, redacted URLs | — |
-| Triage inbox (Linear-style, keyboard-first, light/dark) | `<SitepingInbox />` | F-050/F-051 dashboard | ✅ list + detail, j/k, `/`, dark mode | — |
+| Triage inbox (Linear-style, keyboard-first, light/dark) | `<SitepingInbox />` | F-050/F-051 dashboard | ✅ list + detail + board, j/k, `/`, `e` `s` `p` `a` `x` `u`, bulk bar, activity timeline, dark mode (Playwright `inbox.e2e.ts`) | — |
 | Headless inbox hook | Build your own inbox UI | `@annota/sdk` + REST API | ⬜ | WP-18 |
 | Retry with backoff + local queue | Flaky network never loses a comment | F-010 | ✅ bug reports: IndexedDB outbox, exponential backoff, flushed on `online` and next load with the same clientId; comments retry in-page | — |
 | Shadow DOM isolation | No CSS leaks either way | Closed shadow root | ✅ | — |
@@ -55,7 +55,7 @@ _Last updated: 2026-10-21 (after Phase-1 build)._
 | Over-your-modals handling | Works above host dialogs/focus traps | `z-index` + host on `<html>` | 🟡 needs focus-trap handling | WP-30 |
 | Store-agnostic server (Prisma, Drizzle, memory, localStorage) | Choose your DB / no server | Postgres only (ADR 0001) | ➖ deliberate: one supported DB | — |
 | Screenshot storage backends (S3, R2, Cloudflare Images, DB, filesystem) | Keep images out of the DB | F-096 storage drivers | ✅ filesystem + S3-compatible (`STORAGE_DRIVER=s3`) | — |
-| Webhooks (Slack, Discord, generic) with escaping | Notify on new feedback | F-071/F-072/F-075 | 🟡 API, signed deliveries, retries + log built; dashboard UI next | WP-16 |
+| Webhooks (Slack, Discord, generic) with escaping | Notify on new feedback | F-071/F-072/F-075 | ✅ API + dashboard: create (generic/Slack/Discord), events, test, delivery log, redeliver, rotate secret (Playwright `settings.e2e.ts`) | — |
 | GitHub / GitLab issue sync | One issue per feedback | F-076/F-077 | ⬜ | WP-17 |
 | CLI (`init`, `sync`, `status`, `doctor`) | Setup and health checks | `annota doctor` (08 §5) | ⬜ | WP-12 |
 | Access policies (API key or custom auth, CSRF guards) | Who may read/write | Session auth for team, origin-bound public key for widget | ✅ | — |
@@ -67,7 +67,7 @@ _Last updated: 2026-10-21 (after Phase-1 build)._
 | One script tag install | `<script … data-api-key>` | `<script … data-project>` | ✅ | — |
 | Per-project API key | Identifies the site | Public project key + rotate | ✅ | — |
 | Domain whitelist (subdomains allowed) | Only listed sites can submit | Allowed sites with `*.` wildcards + URL tester | ✅ | — |
-| Rate limiting (configurable per minute) | Abuse protection | Postgres fixed-window limiter (`WIDGET_RATE_LIMIT_PER_MIN`) | ✅ (env); ⬜ UI setting | WP-13 |
+| Rate limiting (configurable per minute) | Abuse protection | Postgres fixed-window limiter (`WIDGET_RATE_LIMIT_PER_MIN`) | ✅ env default + per-project setting in Privacy & data (Playwright `project-settings.e2e.ts`) | — |
 | Visible-area screenshot | Capture what the user sees | SnapDOM viewport capture | ✅ | — |
 | Full-page screenshot | Capture the whole page | F-003 full-page option | ✅ full page + single element | — |
 | Screen-share capture fallback (`getDisplayMedia`) | When DOM capture fails | F-003 fallback | ✅ offered when DOM capture throws/times out (8 s), also a manual mode; or send without screenshot | — |
@@ -83,25 +83,25 @@ _Last updated: 2026-10-21 (after Phase-1 build)._
 | Network logs attached | Failed requests | F-006 | ✅ honours `capture.network`; page timing (TTFB, LCP) in metadata | — |
 | Browser / OS / device metadata | Environment | F-003 environment | ✅ browser, OS, viewport, DPR, locale, timezone, referrer | — |
 | Offline support / draft storage (IndexedDB) | Queue and resume reports | F-010 | ✅ drafts (text, screenshot, vector annotations, attachments) resume after reload; offline outbox | — |
-| Consent notice before sending | Tell the reporter what is sent | F-019 | 🟡 widget notice + privacy link, acceptance remembered; server-side record not yet | WP-13 |
-| Widget launcher customisation (position, shape, icon, text, tooltip, light/dark colours, hover effect) | Brand the button | F-001 | 🟡 accent colour only | WP-20 |
+| Consent notice before sending | Tell the reporter what is sent | F-019 | 🟡 widget notice + privacy link, acceptance remembered, text/link set in the dashboard; server-side record not yet | WP-13 |
+| Widget launcher customisation (position, shape, icon, text, tooltip, light/dark colours, hover effect) | Brand the button | F-001 | ✅ position, offset, round/pill + label, icon, accent, tooltip, hidden — dashboard live preview (`project-settings.e2e.ts`) + widget (`comments.e2e.ts` pill launcher); 🟡 separate light/dark colours and hover toggle | WP-20 |
 | Widget dialog colours | Brand the form | F-001 theming | ⬜ | WP-20 |
 | Widget i18n (de, en, es, fr, it, ja, nl, zh) | Translated widget | F-013 | ✅ those 8 + pt-BR, hi; `data-locale` or browser language | — |
 | Admin dashboard: report list, detail, status, priority, assignee | Triage | F-050/F-051 | ✅ | — |
-| Report history | Per-report change log | `activity` timeline | ✅ stored; 🟡 not yet shown in the UI | WP-08 |
+| Report history | Per-report change log | `activity` timeline | ✅ status/priority/assignee/rename/comment-deleted events interleaved with comments in the item timeline (Playwright `inbox.e2e.ts`) | — |
 | Users with roles (admin, editor, viewer) | Access control | Better Auth org roles (owner/admin/member) | 🟡 roles exist; viewer/permissions not enforced | WP-24 |
-| Invitations by email (with expiry) | Add teammates | F-090 | 🟡 invite emails + `GET /api/invitations`; accept page in dashboard next | WP-11 |
+| Invitations by email (with expiry) | Add teammates | F-090 | ✅ invite with role, pending list (copy link, revoke), `/accept-invitation/<id>` sign-up/in + join, change role, remove (Playwright `settings.e2e.ts`) | — |
 | Team email notifications (new report, status, priority, assignment, deletion) | Email the team | F-054/F-070 | 🟡 new report, assignment, status, replies (email + in-app, per-project prefs); deletion not yet | WP-11 |
 | Reporter email notifications + two-way reporter messaging | Keep the reporter informed | F-054 reporter notifications + public replies | 🟡 public replies + reporter email (project `notifyReporter`) built; reporter unsubscribe not yet | WP-11 |
-| SMTP settings in the UI with test email | Configure mail without env | F-070 instance settings | 🟡 API (env overrides + locks, encrypted password, test send); UI next | WP-11 |
+| SMTP settings in the UI with test email | Configure mail without env | F-070 instance settings | ✅ Settings → Email: env-locked fields read-only with the variable name, write-only password, test send (Playwright `settings.e2e.ts`) | — |
 | Email templates (custom) | Edit message wording | F-020 | 🟡 built-in escaped templates; admin-editable wording not yet (Community in Annota) | WP-11 |
 | GitHub issue sync | Reports → issues | F-076 | ⬜ | WP-17 |
-| Outbound webhooks | Integrations | F-075 | 🟡 API built, UI next (Community in Annota) | WP-16 |
-| API access tokens | Programmatic access | F-081 | 🟡 scoped tokens + `/api/v1/feedback` built; UI next (Community in Annota) | WP-18 |
+| Outbound webhooks | Integrations | F-075 | ✅ API + dashboard UI (Community in Annota) | — |
+| API access tokens | Programmatic access | F-081 | ✅ scoped tokens + `/api/v1/feedback`; Settings → API tokens: create with scopes/expiry, secret shown once, revoke (Community in Annota) | — |
 | S3 storage | Off-disk screenshots | F-096 | ✅ (Enterprise in BugPin; **Community in Annota**) | — |
 | Custom branding (logo, colours, favicon) | Brand the console | F-094 | ⬜ | WP-25 |
 | White-label (remove BugPin branding) | Agency resale | F-094 | ⬜ (Enterprise in both) | WP-25 |
-| Data retention (days) with cleanup job | Auto-delete old reports | F-095 | 🟡 daily `retention.apply` job + project `retentionDays`; UI next | WP-12 |
+| Data retention (days) with cleanup job | Auto-delete old reports | F-095 | ✅ daily `retention.apply` job + per-project retention in Privacy & data | — |
 | Session lifetime setting | Security | Better Auth session config | ⬜ UI | WP-13 |
 | EU privacy mode | Stricter data handling | F-021 (IP truncation, no third-party calls, consent) | ⬜ | WP-13 |
 | Enforce HTTPS | Refuse plain HTTP | Reverse-proxy + `ANNOTA_URL` https check | ⬜ | WP-12 |
@@ -118,7 +118,7 @@ _Last updated: 2026-10-21 (after Phase-1 build)._
 | Multi-tenant workspaces + Cloud plans with Stripe | F-090, F-097 | 🟡 workspaces built | WP-21/22 |
 | Session replay buffer (last 30–120 s) | F-007 | ⬜ | WP-19 |
 | Real-time inbox (SSE) + presence | F-050 | ⬜ (20 s polling today) | WP-14 |
-| Board view, page view, review rounds, saved views | F-052/053/055 | ⬜ | WP-15 |
+| Board view, page view, review rounds, saved views | F-052/053/055 | 🟡 board (drag + `m` move) and pages + pinned page review built (Playwright `board-pages.e2e.ts`); rounds, saved views ⬜ | WP-15 |
 | MCP server for AI coding agents | F-080 | ⬜ | WP-18 |
 | AI triage (summary, severity, duplicates, repro steps, translation) | F-110–F-114 | ⬜ | WP-27 |
 | Slack (interactive), Teams, Telegram, ntfy, Linear, Jira | F-071–F-079 | ⬜ | WP-16/17/25 |

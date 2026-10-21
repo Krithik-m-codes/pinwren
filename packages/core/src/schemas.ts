@@ -182,6 +182,8 @@ export const projectUpdate = z.object({
   notifyReporter: z.boolean().optional(),
   /** Widget reports + replies per IP per minute. null uses the instance default. */
   widgetRateLimitPerMin: z.number().int().min(1).max(1000).nullable().optional(),
+  /** Archive (true) or restore (false). Archived projects leave lists and their widget key stops working. */
+  archived: z.boolean().optional(),
 });
 export type ProjectUpdate = z.infer<typeof projectUpdate>;
 

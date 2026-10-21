@@ -7,8 +7,7 @@ dist
 *.tsbuildinfo
 next-env.d.ts
 /data
-apps/web/public/widget.js
-apps/web/public/widget-capture.js
+apps/web/public/widget*.js
 .dev.log
 packages/widget/test-results
 packages/widget/playwright-report

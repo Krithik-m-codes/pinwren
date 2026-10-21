@@ -13,7 +13,8 @@
       "!**/*.css",
       "!scripts/demo-site",
       "!**/test-results",
-      "!**/playwright-report"
+      "!**/playwright-report",
+      "!**/e2e/.auth"
     ]
   },
   "formatter": {

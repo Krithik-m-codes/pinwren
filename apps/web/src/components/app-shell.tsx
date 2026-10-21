@@ -34,16 +34,11 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { initials } from "@/components/user-avatar";
 import { api, type Project } from "@/lib/api";
 import { authClient, signOut, useSession } from "@/lib/auth-client";
 
-export const initials = (name?: string | null) =>
-  (name ?? "?")
-    .split(/\s+/)
-    .map((p) => p[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+export { initials } from "@/components/user-avatar";
 
 /**
  * Client-side gate for every signed-in screen: no session → sign-in, no workspace → onboarding.
