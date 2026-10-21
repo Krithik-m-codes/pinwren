@@ -69,7 +69,8 @@ async function call<T>(
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {
-    const msg = err instanceof Error && err.name === "TimeoutError" ? "timed out" : (err as Error)?.message;
+    const msg =
+      err instanceof Error ? (err.name === "TimeoutError" ? "timed out" : err.message) : "network error";
     throw new TrackerError(
       `Could not reach ${cfg.provider === "github" ? "GitHub" : "GitLab"}: ${msg}`,
       null,
@@ -80,7 +81,10 @@ async function call<T>(
     let detail = text.slice(0, 200);
     try {
       const j = JSON.parse(text) as { message?: unknown; error?: unknown };
-      detail = String(j.message ?? j.error ?? detail).slice(0, 200);
+      const m = j.message ?? j.error;
+      // GitLab sometimes answers with a structured message ({ "name": ["has already been taken"] }).
+      if (m !== undefined && m !== null)
+        detail = (typeof m === "string" ? m : JSON.stringify(m)).slice(0, 200);
     } catch {
       // not JSON — keep the text
     }
@@ -174,7 +178,8 @@ export async function checkAccess(
       undefined,
       fetchImpl,
     );
-    return { ok: true, name: String(r.full_name ?? r.path_with_namespace ?? cfg.repo) };
+    const name = [r.full_name, r.path_with_namespace].find((v): v is string => typeof v === "string");
+    return { ok: true, name: name ?? cfg.repo };
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : "failed" };
   }

@@ -6,8 +6,21 @@
 // Supported: # / ## / ### headings, paragraphs (single newlines → <br>), > quotes, - / * lists,
 // **bold**, *italic* / _italic_, `code`, [text](url) with http(s)/mailto targets.
 
+/** Template variables are strings and numbers; anything else is shown as JSON rather than "[object Object]". */
+function text(s: unknown): string {
+  if (s === null || s === undefined) return "";
+  if (typeof s === "string") return s;
+  if (typeof s === "number" || typeof s === "boolean" || typeof s === "bigint") return s.toString();
+  if (typeof s !== "object") return ""; // functions and symbols never reach a template
+  try {
+    return JSON.stringify(s);
+  } catch {
+    return ""; // circular
+  }
+}
+
 export function esc(s: unknown): string {
-  return String(s ?? "")
+  return text(s)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -39,7 +52,7 @@ export const VARIABLE = /\{\{\s*([A-Za-z][A-Za-z0-9]*)\s*\}\}/g;
 
 /** Variable names used in a template string. */
 export function variablesIn(s: string): string[] {
-  return [...new Set([...s.matchAll(VARIABLE)].map((m) => m[1] as string))];
+  return [...new Set([...s.matchAll(VARIABLE)].flatMap((m) => (m[1] ? [m[1]] : [])))];
 }
 
 // Private-use characters never appear in escaped template text, so they mark slots safely:

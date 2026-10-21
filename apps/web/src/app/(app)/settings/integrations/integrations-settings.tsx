@@ -51,6 +51,7 @@ import {
   type WebhookKind,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { here } from "@/lib/routes";
 
 const EVENT_LABELS: Record<WebhookEvent, string> = {
   "feedback.created": "New feedback",
@@ -89,7 +90,7 @@ export function IntegrationsSettings() {
   });
   const openId = search.get("webhook");
   const open = (id: string | null) =>
-    router.replace(id ? `${pathname}?webhook=${id}` : pathname, { scroll: false });
+    router.replace(here(pathname, id ? `webhook=${id}` : undefined), { scroll: false });
   const projectName = (id: string | null) =>
     id ? (projects.data?.projects.find((p) => p.id === id)?.name ?? "One project") : "All projects";
 
@@ -129,7 +130,7 @@ export function IntegrationsSettings() {
           </div>
         )}
         {hooks.isError && <ErrorState error={hooks.error} retry={() => hooks.refetch()} />}
-        {hooks.data && hooks.data.webhooks.length === 0 && (
+        {hooks.data?.webhooks.length === 0 && (
           <EmptyState
             icon={WebhookIcon}
             title="No webhooks yet"
@@ -251,11 +252,7 @@ function ProjectScope({
     ...projects.map((p) => ({ value: p.id, label: p.name })),
   ];
   return (
-    <Select
-      items={items}
-      value={value ?? "all"}
-      onValueChange={(v) => v && onChange(v === "all" ? null : String(v))}
-    >
+    <Select items={items} value={value ?? "all"} onValueChange={(v) => v && onChange(v === "all" ? null : v)}>
       <SelectTrigger className="w-full" aria-label="Projects">
         <SelectValue />
       </SelectTrigger>
@@ -352,6 +349,7 @@ function CreateWebhookDialog({
               placeholder={URL_HINT[kind]}
               className="font-mono text-xs"
               aria-invalid={!!error || undefined}
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- the dialog's first field; focus moves into a dialog on open
               autoFocus
             />
             {kind !== "generic" && (
@@ -432,8 +430,12 @@ function WebhookDetail({
     mutationFn: () => api<{ delivery: WebhookDelivery }>(`/webhooks/${id}/test`, { method: "POST" }),
     onSuccess: ({ delivery }) => {
       void qc.invalidateQueries({ queryKey: deliveriesKey(id) });
-      if (delivery.status === "success") toast.success(`Test delivered · ${delivery.responseCode}`);
-      else toast.error("Test failed", { description: delivery.error ?? `HTTP ${delivery.responseCode}` });
+      if (delivery.status === "success")
+        toast.success(`Test delivered · ${delivery.responseCode ?? "no status"}`);
+      else
+        toast.error("Test failed", {
+          description: delivery.error ?? `HTTP ${delivery.responseCode ?? "error"}`,
+        });
     },
     onError: (e) => toast.error(e.message),
   });
@@ -532,7 +534,7 @@ function WebhookDetail({
           </h3>
           {deliveries.isPending && <Skeleton className="h-24" />}
           {deliveries.isError && <ErrorState error={deliveries.error} retry={() => deliveries.refetch()} />}
-          {deliveries.data && deliveries.data.deliveries.length === 0 && (
+          {deliveries.data?.deliveries.length === 0 && (
             <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
               Nothing sent yet. Send a test event to check the connection.
             </p>

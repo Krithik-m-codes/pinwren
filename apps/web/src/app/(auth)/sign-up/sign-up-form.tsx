@@ -8,24 +8,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signUp } from "@/lib/auth-client";
+import { formText } from "@/lib/form";
 
 export function SignUpForm() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     setPending(true);
     setError(null);
     const { error } = await signUp.email({
-      name: String(form.get("name")),
-      email: String(form.get("email")),
-      password: String(form.get("password")),
+      name: formText(form, "name"),
+      email: formText(form, "email"),
+      password: formText(form, "password"),
     });
     setPending(false);
-    if (error) return setError(error.message ?? "Could not create your account");
+    if (error) {
+      setError(error.message ?? "Could not create your account");
+      return;
+    }
     router.replace("/onboarding");
   }
 
@@ -39,6 +43,7 @@ export function SignUpForm() {
         <form onSubmit={onSubmit} className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="name">Name</Label>
+            {/* eslint-disable-next-line jsx-a11y/no-autofocus -- the page exists to sign up; its first field is the only sensible start */}
             <Input id="name" name="name" autoComplete="name" required autoFocus />
           </div>
           <div className="grid gap-2">

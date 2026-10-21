@@ -9,13 +9,13 @@ Shared by the **admin agent** (owns `packages/core`, `packages/db`, `packages/ap
 
 ```ts
 type PanelAction = {
-  id: string;                       // stable slug, [a-z0-9-]{1,32}
-  label: string;                    // ≤ 40 chars
+  id: string; // stable slug, [a-z0-9-]{1,32}
+  label: string; // ≤ 40 chars
   kind: "link" | "webhook";
-  url: string;                      // https?:// only. For "link": may contain {id} {number} {url} {projectSlug}
-                                    // placeholders, URL-encoded on substitution. For "webhook": a fixed URL.
-  icon: "link" | "ticket" | "bot" | "external" | null;   // default null
-  visibleTo: "everyone" | "team";   // "team" = dashboard only; widget never renders team actions
+  url: string; // https?:// only. For "link": may contain {id} {number} {url} {projectSlug}
+  // placeholders, URL-encoded on substitution. For "webhook": a fixed URL.
+  icon: "link" | "ticket" | "bot" | "external" | null; // default null
+  visibleTo: "everyone" | "team"; // "team" = dashboard only; widget never renders team actions
 };
 ```
 
@@ -28,7 +28,7 @@ type PanelAction = {
   `message` is the receiver's JSON `{ "message": "…" }` if present (≤ 200 chars, shown as a toast) and `error`
   says why a run failed (`HTTP 500`, `timed out after 10 s`; `status` is 0 when the receiver was unreachable).
   Logged in `activity` (`type: "action_run"`). Payload envelope: `{ id, event: "action.run", apiVersion, createdAt,
-  data: { feedback, action: { id, label }, actor } }`. Secret: `GET /api/projects/:id/action-secret` (org admins,
+data: { feedback, action: { id, label }, actor } }`. Secret: `GET /api/projects/:id/action-secret` (org admins,
   created on first use), `POST /api/projects/:id/action-secret/rotate`.
 - **`/w/config` only carries `kind: "link"`, `visibleTo: "everyone"` actions** (added in wave 3, admin side): team
   links and webhook URLs never reach the page. `substituteActionUrl(template, { id, number, url, projectSlug })` is

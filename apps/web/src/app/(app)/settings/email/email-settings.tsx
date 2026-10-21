@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CircleCheck, CircleX, Lock, Mail, Send } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { NumberInput } from "@/components/number-input";
 import { SettingGroup, SettingRow } from "@/components/setting-row";
@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { api, type EmailField, type EmailSettings, type EmailTestResult, isForbidden } from "@/lib/api";
 import { emailSettingsKey, useEmailSettings } from "../settings-shell";
+import { useSyncedState } from "@/lib/use-synced-state";
 
 const ENV: Record<EmailField, string> = {
   host: "SMTP_HOST",
@@ -51,22 +52,23 @@ export function EmailSettingsForm() {
   const qc = useQueryClient();
   const query = useEmailSettings();
   const s = query.data?.email;
-  const [draft, setDraft] = useState<Draft | null>(null);
+  // The form follows the saved settings whenever they (re)load; the password field always starts empty.
+  const [draft, setDraft] = useSyncedState<Draft | null>(
+    s
+      ? {
+          host: s.host ?? "",
+          port: s.port,
+          user: s.user ?? "",
+          secure: s.secure,
+          from: s.from ?? "",
+          password: "",
+        }
+      : null,
+    s,
+  );
   const [testTo, setTestTo] = useState("");
   const [result, setResult] = useState<EmailTestResult | null>(null);
   const [errors, setErrors] = useState<Partial<Record<EmailField, string>>>({});
-
-  useEffect(() => {
-    if (s)
-      setDraft({
-        host: s.host ?? "",
-        port: s.port,
-        user: s.user ?? "",
-        secure: s.secure,
-        from: s.from ?? "",
-        password: "",
-      });
-  }, [s]);
 
   const save = useMutation({
     mutationFn: (patch: Record<string, unknown>) =>
@@ -108,7 +110,7 @@ export function EmailSettingsForm() {
   const locked = s.locked;
   const allLocked = Object.values(locked).every(Boolean);
 
-  function submit(e: React.FormEvent) {
+  function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!s || !draft) return;
     const next: Partial<Record<EmailField, string>> = {};

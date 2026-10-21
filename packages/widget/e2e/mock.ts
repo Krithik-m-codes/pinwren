@@ -16,8 +16,8 @@ export type Item = {
   replyCount: number;
   token?: string;
   replies: { id: string; body: string; createdAt: string; authorName: string | null; team: boolean }[];
-  url?: string;
-  clientId?: string;
+  url?: string | undefined;
+  clientId?: string | undefined;
   /** The full POST body, for assertions on screenshots, attachments and diagnostics. */
   payload?: Record<string, unknown>;
 };
@@ -29,6 +29,19 @@ export type Mock = {
   /** When true, POST /w/feedback fails like a dead network (page.route ignores context.setOffline). */
   offline: boolean;
   requests: { method: string; path: string; headers: Record<string, string>; body: unknown }[];
+};
+
+/** What the widget POSTs/PATCHes; only the fields the mock reads. */
+type Body = {
+  clientId?: string;
+  kind?: string;
+  body?: string;
+  title?: string;
+  anchor?: Record<string, unknown>;
+  reporter?: { name?: string };
+  author?: { name?: string };
+  page?: { url?: string };
+  status?: string;
 };
 
 type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };
@@ -95,6 +108,8 @@ export async function mockApi(
   const widget = opts.widget ?? {};
   // Tests need to look inside the widget; Playwright cannot pierce a closed shadow root, so force it open.
   await page.addInitScript(() => {
+    // Re-invoked below with the element as `this`.
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     const attach = Element.prototype.attachShadow;
     Element.prototype.attachShadow = function (init: ShadowRootInit) {
       return attach.call(this, { ...init, mode: "open" });
@@ -105,9 +120,11 @@ export async function mockApi(
     const req = route.request();
     const url = new URL(req.url());
     const path = url.pathname.replace(/^\/w/, "");
-    const body = req.postData() ? JSON.parse(req.postData() as string) : undefined;
+    const raw = req.postData();
+    const parsed: unknown = raw ? JSON.parse(raw) : undefined;
+    const body = (parsed ?? {}) as Body;
     const headers = req.headers();
-    mock.requests.push({ method: req.method(), path: `${path}${url.search}`, headers, body });
+    mock.requests.push({ method: req.method(), path: `${path}${url.search}`, headers, body: parsed });
     if (req.method() === "OPTIONS") return route.fulfill({ status: 204 });
 
     if (path === "/config")
@@ -141,30 +158,32 @@ export async function mockApi(
       const number = mock.items.reduce((n, i) => Math.max(n, i.number), 0) + 1;
       const item: Item = seed({
         number,
-        kind: body.kind,
-        body: body.body,
+        kind: body.kind ?? "comment",
+        body: body.body ?? "",
         title: body.title ?? null,
         anchor: body.anchor ?? null,
         reporterName: body.reporter?.name ?? null,
         createdAt: new Date().toISOString(),
         token: `tok_${number}`,
-        url: body.page.url,
+        url: body.page?.url,
         clientId: body.clientId,
-        payload: body,
+        payload: parsed as Record<string, unknown>,
       });
       mock.items.push(item);
       return json(route, 201, { feedback: { id: item.id, number, reporterToken: item.token } });
     }
 
     const m = /^\/feedback\/([^/]+)(\/comments)?$/.exec(path);
-    const item = m && mock.items.find((i) => i.id === decodeURIComponent(m[1] as string));
+    const id = m?.[1];
+    const item = id === undefined ? undefined : mock.items.find((i) => i.id === decodeURIComponent(id));
     if (!item) return json(route, 404, { title: "Not found" });
 
-    if (m?.[2] && req.method() === "GET") return json(route, 200, { items: item.replies });
-    if (m?.[2] && req.method() === "POST") {
+    const comments = m?.[2] !== undefined;
+    if (comments && req.method() === "GET") return json(route, 200, { items: item.replies });
+    if (comments && req.method() === "POST") {
       const comment = {
         id: `c_${item.replies.length + 1}`,
-        body: body.body,
+        body: body.body ?? "",
         createdAt: new Date().toISOString(),
         authorName: body.author?.name ?? null,
         team: false,
@@ -177,7 +196,7 @@ export async function mockApi(
       const allowed =
         widget.visitorsCanResolve !== false || headers["x-pinwren-reporter-token"] === item.token;
       if (!allowed) return json(route, 403, { title: "You can't resolve this", code: "RESOLVE_NOT_ALLOWED" });
-      item.status = body.status;
+      item.status = body.status ?? item.status;
       return json(route, 200, { feedback: { id: item.id, status: item.status } });
     }
     return json(route, 405, { title: "Method not allowed" });

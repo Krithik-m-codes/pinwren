@@ -1,0 +1,26 @@
+# Dependencies and lockfiles
+node_modules
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Build output and caches
+dist
+.next
+.next-*
+.turbo
+coverage
+*.tsbuildinfo
+next-env.d.ts
+
+# Generated
+packages/db/drizzle/meta
+apps/web/public/widget*.js
+**/e2e/__screenshots__
+**/e2e/.auth
+**/test-results
+**/playwright-report
+
+# Runtime data
+/data
+.dev.log

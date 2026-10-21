@@ -3,6 +3,7 @@
 One prompt per work package (WP). Run them **in order**, each in a session that has read the whole blueprint. Every prompt implicitly includes the **standard footer** below — don't repeat it, but always follow it.
 
 > **Standard footer (applies to every WP)**
+>
 > 1. Re-read the blueprint sections cited in the prompt before starting.
 > 2. Write tests alongside code (see 12). Do not mark the WP done with failing or skipped tests.
 > 3. Run the full gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e --project=smoke` (+ any WP-specific gate).
@@ -16,11 +17,12 @@ One prompt per work package (WP). Run them **in order**, each in a session that 
 ## Phase 0 — Foundations
 
 ### WP-00 — Repository scaffold
+
 ```
 Create the Pinwren monorepo exactly as laid out in 02-architecture.md §3.
 - pnpm workspaces + Turborepo; Node 24 (.nvmrc, engines); TypeScript strict (shared tsconfig in packages/config:
   strict, exactOptionalPropertyTypes, noUncheckedIndexedAccess, verbatimModuleSyntax).
-- Biome for lint+format; Vitest workspace config; Playwright config with a "smoke" project; Changesets.
+- ESLint + Prettier for lint and format (ADR 0017); Vitest workspace config; Playwright config with a "smoke" project; release-please.
 - LICENSE (AGPL-3.0) at root, ee/LICENSE (commercial placeholder text clearly marked for legal review),
   MIT LICENSE files in packages/widget, widget-react, sdk-js, mcp, anchoring, capture. THIRD_PARTY_NOTICES.md.
 - Copy templates/CLAUDE.md from the blueprint to the repo root and templates/env.example to .env.example.
@@ -33,6 +35,7 @@ Acceptance: `pnpm i && pnpm build && pnpm test` passes on a clean clone; CI gree
 ```
 
 ### WP-01 — Core schemas and database
+
 ```
 Implement packages/core and packages/db per 03-data-model.md and 04-api-spec.md.
 - packages/core: Zod 4 schemas for every wire type in 04 (AnchorBundle, Environment, Feedback create/read,
@@ -48,6 +51,7 @@ Implement packages/core and packages/db per 03-data-model.md and 04-api-spec.md.
 ```
 
 ### WP-02 — Server skeleton and auth
+
 ```
 Build apps/server per 02 and 04.
 - Hono app with @hono/zod-openapi; route modules per resource; OpenAPI at /api/openapi.json and Scalar UI at
@@ -64,6 +68,7 @@ Build apps/server per 02 and 04.
 ```
 
 ### WP-03 — Design system and dashboard shell
+
 ```
 Build packages/ui and apps/dashboard per 06-dashboard-ux.md.
 - Tailwind v4 with CSS-variable tokens for light/dark (06 §1), Inter + JetBrains Mono self-hosted (no CDN).
@@ -83,6 +88,7 @@ Acceptance: Phase 0 exit criteria in 10-roadmap.md.
 ## Phase 1 — Self-host MVP
 
 ### WP-04 — Projects, keys, origins, install flow
+
 ```
 Implement projects (03 `project`, 04 Projects endpoints, 06 §3.5).
 - CRUD, slug, public key generation (pk_live_/pk_test_ + 24 random chars), rotate key with overlap window.
@@ -94,6 +100,7 @@ Implement projects (03 `project`, 04 Projects endpoints, 06 §3.5).
 ```
 
 ### WP-05 — Anchoring engine
+
 ```
 Implement packages/anchoring per 01 F-030–F-032 and 05 §5. Framework-free TypeScript, no DOM globals at
 import time, pure functions where possible.
@@ -109,6 +116,7 @@ attribution only if you copy code.
 ```
 
 ### WP-06 — Widget core (comment mode)
+
 ```
 Build packages/widget per 05-widget-spec.md §§1–5, 8, 9 (capture/replay come later).
 - Loader (<3 KB) + core (Preact + signals) in closed Shadow DOM under <pinwren-root>; constructed stylesheets.
@@ -124,6 +132,7 @@ Build packages/widget per 05-widget-spec.md §§1–5, 8, 9 (capture/replay come
 ```
 
 ### WP-07 — Widget API, ingest and storage
+
 ```
 Implement /w/* from 04 §2 and packages/storage (FS + S3 drivers via aws4fetch, presigned PUT for S3,
 streamed PUT for FS, signed GET redirects), F-096, F-010.
@@ -137,6 +146,7 @@ streamed PUT for FS, signed GET redirects), F-096, F-010.
 ```
 
 ### WP-08 — Inbox and item detail
+
 ```
 Implement F-050 (without realtime) and F-051 per 06 §3.1–3.2.
 - List with virtualisation, grouping, filter chips, search (Postgres FTS), cursor pagination, sort.
@@ -149,6 +159,7 @@ Implement F-050 (without realtime) and F-051 per 06 §3.1–3.2.
 ```
 
 ### WP-09 — Capture, annotation editor, bug report mode
+
 ```
 Implement packages/capture (screenshot part) and widget bug mode per 05 §6 and F-003/F-004.
 - Masking pass, SnapDOM capture (viewport/element/full page), WebP/PNG encode, cross-origin asset retry via
@@ -161,6 +172,7 @@ Implement packages/capture (screenshot part) and widget bug mode per 05 §6 and 
 ```
 
 ### WP-10 — Diagnostics capture
+
 ```
 Implement console, network and error buffers (05 §7, F-005, F-006) in packages/capture with reversible wrappers,
 safe serializer, redaction rules; attach on submit; project-level configuration honoured.
@@ -170,6 +182,7 @@ credentials, redirects).
 ```
 
 ### WP-11 — Notifications and email
+
 ```
 Implement F-054 and F-070: packages/email (React Email templates: new feedback, assigned, mentioned, status
 changed, reply to reporter, digest, invitation, magic link, test email), drivers (SMTP via nodemailer, Resend,
@@ -179,6 +192,7 @@ Every email has a plain-text part, List-Unsubscribe for digests, and is rendered
 ```
 
 ### WP-12 — Packaging and self-host experience
+
 ```
 Implement 08-self-hosting.md: multi-arch Dockerfile (bundled server, non-root, read-only rootfs), compose files
 (base, caddy, traefik, minio, external-db), install.sh, setup wizard with PINWREN_SETUP_TOKEN, `pinwren doctor`
@@ -188,6 +202,7 @@ Acceptance: fresh VM → install.sh → first report in < 5 minutes (scripted te
 ```
 
 ### WP-13 — Hardening and alpha release
+
 ```
 Go through 09-security-and-privacy.md item by item and close every Phase-1-relevant mitigation; add tests
 proving each. Run the full E2E matrix, anchoring suite, size budgets, axe checks. Write docs: self-hosting,
@@ -199,6 +214,7 @@ widget install, configuration reference, privacy & masking guide. Tag v0.1.0-alp
 ## Phase 2 — Collaboration & integrations
 
 ### WP-14 — Real time
+
 ```
 SSE endpoint /api/stream with Postgres LISTEN/NOTIFY fan-out (multi-instance safe), auth per project
 membership, heartbeat, reconnect with Last-Event-ID. Dashboard: live list updates, "N new" pill, presence
@@ -206,12 +222,14 @@ avatars on items (ephemeral presence table or in-memory with NOTIFY). Replace WP
 ```
 
 ### WP-15 — Board, pages, rounds, views, duplicates
+
 ```
 Implement F-052, F-053, F-055, F-056 (basic) and saved views per 06 §3.3–3.4. Rounds export to CSV and PDF
 (server-side PDF via a lightweight renderer — no headless Chrome dependency in the image).
 ```
 
 ### WP-16 — Webhooks and chat integrations
+
 ```
 packages/integrations: provider interface (configure, test, deliver, optional inbound). Generic webhooks with
 HMAC signing, retries schedule and auto-disable (04 §5), delivery log UI with redeliver. Slack (OAuth app,
@@ -221,6 +239,7 @@ untrusted content per 09. Failures never block ingest.
 ```
 
 ### WP-17 — Issue tracker sync
+
 ```
 GitHub (GitHub App: install flow, repo picker, issue create with embedded screenshot + context, label mapping,
 two-way status via webhooks), GitLab (OAuth + webhooks), Linear (OAuth + webhooks). Link table, conflict rules
@@ -228,6 +247,7 @@ two-way status via webhooks), GitLab (OAuth + webhooks), Linear (OAuth + webhook
 ```
 
 ### WP-18 — Public API, SDK and MCP
+
 ```
 API tokens (argon2id-hashed, scopes, prefix display), /api/v1 per 04 §4 with Idempotency-Key, @pinwren/sdk
 generated types from OpenAPI + hand-written ergonomic client, MCP server per 04 §6 (Streamable HTTP at /mcp and
@@ -236,6 +256,7 @@ resolves an item.
 ```
 
 ### WP-19 — Session replay
+
 ```
 Replay buffer in packages/capture (rrweb record, rolling 30–120 s, masking defaults, CompressionStream gzip,
 memory cap), lazy chunk, consent hook, per-project toggle; dashboard player (rrweb-player) with timeline markers
@@ -243,6 +264,7 @@ synced to console/network panes. Perf test on reference SPA: CPU overhead < 3 %.
 ```
 
 ### WP-20 — i18n, guests, review links, React package
+
 ```
 Locales en, es, fr, de, pt-BR, it, ja, hi for widget + emails (+ dashboard en first, structure for more).
 Guest portal (06 §7), review links (03 review_link) that enable the widget via token, signed identity
@@ -254,6 +276,7 @@ Guest portal (06 §7), review links (03 review_link) that enable the widget via 
 ## Phase 3 — Cloud & monetisation
 
 ### WP-21 — Cloud mode
+
 ```
 PINWREN_MODE=cloud: enforce RLS on every tenant query path, cross-tenant test suite that calls every endpoint
 as another org and expects 404/403, org signup flow, CDN widget delivery with versioned paths, remote kill
@@ -261,6 +284,7 @@ switch for widget versions, per-org rate limits, Redis optional adapter for rate
 ```
 
 ### WP-22 — Billing
+
 ```
 ee/billing with Stripe: plans from 07 §3 defined in code and synced by script, Checkout, Customer Portal,
 webhooks (idempotent), usage counters and limit enforcement (soft/hard), dunning banners and downgrade rules,
@@ -268,6 +292,7 @@ billing settings page, upgrade cards wherever a limit or entitlement blocks an a
 ```
 
 ### WP-23 — Licensing (self-host Enterprise)
+
 ```
 ee/licensing per 07 §4: Ed25519 verification with key ids, entitlement resolution, grace/read-only behaviour,
 admin licence page (upload, details, expiry countdown), seat counting, and tools/sign-license (CLI that signs a
@@ -275,6 +300,7 @@ payload with a private key from env/KMS; never committed). Tests for tampered, e
 ```
 
 ### WP-24 — Enterprise identity and governance
+
 ```
 SSO via Better Auth SSO plugin (SAML 2.0 + OIDC), domain verification and capture, enforced SSO, SCIM 2.0
 (users, groups), audit log (append-only, filters, CSV/JSONL export, SIEM webhook stream), custom roles with
@@ -282,6 +308,7 @@ permission matrix. All behind requireEntitlement().
 ```
 
 ### WP-25 — White-label, Jira, legal hold
+
 ```
 Custom widget/CDN domain and dashboard domain (Cloud: automated TLS via the edge; self-host: docs), branding
 removal and theming for widget, emails, guest portal; Jira Cloud + Data Center integration; legal hold flag
@@ -289,6 +316,7 @@ that suspends retention deletes.
 ```
 
 ### WP-26 — Website and docs
+
 ```
 apps/www (Astro): landing, features, pricing (from the same plan definitions), self-hosting docs, widget docs,
 API reference (from OpenAPI), MCP guide, changelog, comparison pages (honest, sourced). Tag v1.0.0.
@@ -297,6 +325,7 @@ API reference (from OpenAPI), MCP guide, changelog, comparison pages (honest, so
 ---
 
 ### WP-30 — Widget parity extras (SitePing + BugPin)
+
 ```
 Close every ⬜ row in 14-feature-parity.md that names WP-30: right-click comments (F-015), panel actions (F-016),
 read-only mode (F-017), widget export (F-018), "Mine" filter, focus-trap/modal handling. Then re-check the whole
@@ -309,6 +338,7 @@ commit and add a test per ✅ row.
 ## Phase 4 — AI, scale, polish
 
 ### WP-27 — AI features
+
 ```
 packages/ai provider layer (Anthropic, OpenAI-compatible, Ollama) with per-org config, cost/usage logging,
 audit entries. Features F-110–F-114 as jobs triggered on ingest (opt-in per project); pgvector for embeddings
@@ -316,12 +346,14 @@ audit entries. Features F-110–F-114 as jobs triggered on ingest (opt-in per pr
 ```
 
 ### WP-28 — Scale & ops
+
 ```
 Helm chart, read-replica routing, k6 load tests with published capacity numbers, backup/restore drill in CI,
 OpenTelemetry traces across ingest → jobs → integrations.
 ```
 
 ### WP-29 — Quality pass
+
 ```
 Accessibility audit (axe clean, manual screen-reader pass on widget + dashboard), Lighthouse ≥ 95 on dashboard
 routes, VPAT draft, performance profiling of widget on low-end Android, docs polish. Tag v1.1.0.

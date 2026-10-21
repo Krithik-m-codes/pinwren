@@ -1,0 +1,41 @@
+name: Stale follow-up
+
+# Deliberately narrow: only issues and PRs labelled `awaiting-response` or `needs-reproduction` can go
+# stale. Nothing else is ever touched — blanket stale bots punish patient contributors.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+        with:
+          any-of-labels: "awaiting-response,needs-reproduction"
+          days-before-stale: 14
+          days-before-close: 7
+          stale-issue-label: stale
+          stale-pr-label: stale
+          remove-stale-when-updated: true
+          operations-per-run: 60
+          stale-issue-message: >-
+            This issue is waiting on a reply or a reproduction and has had no activity for 14 days.
+            It will be closed in 7 days unless something changes — a quick comment keeps it open.
+          close-issue-message: >-
+            Closing for now because the information needed to move forward didn't arrive. This is not
+            a rejection: comment with the missing details and we'll reopen.
+          stale-pr-message: >-
+            This pull request is waiting on its author and has had no activity for 14 days. It will be
+            closed in 7 days unless something changes — push a commit or comment to keep it open.
+          close-pr-message: >-
+            Closing for now since the requested changes didn't land. Reopen it, or open a fresh PR,
+            whenever you want to pick it back up.

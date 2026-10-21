@@ -96,7 +96,7 @@ textarea { min-height: 76px; field-sizing: content; max-height: 220px; }
 .av { width: 24px; height: 24px; border-radius: 999px; background: var(--c, var(--accent)); color: #fff; flex: none;
   display: grid; place-items: center; font-size: 10px; font-weight: 700; letter-spacing: .02em; }
 .av svg { width: 13px; height: 13px; }
-.pin { position: fixed; z-index: 2147483595; width: ${32}px; height: ${32}px; border-radius: 50% 50% 50% 4px;
+.pin { position: fixed; z-index: 2147483595; width: 32px; height: 32px; border-radius: 50% 50% 50% 4px;
   background: var(--c, var(--accent)); border: 2px solid #fff; color: #fff; box-shadow: 0 4px 12px -2px rgba(0,0,0,.35);
   display: grid; place-items: center; transform-origin: 0 100%; transition: transform .14s ease, opacity .14s; }
 .pin .av { width: 100%; height: 100%; background: none; font-size: 11px; }

@@ -60,7 +60,10 @@ export const project = pgTable(
     name: text("name").notNull(),
     slug: text("slug").notNull(),
     publicKey: text("public_key").notNull().unique(),
-    allowedOrigins: text("allowed_origins").array().notNull().default(sql`'{}'::text[]`),
+    allowedOrigins: text("allowed_origins")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     publicRead: boolean("public_read").notNull().default(true),
     widgetConfig: jsonb("widget_config").$type<Record<string, unknown>>().notNull().default({}),
     captureConfig: jsonb("capture_config").$type<Record<string, unknown>>().notNull().default({}),
@@ -98,7 +101,11 @@ export const page = pgTable(
   (t) => [uniqueIndex("page_project_url_uq").on(t.projectId, t.url)],
 );
 
-export type ReporterGuest = { name?: string; email?: string; externalId?: string };
+export type ReporterGuest = {
+  name?: string | undefined;
+  email?: string | undefined;
+  externalId?: string | undefined;
+};
 
 export const feedback = pgTable(
   "feedback",
@@ -117,7 +124,10 @@ export const feedback = pgTable(
     body: text("body").notNull(),
     reporterId: text("reporter_id").references(() => user.id, { onDelete: "set null" }),
     reporterGuest: jsonb("reporter_guest").$type<ReporterGuest>(),
-    assigneeIds: text("assignee_ids").array().notNull().default(sql`'{}'::text[]`),
+    assigneeIds: text("assignee_ids")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     clientId: uuid("client_id").notNull(),
     /** SHA-256 (hex) of the reporter token handed to the widget once; proves "I filed this". */
     reporterTokenHash: text("reporter_token_hash"),
@@ -277,7 +287,10 @@ export const webhookEndpoint = pgTable(
     name: text("name"),
     url: text("url").notNull(),
     kind: webhookKindEnum("kind").notNull().default("generic"),
-    events: text("events").array().notNull().default(sql`'{}'::text[]`),
+    events: text("events")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     /** AES-256-GCM ciphertext of the signing secret (generic endpoints). */
     secret: text("secret"),
     active: boolean("active").notNull().default(true),
@@ -329,7 +342,10 @@ export const apiToken = pgTable(
     name: text("name").notNull(),
     prefix: text("prefix").notNull(),
     hash: text("hash").notNull(),
-    scopes: text("scopes").array().notNull().default(sql`'{}'::text[]`),
+    scopes: text("scopes")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -405,7 +421,10 @@ export const issueIntegration = pgTable(
     repo: text("repo").notNull(),
     /** GitHub Enterprise / self-managed GitLab base URL; null = instance default. */
     apiUrl: text("api_url"),
-    labels: text("labels").array().notNull().default(sql`'{}'::text[]`),
+    labels: text("labels")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     autoCreate: text("auto_create", { enum: ISSUE_AUTO_CREATE }).notNull().default("manual"),
     /** AES-256-GCM ciphertext of the inbound webhook secret (X-Hub-Signature-256 / X-Gitlab-Token). */
     webhookSecret: text("webhook_secret").notNull(),

@@ -12,7 +12,9 @@ The full specification lives in `blueprint/` (files 00–14). `blueprint/14-feat
 - `node scripts/smoke.mjs http://localhost:3100` — 20-check end-to-end API test
 - `docker compose -f docker/compose.yml --env-file docker/.env up -d --build` — self-host stack
 - `pnpm build` — all packages (Turborepo, cached)
-- `pnpm lint` / `pnpm lint:fix` — Biome + dependency-boundary check
+- `pnpm format` / `pnpm format:check` — Prettier (with prettier-plugin-tailwindcss)
+- `pnpm lint` / `pnpm lint:fix` — ESLint 9 flat config: typescript-eslint strict type-checked, eslint-config-next, React Compiler rules, jsx-a11y
+- `pnpm verify` — format:check + lint + typecheck + test + build
 - `pnpm typecheck`
 - `pnpm test` — unit + component + integration (Testcontainers; Docker required)
 - `pnpm test:e2e` — Playwright (`--project=smoke` for the quick set)
@@ -39,7 +41,7 @@ The full specification lives in `blueprint/` (files 00–14). `blueprint/14-feat
 - Conventional Commits. One logical change per commit.
 - UI: `packages/ui` components only — shadcn/ui on Base UI. No browser-native pickers/selects/date inputs.
 - Every new screen ships empty, loading and error states, keyboard access and dark mode.
-- Comments explain *why*; match surrounding density.
+- Comments explain _why_; match surrounding density.
 - Untrusted content (feedback text, names, URLs, metadata) is escaped/sanitised at every output: dashboard, emails, chat messages, issue bodies.
 
 ## Licensing rules

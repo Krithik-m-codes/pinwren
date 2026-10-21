@@ -3,6 +3,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  // React Compiler, run by Turbopack's native Rust port rather than the Babel plugin (no
+  // babel-plugin-react-compiler dependency). ESLint enforces the compiler's rules (eslint.config.mjs).
+  reactCompiler: true,
+  experimental: {
+    turbopackRustReactCompiler: true,
+  },
+  // `<Link href>` and `router.push()` are checked against the app's real routes.
+  typedRoutes: true,
   // A second dev server in the same checkout (e.g. a parallel test run on another port) needs its own
   // build folder: Next refuses two dev servers on one dist dir. Default unchanged.
   distDir: process.env.PINWREN_NEXT_DIST_DIR || ".next",
@@ -22,8 +30,8 @@ const nextConfig: NextConfig = {
       },
     },
   },
-  async headers() {
-    return [
+  headers() {
+    return Promise.resolve([
       {
         source: "/((?!w/|widget\\.js).*)",
         headers: [
@@ -32,7 +40,7 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         ],
       },
-    ];
+    ]);
   },
 };
 

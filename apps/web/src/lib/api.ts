@@ -29,16 +29,23 @@ export class ApiRequestError extends Error {
 
 export async function api<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
   const { json, ...rest } = init ?? {};
+  const headers = new Headers(rest.headers);
+  if (json !== undefined && !headers.has("content-type")) headers.set("content-type", "application/json");
   const res = await fetch(`/api${path}`, {
     ...rest,
     credentials: "same-origin",
-    headers: { ...(json !== undefined ? { "content-type": "application/json" } : {}), ...rest.headers },
-    body: json !== undefined ? JSON.stringify(json) : rest.body,
+    headers,
+    body: json !== undefined ? JSON.stringify(json) : (rest.body ?? null),
   });
   if (res.status === 204) return undefined as T;
-  const data = await res.json().catch(() => ({}));
+  const data: unknown = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new ApiRequestError(res.status, data.code ?? "ERROR", data.title ?? res.statusText);
+    const problem = (data ?? {}) as { code?: unknown; title?: unknown };
+    throw new ApiRequestError(
+      res.status,
+      typeof problem.code === "string" ? problem.code : "ERROR",
+      typeof problem.title === "string" ? problem.title : res.statusText,
+    );
   }
   return data as T;
 }

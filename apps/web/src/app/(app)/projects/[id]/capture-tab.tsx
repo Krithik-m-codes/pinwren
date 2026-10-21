@@ -96,8 +96,14 @@ function MaskCard({ selectors, onSave }: { selectors: string[]; onSave: (s: stri
   const add = () => {
     const s = draft.trim();
     const err = selectorError(s) ?? (selectors.includes(s) ? "Already in the list" : null);
-    if (!err && selectors.length >= 50) return setError("50 selectors at most");
-    if (err) return setError(err);
+    if (!err && selectors.length >= 50) {
+      setError("50 selectors at most");
+      return;
+    }
+    if (err) {
+      setError(err);
+      return;
+    }
     setError(null);
     setDraft("");
     onSave([...selectors, s]);

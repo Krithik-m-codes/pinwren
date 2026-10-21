@@ -77,12 +77,13 @@ async function fakeScreenShare(page: Page) {
     const w = window as unknown as { __stopped: number; __shares: number };
     w.__stopped = 0;
     w.__shares = 0;
-    navigator.mediaDevices.getDisplayMedia = async () => {
+    navigator.mediaDevices.getDisplayMedia = () => {
       w.__shares++;
       const c = document.createElement("canvas");
       c.width = 640;
       c.height = 400;
-      const x = c.getContext("2d") as CanvasRenderingContext2D;
+      const x = c.getContext("2d");
+      if (!x) throw new Error("no 2D canvas");
       const paint = () => {
         x.fillStyle = "#0090ff";
         x.fillRect(0, 0, 640, 400);
@@ -101,7 +102,7 @@ async function fakeScreenShare(page: Page) {
           stop();
         };
       }
-      return stream;
+      return Promise.resolve(stream);
     };
   });
 }
@@ -168,7 +169,8 @@ test("visible capture → every editor tool, shortcuts, undo/redo, crop → send
   await expect(toast(page)).toHaveText("Bug report #1 sent — thank you!");
   await expect(report(page)).toHaveCount(0);
 
-  const p = mock.items[0]?.payload as Record<string, unknown>;
+  const p = mock.items[0]?.payload;
+  if (!p) throw new Error("nothing was sent");
   expect(p.kind).toBe("bug");
   expect(p.title).toBe("Price shows ₹0");
   expect(p.priority).toBe("urgent");
@@ -274,7 +276,9 @@ test("attachments: browse, paste, drop, validation, remove", async ({ page }) =>
 
   const chooser = page.waitForEvent("filechooser", { timeout: 5000 });
   await dlg.getByRole("button", { name: "browse" }).click();
-  await (await chooser).setFiles([
+  await (
+    await chooser
+  ).setFiles([
     { name: "receipt.png", mimeType: "image/png", buffer: PNG },
     { name: "invoice.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n%%EOF") },
     { name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("hi") },
@@ -429,7 +433,9 @@ test("capture config: console off, network failures, mask selectors", async ({ p
   await ready(page);
   await page.evaluate(async () => {
     console.error("should not be captured");
-    await fetch("/missing-asset.json").catch(() => {});
+    await fetch("/missing-asset.json").catch(() => {
+      // a 404 resolves; this only absorbs a network error
+    });
   });
   await openReport(page);
   const dlg = report(page);

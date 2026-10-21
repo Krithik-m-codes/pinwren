@@ -1,7 +1,7 @@
 "use client";
 
 import { mergeConfig, type WidgetConfig, type WidgetConfigInput, widgetConfig } from "@pinwren/core";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ColorPicker } from "@/components/color-picker";
 import { NumberInput } from "@/components/number-input";
 import { Segmented } from "@/components/segmented";
@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 import { LAUNCHER_ICONS, LauncherPreview } from "./launcher-preview";
 import { useProjectPatch } from "./use-project";
 import { WidgetBrandingCard } from "./widget-branding-card";
+import { useSyncedState } from "@/lib/use-synced-state";
+import { sliderValue } from "@/lib/form";
 
 const POSITIONS = [
   { value: "top-left", label: "Top left" },
@@ -34,10 +36,9 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
   const save = useProjectPatch(project.id);
   const server = project.widgetConfig;
   const serverKey = JSON.stringify(server);
-  const [draft, setDraft] = useState<WidgetConfig>(server);
+  // Re-synced only when the saved config changes by value, not on every refetch.
+  const [draft, setDraft] = useSyncedState<WidgetConfig>(server, serverKey);
   const [errors, setErrors] = useState<Errors>({});
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-sync only when the saved config changes
-  useEffect(() => setDraft(server), [serverKey]);
 
   /** Preview-only change (typing, dragging). */
   const preview = (patch: WidgetConfigInput) =>
@@ -84,7 +85,7 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                     const active = l.position === p.value;
                     const [v, h] = p.value.split("-");
                     return (
-                      // biome-ignore lint/a11y/useSemanticElements: styled radio needs a button for the corner glyph
+                      // A button, not a native radio: styled radio needs a button for the corner glyph
                       <button
                         key={p.value}
                         type="button"
@@ -127,10 +128,10 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                         max={200}
                         value={[Math.min(l.offset[axis], 200)]}
                         onValueChange={(val) =>
-                          preview({ launcher: { offset: { [axis]: Array.isArray(val) ? val[0] : val } } })
+                          preview({ launcher: { offset: { [axis]: sliderValue(val) } } })
                         }
                         onValueCommitted={(val) =>
-                          commit({ launcher: { offset: { [axis]: Array.isArray(val) ? val[0] : val } } })
+                          commit({ launcher: { offset: { [axis]: sliderValue(val) } } })
                         }
                       />
                       <NumberInput
@@ -171,7 +172,7 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                   <Input
                     id="launcher-label"
                     defaultValue={l.label ?? ""}
-                    key={`label-${server.launcher.label}`}
+                    key={`label-${server.launcher.label ?? ""}`}
                     maxLength={40}
                     disabled={l.shape !== "pill"}
                     placeholder="Feedback"
@@ -192,7 +193,7 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                   onChange={(icon) => commit({ launcher: { icon } })}
                   options={(["pin", "comment", "bug"] as const).map((k) => {
                     const Icon = LAUNCHER_ICONS[k];
-                    return { value: k, title: k[0]?.toUpperCase() + k.slice(1), label: <Icon /> };
+                    return { value: k, title: (k[0]?.toUpperCase() ?? "") + k.slice(1), label: <Icon /> };
                   })}
                 />
               </SettingRow>
@@ -220,7 +221,7 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                   <Input
                     id="launcher-tooltip"
                     defaultValue={l.tooltip ?? ""}
-                    key={`tooltip-${server.launcher.tooltip}`}
+                    key={`tooltip-${server.launcher.tooltip ?? ""}`}
                     maxLength={80}
                     placeholder="No tooltip"
                     onChange={(e) => preview({ launcher: { tooltip: e.target.value || null } })}
@@ -398,7 +399,7 @@ function ConsentCard({
               rows={3}
               maxLength={1000}
               disabled={!c.enabled && !draft.privacyMode}
-              key={`consent-${server.consent.text}`}
+              key={`consent-${server.consent.text ?? ""}`}
               defaultValue={c.text ?? ""}
               placeholder="Your comment, the page address, browser details and any screenshot are sent to the site owner."
               onChange={(e) => preview({ consent: { text: e.target.value || null } })}
@@ -422,7 +423,7 @@ function ConsentCard({
                 type="url"
                 inputMode="url"
                 disabled={!c.enabled && !draft.privacyMode}
-                key={`url-${server.consent.privacyUrl}`}
+                key={`url-${server.consent.privacyUrl ?? ""}`}
                 defaultValue={c.privacyUrl ?? ""}
                 placeholder="https://example.com/privacy"
                 aria-invalid={!!(urlError ?? errors["consent.privacyUrl"]) || undefined}

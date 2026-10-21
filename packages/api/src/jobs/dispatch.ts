@@ -27,7 +27,7 @@ async function membersWanting(
   pref: Pref,
   only?: string[],
 ): Promise<Recipient[]> {
-  if (only && only.length === 0) return [];
+  if (only?.length === 0) return [];
   const col = notificationPreference[pref];
   const rows = await getDb()
     .select({
@@ -50,6 +50,12 @@ async function membersWanting(
       ),
     );
   return rows;
+}
+
+/** The status a `feedback.status_changed` event moved to (the item's current status if the event lacks it). */
+function newStatus(e: DomainEvent, ctx: FeedbackContext): string {
+  const to = e.changes?.status?.to;
+  return typeof to === "string" ? to : ctx.payload.status;
 }
 
 const summary = (ctx: FeedbackContext): FeedbackSummary => ({
@@ -135,7 +141,7 @@ async function notifications(
   }
 
   if (e.type === "feedback.status_changed") {
-    const to = String(e.changes?.status?.to ?? ctx.payload.status);
+    const to = newStatus(e, ctx);
     const r = await membersWanting(e.orgId, projectId, "statusChanges", ctx.payload.assigneeIds);
     const actor = by ?? (e.actor.kind === "integration" ? "An issue tracker" : "Someone");
     await notify(e, ctx, r, { actorName: by, status: to }, () =>
@@ -157,7 +163,9 @@ async function notifications(
       .selectDistinct({ id: comment.authorId })
       .from(comment)
       .where(and(eq(comment.feedbackId, e.feedbackId), sql`${comment.authorId} is not null`));
-    const involved = [...new Set([...ctx.payload.assigneeIds, ...commenters.map((c) => c.id as string)])];
+    const involved = [
+      ...new Set([...ctx.payload.assigneeIds, ...commenters.flatMap((c) => (c.id ? [c.id] : []))]),
+    ];
     // A visitor reply with nobody involved yet goes to everyone who wants replies.
     const scope = !commentInfo.team && involved.length === 0 ? undefined : involved;
     const r = await membersWanting(e.orgId, projectId, "replies", scope);
@@ -221,7 +229,7 @@ function withoutAuthorId<T extends { authorId: unknown }>(c: T): Omit<T, "author
 /** `events.dispatch` handler. */
 export async function dispatchEvent(e: DomainEvent): Promise<void> {
   const ctx = await loadFeedbackContext(e.feedbackId);
-  if (!ctx || ctx.orgId !== e.orgId) return; // deleted since
+  if (ctx?.orgId !== e.orgId) return; // deleted since
   const commentInfo = e.commentId ? await loadCommentPayload(e.commentId) : null;
   if (e.type === "comment.created" && !commentInfo) return;
   // Integrations first: a broken mail setup must not hold back webhooks or issue sync. Issue sync
@@ -229,7 +237,7 @@ export async function dispatchEvent(e: DomainEvent): Promise<void> {
   await webhooks(e, ctx, commentInfo);
   if (e.type === "feedback.created") await autoCreateIssues(ctx);
   if (e.type === "feedback.status_changed" && e.actor.kind !== "integration") {
-    await syncIssueState(e.feedbackId, String(e.changes?.status?.to ?? ctx.payload.status));
+    await syncIssueState(e.feedbackId, newStatus(e, ctx));
   }
   await notifications(e, ctx, commentInfo);
 }

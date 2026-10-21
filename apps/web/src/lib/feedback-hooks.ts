@@ -113,7 +113,7 @@ export function useMe() {
 export function useFeedbackDetail(id: string | null) {
   return useQuery({
     queryKey: qk.feedback(id ?? ""),
-    queryFn: () => api<FeedbackDetail>(`/feedback/${id}`),
+    queryFn: () => api<FeedbackDetail>(`/feedback/${id ?? ""}`),
     enabled: !!id,
   });
 }

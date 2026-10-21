@@ -32,10 +32,16 @@ function open(): Promise<IDBDatabase | null> {
 export function memoryKV<T>(): KV<T> {
   const m = new Map<string, T>();
   return {
-    get: async (k) => m.get(k),
-    set: async (k, v) => void m.set(k, v),
-    del: async (k) => void m.delete(k),
-    all: async () => [...m.values()],
+    get: (k) => Promise.resolve(m.get(k)),
+    set: (k, v) => {
+      m.set(k, v);
+      return Promise.resolve();
+    },
+    del: (k) => {
+      m.delete(k);
+      return Promise.resolve();
+    },
+    all: () => Promise.resolve([...m.values()]),
   };
 }
 
@@ -52,7 +58,7 @@ export function idbKV<T>(store: (typeof STORES)[number]): KV<T> {
       return await new Promise<R>((resolve, reject) => {
         const req = fn(d.transaction(store, mode).objectStore(store));
         req.onsuccess = () => resolve(req.result as R);
-        req.onerror = () => reject(req.error);
+        req.onerror = () => reject(req.error ?? new Error("IndexedDB request failed"));
       });
     } catch {
       return fallback();

@@ -45,7 +45,12 @@ export function readFile(f: File): Promise<Attachment> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () =>
-      resolve({ name: fileName(f), contentType: f.type, dataUrl: String(r.result), size: f.size });
+      resolve({
+        name: fileName(f),
+        contentType: f.type,
+        dataUrl: typeof r.result === "string" ? r.result : "",
+        size: f.size,
+      });
     r.onerror = () => reject(r.error ?? new Error("read failed"));
     r.readAsDataURL(f);
   });
@@ -55,15 +60,18 @@ export function readFile(f: File): Promise<Attachment> {
 export function sanitizeAttachments(raw: unknown): Attachment[] {
   if (!Array.isArray(raw)) return [];
   return raw
-    .filter(
-      (a): a is Attachment =>
-        !!a &&
+    .filter((x: unknown): x is Attachment => {
+      if (!x || typeof x !== "object") return false;
+      const a = x as Record<keyof Attachment, unknown>;
+      return (
         typeof a.name === "string" &&
+        typeof a.contentType === "string" &&
         FILE_TYPES.includes(a.contentType) &&
         typeof a.dataUrl === "string" &&
         a.dataUrl.startsWith(`data:${a.contentType};base64,`) &&
         typeof a.size === "number" &&
-        a.size <= MAX_BYTES,
-    )
+        a.size <= MAX_BYTES
+      );
+    })
     .slice(0, MAX_FILES);
 }

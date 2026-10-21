@@ -2,17 +2,17 @@
 
 ## 1. Test layers
 
-| Layer | Tool | Scope | Runs |
-|---|---|---|---|
-| Unit | Vitest | Pure logic: anchoring, selectors, serializers, redaction, URL normalisation, entitlements, licence verification, plan limits | Every commit |
-| Component | Vitest + Testing Library (dashboard), Preact testing (widget) | UI components, a11y roles, keyboard handling | Every commit |
-| Integration | Vitest + Testcontainers Postgres | API routes end-to-end against a real DB, jobs, RLS, migrations | Every commit |
-| E2E | Playwright | Widget on fixture sites × flows; dashboard triage; self-host compose smoke | PR (smoke) / main (full matrix) |
-| Anchoring benchmark | Playwright + custom runner | 10 pages × 30 mutations, re-attach rate | PR touching anchoring/widget; nightly |
-| Performance | Playwright tracing, size-limit, k6 | Widget main-thread/memory budgets, bundle sizes, API p95 | PR (size), nightly (perf), release (k6) |
-| Security | Custom integration tests + ZAP baseline | Each mitigation in 09 has a test; cross-tenant suite (Cloud) | PR / nightly |
-| Accessibility | axe-core in Playwright, manual checklist | Every dashboard route + widget states | PR (axe) / release (manual) |
-| Visual regression | Playwright screenshots | Widget themes on hostile-CSS fixture, key dashboard screens | PR |
+| Layer               | Tool                                                          | Scope                                                                                                                        | Runs                                    |
+| ------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Unit                | Vitest                                                        | Pure logic: anchoring, selectors, serializers, redaction, URL normalisation, entitlements, licence verification, plan limits | Every commit                            |
+| Component           | Vitest + Testing Library (dashboard), Preact testing (widget) | UI components, a11y roles, keyboard handling                                                                                 | Every commit                            |
+| Integration         | Vitest + Testcontainers Postgres                              | API routes end-to-end against a real DB, jobs, RLS, migrations                                                               | Every commit                            |
+| E2E                 | Playwright                                                    | Widget on fixture sites × flows; dashboard triage; self-host compose smoke                                                   | PR (smoke) / main (full matrix)         |
+| Anchoring benchmark | Playwright + custom runner                                    | 10 pages × 30 mutations, re-attach rate                                                                                      | PR touching anchoring/widget; nightly   |
+| Performance         | Playwright tracing, size-limit, k6                            | Widget main-thread/memory budgets, bundle sizes, API p95                                                                     | PR (size), nightly (perf), release (k6) |
+| Security            | Custom integration tests + ZAP baseline                       | Each mitigation in 09 has a test; cross-tenant suite (Cloud)                                                                 | PR / nightly                            |
+| Accessibility       | axe-core in Playwright, manual checklist                      | Every dashboard route + widget states                                                                                        | PR (axe) / release (manual)             |
+| Visual regression   | Playwright screenshots                                        | Widget themes on hostile-CSS fixture, key dashboard screens                                                                  | PR                                      |
 
 ## 2. Fixture sites (`e2e/fixtures`)
 
@@ -20,7 +20,7 @@ plain-html · nextjs-app-router · nuxt · sveltekit · astro · wordpress-like 
 
 ## 3. Gates (CI must be green to merge)
 
-1. `pnpm lint` (Biome) and dependency-boundary check.
+1. `pnpm format:check` (Prettier) and `pnpm lint` (ESLint, ADR 0017).
 2. `pnpm typecheck` — zero errors, no `any` without an explanatory comment, no `@ts-ignore`.
 3. Unit + component + integration tests pass; coverage ≥ 80 % lines for `packages/anchoring`, `packages/capture`, `packages/core`, `ee/licensing`, `ee/billing`.
 4. E2E smoke passes; full matrix passes on `main`.

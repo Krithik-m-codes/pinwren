@@ -2,7 +2,7 @@
 
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Segmented } from "@/components/segmented";
 import { SettingGroup, SettingRow } from "@/components/setting-row";
@@ -13,17 +13,18 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { authClient, useSession } from "@/lib/auth-client";
+import { formText } from "@/lib/form";
+import { useMounted, useSyncedState } from "@/lib/use-synced-state";
 
 export function ProfileSettings() {
   const { data: session, isPending, refetch } = useSession();
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  const [name, setName] = useState("");
+  // The theme is only known on the client; render its control after hydration.
+  const mounted = useMounted();
+  const [name, setName] = useSyncedState(session?.user.name ?? "");
   const [saving, setSaving] = useState(false);
-  useEffect(() => setMounted(true), []);
-  useEffect(() => setName(session?.user.name ?? ""), [session?.user.name]);
 
-  async function saveName(e: React.FormEvent) {
+  async function saveName(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const v = name.trim();
     if (!v || v === session?.user.name) return;
@@ -32,7 +33,7 @@ export function ProfileSettings() {
     setSaving(false);
     if (error) return toast.error(error.message ?? "Couldn't save your name");
     toast.success("Name updated");
-    refetch();
+    void refetch();
   }
 
   return (
@@ -94,7 +95,7 @@ export function ProfileSettings() {
               {mounted ? (
                 <Segmented
                   label="Theme"
-                  value={(theme as "light" | "dark" | "system") ?? "system"}
+                  value={(theme ?? "system") as "light" | "dark" | "system"}
                   onChange={setTheme}
                   options={[
                     {
@@ -139,22 +140,31 @@ export function ProfileSettings() {
 function PasswordCard() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const data = new FormData(form);
-    const next = String(data.get("new"));
-    if (next.length < 8) return setError("Use at least 8 characters");
-    if (next !== String(data.get("confirm"))) return setError("The new passwords don't match");
+    const next = formText(data, "new");
+    if (next.length < 8) {
+      setError("Use at least 8 characters");
+      return;
+    }
+    if (next !== formText(data, "confirm")) {
+      setError("The new passwords don't match");
+      return;
+    }
     setPending(true);
     setError(null);
     const { error } = await authClient.changePassword({
-      currentPassword: String(data.get("current")),
+      currentPassword: formText(data, "current"),
       newPassword: next,
       revokeOtherSessions: true,
     });
     setPending(false);
-    if (error) return setError(error.message ?? "Couldn't change your password");
+    if (error) {
+      setError(error.message ?? "Couldn't change your password");
+      return;
+    }
     form.reset();
     toast.success("Password changed", { description: "Other devices were signed out." });
   }

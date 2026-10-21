@@ -53,6 +53,8 @@ type Placed = {
   area: HTMLElement | null;
   moved: boolean;
   quote: Quote | null;
+  /** The anchor's marker position (only pins with an anchor are placed). */
+  at: PinPct;
 };
 type Card = {
   el: HTMLElement;
@@ -66,6 +68,8 @@ type Card = {
   release?: () => void;
 };
 type Selected = { range: Range; el: Element };
+/** Events the widget listens for on the host page's window and document. */
+type PageEventMap = WindowEventMap & DocumentEventMap;
 
 const PIN = 32; // marker size, px
 const SHEET = 640; // below this width cards become bottom sheets and the panel goes full screen
@@ -137,7 +141,10 @@ export class PinwrenWidget {
 
   async start() {
     let loaded: Awaited<ReturnType<WidgetApi["config"]>>;
-    const lang = pickLocale(this.opts.locale, navigator.languages ?? [navigator.language]);
+    const lang = pickLocale(
+      this.opts.locale,
+      navigator.languages.length ? navigator.languages : [navigator.language],
+    );
     try {
       [loaded] = await Promise.all([this.api.config(this.opts.accent), loadLocale(lang, this.opts.endpoint)]);
     } catch (err) {
@@ -179,7 +186,7 @@ export class PinwrenWidget {
     });
     // Host-page focus traps (modal libraries) pull focus back into their dialog on `focusin`. Our UI is
     // outside their DOM subtree, so our own focus events stop at the window before page listeners see them.
-    for (const type of ["focusin", "focusout"])
+    for (const type of ["focusin", "focusout"] as const)
       this.listen(
         window,
         type,
@@ -205,6 +212,7 @@ export class PinwrenWidget {
       this.draftWaiting = d;
     });
     await this.loadPins();
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- destroy() can run during the await above
     if (this.destroyed) return;
 
     // Re-place pins when the page changes underneath (SPA navigation, lazy content).
@@ -314,15 +322,15 @@ export class PinwrenWidget {
   }
 
   /** Add a guarded listener that `destroy()` removes. Errors are swallowed, never thrown at the host. */
-  private listen<E extends Event>(
-    target: EventTarget,
-    type: string,
-    fn: (e: E) => void,
+  private listen<K extends keyof PageEventMap>(
+    target: Window | Document,
+    type: K,
+    fn: (e: PageEventMap[K]) => void,
     opts?: AddEventListenerOptions | boolean,
   ) {
     const safe = (e: Event) => {
       try {
-        fn(e as E);
+        fn(e as PageEventMap[K]); // addEventListener(type) only delivers events of that type
       } catch (err) {
         console.warn("[pinwren]", err);
       }
@@ -468,7 +476,7 @@ export class PinwrenWidget {
     this.menu = menu;
     this.root.append(menu);
     this.launcher?.setAttribute("aria-expanded", "true");
-    (menu.querySelector("[role=menuitem]") as HTMLElement | null)?.focus();
+    menu.querySelector<HTMLElement>("[role=menuitem]")?.focus();
     this.menuAway = (e: Event) => {
       if (!e.composedPath().includes(this.host)) this.closeMenu();
     };
@@ -548,7 +556,7 @@ export class PinwrenWidget {
     const tr = pin.anchor.textRange;
     const range = tr ? findQuote(found.element, tr) : null;
     const quote = range ? { range, hls: [] } : null;
-    const p: Placed = { pin, el: found.element, marker, area, moved, quote };
+    const p: Placed = { pin, el: found.element, marker, area, moved, quote, at: pin.anchor.pin };
     marker.addEventListener("click", (e) => {
       e.stopPropagation();
       void this.openThread(pin, p);
@@ -601,7 +609,7 @@ export class PinwrenWidget {
     const r = p.el.getBoundingClientRect();
     if (r.width + r.height === 0) return null;
     const end = p.quote && quoteEnd(p.quote.range);
-    return end ?? pinBox(r, (p.pin.anchor as AnchorBundle).pin);
+    return end ?? pinBox(r, p.at);
   }
 
   /** What a card attached to this pin must stay clear of: the marker, plus the region or quoted text. */
@@ -622,7 +630,8 @@ export class PinwrenWidget {
       this.root.prepend(el); // under pins and cards
     }
     for (const [i, r] of rects.entries()) {
-      const el = q.hls[i] as HTMLElement;
+      const el = q.hls[i];
+      if (!el) continue; // one element per rect was ensured above
       el.className = cls;
       box(el, { left: r.left, top: r.top, width: r.width, height: r.height });
     }
@@ -659,7 +668,7 @@ export class PinwrenWidget {
       const r = this.draft.el.getBoundingClientRect();
       const q = this.draft.quote;
       if (q) this.paintQuote(q, "hl draft", true);
-      const b = (q && quoteEnd(q.range)) || pinBox(r, this.draft.pin);
+      const b = (q ? quoteEnd(q.range) : null) ?? pinBox(r, this.draft.pin);
       if (isRegion(this.draft.pin)) box(this.draft.node, b);
       else {
         this.draft.node.style.left = `${b.left}px`;
@@ -712,7 +721,8 @@ export class PinwrenWidget {
     clearTimeout(this.previewTimer);
     if (!on) {
       this.hidePreview();
-      return this.schedule();
+      this.schedule();
+      return;
     }
     if (this.card?.id === p.pin.id) return;
     this.previewTimer = window.setTimeout(() => {
@@ -863,7 +873,10 @@ export class PinwrenWidget {
     const rects = textRects(o.sel.range, 200);
     const first = rects[0];
     const last = rects.at(-1);
-    if (!first || !last) return this.hideSelOffer();
+    if (!first || !last) {
+      this.hideSelOffer();
+      return;
+    }
     const w = o.el.offsetWidth || 180;
     const hgt = o.el.offsetHeight || 32;
     let top = last.bottom + 8;
@@ -932,19 +945,21 @@ export class PinwrenWidget {
 
     const error = h("p", { class: "err", role: "alert" }, restore?.error ?? "");
     const send = h("button", { class: "btn primary" }, consent.need ? t("agreeSend") : t("send"));
-    const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+    const mac = /Mac|iPhone|iPad/.test(navigator.userAgent);
     let warned = false;
 
     const submit = () => {
       const body = text.value.trim();
       if (!body) {
         error.textContent = t("writeFirst");
-        return text.focus();
+        text.focus();
+        return;
       }
       const bad = ident.invalid();
       if (bad) {
         error.textContent = t("badEmail");
-        return bad.focus();
+        bad.focus();
+        return;
       }
       consent.accept();
       void this.submitComment(pick, anchor, kind, body, ident.read() ?? {}, clientId);
@@ -1039,9 +1054,7 @@ export class PinwrenWidget {
         page: { url: location.href, title: document.title.slice(0, 300) },
         anchor,
         environment: environment(this.cfg.privacyMode),
-        reporter: (reporter.name || reporter.email
-          ? reporter
-          : undefined) as WidgetFeedbackCreate["reporter"],
+        reporter: reporter.name || reporter.email ? reporter : undefined,
         diagnostics: kind === "bug" ? snapshotDiagnostics() : undefined,
       });
       pin.id = feedback.id;
@@ -1151,6 +1164,7 @@ export class PinwrenWidget {
       this.panelLoading = false;
       this.idle();
     }
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- destroy() can run during the await above
     if (want !== this.panelWant || this.destroyed || this.panel) return;
     this.panel = new mod.Panel({
       root: this.root,
@@ -1167,7 +1181,7 @@ export class PinwrenWidget {
         const p = this.placed.find((x) => x.pin === row.pin);
         if (p) {
           p.el.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "center" });
-          setTimeout(() => this.openThread(p.pin, p), reduced() ? 0 : 350);
+          setTimeout(() => void this.openThread(p.pin, p), reduced() ? 0 : 350);
         } else void this.openThread(row.pin, null);
       },
       comment: () => this.open("comment"),
@@ -1258,6 +1272,7 @@ export class PinwrenWidget {
       this.reportLoading = false;
       this.idle();
     }
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- destroy() can run during the await above
     if (want !== this.reportWant || this.destroyed || this.modalClose) return;
     const masks = this.cfg.privacyMode
       ? [...this.capture.maskSelectors, ...PRIVACY_MASKS]

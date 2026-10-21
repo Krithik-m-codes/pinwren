@@ -16,6 +16,7 @@ import { PrivacyTab } from "./privacy-tab";
 import { TrackersTab } from "./trackers-tab";
 import { useProject } from "./use-project";
 import { WidgetTab } from "./widget-tab";
+import { here } from "@/lib/routes";
 
 const TABS = [
   { value: "install", label: "Install" },
@@ -73,14 +74,14 @@ export function ProjectSettings({ params }: { params: Promise<{ id: string }> })
           <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
             <Archive className="size-4 shrink-0" />
             This project is archived: the widget is switched off and it&apos;s hidden from your lists.
-            <ButtonLink href={`${pathname}?tab=danger`} size="sm" variant="outline" className="ml-auto">
+            <ButtonLink href={here(pathname, "tab=danger")} size="sm" variant="outline" className="ml-auto">
               Restore
             </ButtonLink>
           </div>
         )}
         <Tabs
           value={tab}
-          onValueChange={(v) => router.replace(`${pathname}?tab=${String(v)}`, { scroll: false })}
+          onValueChange={(v) => router.replace(here(pathname, `tab=${String(v)}`), { scroll: false })}
         >
           <div className="-mx-4 overflow-x-auto px-4 pb-1">
             <TabsList variant="line" className="w-full justify-start border-b">

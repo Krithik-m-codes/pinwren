@@ -1,6 +1,6 @@
 "use client";
 
-import { FEEDBACK_STATUSES, type FeedbackStatus, PRIORITIES, type Priority } from "@pinwren/core";
+import { FEEDBACK_STATUSES, PRIORITIES } from "@pinwren/core";
 import {
   Crosshair,
   Download,
@@ -173,7 +173,7 @@ export function FeedbackDetailPanel({
             value={f.status}
             open={menu === "status"}
             onOpenChange={(o) => onMenuChange?.(o ? "status" : null)}
-            onValueChange={(v) => v && patch({ status: v as FeedbackStatus })}
+            onValueChange={(v) => v && patch({ status: v })}
           >
             <SelectTrigger size="sm" aria-label="Status" data-testid="status-picker">
               <StatusIcon status={f.status} />
@@ -193,7 +193,7 @@ export function FeedbackDetailPanel({
             value={f.priority}
             open={menu === "priority"}
             onOpenChange={(o) => onMenuChange?.(o ? "priority" : null)}
-            onValueChange={(v) => v && patch({ priority: v as Priority })}
+            onValueChange={(v) => v && patch({ priority: v })}
           >
             <SelectTrigger size="sm" aria-label="Priority" data-testid="priority-picker">
               <PriorityIcon priority={f.priority} />
@@ -213,7 +213,7 @@ export function FeedbackDetailPanel({
             value={assignee}
             open={menu === "assignee"}
             onOpenChange={(o) => onMenuChange?.(o ? "assignee" : null)}
-            onValueChange={(v) => v && patch({ assigneeIds: v === "unassigned" ? [] : [String(v)] })}
+            onValueChange={(v) => v && patch({ assigneeIds: v === "unassigned" ? [] : [v] })}
           >
             <SelectTrigger size="sm" aria-label="Assignee" data-testid="assignee-picker">
               {data.assignees[0] ? (
@@ -339,7 +339,7 @@ function Attachments({ assets }: { assets: Asset[] }) {
                 className="group flex items-center gap-3 rounded-lg border p-2 transition-colors hover:bg-muted/60"
               >
                 {image ? (
-                  // biome-ignore lint/performance/noImgElement: authenticated asset route
+                  // eslint-disable-next-line @next/next/no-img-element -- session-authenticated asset; next/image would fetch it without the cookie
                   <img
                     src={assetUrl(a.id)}
                     alt=""
@@ -483,7 +483,7 @@ function ContextTabs({ data }: { data: FeedbackDetail }) {
           <ul className="divide-y overflow-hidden rounded-lg border font-mono text-xs">
             {consoleEntries.map((e, i) => (
               <li
-                // biome-ignore lint/suspicious/noArrayIndexKey: log lines have no id
+                // Keyed by position: log lines have no id
                 key={i}
                 className={cn(
                   "px-3 py-1.5 break-all whitespace-pre-wrap",
@@ -503,7 +503,7 @@ function ContextTabs({ data }: { data: FeedbackDetail }) {
         ) : (
           <ul className="divide-y overflow-hidden rounded-lg border font-mono text-xs">
             {networkEntries.map((n, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: request entries have no id
+              // Keyed by position: request entries have no id
               <li key={i} className="flex gap-3 px-3 py-1.5">
                 <span
                   className={cn("w-10 shrink-0", n.status >= 400 || n.status === 0 ? "text-destructive" : "")}

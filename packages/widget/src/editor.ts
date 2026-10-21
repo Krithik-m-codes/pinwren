@@ -28,7 +28,7 @@ export class Editor {
   private draft: Shape | null = null;
   private typing: { input: HTMLInputElement; shape: TextShape } | null = null;
   tool: Tool = "rect";
-  color = COLORS[0] as string;
+  color: string = COLORS[0];
   size: Size = "m";
   /** Called after every change of tool, colour, size or shapes, so the toolbar and draft can follow. */
   onChange: (() => void) | null = null;
@@ -129,10 +129,15 @@ export class Editor {
     e.preventDefault();
     this.commitText();
     const p = this.toCanvas(e);
-    if (this.tool === "text") return this.placeText(p);
+    if (this.tool === "text") {
+      this.placeText(p);
+      return;
+    }
     try {
       this.canvas.setPointerCapture(e.pointerId);
-    } catch {}
+    } catch {
+      // pointer capture is a nicety; drawing works without it
+    }
     const { color, size } = this;
     this.draft =
       this.tool === "pen"

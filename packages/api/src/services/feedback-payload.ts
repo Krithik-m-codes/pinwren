@@ -1,4 +1,4 @@
-import { comment, feedback, getDb, page, project, type ReporterGuest, user } from "@pinwren/db";
+import { comment, feedback, getDb, page, project, user } from "@pinwren/db";
 import { eq } from "drizzle-orm";
 import { env } from "../env";
 import type { CommentPayload, FeedbackPayload } from "../webhooks/format";
@@ -28,7 +28,7 @@ export async function loadFeedbackContext(feedbackId: string): Promise<FeedbackC
     .where(eq(feedback.id, feedbackId));
   if (!row) return null;
   const f = row.f;
-  const guest = (f.reporterGuest ?? null) as ReporterGuest | null;
+  const guest = f.reporterGuest ?? null;
   let reporterName = guest?.name ?? null;
   let reporterEmail = guest?.email ?? null;
   if (f.reporterId) {
@@ -77,7 +77,7 @@ export async function loadCommentPayload(
     id: c.id,
     body: c.body,
     visibility: c.visibility,
-    authorName: row.authorName ?? (c.authorGuest as ReporterGuest | null)?.name ?? null,
+    authorName: row.authorName ?? c.authorGuest?.name ?? null,
     team: c.authorId !== null,
     createdAt: c.createdAt.toISOString(),
     authorId: c.authorId,

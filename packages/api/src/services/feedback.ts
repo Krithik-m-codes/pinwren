@@ -1,4 +1,9 @@
-import { type FeedbackListQuery, type FeedbackUpdate, isClosedStatus, parseWidgetConfig } from "@pinwren/core";
+import {
+  type FeedbackListQuery,
+  type FeedbackUpdate,
+  isClosedStatus,
+  parseWidgetConfig,
+} from "@pinwren/core";
 import {
   activity,
   comment,

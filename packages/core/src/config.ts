@@ -40,7 +40,7 @@ const actionUrl = z
       if (!(PANEL_ACTION_PLACEHOLDERS as readonly string[]).includes(m[1] ?? "")) {
         ctx.addIssue({
           code: "custom",
-          message: `Unknown placeholder {${m[1]}} — use {id}, {number}, {url} or {projectSlug}`,
+          message: `Unknown placeholder {${m[1] ?? ""}} — use {id}, {number}, {url} or {projectSlug}`,
         });
         return;
       }

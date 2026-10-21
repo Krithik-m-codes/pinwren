@@ -90,13 +90,23 @@ function toCanvas(dataUrl: string): Promise<HTMLCanvasElement> {
   });
 }
 
+/** Draft storage is best effort (private browsing, full quota): a failure must never block the report. */
+/** No mediaDevices on insecure (http://) pages, and no getDisplayMedia on mobile browsers. */
+function canShareScreen(): boolean {
+  return "mediaDevices" in navigator && "getDisplayMedia" in navigator.mediaDevices;
+}
+
+function ignoreDraftError() {
+  // the report itself still works without a saved draft
+}
+
 async function readDraft(project: string): Promise<Draft | null> {
   const d = await drafts.get(project).catch(() => undefined);
   if (d?.v !== 1 || typeof d.clientId !== "string") return null;
   return {
     v: 1,
     clientId: /^[0-9a-f-]{36}$/i.test(d.clientId) ? d.clientId : uuid(),
-    savedAt: Number(d.savedAt) || Date.now(),
+    savedAt: Number.isFinite(d.savedAt) && d.savedAt > 0 ? d.savedAt : Date.now(),
     title: typeof d.title === "string" ? d.title.slice(0, 200) : "",
     body: typeof d.body === "string" ? d.body.slice(0, 10_000) : "",
     severity: SEVERITIES.includes(d.severity) ? d.severity : "medium",
@@ -158,7 +168,7 @@ export class BugReport {
       const answer = await this.askResume(draft);
       if (answer === "cancel" || this.closed) return;
       if (answer === "resume") return this.restore(draft);
-      await drafts.del(this.ctx.project).catch(() => {});
+      await drafts.del(this.ctx.project).catch(ignoreDraftError);
     }
     this.ctx.root.style.visibility = "hidden"; // the launcher must not flash into the first frame
     try {
@@ -291,12 +301,14 @@ export class BugReport {
       const body = this.body.value.trim();
       if (!body) {
         this.error.textContent = t("describeFirst");
-        return this.body.focus();
+        this.body.focus();
+        return;
       }
       const bad = ident.invalid();
       if (bad) {
         this.error.textContent = t("badEmail");
-        return bad.focus();
+        bad.focus();
+        return;
       }
       consent.accept();
       void this.send(send, body, ident.read());
@@ -365,10 +377,15 @@ export class BugReport {
     );
     this.modal = modal;
 
-    const on = <E extends Event>(target: EventTarget, type: string, fn: (e: E) => void, capture = false) => {
+    const on = <K extends keyof HTMLElementEventMap>(
+      target: Document | HTMLElement,
+      type: K,
+      fn: (e: HTMLElementEventMap[K]) => void,
+      capture = false,
+    ) => {
       const safe = (e: Event) => {
         try {
-          fn(e as E);
+          fn(e as HTMLElementEventMap[K]); // addEventListener(type) only delivers events of that type
         } catch (err) {
           console.warn("[pinwren]", err);
         }
@@ -382,11 +399,15 @@ export class BugReport {
       document,
       "keydown",
       (e: KeyboardEvent) => {
-        const el = e.composedPath()[0] as HTMLElement | undefined;
+        const first = e.composedPath()[0];
+        const el = first instanceof Element ? first : null;
         // The text-label input handles its own Enter/Esc (commit/cancel the label).
-        if (this.picker || e.defaultPrevented || modal.hidden || el?.classList?.contains("ed-text")) return;
-        if (e.key === "Escape") return this.close();
-        if (!this.editor || el?.closest?.("input, textarea, [contenteditable]") || e.repeat) return;
+        if (this.picker || e.defaultPrevented || modal.hidden || el?.classList.contains("ed-text")) return;
+        if (e.key === "Escape") {
+          this.close();
+          return;
+        }
+        if (!this.editor || el?.closest("input, textarea, [contenteditable]") || e.repeat) return;
         if (this.editor.key(e)) {
           e.preventDefault();
           e.stopPropagation();
@@ -447,7 +468,7 @@ export class BugReport {
     else if (state === "capturing")
       this.stage.replaceChildren(h("div", { class: "note" }, h("span", { class: "spin" }), t("capturing")));
     else if (state === "failed") {
-      const share = this.mod && navigator.mediaDevices?.getDisplayMedia;
+      const share = !!this.mod && canShareScreen();
       this.stage.replaceChildren(
         h(
           "div",
@@ -484,7 +505,7 @@ export class BugReport {
     ];
     this.capbar.replaceChildren(
       ...modes
-        .filter(([m]) => m !== "screen" || !!navigator.mediaDevices?.getDisplayMedia)
+        .filter(([m]) => m !== "screen" || canShareScreen())
         .map(([m, svg, label]) =>
           h(
             "button",
@@ -520,7 +541,7 @@ export class BugReport {
       ["blur", I.blur, t("toolBlur"), "B"],
       ["crop", I.crop, t("toolCrop"), "C"],
     ];
-    const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+    const mac = /Mac|iPhone|iPad/.test(navigator.userAgent);
     /** A toolbar button whose pressed/disabled state follows the editor. */
     const btn = (
       attrs: Record<string, string>,
@@ -783,7 +804,7 @@ export class BugReport {
   private async saveDraft() {
     clearTimeout(this.saveTimer);
     if (this.sending) return;
-    if (!this.hasContent()) return drafts.del(this.ctx.project).catch(() => {});
+    if (!this.hasContent()) return drafts.del(this.ctx.project).catch(ignoreDraftError);
     if (!this.baseUrl && this.base) {
       try {
         const webp = this.base.toDataURL("image/webp", 0.85);
@@ -803,7 +824,7 @@ export class BugReport {
       shapes: this.editor?.shapes ?? [],
       attachments: this.attachments,
     };
-    await drafts.set(this.ctx.project, draft).catch(() => {});
+    await drafts.set(this.ctx.project, draft).catch(ignoreDraftError);
   }
 
   // --- Sending ------------------------------------------------------------------------------------
@@ -823,7 +844,7 @@ export class BugReport {
       priority: PRIORITY[this.severity],
       page: { url: location.href, title: document.title.slice(0, 300) },
       environment: environment(this.ctx.cfg.privacyMode),
-      reporter: reporter as WidgetFeedbackCreate["reporter"],
+      reporter: reporter,
       diagnostics: snapshotDiagnostics(),
       // Privacy mode (wave-3 §3) sends no page-timing metadata.
       metadata: this.ctx.cfg.privacyMode ? undefined : { performance: performanceTiming() },
@@ -838,7 +859,7 @@ export class BugReport {
     };
     try {
       const { feedback } = await this.ctx.submit(payload);
-      await drafts.del(this.ctx.project).catch(() => {});
+      await drafts.del(this.ctx.project).catch(ignoreDraftError);
       this.close(false);
       this.ctx.toast(t("bugSent", { n: feedback.number }));
       this.ctx.sent(feedback.id, feedback.number, feedback.reporterToken);
@@ -846,7 +867,7 @@ export class BugReport {
       if (isRetryable(err)) {
         // Offline or the server is struggling: keep it and send it later with the same clientId.
         await this.ctx.queue(this.clientId, payload);
-        await drafts.del(this.ctx.project).catch(() => {});
+        await drafts.del(this.ctx.project).catch(ignoreDraftError);
         this.close(false);
         this.ctx.toast(t("queuedToast"));
         return;

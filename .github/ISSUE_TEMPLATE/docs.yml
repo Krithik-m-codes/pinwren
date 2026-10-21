@@ -1,0 +1,26 @@
+name: Documentation
+description: Something in the README, the docs or the self-hosting guide is missing, wrong or unclear
+title: "docs: "
+labels: ["documentation", "needs-triage"]
+body:
+  - type: input
+    id: where
+    attributes:
+      label: Where?
+      description: File path or URL.
+      placeholder: "README.md › Self-host with Docker"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's wrong or missing?
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested wording
+      description: Optional — what it should say instead.

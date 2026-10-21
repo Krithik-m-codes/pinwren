@@ -211,7 +211,7 @@ export function ActionsTab({ project }: { project: ProjectDetail }) {
       <ConfirmDialog
         open={removing !== null}
         onOpenChange={(o) => !o && setRemoving(null)}
-        title={`Remove “${removing !== null ? actions[removing]?.label : ""}”?`}
+        title={`Remove “${removing !== null ? (actions[removing]?.label ?? "") : ""}”?`}
         description="The button disappears from the dashboard and the widget."
         confirmLabel="Remove"
         onConfirm={() => {
@@ -245,7 +245,7 @@ function ActionDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
 
-  function submit(e: React.FormEvent) {
+  function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const id = isNew ? uniqueId(slug(d.label), takenIds) : d.id;
     const parsed = panelAction.safeParse({ ...d, id, label: d.label.trim(), url: d.url.trim() });

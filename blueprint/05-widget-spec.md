@@ -7,11 +7,14 @@ The widget is the product most people touch and the one place a bug can hurt a c
 ```html
 <script src="https://pinwren.example.com/widget.js" data-project="pk_live_xxx" async></script>
 ```
+
 or
+
 ```ts
-import { init } from '@pinwren/widget';
-init({ projectKey: 'pk_live_xxx', endpoint: 'https://pinwren.example.com' });
+import { init } from "@pinwren/widget";
+init({ projectKey: "pk_live_xxx", endpoint: "https://pinwren.example.com" });
 ```
+
 or React: `<Pinwren projectKey="…" />` from `@pinwren/react`.
 
 - `widget.js` is a tiny **loader** (< 3 KB gzip) that reads `data-*` attributes, checks visibility rules locally where possible, then imports the versioned core (`/w/v1/core.<hash>.js`).
@@ -20,16 +23,16 @@ or React: `<Pinwren projectKey="…" />` from `@pinwren/react`.
 
 ## 2. Budgets (CI-enforced with size-limit)
 
-| Artifact | Budget (gzip) |
-|---|---|
-| loader | 3 KB |
-| core (launcher, comment mode, composer, API client, anchoring) | 35 KB |
-| panel | 15 KB |
-| editor | 30 KB |
-| capture (SnapDOM + glue) | 40 KB |
-| replay (rrweb record) | 60 KB |
-| Main-thread work on page load (loader + core idle init) | < 5 ms on 4× CPU throttle |
-| Memory at idle | < 3 MB (replay off), < 8 MB (replay on) |
+| Artifact                                                       | Budget (gzip)                           |
+| -------------------------------------------------------------- | --------------------------------------- |
+| loader                                                         | 3 KB                                    |
+| core (launcher, comment mode, composer, API client, anchoring) | 35 KB                                   |
+| panel                                                          | 15 KB                                   |
+| editor                                                         | 30 KB                                   |
+| capture (SnapDOM + glue)                                       | 40 KB                                   |
+| replay (rrweb record)                                          | 60 KB                                   |
+| Main-thread work on page load (loader + core idle init)        | < 5 ms on 4× CPU throttle               |
+| Memory at idle                                                 | < 3 MB (replay off), < 8 MB (replay on) |
 
 ## 3. Isolation rules
 
@@ -61,10 +64,11 @@ idle ──launcher/shortcut──▶ menu ──"Comment"──▶ picking ─�
 interface AnchorBundle {
   v: 1;
   attrs?: { pinwrenAnchor?: string; testId?: string; id?: string; ariaLabel?: string; name?: string };
-  css: string;                 // stable selector (avoid hashed classes)
+  css: string; // stable selector (avoid hashed classes)
   xpath: string;
-  text: { content: string; prefix: string; suffix: string };   // normalised, truncated
-  tag: string; role?: string;
+  text: { content: string; prefix: string; suffix: string }; // normalised, truncated
+  tag: string;
+  role?: string;
   structure: { depth: number; siblingIndex: number; childTagsHash: string };
   rect: { x: number; y: number; w: number; h: number; vw: number; vh: number; scrollY: number };
   pin: { xPct: number; yPct: number; wPct?: number; hPct?: number };
@@ -104,6 +108,7 @@ Pinwren.setPageScope({ urlPattern })
 Pinwren.on(event, handler)       // 'open','close','submit','error','ready'
 Pinwren.destroy()                // full teardown: listeners, wrappers, DOM
 ```
+
 Before the core loads, calls are queued on `window.Pinwren.q` (snippet-style).
 
 ## 9. Accessibility

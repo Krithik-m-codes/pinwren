@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 export function Thumb({ src, className }: { src: string; className?: string }) {
   const [portrait, setPortrait] = useState(false);
   return (
-    // biome-ignore lint/performance/noImgElement: authenticated asset route, not optimisable
+    // eslint-disable-next-line @next/next/no-img-element -- session-authenticated asset; next/image would fetch it without the cookie
     <img
       src={src}
       alt=""

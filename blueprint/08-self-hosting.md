@@ -15,7 +15,7 @@ services:
   pinwren:
     image: ghcr.io/<org>/pinwren:latest
     restart: unless-stopped
-    ports: ["3000:3000"]          # put a TLS reverse proxy in front (see below)
+    ports: ["3000:3000"] # put a TLS reverse proxy in front (see below)
     env_file: .env
     environment:
       DATABASE_URL: postgres://pinwren:${POSTGRES_PASSWORD}@db:5432/pinwren
@@ -31,6 +31,7 @@ volumes: { pinwren-data: {}, pinwren-db: {} }
 ```
 
 Variants shipped in `docker/`:
+
 - `compose.caddy.yml` — adds Caddy with automatic HTTPS for `PINWREN_URL`.
 - `compose.traefik.yml` — labels for an existing Traefik.
 - `compose.minio.yml` — S3 storage with MinIO for people who want object storage locally.
@@ -41,12 +42,14 @@ One-liner installer (`install.sh`): checks Docker, writes `.env` with generated 
 ## 3. Required environment
 
 Minimum `.env`:
+
 ```
 PINWREN_URL=https://feedback.example.com
 POSTGRES_PASSWORD=<generated>
 PINWREN_SECRET=<generated 32+ bytes>          # sessions, CSRF, signing
 PINWREN_ENCRYPTION_KEY=<generated 32 bytes>   # encrypts secrets at rest
 ```
+
 Everything else is optional — see [templates/env.example](templates/env.example). Email, storage and AI can also be configured in the admin UI (stored encrypted in the DB).
 
 ## 4. First run
@@ -67,12 +70,12 @@ Everything else is optional — see [templates/env.example](templates/env.exampl
 
 ## 7. Scaling
 
-| Size | Setup |
-|---|---|
+| Size                                    | Setup                                                                                                                   |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Small (≤ 20 users, ≤ 10k reports/month) | Defaults: 1 container, 2 vCPU, 1 GB RAM, `PINWREN_WORKERS=2` — measured ~70 req/s at p95 ≤ 50 ms (`loadtest/README.md`) |
-| Medium-small | 4 vCPU, `PINWREN_WORKERS=4` — measured 130 req/s at p95 < 100 ms |
-| Medium | `PINWREN_ROLE=web` × 2 behind a load balancer + `PINWREN_ROLE=worker` × 1, S3 storage |
-| Large | Same + managed Postgres with read replica (`DATABASE_READ_URL`), optional Redis for rate limits/SSE (`REDIS_URL`) |
+| Medium-small                            | 4 vCPU, `PINWREN_WORKERS=4` — measured 130 req/s at p95 < 100 ms                                                        |
+| Medium                                  | `PINWREN_ROLE=web` × 2 behind a load balancer + `PINWREN_ROLE=worker` × 1, S3 storage                                   |
+| Large                                   | Same + managed Postgres with read replica (`DATABASE_READ_URL`), optional Redis for rate limits/SSE (`REDIS_URL`)       |
 
 Helm chart (`deploy/helm/pinwren`) in Phase 4.
 

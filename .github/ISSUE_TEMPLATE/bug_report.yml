@@ -1,0 +1,86 @@
+name: Bug report
+description: Something in the widget, dashboard, API or self-host setup doesn't work as it should
+title: "bug: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. **Security issues go to a private report instead** — see [SECURITY.md](https://github.com/Krithik-m-codes/pinwren/security/policy).
+        Please remove secrets, project keys and anything private from logs and screenshots.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it happen?
+      options:
+        - Widget (on the website — pins, comments, bug report)
+        - Dashboard (inbox, projects, settings)
+        - API / webhooks / integrations
+        - Self-hosting (Docker image, compose, migrations)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the site with the widget installed
+        2. Click "Report a bug"
+        3. …
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Pinwren version
+      description: Settings › Security shows the server version; the widget version is in the `@pinwren/widget` package or the image tag.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run Pinwren?
+      options:
+        - Docker image / docker compose
+        - From source (pnpm dev / build)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and OS
+      description: Needed for widget problems.
+      placeholder: "Chrome 141 on macOS 15, Safari 18 on iOS"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and screenshots
+      description: Browser console output, server logs (`docker compose logs pinwren`), screenshots.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this hasn't been reported.
+          required: true
+        - label: I removed secrets and private data from everything above.
+          required: true

@@ -9,7 +9,7 @@ export const LAUNCHER_ICONS = { pin: MapPin, comment: MessageCircle, bug: Bug } 
 /** Readable text colour on the accent (WCAG relative luminance). */
 export function onAccent(hex: string): string {
   let h = hex.replace("#", "");
-  if (h.length === 3) h = [...h].map((c) => c + c).join("");
+  if (h.length === 3) h = h.replace(/./g, "$&$&");
   if (h.length !== 6) return "#fff";
   const [r, g, b] = [0, 2, 4].map((i) => {
     const c = Number.parseInt(h.slice(i, i + 2), 16) / 255;
@@ -92,7 +92,9 @@ export function LauncherPreview({ config }: { config: WidgetConfig }) {
             <span
               role="img"
               aria-label={
-                launcher.hidden ? "Launcher hidden" : `Launcher: ${pill ? launcher.label : launcher.icon}`
+                launcher.hidden
+                  ? "Launcher hidden"
+                  : `Launcher: ${pill ? (launcher.label ?? "") : launcher.icon}`
               }
               className={cn(
                 "flex items-center justify-center gap-1.5 shadow-lg ring-1 ring-black/10 transition-all duration-150",

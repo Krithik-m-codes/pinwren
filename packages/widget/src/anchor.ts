@@ -13,13 +13,13 @@ const UNSTABLE_ID = /^:r|[0-9a-f]{8}-[0-9a-f]{4}|\d{4,}/i;
 const normalize = (s: string) => s.replace(/\s+/g, " ").trim();
 
 function textOf(el: Element, max = 120) {
-  return normalize((el as HTMLElement).innerText ?? el.textContent ?? "").slice(0, max);
+  return normalize(el instanceof HTMLElement ? el.innerText : el.textContent).slice(0, max);
 }
 
 function xpathOf(el: Element): string {
   const parts: string[] = [];
   let node: Element | null = el;
-  while (node && node.nodeType === 1 && node !== document.documentElement) {
+  while (node?.nodeType === 1 && node !== document.documentElement) {
     const tag = node.tagName.toLowerCase();
     let i = 1;
     let sib = node.previousElementSibling;
@@ -159,8 +159,7 @@ export function resolveAnchor(a: AnchorBundle): Resolved {
   if (byCss.length === 1 && byCss[0] && textOk(byCss[0])) return { element: byCss[0], confidence: 0.9 };
 
   const byPath = byXPath(a.xpath);
-  if (byPath && byPath.tagName.toLowerCase() === a.tag && textOk(byPath))
-    return { element: byPath, confidence: 0.8 };
+  if (byPath?.tagName.toLowerCase() === a.tag && textOk(byPath)) return { element: byPath, confidence: 0.8 };
 
   // Fuzzy search among elements of the same tag.
   if (!text) return null;

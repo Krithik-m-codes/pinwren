@@ -2,9 +2,15 @@
 import { describe, expect, it } from "vitest";
 import { findQuote, locateQuote, MAX_QUOTE, pageSelection, rangeAt, toTextRange } from "./selection";
 
+function byId(id: string): HTMLElement {
+  const el = document.getElementById(id);
+  if (!el) throw new Error(`#${id} missing from the fixture`);
+  return el;
+}
+
 function setup(html: string) {
   document.body.innerHTML = html;
-  return document.getElementById("p") as HTMLElement;
+  return byId("p");
 }
 
 describe("selection → textRange", () => {
@@ -17,7 +23,7 @@ describe("selection → textRange", () => {
     r.setEnd(i, 3); // "eve"
     const tr = toTextRange(p, r);
     expect(tr.quote).toBe("ffee, roasted eve");
-    expect(p.textContent?.slice(tr.startOffset, tr.endOffset)).toBe(tr.quote);
+    expect(p.textContent.slice(tr.startOffset, tr.endOffset)).toBe(tr.quote);
     expect(tr).toEqual({ startOffset: 14, endOffset: 31, quote: "ffee, roasted eve" });
   });
 
@@ -71,8 +77,9 @@ describe("pageSelection", () => {
     const p = setup(
       `<p id="p">Some <b>bold</b> text</p><pinwren-root id="host"><span id="in">x</span></pinwren-root>`,
     );
-    const host = document.getElementById("host") as HTMLElement;
-    const sel = getSelection() as Selection;
+    const host = byId("host");
+    const sel = getSelection();
+    if (!sel) throw new Error("no Selection API");
     const r = document.createRange();
     r.setStart(p.firstChild as Text, 0);
     r.setEnd(p.lastChild as Text, 3);

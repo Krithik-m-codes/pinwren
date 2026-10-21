@@ -1,0 +1,72 @@
+version: 2
+updates:
+  - package-ecosystem: npm # pnpm workspaces are handled by the npm ecosystem
+    directory: /
+    schedule:
+      interval: weekly
+    # Conventional titles: PRs are squash-merged and the title must pass pr-title.yml.
+    commit-message:
+      prefix: chore
+      include: scope
+    # Wait a week before adopting a release: a freshly compromised version is usually yanked within days.
+    # Security updates ignore the cooldown.
+    cooldown:
+      default-days: 7
+    groups:
+      # Packages that must move in lockstep arrive as one PR.
+      next:
+        patterns: ["next", "eslint-config-next", "@next/*"]
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
+      lint:
+        patterns:
+          ["eslint", "@eslint/*", "eslint-*", "typescript-eslint", "prettier", "prettier-plugin-*", "globals"]
+      better-auth:
+        patterns: ["better-auth", "@better-auth/*"]
+      drizzle:
+        patterns: ["drizzle-orm", "drizzle-kit"]
+      playwright:
+        patterns: ["@playwright/test", "playwright"]
+      vitest:
+        patterns: ["vitest", "@vitest/*"]
+      # Everything else: one PR for minor/patch updates.
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
+      production-dependencies:
+        dependency-type: production
+        update-types: [minor, patch]
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    cooldown:
+      default-days: 7
+    groups:
+      # init, analyze and upload-sarif refuse to mix versions.
+      codeql-action:
+        patterns: ["github/codeql-action", "github/codeql-action/*"]
+      docker-actions:
+        patterns: ["docker/*"]
+    open-pull-requests-limit: 5
+
+  # Base images in docker/Dockerfile (node:22-alpine) and the compose files (postgres:17-alpine).
+  # Digest and patch refreshes only: moving to a new Node or Postgres major is a deliberate change that
+  # has to match .nvmrc / engines and the upgrade notes for self-hosters.
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    cooldown:
+      default-days: 7
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+    open-pull-requests-limit: 5

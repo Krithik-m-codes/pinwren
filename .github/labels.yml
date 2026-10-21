@@ -1,0 +1,70 @@
+# Repository labels, synced by .github/workflows/labeler.yml (crazy-max/ghaction-github-labeler).
+# GitHub's defaults (bug, enhancement, documentation, dependencies, good first issue, help wanted) keep their
+# usual names because Dependabot, the issue forms and GitHub search expect them.
+
+- name: bug
+  color: d73a4a
+  description: Something isn't working
+- name: enhancement
+  color: a2eeef
+  description: New feature or request
+- name: documentation
+  color: 0075ca
+  description: Improvements or additions to documentation
+- name: dependencies
+  color: 0366d6
+  description: Updates a dependency
+- name: security
+  color: b60205
+  description: Security hardening (report vulnerabilities privately — see SECURITY.md)
+- name: good first issue
+  color: 7057ff
+  description: Good for newcomers
+- name: help wanted
+  color: 008672
+  description: Extra attention is needed
+- name: question
+  color: d876e3
+  description: Further information is requested
+
+# Areas (applied by .github/labeler.yml)
+- name: "area: widget"
+  color: 1d76db
+  description: The embeddable widget (packages/widget, MIT)
+- name: "area: dashboard"
+  color: 1d76db
+  description: The Next.js dashboard (apps/web)
+- name: "area: api"
+  color: 1d76db
+  description: The Hono API and shared schemas (packages/api, packages/core)
+- name: "area: database"
+  color: 1d76db
+  description: Schema and migrations (packages/db)
+- name: "area: self-hosting"
+  color: 1d76db
+  description: Docker image, compose files, load tests
+
+# Change types
+- name: "type: ci"
+  color: c5def5
+  description: CI/CD workflows
+- name: "type: breaking"
+  color: e11d21
+  description: Breaking change for self-hosters or widget users
+
+# Triage — the stale workflow only acts on the first two
+- name: awaiting-response
+  color: e99695
+  description: Waiting for more information from the author
+- name: needs-reproduction
+  color: fbca04
+  description: Needs a minimal reproduction before triage can continue
+- name: stale
+  color: ededed
+  description: No recent activity — will be closed soon without an update
+- name: needs-triage
+  color: ededed
+  description: New issue, not yet looked at
+- name: ignore-for-release
+  color: e4e669
+  description: Leave this PR out of generated release notes

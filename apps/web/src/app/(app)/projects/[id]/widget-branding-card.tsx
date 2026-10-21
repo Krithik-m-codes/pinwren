@@ -1,7 +1,6 @@
 "use client";
 
 import { RotateCcw } from "lucide-react";
-import { useEffect, useState } from "react";
 import { ColorPicker } from "@/components/color-picker";
 import { LogoUpload } from "@/components/logo-upload";
 import { SettingGroup, SettingRow } from "@/components/setting-row";
@@ -10,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { useBranding } from "@/lib/account-hooks";
 import type { ProjectDetail } from "@/lib/api";
+import { useSyncedState } from "@/lib/use-synced-state";
 import { useProjectPatch } from "./use-project";
 
 /** Widget white-label (F-094, wave-3 contract §2): "Powered by", dialog colour, logo. */
@@ -18,8 +18,7 @@ export function WidgetBrandingCard({ project }: { project: ProjectDetail }) {
   const b = project.widgetBranding;
   const orgLogo = useBranding().data?.branding.logoUrl ?? null;
   const fallback = project.widgetConfig.launcher.accent;
-  const [accent, setAccent] = useState(b.dialogAccent ?? fallback);
-  useEffect(() => setAccent(b.dialogAccent ?? fallback), [b.dialogAccent, fallback]);
+  const [accent, setAccent] = useSyncedState(b.dialogAccent ?? fallback);
 
   return (
     <Card>

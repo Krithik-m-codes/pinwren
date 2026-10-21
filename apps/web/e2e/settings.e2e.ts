@@ -91,8 +91,8 @@ test.describe("settings", () => {
     test.beforeAll(async () => {
       server = createServer((req, res) => {
         let body = "";
-        req.on("data", (c) => {
-          body += c;
+        req.on("data", (c: Buffer) => {
+          body += c.toString();
         });
         req.on("end", () => {
           received.push({ headers: req.headers, body });

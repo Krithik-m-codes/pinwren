@@ -50,7 +50,7 @@ describe("catalogues", () => {
       // Extra plural forms (`_few`, `_many`) are allowed only for a counted English string (`<base>_other`).
       for (const k of Object.keys(cat).filter((k) => !(k in en))) {
         const base = /^(\w+)_(few|many)$/.exec(k)?.[1];
-        const other = eng[`${base}_other`];
+        const other = base === undefined ? undefined : eng[`${base}_other`];
         expect(other, `${code}.${k} is not an English key`).toBeTypeOf("string");
         expect(placeholders(cat[k] ?? ""), `${code}.${k}`).toEqual(placeholders(other ?? ""));
       }

@@ -61,7 +61,7 @@ export function rangeAt(root: Element, start: number, end: number): Range | null
 
 /** Re-find a stored text range inside its (re-attached) anchor element. */
 export function findQuote(root: Element, tr: TextRange): Range | null {
-  const at = locateQuote(root.textContent ?? "", tr);
+  const at = locateQuote(root.textContent, tr);
   return at ? rangeAt(root, at[0], at[1]) : null;
 }
 

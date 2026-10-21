@@ -10,7 +10,7 @@ import { applyRetention, cleanupTrash } from "./maintenance";
 
 export { enqueue, getBoss, QUEUES } from "./boss";
 
-const g = globalThis as unknown as { __pinwrenWorkers?: Promise<void> };
+const g = globalThis as unknown as { __pinwrenWorkers?: Promise<void> | undefined };
 
 /**
  * Start the job workers in this process (called from the Next.js Node instrumentation hook).
@@ -54,7 +54,7 @@ export function startJobs(): Promise<void> {
     await boss.schedule(QUEUES.cleanup, "45 3 * * *");
     await boss.schedule(QUEUES.update, "30 4 * * *");
     console.log("[pinwren] job workers started");
-  })().catch((err) => {
+  })().catch((err: unknown) => {
     g.__pinwrenWorkers = undefined;
     console.error("[pinwren] job workers failed to start", err);
   });
@@ -63,7 +63,9 @@ export function startJobs(): Promise<void> {
 
 /** Stop workers and close the queue's pool (graceful shutdown, tests). */
 export async function stopJobs(): Promise<void> {
-  const g2 = globalThis as unknown as { __pinwrenBoss?: Promise<{ stop: (o?: object) => Promise<void> }> };
+  const g2 = globalThis as unknown as {
+    __pinwrenBoss?: Promise<{ stop: (o?: object) => Promise<void> }> | undefined;
+  };
   const boss = await g2.__pinwrenBoss?.catch(() => undefined);
   await boss?.stop({ graceful: true, timeout: 10_000 });
   g2.__pinwrenBoss = undefined;

@@ -1,0 +1,27 @@
+# Categories for GitHub's generated release notes (used when a release is drafted by hand; release-please
+# writes its own notes from Conventional Commits).
+changelog:
+  exclude:
+    labels:
+      - "autorelease: pending"
+      - "autorelease: tagged"
+      - ignore-for-release
+    authors:
+      - dependabot
+      - dependabot[bot]
+      - github-actions[bot]
+  categories:
+    - title: Breaking changes
+      labels: ["type: breaking"]
+    - title: Features
+      labels: [enhancement]
+    - title: Bug fixes
+      labels: [bug]
+    - title: Security
+      labels: [security]
+    - title: Documentation
+      labels: [documentation]
+    - title: Dependencies
+      labels: [dependencies]
+    - title: Other changes
+      labels: ["*"]

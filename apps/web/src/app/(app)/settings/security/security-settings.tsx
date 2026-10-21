@@ -62,7 +62,7 @@ export function SecuritySettingsForm() {
           r.reason === "privacy_mode" ? "Skipped: a project uses privacy mode" : "The update check is off",
         );
       else if (r.state?.error) toast.error("Couldn't reach the release feed", { description: r.state.error });
-      else if (r.state?.available) toast.success(`Version ${r.state.latest} is available`);
+      else if (r.state?.available) toast.success(`Version ${r.state.latest ?? "?"} is available`);
       else toast.success("You're on the latest version");
     },
     onError: (e) => toast.error(e.message),
@@ -82,7 +82,7 @@ export function SecuritySettingsForm() {
       </Card>
     );
   }
-  if (query.isError || !query.data) return <ErrorState error={query.error} retry={() => query.refetch()} />;
+  if (query.isError) return <ErrorState error={query.error} retry={() => query.refetch()} />;
   const s = query.data.security;
   const blockedByPrivacy = s.privacyModeProjects > 0;
 

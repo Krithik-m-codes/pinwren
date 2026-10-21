@@ -50,7 +50,9 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
     <>
       <PageHeader
         title={
-          <span>Settings{current && <span className="text-muted-foreground"> / {current.label}</span>}</span>
+          <span>
+            Settings<span className="text-muted-foreground"> / {current.label}</span>
+          </span>
         }
       />
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 pb-16 md:flex-row md:gap-8">

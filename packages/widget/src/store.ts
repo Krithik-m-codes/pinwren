@@ -16,7 +16,9 @@ function read<T>(key: string, fallback: T): T {
 function write(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
+  } catch {
+    // private browsing or a full quota: settings just won't persist
+  }
 }
 
 const REPORTER = "pinwren:reporter";
@@ -34,7 +36,9 @@ export const store = {
   /** Feedback this browser sent, with the one-time reporter token that lets it resolve its own items. */
   mine: (project: string): Mine[] => {
     const list = read<unknown>(`pinwren:mine:${project}`, []);
-    return Array.isArray(list) ? list.filter((m): m is Mine => typeof m?.id === "string") : [];
+    return Array.isArray(list)
+      ? list.filter((m: unknown): m is Mine => typeof (m as { id?: unknown } | null)?.id === "string")
+      : [];
   },
   addMine: (project: string, m: Mine) => {
     const list = store.mine(project).filter((x) => x.id !== m.id);
@@ -42,6 +46,7 @@ export const store = {
     write(`pinwren:mine:${project}`, list.slice(0, 300));
   },
 
-  consented: (project: string) => read<boolean>(`pinwren:consent:${project}`, false) === true,
+  // The page can write localStorage too: only a literal `true` counts.
+  consented: (project: string) => read<unknown>(`pinwren:consent:${project}`, false) === true,
   setConsented: (project: string) => write(`pinwren:consent:${project}`, true),
 };

@@ -9,32 +9,32 @@
 
 ## 2. Stack (decided)
 
-| Layer | Choice | Why |
-|---|---|---|
-| Runtime | **Node.js 24 LTS** | LTS through 2028; native `fetch`, test runner, permission model. Bun compatibility kept, not required |
-| Package manager / monorepo | **pnpm workspaces + Turborepo** | Fast, strict, cached builds |
-| HTTP server | **Hono** (`@hono/node-server`) + **@hono/zod-openapi** | Tiny, Web-standard `Request/Response`, OpenAPI generated from Zod |
-| Database | **PostgreSQL 16+** | One required dependency; FTS, JSONB, LISTEN/NOTIFY, RLS |
-| ORM / migrations | **Drizzle ORM + drizzle-kit** | Typed SQL, migrations applied on boot |
-| Jobs | **pg-boss** | Postgres-backed queue — no Redis in self-host |
-| Real time | **SSE** + Postgres `LISTEN/NOTIFY` fan-out | Works behind every proxy; multi-instance safe |
-| Auth | **Better Auth** (organisation, passkey, magic-link, OAuth; SSO/SCIM plugins for `ee/`) | Self-hostable, TypeScript-native, active |
-| Object storage | Driver interface: **local FS** and **S3-compatible** (`aws4fetch`, no AWS SDK) | Free storage choice in every edition |
-| Email | **nodemailer** (SMTP) + Resend/Postmark HTTP drivers; templates in **React Email** | Works with any provider |
-| Dashboard | **React 19 + Vite + TanStack Router + TanStack Query + Tailwind CSS v4 + shadcn/ui (Base UI primitives) + Motion** | SPA served by the API container — no second server, no SSR needed behind login |
-| Charts | Recharts (via shadcn charts) | Consistent with design system |
-| Widget | **Preact + @preact/signals**, CSS in constructed stylesheets inside a closed Shadow DOM, built with **tsup/esbuild** | Small runtime, React-like DX |
-| Screenshot | **SnapDOM** (`@zumer/snapdom`, MIT) with a fallback path (see 05) | Fast, accurate SVG/foreignObject capture |
-| Annotation canvas | Custom canvas layer + **perfect-freehand** (MIT) | Small, touch-friendly |
-| Replay | **rrweb** record (widget) + **rrweb-player** (dashboard) | Standard, MIT |
-| Selectors | **@medv/finder** (MIT) + custom stability heuristics | Proven in SitePing |
-| MCP | **@modelcontextprotocol/sdk** — Streamable HTTP at `/mcp` + `@pinwren/mcp` stdio package | Claude Code / Cursor compatible |
-| Billing (Cloud) | **Stripe** Billing + Customer Portal + webhooks | Industry default |
-| Validation | **Zod 4** shared between server, dashboard, widget (widget uses a tree-shaken subset or Valibot if size demands) | One schema source |
-| Logging / telemetry | **pino** + **OpenTelemetry** (optional OTLP export) | Ops-friendly |
-| Testing | **Vitest**, **Playwright**, **Testcontainers** (Postgres), **MSW** | See 12 |
-| Lint / format | **Biome** | One fast tool |
-| Marketing site (Cloud only) | **Astro** in `apps/www` | Static, fast, separate from product |
+| Layer                       | Choice                                                                                                               | Why                                                                                                   |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Runtime                     | **Node.js 24 LTS**                                                                                                   | LTS through 2028; native `fetch`, test runner, permission model. Bun compatibility kept, not required |
+| Package manager / monorepo  | **pnpm workspaces + Turborepo**                                                                                      | Fast, strict, cached builds                                                                           |
+| HTTP server                 | **Hono** (`@hono/node-server`) + **@hono/zod-openapi**                                                               | Tiny, Web-standard `Request/Response`, OpenAPI generated from Zod                                     |
+| Database                    | **PostgreSQL 16+**                                                                                                   | One required dependency; FTS, JSONB, LISTEN/NOTIFY, RLS                                               |
+| ORM / migrations            | **Drizzle ORM + drizzle-kit**                                                                                        | Typed SQL, migrations applied on boot                                                                 |
+| Jobs                        | **pg-boss**                                                                                                          | Postgres-backed queue — no Redis in self-host                                                         |
+| Real time                   | **SSE** + Postgres `LISTEN/NOTIFY` fan-out                                                                           | Works behind every proxy; multi-instance safe                                                         |
+| Auth                        | **Better Auth** (organisation, passkey, magic-link, OAuth; SSO/SCIM plugins for `ee/`)                               | Self-hostable, TypeScript-native, active                                                              |
+| Object storage              | Driver interface: **local FS** and **S3-compatible** (`aws4fetch`, no AWS SDK)                                       | Free storage choice in every edition                                                                  |
+| Email                       | **nodemailer** (SMTP) + Resend/Postmark HTTP drivers; templates in **React Email**                                   | Works with any provider                                                                               |
+| Dashboard                   | **React 19 + Vite + TanStack Router + TanStack Query + Tailwind CSS v4 + shadcn/ui (Base UI primitives) + Motion**   | SPA served by the API container — no second server, no SSR needed behind login                        |
+| Charts                      | Recharts (via shadcn charts)                                                                                         | Consistent with design system                                                                         |
+| Widget                      | **Preact + @preact/signals**, CSS in constructed stylesheets inside a closed Shadow DOM, built with **tsup/esbuild** | Small runtime, React-like DX                                                                          |
+| Screenshot                  | **SnapDOM** (`@zumer/snapdom`, MIT) with a fallback path (see 05)                                                    | Fast, accurate SVG/foreignObject capture                                                              |
+| Annotation canvas           | Custom canvas layer + **perfect-freehand** (MIT)                                                                     | Small, touch-friendly                                                                                 |
+| Replay                      | **rrweb** record (widget) + **rrweb-player** (dashboard)                                                             | Standard, MIT                                                                                         |
+| Selectors                   | **@medv/finder** (MIT) + custom stability heuristics                                                                 | Proven in SitePing                                                                                    |
+| MCP                         | **@modelcontextprotocol/sdk** — Streamable HTTP at `/mcp` + `@pinwren/mcp` stdio package                             | Claude Code / Cursor compatible                                                                       |
+| Billing (Cloud)             | **Stripe** Billing + Customer Portal + webhooks                                                                      | Industry default                                                                                      |
+| Validation                  | **Zod 4** shared between server, dashboard, widget (widget uses a tree-shaken subset or Valibot if size demands)     | One schema source                                                                                     |
+| Logging / telemetry         | **pino** + **OpenTelemetry** (optional OTLP export)                                                                  | Ops-friendly                                                                                          |
+| Testing                     | **Vitest**, **Playwright**, **Testcontainers** (Postgres), **MSW**                                                   | See 12                                                                                                |
+| Lint / format               | **ESLint** (typescript-eslint, Next.js, React Compiler, a11y) + **Prettier** — ADR 0017                              | Familiar to contributors; type-aware rules                                                            |
+| Marketing site (Cloud only) | **Astro** in `apps/www`                                                                                              | Static, fast, separate from product                                                                   |
 
 ## 3. Monorepo layout
 
@@ -60,7 +60,7 @@ pinwren/
 │  ├─ jobs/              # pg-boss setup + job definitions
 │  ├─ ai/                # Provider-agnostic AI client (Anthropic, OpenAI-compatible, Ollama)
 │  ├─ ui/                # Dashboard design system (shadcn-based components, tokens)
-│  └─ config/            # Shared tsconfig, biome, vitest presets
+│  └─ config/            # Shared tsconfig and vitest presets
 ├─ ee/                   # Commercial licence. Imports from packages/*, never the reverse
 │  ├─ licensing/         # Licence verification, entitlements
 │  ├─ sso/               # SAML/OIDC, SCIM, domain capture
@@ -138,9 +138,20 @@ Outbound via jobs with retries (exponential, max 24 h), delivery log rows. Inbou
 ```ts
 // packages/core/src/entitlements.ts (shape only)
 type Entitlement =
-  | 'sso' | 'scim' | 'audit_log' | 'custom_roles' | 'white_label'
-  | 'jira' | 'legal_hold' | 'siem_stream' | 'priority_support';
-interface EntitlementSet { plan: PlanId; features: Set<Entitlement>; limits: PlanLimits; }
+  | "sso"
+  | "scim"
+  | "audit_log"
+  | "custom_roles"
+  | "white_label"
+  | "jira"
+  | "legal_hold"
+  | "siem_stream"
+  | "priority_support";
+interface EntitlementSet {
+  plan: PlanId;
+  features: Set<Entitlement>;
+  limits: PlanLimits;
+}
 ```
 
 - Self-host without licence → `community` set (no `ee` entitlements, no limits).
@@ -150,16 +161,16 @@ interface EntitlementSet { plan: PlanId; features: Set<Entitlement>; limits: Pla
 
 ## 8. Decision log (ADRs to create in `docs/adr/` during WP-00)
 
-| ADR | Decision | Alternatives rejected |
-|---|---|---|
-| 0001 | Postgres only (no SQLite) | Dual-dialect SQLite+PG doubles migration/test cost; Postgres in compose is trivial |
-| 0002 | Hono + static SPA instead of Next.js | Next.js adds a second runtime model, heavier image, harder self-host |
-| 0003 | pg-boss instead of BullMQ/Redis | Keeps self-host to one dependency |
-| 0004 | SSE instead of WebSockets | Proxy-friendly, simpler auth, enough for one-way updates |
-| 0005 | Better Auth instead of Lucia/Auth.js/Keycloak | Org + SSO + passkeys in one TS library, self-hostable |
-| 0006 | Preact widget with closed Shadow DOM | Vanilla is slower to build; React too heavy |
-| 0007 | SnapDOM for capture | html2canvas re-implements CSS and lags modern features |
-| 0008 | AGPL core + commercial `ee/` + MIT SDKs | FSL (fewer contributors accept it), MIT (no protection from hosted clones) |
-| 0009 | Ed25519 offline licence files | Phone-home activation alienates air-gapped customers |
-| 0010 | RLS as defence in depth in Cloud | App-level filtering alone is one bug away from a cross-tenant leak |
-| 0011 | Clean-room reimplementation; SitePing (MIT) code may be adapted, BugPin (AGPL) may not | — |
+| ADR  | Decision                                                                               | Alternatives rejected                                                              |
+| ---- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 0001 | Postgres only (no SQLite)                                                              | Dual-dialect SQLite+PG doubles migration/test cost; Postgres in compose is trivial |
+| 0002 | Hono + static SPA instead of Next.js                                                   | Next.js adds a second runtime model, heavier image, harder self-host               |
+| 0003 | pg-boss instead of BullMQ/Redis                                                        | Keeps self-host to one dependency                                                  |
+| 0004 | SSE instead of WebSockets                                                              | Proxy-friendly, simpler auth, enough for one-way updates                           |
+| 0005 | Better Auth instead of Lucia/Auth.js/Keycloak                                          | Org + SSO + passkeys in one TS library, self-hostable                              |
+| 0006 | Preact widget with closed Shadow DOM                                                   | Vanilla is slower to build; React too heavy                                        |
+| 0007 | SnapDOM for capture                                                                    | html2canvas re-implements CSS and lags modern features                             |
+| 0008 | AGPL core + commercial `ee/` + MIT SDKs                                                | FSL (fewer contributors accept it), MIT (no protection from hosted clones)         |
+| 0009 | Ed25519 offline licence files                                                          | Phone-home activation alienates air-gapped customers                               |
+| 0010 | RLS as defence in depth in Cloud                                                       | App-level filtering alone is one bug away from a cross-tenant leak                 |
+| 0011 | Clean-room reimplementation; SitePing (MIT) code may be adapted, BugPin (AGPL) may not | —                                                                                  |

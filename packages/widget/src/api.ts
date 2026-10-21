@@ -55,7 +55,7 @@ export class WidgetApi {
           ...(init?.json ? { "content-type": "application/json" } : {}),
           ...init?.headers,
         },
-        body: init?.json ? JSON.stringify(init.json) : undefined,
+        ...(init?.json ? { body: JSON.stringify(init.json) } : {}),
         credentials: "omit",
         mode: "cors",
       });
@@ -63,8 +63,11 @@ export class WidgetApi {
       // No response at all (offline, DNS, CORS): status 0 marks it as worth retrying.
       throw new HttpError(err instanceof Error ? err.message : "Network error", 0);
     }
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new HttpError(data.title ?? `Request failed (${res.status})`, res.status);
+    const data: unknown = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const title = (data as { title?: unknown } | null)?.title;
+      throw new HttpError(typeof title === "string" ? title : `Request failed (${res.status})`, res.status);
+    }
     return data as T;
   }
 

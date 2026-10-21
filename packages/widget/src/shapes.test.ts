@@ -42,7 +42,7 @@ describe("text labels", () => {
     expect(textSize(1280, "l")).toBeGreaterThan(textSize(1280, "m"));
   });
   it("drops empty labels", () => {
-    expect(isTiny({ ...label, text: "   " } as Shape)).toBe(true);
+    expect(isTiny({ ...label, text: "   " })).toBe(true);
     expect(isTiny(label)).toBe(false);
   });
 });

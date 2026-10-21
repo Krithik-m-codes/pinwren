@@ -21,7 +21,7 @@ export async function purgeFeedback(ids: string[]): Promise<number> {
     if (!a.key) continue;
     await storage()
       .remove(a.key)
-      .catch((err) => console.warn(`[pinwren] could not remove asset ${a.key}`, err));
+      .catch((err: unknown) => console.warn(`[pinwren] could not remove asset ${a.key}`, err));
   }
   return deleted.length;
 }

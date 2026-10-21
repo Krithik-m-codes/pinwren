@@ -10,7 +10,7 @@ export type Shape =
   | { tool: "pen"; color: string; size: Size; points: Point[] }
   | { tool: "text"; color: string; size: Size; at: Point; text: string; px: number };
 
-export const COLORS = ["#e5484d", "#f5a524", "#30a46c", "#0090ff", "#18181b"];
+export const COLORS = ["#e5484d", "#f5a524", "#30a46c", "#0090ff", "#18181b"] as const;
 export const TOOLS: Tool[] = ["rect", "ellipse", "arrow", "pen", "text", "blur", "crop"];
 /** Keyboard shortcuts inside the editor. */
 export const TOOL_KEYS: Record<string, Tool> = {
@@ -125,10 +125,12 @@ export function sanitizeShapes(raw: unknown): Shape[] {
   const pt = (p: unknown): p is Point => !!p && num((p as Point).x) && num((p as Point).y);
   const hex = (c: unknown) => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c);
   const size = (z: unknown): z is Size => z === "s" || z === "m" || z === "l";
-  return raw.filter((s): s is Shape => {
-    if (!s || typeof s !== "object" || !hex(s.color) || !size(s.size)) return false;
+  return raw.filter((x: unknown): x is Shape => {
+    if (!x || typeof x !== "object") return false;
+    const s = x as Record<string, unknown>;
+    if (!hex(s.color) || !size(s.size)) return false;
     if (s.tool === "pen") return Array.isArray(s.points) && s.points.every(pt);
     if (s.tool === "text") return pt(s.at) && typeof s.text === "string" && num(s.px);
-    return TOOLS.includes(s.tool) && pt(s.a) && pt(s.b);
+    return (TOOLS as readonly unknown[]).includes(s.tool) && pt(s.a) && pt(s.b);
   });
 }

@@ -1,0 +1,16 @@
+# Reviews are requested from these owners automatically. Later rules win.
+
+*                    @Krithik-m-codes
+
+# MIT-licensed, published to npm — changes here affect every site that embeds the widget.
+/packages/widget/    @Krithik-m-codes
+
+# Schema and migrations are irreversible for self-hosters once released.
+/packages/db/        @Krithik-m-codes
+
+# Workflows hold release and publishing credentials.
+/.github/            @Krithik-m-codes
+
+# Licensing and security policy.
+/LICENSE             @Krithik-m-codes
+/SECURITY.md         @Krithik-m-codes

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
+import { formText } from "@/lib/form";
 
 const slugify = (s: string) =>
   s
@@ -22,11 +23,11 @@ export function OnboardingForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const orgName = String(form.get("org")).trim();
-    const site = String(form.get("site")).trim();
+    const orgName = formText(form, "org").trim();
+    const site = formText(form, "site").trim();
     setPending(true);
     setError(null);
     try {
@@ -34,13 +35,13 @@ export function OnboardingForm() {
         name: orgName,
         slug: `${slugify(orgName) || "workspace"}-${Math.random().toString(36).slice(2, 6)}`,
       });
-      if (error || !org) throw new Error(error?.message ?? "Could not create the workspace");
+      if (error) throw new Error(error.message ?? "Could not create the workspace");
       await authClient.organization.setActive({ organizationId: org.id });
       const host = site.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
       const { project } = await api<{ project: { id: string } }>("/projects", {
         method: "POST",
         json: {
-          name: String(form.get("project")).trim() || host || "My site",
+          name: formText(form, "project").trim() || host || "My site",
           allowedOrigins: host ? [host] : [],
         },
       });
@@ -63,6 +64,7 @@ export function OnboardingForm() {
         <form onSubmit={onSubmit} className="grid gap-5">
           <div className="grid gap-2">
             <Label htmlFor="org">Workspace name</Label>
+            {/* eslint-disable-next-line jsx-a11y/no-autofocus -- onboarding is a single form; start in its first field */}
             <Input id="org" name="org" placeholder="Acme Studio" required autoFocus />
           </div>
           <div className="grid gap-2">

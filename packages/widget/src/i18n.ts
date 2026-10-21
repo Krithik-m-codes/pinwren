@@ -9,7 +9,7 @@ import type { enReport } from "./locales/en-report";
 export type English = typeof en & typeof enPanel & typeof enReport;
 export type Key = keyof English;
 /** English plural forms are `_one`/`_other`; languages with more forms (Russian: 2–4 vs 5–20) add `_few`/`_many`. */
-type ExtraPlural = { [k: `${string}_few` | `${string}_many`]: string };
+type ExtraPlural = Record<`${string}_few` | `${string}_many`, string>;
 export type Catalog = Record<Key, string> & ExtraPlural;
 type Vars = Record<string, string | number>;
 
@@ -76,7 +76,10 @@ export function tn(stem: string, n: number, vars?: Vars): string {
 
 /** Load a non-English catalogue from `<endpoint>/widget-i18n-<code>.js`. Never throws; English stays on failure. */
 export async function loadLocale(code: Locale, endpoint: string, timeoutMs = 3000): Promise<void> {
-  if (code === "en") return setCatalog("en", base);
+  if (code === "en") {
+    setCatalog("en", base);
+    return;
+  }
   const w = window as unknown as { __pinwrenI18n?: Record<string, Partial<Catalog>> };
   if (!w.__pinwrenI18n?.[code]) {
     try {

@@ -31,6 +31,7 @@ import { useThumbnail } from "@/lib/feedback-hooks";
 import { type Capture, captureOf, isRegion, placeOn } from "@/lib/geometry";
 import { cn } from "@/lib/utils";
 import { FeedbackDetailPanel } from "../../../inbox/feedback-detail";
+import { here } from "@/lib/routes";
 
 const MAX_PAGES_OF_FEEDBACK = 5;
 const MAX_REVIEW_ITEMS = 60;
@@ -322,7 +323,7 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
     const next = new URLSearchParams(search);
     if (id) next.set("item", id);
     else next.delete("item");
-    router.replace(`${pathname}?${next}`, { scroll: false });
+    router.replace(here(pathname, next), { scroll: false });
   };
 
   const markers: Marker[] = visible.flatMap((r) => {
@@ -403,7 +404,7 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
                             active ? "border-primary" : "border-transparent hover:border-border",
                           )}
                         >
-                          {/* biome-ignore lint/performance/noImgElement: authenticated asset route */}
+                          {/* eslint-disable-next-line @next/next/no-img-element -- session-authenticated asset; next/image would fetch it without the cookie */}
                           <img
                             src={assetUrl(shot.id)}
                             alt=""

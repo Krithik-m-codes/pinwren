@@ -92,10 +92,13 @@ describe("rows, CSV and JSON", () => {
   });
 
   it("JSON keeps the raw values", () => {
-    const data = JSON.parse(toJson(toRows([pin({ title: "=1+1" })], page)));
+    const data = JSON.parse(toJson(toRows([pin({ title: "=1+1" })], page))) as {
+      title: string;
+      deepLink: string;
+    }[];
     expect(data).toHaveLength(1);
-    expect(data[0].title).toBe("=1+1");
-    expect(data[0].deepLink).toContain("pinwren=fb_1");
+    expect(data[0]?.title).toBe("=1+1");
+    expect(data[0]?.deepLink).toContain("pinwren=fb_1");
   });
 
   it("names the file after the site and the day", () => {

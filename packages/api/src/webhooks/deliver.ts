@@ -90,7 +90,7 @@ export async function queueDelivery(endpoint: Endpoint, payload: WebhookPayload)
       endpointId: endpoint.id,
       eventId: payload.id,
       event: payload.event,
-      payload: payload as unknown as Record<string, unknown>,
+      payload: payload,
       attempt: 1,
       status: "pending",
     })

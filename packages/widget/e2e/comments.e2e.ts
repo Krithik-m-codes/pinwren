@@ -82,7 +82,7 @@ test("drag-select a region → composer → send → region overlay on the eleme
   const pin = (sent.anchor as { pin: Record<string, number> }).pin;
   expect(pin.wPct).toBeGreaterThan(0);
   expect(pin.hPct).toBeGreaterThan(0);
-  near(pin.xPct as number, (24 / h1.width) * 100, 0.5);
+  near(pin.xPct ?? Number.NaN, (24 / h1.width) * 100, 0.5);
 
   const area = page.locator("pinwren-root .area");
   await expect(area).toBeVisible();

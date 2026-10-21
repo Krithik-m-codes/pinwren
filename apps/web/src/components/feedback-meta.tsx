@@ -2,7 +2,6 @@ import type { FeedbackKind, FeedbackStatus, Priority } from "@pinwren/core";
 import {
   Bug,
   CircleCheck,
-  CircleDashed,
   CircleDot,
   CircleSlash,
   Copy,
@@ -40,14 +39,9 @@ export const PRIORITY_META: Record<Priority, { label: string; className: string;
 };
 
 export function StatusIcon({ status, className }: { status: FeedbackStatus; className?: string }) {
-  const meta = STATUS_META[status] ?? { icon: CircleDashed, className: "" };
+  const meta = STATUS_META[status];
   const Icon = meta.icon;
-  return (
-    <Icon
-      aria-label={STATUS_META[status]?.label}
-      className={cn("size-4 shrink-0", meta.className, className)}
-    />
-  );
+  return <Icon aria-label={meta.label} className={cn("size-4 shrink-0", meta.className, className)} />;
 }
 
 export function PriorityIcon({ priority, className }: { priority: Priority; className?: string }) {

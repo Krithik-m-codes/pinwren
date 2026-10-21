@@ -15,9 +15,9 @@ export function UserAvatar({
   image,
   className,
 }: {
-  name?: string | null;
-  image?: string | null;
-  className?: string;
+  name?: string | null | undefined;
+  image?: string | null | undefined;
+  className?: string | undefined;
 }) {
   return (
     <Avatar className={cn("size-6", className)}>

@@ -1,13 +1,14 @@
 // Tiny element builder: no framework, no innerHTML for untrusted text (blueprint 09 — XSS).
-type Attrs = Record<string, string | number | boolean | EventListener | undefined>;
+// `on*` handlers may be async: h() wraps them in guard(), which also catches a rejected promise.
+type Attrs = Record<string, string | number | boolean | ((e: Event) => unknown) | undefined>;
 
 /** Wrap a handler so a widget bug is logged instead of surfacing in the host page's error handlers. */
 export const guard =
-  (fn: EventListener): EventListener =>
+  (fn: (e: Event) => unknown): EventListener =>
   (e) => {
     try {
-      const r = fn(e) as unknown;
-      if (r instanceof Promise) r.catch((err) => console.warn("[pinwren]", err));
+      const r = fn(e);
+      if (r instanceof Promise) r.catch((err: unknown) => console.warn("[pinwren]", err));
     } catch (err) {
       console.warn("[pinwren]", err);
     }
@@ -39,12 +40,14 @@ export function icon(svg: string): HTMLElement {
 
 /** Add a chunk's stylesheet to the widget's shadow root once. */
 export function adoptStyle(root: HTMLElement, id: string, css: string) {
-  const shadow = root.getRootNode() as ShadowRoot | Document;
-  if (shadow.querySelector?.(`style[data-chunk="${id}"]`)) return;
+  const top = root.getRootNode();
+  // Normally the widget's shadow root; the document only if the widget was mounted without one.
+  const target = top instanceof Document ? top.head : top instanceof ShadowRoot ? top : root;
+  if (target.querySelector(`style[data-chunk="${id}"]`)) return;
   const style = document.createElement("style");
   style.dataset.chunk = id;
   style.textContent = css;
-  (shadow === document ? document.head : (shadow as ShadowRoot)).append(style);
+  target.append(style);
 }
 
 const FOCUSABLE =
@@ -69,7 +72,10 @@ export function trapFocus(box: HTMLElement, ...openers: (Element | null | undefi
     );
     const first = items[0];
     const last = items[items.length - 1];
-    if (!first || !last) return e.preventDefault();
+    if (!first || !last) {
+      e.preventDefault();
+      return;
+    }
     const cur = focused(box);
     if (e.shiftKey && (cur === first || cur === box)) {
       e.preventDefault();

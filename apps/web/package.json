@@ -2,11 +2,23 @@
   "name": "@pinwren/web",
   "version": "0.1.0",
   "private": true,
+  "description": "Pinwren dashboard (Next.js) with the API mounted at /api and /w",
+  "license": "AGPL-3.0-only",
+  "author": "Krithik-m-codes (https://github.com/Krithik-m-codes)",
+  "homepage": "https://pinwren.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Krithik-m-codes/pinwren.git",
+    "directory": "apps/web"
+  },
+  "bugs": {
+    "url": "https://github.com/Krithik-m-codes/pinwren/issues"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test:e2e": "playwright test"
   },
   "dependencies": {

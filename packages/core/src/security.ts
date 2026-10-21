@@ -3,9 +3,7 @@
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
 export type HttpsDecision =
-  | { action: "pass"; hsts: boolean }
-  | { action: "redirect"; location: string }
-  | { action: "refuse" };
+  { action: "pass"; hsts: boolean } | { action: "redirect"; location: string } | { action: "refuse" };
 
 /**
  * `PINWREN_ENFORCE_HTTPS`: plain-HTTP requests are redirected (GET/HEAD) or refused (anything else,
@@ -41,7 +39,7 @@ export const HSTS_HEADER = "max-age=31536000; includeSubDomains";
 export function truncateIp(ip: string): string {
   const v = ip.trim();
   const v4 = /^(?:::ffff:)?(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.\d{1,3}$/i.exec(v);
-  if (v4) return `${v4[1]}.${v4[2]}.${v4[3]}.0`;
+  if (v4) return `${v4.slice(1, 4).join(".")}.0`;
   if (v.includes(":")) {
     const groups =
       v
@@ -50,7 +48,11 @@ export function truncateIp(ip: string): string {
         ?.split("::") ?? [];
     const head = (groups[0] ?? "").split(":").filter(Boolean);
     const tail = groups.length > 1 ? (groups[1] ?? "").split(":").filter(Boolean) : [];
-    const full = [...head, ...Array(Math.max(0, 8 - head.length - tail.length)).fill("0"), ...tail];
+    const full = [
+      ...head,
+      ...new Array<string>(Math.max(0, 8 - head.length - tail.length)).fill("0"),
+      ...tail,
+    ];
     if (full.length === 8 && full.every((g) => /^[0-9a-f]{1,4}$/i.test(g))) {
       return `${full.slice(0, 3).join(":").toLowerCase()}::`;
     }

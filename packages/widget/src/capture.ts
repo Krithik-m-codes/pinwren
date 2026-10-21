@@ -64,9 +64,10 @@ async function screenShare(
   show: () => void,
   masks: string[] = [],
 ): Promise<HTMLCanvasElement> {
-  const md = navigator.mediaDevices;
-  if (!md?.getDisplayMedia) throw new Error("Screen sharing isn't supported in this browser");
-  const stream = await md.getDisplayMedia({
+  // No mediaDevices on insecure (http://) pages, and no getDisplayMedia on mobile browsers.
+  if (!("mediaDevices" in navigator) || !("getDisplayMedia" in navigator.mediaDevices))
+    throw new Error("Screen sharing isn't supported in this browser");
+  const stream = await navigator.mediaDevices.getDisplayMedia({
     video: { displaySurface: "browser" },
     audio: false,
     preferCurrentTab: true,
@@ -119,4 +120,8 @@ export type CaptureModule = {
   Editor: typeof Editor;
 };
 
-(window as unknown as { __pinwrenCapture: CaptureModule }).__pinwrenCapture = { capture, screenShare, Editor };
+(window as unknown as { __pinwrenCapture: CaptureModule }).__pinwrenCapture = {
+  capture,
+  screenShare,
+  Editor,
+};

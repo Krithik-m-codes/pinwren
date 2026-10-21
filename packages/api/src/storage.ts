@@ -8,11 +8,11 @@ import { env } from "./env";
 // Storage drivers (blueprint F-096): local disk (default) or any S3-compatible store. Both are
 // reached only by the API — assets are always streamed through `/api/assets/:id`, so the bucket can
 // stay private and access control stays in one place.
-export interface StorageDriver {
+export type StorageDriver = {
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   get(key: string): Promise<{ body: ReadableStream; bytes: number } | null>;
   remove(key: string): Promise<void>;
-}
+};
 
 // `<projectId>/<uuid>.<ext>` — random, generated server-side; never derived from user input.
 const KEY_PATTERN = /^[a-z0-9-]+\/[a-z0-9-]+\.(png|jpe?g|webp|gif|pdf)$/;
@@ -102,6 +102,12 @@ export function s3Driver(o: S3Options, fetchImpl: typeof fetch = fetch): Storage
   };
 }
 
+/** env() already refuses STORAGE_DRIVER=s3 without these; this keeps the types honest. */
+function required(name: string, value: string | undefined): string {
+  if (!value) throw new Error(`${name} is required when STORAGE_DRIVER=s3`);
+  return value;
+}
+
 let driver: StorageDriver | undefined;
 export function storage(): StorageDriver {
   if (driver) return driver;
@@ -109,11 +115,11 @@ export function storage(): StorageDriver {
   driver =
     e.STORAGE_DRIVER === "s3"
       ? s3Driver({
-          endpoint: e.S3_ENDPOINT as string,
-          bucket: e.S3_BUCKET as string,
+          endpoint: required("S3_ENDPOINT", e.S3_ENDPOINT),
+          bucket: required("S3_BUCKET", e.S3_BUCKET),
           region: e.S3_REGION,
-          accessKeyId: e.S3_ACCESS_KEY_ID as string,
-          secretAccessKey: e.S3_SECRET_ACCESS_KEY as string,
+          accessKeyId: required("S3_ACCESS_KEY_ID", e.S3_ACCESS_KEY_ID),
+          secretAccessKey: required("S3_SECRET_ACCESS_KEY", e.S3_SECRET_ACCESS_KEY),
           forcePathStyle: e.S3_FORCE_PATH_STYLE,
         })
       : fsDriver(e.PINWREN_DATA_DIR);
@@ -148,9 +154,9 @@ export function decodeDataUrl(
 ): { bytes: Uint8Array; contentType: string } {
   const match = /^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
   if (!match) throw new Error("unsupported data URL");
-  const contentType = match[1] as string;
+  const [, contentType = "", base64 = ""] = match;
   if (!allowed.includes(contentType)) throw new Error(`type ${contentType} is not allowed`);
-  const bytes = new Uint8Array(Buffer.from(match[2] as string, "base64"));
+  const bytes = new Uint8Array(Buffer.from(base64, "base64"));
   if (bytes.length === 0) throw new Error("file is empty");
   if (bytes.length > maxBytes) throw new Error("file too large");
   if (!MAGIC[contentType]?.(bytes)) throw new Error("file bytes do not match their type");

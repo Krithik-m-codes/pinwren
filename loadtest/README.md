@@ -2,12 +2,12 @@
 
 `k6.js` drives the self-host stack (`docker/compose.yml`: app + Postgres) with four concurrent scenarios:
 
-| Scenario | What it simulates | Default rate |
-|---|---|---|
-| `widget_read` | A visitor's widget loading config + the pins of a page (2 requests) | 60 iterations/s |
-| `widget_ingest` | Visitors sending comments and bug reports (40% bugs, half with a screenshot up to 60 KB) | ramps to 25/s |
-| `dashboard` | A team member listing, opening and re-statusing feedback | 10 iterations/s |
-| `abuse` | One IP flooding the submit endpoint — must be throttled | 5/s for 20 s |
+| Scenario        | What it simulates                                                                        | Default rate    |
+| --------------- | ---------------------------------------------------------------------------------------- | --------------- |
+| `widget_read`   | A visitor's widget loading config + the pins of a page (2 requests)                      | 60 iterations/s |
+| `widget_ingest` | Visitors sending comments and bug reports (40% bugs, half with a screenshot up to 60 KB) | ramps to 25/s   |
+| `dashboard`     | A team member listing, opening and re-statusing feedback                                 | 10 iterations/s |
+| `abuse`         | One IP flooding the submit endpoint — must be throttled                                  | 5/s for 20 s    |
 
 Each simulated visitor sends its own `X-Forwarded-For`, so the per-IP rate limit behaves as in production.
 
@@ -27,14 +27,14 @@ No Redis is needed: rate limits and (later) background jobs live in Postgres by 
 
 ## Results — 2026-10-21 (Windows 11, Docker Desktop, Postgres 17, 2-minute runs)
 
-| Run | App limits | Offered load | Result | p95 read / dashboard / submit | Errors |
-|---|---|---|---|---|---|
-| 1 — first build | 2 CPU, 1 process | ~170 req/s | ❌ saturated at 64 req/s | 5.8 s / 9.5 s / 9.1 s | 0 |
-| 2 — throttle "last seen" write, lock-free page insert, session cookie cache | 2 CPU, 1 process | ~170 req/s | ❌ 75 req/s | 5.2 s / 8.5 s / 12.3 s | 0.04 % |
-| 3 — 2 cluster workers, slimmer pins response | 2 CPU, 2 workers | ~170 req/s | ❌ 102 req/s | 3.8 s / 5.6 s / 10.6 s | 0 |
-| 4 — single-statement report insert (CTE) | 2 CPU, 2 workers | ~170 req/s | 🟡 127 req/s, 206 dropped | 0.97 s / 1.1 s / 2.2 s | 0 |
-| 5 — same build | **4 CPU, 4 workers** | ~130 req/s | ✅ all thresholds | **38 ms / 65 ms / 70 ms** | 0 |
-| 6 — same build, lighter load | **2 CPU, 2 workers** | ~74 req/s | ✅ all thresholds | **20 ms / 41 ms / 50 ms** | 0 |
+| Run                                                                         | App limits           | Offered load | Result                    | p95 read / dashboard / submit | Errors |
+| --------------------------------------------------------------------------- | -------------------- | ------------ | ------------------------- | ----------------------------- | ------ |
+| 1 — first build                                                             | 2 CPU, 1 process     | ~170 req/s   | ❌ saturated at 64 req/s  | 5.8 s / 9.5 s / 9.1 s         | 0      |
+| 2 — throttle "last seen" write, lock-free page insert, session cookie cache | 2 CPU, 1 process     | ~170 req/s   | ❌ 75 req/s               | 5.2 s / 8.5 s / 12.3 s        | 0.04 % |
+| 3 — 2 cluster workers, slimmer pins response                                | 2 CPU, 2 workers     | ~170 req/s   | ❌ 102 req/s              | 3.8 s / 5.6 s / 10.6 s        | 0      |
+| 4 — single-statement report insert (CTE)                                    | 2 CPU, 2 workers     | ~170 req/s   | 🟡 127 req/s, 206 dropped | 0.97 s / 1.1 s / 2.2 s        | 0      |
+| 5 — same build                                                              | **4 CPU, 4 workers** | ~130 req/s   | ✅ all thresholds         | **38 ms / 65 ms / 70 ms**     | 0      |
+| 6 — same build, lighter load                                                | **2 CPU, 2 workers** | ~74 req/s    | ✅ all thresholds         | **20 ms / 41 ms / 50 ms**     | 0      |
 
 The rate limiter held in every run: the single-IP flood got exactly its 10/minute allowance through and the rest
 was answered `429`.
@@ -54,9 +54,9 @@ processes (default 2) sharing the port.
 
 ### Sizing guide
 
-| Server | Settings | Comfortable load |
-|---|---|---|
+| Server         | Settings            | Comfortable load                                      |
+| -------------- | ------------------- | ----------------------------------------------------- |
 | 1–2 vCPU, 1 GB | `PINWREN_WORKERS=2` | ~70 req/s ≈ thousands of daily active widget visitors |
-| 4 vCPU, 2 GB | `PINWREN_WORKERS=4` | 130+ req/s with p95 < 100 ms |
+| 4 vCPU, 2 GB   | `PINWREN_WORKERS=4` | 130+ req/s with p95 < 100 ms                          |
 
 A widget visitor costs about two requests per page view; a report adds one. Screenshots are the heaviest request.

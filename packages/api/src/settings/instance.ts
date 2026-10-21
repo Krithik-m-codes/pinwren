@@ -128,8 +128,7 @@ export function isNewerVersion(latest: string, current: string): boolean {
 }
 
 export type UpdateCheckResult =
-  | { checked: true; state: UpdateState }
-  | { checked: false; reason: "disabled" | "privacy_mode" };
+  { checked: true; state: UpdateState } | { checked: false; reason: "disabled" | "privacy_mode" };
 
 /**
  * `update.check` (daily): read the latest GitHub release of PINWREN_UPDATE_REPO. Skipped when the
@@ -165,6 +164,8 @@ export async function runUpdateCheck(fetchImpl: typeof fetch = fetch): Promise<U
   } catch (err) {
     state.error = err instanceof Error ? err.message.slice(0, 200) : "check failed";
   }
-  await writeSetting(UPDATE_STATE_KEY, state, null).catch(() => {});
+  await writeSetting(UPDATE_STATE_KEY, state, null).catch(() => {
+    // The result is advisory; the next scheduled check tries again.
+  });
   return { checked: true, state };
 }

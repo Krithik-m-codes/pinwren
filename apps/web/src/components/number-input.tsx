@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useSyncedState } from "@/lib/use-synced-state";
 
 /**
  * Whole-number field without the browser's native spinner: free typing, validated on blur / Enter,
@@ -37,9 +38,8 @@ export function NumberInput({
   disabled?: boolean;
   "aria-label"?: string;
 }) {
-  const [text, setText] = useState(value === null ? "" : String(value));
+  const [text, setText] = useSyncedState(value === null ? "" : String(value), value);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => setText(value === null ? "" : String(value)), [value]);
 
   const parse = (t: string): { ok: true; n: number | null } | { ok: false; msg: string } => {
     const s = t.trim();

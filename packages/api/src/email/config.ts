@@ -41,7 +41,7 @@ export type EmailSettingsView = {
 
 async function readStored(): Promise<{ value: Stored; secret: string | null }> {
   const [row] = await getDb().select().from(setting).where(eq(setting.key, EMAIL_SETTING_KEY));
-  return { value: (row?.value ?? {}) as Stored, secret: row?.secret ?? null };
+  return { value: row?.value ?? {}, secret: row?.secret ?? null };
 }
 
 function lockedFields() {

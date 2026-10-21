@@ -75,7 +75,7 @@ describe("webhook formatting", () => {
 
   it("disables Discord mentions and escapes markdown", async () => {
     const { buildRequest } = await import("./webhooks/format");
-    const parsed = JSON.parse(buildRequest("discord", payload, null).body);
+    const parsed = JSON.parse(buildRequest("discord", payload, null).body) as { allowed_mentions: unknown };
     expect(parsed.allowed_mentions).toEqual({ parse: [] });
     const text = JSON.stringify(parsed);
     expect(text).not.toMatch(/(^|[^\\])\[x\]\(/);
@@ -176,21 +176,17 @@ describe("issue sync", () => {
   it("calls GitHub and GitLab the way their APIs expect", async () => {
     const { createIssue, setIssueState } = await import("./integrations/trackers");
     const seen: { url: string; method: string; headers: Headers; body: unknown }[] = [];
-    const fake = (async (url: string, init: RequestInit) => {
+    const fake = ((url: string, init: RequestInit) => {
       seen.push({
         url,
         method: init.method ?? "GET",
         headers: new Headers(init.headers),
-        body: init.body ? JSON.parse(String(init.body)) : null,
+        body: typeof init.body === "string" ? (JSON.parse(init.body) as unknown) : null,
       });
-      return new Response(
-        JSON.stringify(
-          url.includes("/api/v4/")
-            ? { iid: 3, web_url: "https://gl.example/x/-/issues/3" }
-            : { number: 5, html_url: "https://gh.example/o/r/issues/5" },
-        ),
-        { status: 201 },
-      );
+      const json = url.includes("/api/v4/")
+        ? { iid: 3, web_url: "https://gl.example/x/-/issues/3" }
+        : { number: 5, html_url: "https://gh.example/o/r/issues/5" };
+      return Promise.resolve(new Response(JSON.stringify(json), { status: 201 }));
     }) as unknown as typeof fetch;
     const gh = { provider: "github" as const, token: "ghp_x", repo: "o/r", apiUrl: "https://gh.example/api" };
     expect(await createIssue(gh, { title: "t", body: "b", labels: ["bug"] }, fake)).toEqual({
@@ -222,10 +218,12 @@ describe("issue sync", () => {
 
   it("reports tracker errors with a hint", async () => {
     const { createIssue, TrackerError } = await import("./integrations/trackers");
-    const fake = (async () =>
-      new Response(JSON.stringify({ message: "Bad credentials" }), {
-        status: 401,
-      })) as unknown as typeof fetch;
+    const fake = (() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ message: "Bad credentials" }), {
+          status: 401,
+        }),
+      )) as unknown as typeof fetch;
     const gh = { provider: "github" as const, token: "bad", repo: "o/r", apiUrl: "https://gh.example" };
     await expect(createIssue(gh, { title: "t", body: "b", labels: [] }, fake)).rejects.toThrow(TrackerError);
     await expect(createIssue(gh, { title: "t", body: "b", labels: [] }, fake)).rejects.toThrow(
@@ -267,10 +265,9 @@ describe("S3 driver", () => {
   it("signs path-style requests and maps 404 to null", async () => {
     const { s3Driver } = await import("./storage");
     const seen: Request[] = [];
-    const fake = (async (req: Request) => {
+    const fake = ((req: Request) => {
       seen.push(req);
-      if (req.method === "GET") return new Response(null, { status: 404 });
-      return new Response(null, { status: 200 });
+      return Promise.resolve(new Response(null, { status: req.method === "GET" ? 404 : 200 }));
     }) as typeof fetch;
     const s3 = s3Driver({ ...opts, forcePathStyle: true }, fake);
     await s3.put("p1/abc.png", new Uint8Array([1, 2, 3]), "image/png");
@@ -287,9 +284,9 @@ describe("S3 driver", () => {
   it("uses virtual-hosted URLs and refuses odd keys", async () => {
     const { s3Driver } = await import("./storage");
     const urls: string[] = [];
-    const fake = (async (req: Request) => {
+    const fake = ((req: Request) => {
       urls.push(req.url);
-      return new Response("hi", { status: 200, headers: { "content-length": "2" } });
+      return Promise.resolve(new Response("hi", { status: 200, headers: { "content-length": "2" } }));
     }) as typeof fetch;
     const s3 = s3Driver({ ...opts, forcePathStyle: false }, fake);
     const got = await s3.get("p1/abc.pdf");

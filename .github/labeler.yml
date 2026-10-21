@@ -1,0 +1,33 @@
+# actions/labeler: label PRs by the paths they change. Labels are defined in labels.yml.
+
+"area: widget":
+  - changed-files:
+      - any-glob-to-any-file: ["packages/widget/**"]
+
+"area: dashboard":
+  - changed-files:
+      - any-glob-to-any-file: ["apps/web/**"]
+
+"area: api":
+  - changed-files:
+      - any-glob-to-any-file: ["packages/api/**", "packages/core/**"]
+
+"area: database":
+  - changed-files:
+      - any-glob-to-any-file: ["packages/db/**"]
+
+"area: self-hosting":
+  - changed-files:
+      - any-glob-to-any-file: ["docker/**", "loadtest/**"]
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: ["**/*.md", "docs/**", "blueprint/**"]
+
+"type: ci":
+  - changed-files:
+      - any-glob-to-any-file: [".github/**"]
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file: ["pnpm-lock.yaml", "pnpm-workspace.yaml"]

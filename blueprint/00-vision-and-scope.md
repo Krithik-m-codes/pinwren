@@ -8,10 +8,10 @@
 
 Website feedback today is split across two tool families, and teams usually pay for both:
 
-| Family | Examples | Good at | Bad at |
-|---|---|---|---|
-| **Visual review / commenting** | SitePing, BugHerd, Feedbucket, Ruttl, Pastel | Clients pin comments on exact page elements; threads; review rounds | Weak technical context (no logs, no replay); most are SaaS-only |
-| **Bug reporting** | BugPin, Marker.io, Jam, Gleap, Usersnap | Annotated screenshots, console and network logs, browser metadata, issue-tracker sync | Comments are not anchored to the DOM; little client-review workflow; expensive per seat |
+| Family                         | Examples                                     | Good at                                                                               | Bad at                                                                                  |
+| ------------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| **Visual review / commenting** | SitePing, BugHerd, Feedbucket, Ruttl, Pastel | Clients pin comments on exact page elements; threads; review rounds                   | Weak technical context (no logs, no replay); most are SaaS-only                         |
+| **Bug reporting**              | BugPin, Marker.io, Jam, Gleap, Usersnap      | Annotated screenshots, console and network logs, browser metadata, issue-tracker sync | Comments are not anchored to the DOM; little client-review workflow; expensive per seat |
 
 Self-hostable options are either narrow (SitePing: anchored comments only, no Docker image; BugPin: bug reports only, S3 and other features locked behind an Enterprise licence; BugDrop: GitHub-only) or ship heavy dependency stacks (FasterFixes: Next.js + Inngest + R2 + Resend).
 
@@ -26,29 +26,29 @@ One widget and one inbox covering both jobs:
 
 ## Target users
 
-| Persona | Need | Edition they usually land on |
-|---|---|---|
-| **Agency / freelancer** | Client review rounds on staging sites, no client logins, white-label | Cloud Pro / Business, or self-host |
-| **Product & QA team** | In-app bug reports with technical context, tracker sync | Cloud Business, Enterprise self-host |
-| **Indie / OSS developer** | Free, self-hosted, low ops | Community self-host |
-| **Regulated org (health, gov, finance, education)** | Data never leaves their infra, SSO, audit | Enterprise self-host |
+| Persona                                             | Need                                                                 | Edition they usually land on         |
+| --------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------ |
+| **Agency / freelancer**                             | Client review rounds on staging sites, no client logins, white-label | Cloud Pro / Business, or self-host   |
+| **Product & QA team**                               | In-app bug reports with technical context, tracker sync              | Cloud Business, Enterprise self-host |
+| **Indie / OSS developer**                           | Free, self-hosted, low ops                                           | Community self-host                  |
+| **Regulated org (health, gov, finance, education)** | Data never leaves their infra, SSO, audit                            | Enterprise self-host                 |
 
 ## Market research summary
 
 Pricing and feature claims below come mostly from vendor and competitor pages (see [13-references.md](13-references.md)); re-check before using them in marketing.
 
-| Product | Model | Price signal | Notable |
-|---|---|---|---|
-| Marker.io | SaaS | Starter ~$39–59/mo (3 users), Team ~$149–199/mo | Console, network, session replay, Jira two-way sync on Team |
-| BugHerd | SaaS | From ~$50/mo (5 members), ~$150/mo to avoid the browser extension | Agency-focused review |
-| Feedbucket | SaaS | Pro ~$39–49/mo, Business ~$72–89/mo | Cheap two-way PM sync |
-| Userback | SaaS | Only real free tier (2 projects, 7-day expiry); ~$7–23/seat | Per-seat pricing |
-| Gleap | SaaS | Team ~$149/mo, unlimited seats | Replay, mobile SDKs, AI agent that opens PRs |
-| Jam | SaaS + extension | ~$14/creator seat | Developer-side recordings |
-| BugPin | Open-core, AGPL + EE | Free self-host; S3 etc. Enterprise | SQLite, single container, small adoption |
-| SitePing | MIT library | Free | Best DOM anchoring; no server product |
-| FasterFixes | AGPL + hosted | Free self-host, flat hosted | MCP server for AI agents |
-| BugDrop | MIT | Free | Feedback → GitHub Issues only |
+| Product     | Model                | Price signal                                                      | Notable                                                     |
+| ----------- | -------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------- |
+| Marker.io   | SaaS                 | Starter ~$39–59/mo (3 users), Team ~$149–199/mo                   | Console, network, session replay, Jira two-way sync on Team |
+| BugHerd     | SaaS                 | From ~$50/mo (5 members), ~$150/mo to avoid the browser extension | Agency-focused review                                       |
+| Feedbucket  | SaaS                 | Pro ~$39–49/mo, Business ~$72–89/mo                               | Cheap two-way PM sync                                       |
+| Userback    | SaaS                 | Only real free tier (2 projects, 7-day expiry); ~$7–23/seat       | Per-seat pricing                                            |
+| Gleap       | SaaS                 | Team ~$149/mo, unlimited seats                                    | Replay, mobile SDKs, AI agent that opens PRs                |
+| Jam         | SaaS + extension     | ~$14/creator seat                                                 | Developer-side recordings                                   |
+| BugPin      | Open-core, AGPL + EE | Free self-host; S3 etc. Enterprise                                | SQLite, single container, small adoption                    |
+| SitePing    | MIT library          | Free                                                              | Best DOM anchoring; no server product                       |
+| FasterFixes | AGPL + hosted        | Free self-host, flat hosted                                       | MCP server for AI agents                                    |
+| BugDrop     | MIT                  | Free                                                              | Feedback → GitHub Issues only                               |
 
 **What this tells us**
 
@@ -79,12 +79,12 @@ Differentiators, in priority order:
 
 ## Success metrics
 
-| Metric | v1 target |
-|---|---|
-| Time from `docker compose up` to first report | < 5 minutes |
-| Widget core bundle (gzip) | ≤ 35 KB; lazy chunks loaded only on interaction |
-| Host-page main-thread cost at load | < 5 ms |
+| Metric                                         | v1 target                                                                 |
+| ---------------------------------------------- | ------------------------------------------------------------------------- |
+| Time from `docker compose up` to first report  | < 5 minutes                                                               |
+| Widget core bundle (gzip)                      | ≤ 35 KB; lazy chunks loaded only on interaction                           |
+| Host-page main-thread cost at load             | < 5 ms                                                                    |
 | Anchor re-attachment after a moderate redesign | ≥ 90 % of pins re-attach or are surfaced as "moved" (never silently lost) |
-| Report submit p95 (excluding upload) | < 300 ms server time |
-| Self-host image size | < 250 MB |
-| Idle memory (app container) | < 200 MB |
+| Report submit p95 (excluding upload)           | < 300 ms server time                                                      |
+| Self-host image size                           | < 250 MB                                                                  |
+| Idle memory (app container)                    | < 200 MB                                                                  |

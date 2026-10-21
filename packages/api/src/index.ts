@@ -23,8 +23,13 @@ export const app = new Hono()
   // it runs on its own).
   .use("*", async (c, next) => {
     const e = env();
-    const d = httpsDecision(c.req.raw, { enforce: e.PINWREN_ENFORCE_HTTPS, trustProxy: e.PINWREN_TRUST_PROXY });
+    const d = httpsDecision(c.req.raw, {
+      enforce: e.PINWREN_ENFORCE_HTTPS,
+      trustProxy: e.PINWREN_TRUST_PROXY,
+    });
     if (d.action === "redirect") return c.redirect(d.location, 308);
+    // Hono types a `use("*")` context's input as `any`; `problem` only uses the response helpers.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     if (d.action === "refuse") return problem(c, 403, "HTTPS_REQUIRED", "This server only accepts HTTPS");
     await next();
     if (d.hsts) c.res.headers.set("strict-transport-security", HSTS_HEADER);

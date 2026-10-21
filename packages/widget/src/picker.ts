@@ -126,20 +126,25 @@ export class Picker {
     this.dragging = false;
     try {
       this.shield.setPointerCapture(e.pointerId);
-    } catch {}
+    } catch {
+      // pointer capture is a nicety; picking works without it
+    }
     if (touch) {
       this.timer = window.setTimeout(() => {
         if (!this.down) return;
         this.down.armed = true;
         this.hover(this.down.x, this.down.y, false);
-        navigator.vibrate?.(10);
+        if ("vibrate" in navigator) navigator.vibrate(10); // absent in Safari
       }, LONG_PRESS);
     }
   };
 
   private onMove = (e: PointerEvent) => {
     const d = this.down;
-    if (!d) return this.hover(e.clientX, e.clientY, e.shiftKey);
+    if (!d) {
+      this.hover(e.clientX, e.clientY, e.shiftKey);
+      return;
+    }
     const dist = Math.hypot(e.clientX - d.x, e.clientY - d.y);
     if (!d.armed) {
       // Touch before the long-press fires: the shield blocks native scrolling, so pan by hand.
@@ -170,7 +175,10 @@ export class Picker {
   private onUp = (e: PointerEvent) => {
     const d = this.down;
     clearTimeout(this.timer);
-    if (!d?.armed) return this.reset();
+    if (!d?.armed) {
+      this.reset();
+      return;
+    }
     const region = this.dragging ? boxFrom(d.x, d.y, e.clientX, e.clientY) : null;
     this.reset();
     if (region && region.width >= 8 && region.height >= 8) {
@@ -190,13 +198,16 @@ export class Picker {
   };
 
   private onKey = (e: KeyboardEvent) => {
-    if (e.key === "Shift" && this.last && !this.down)
-      return this.hover(this.last.x, this.last.y, e.type === "keydown");
+    if (e.key === "Shift" && this.last && !this.down) {
+      this.hover(this.last.x, this.last.y, e.type === "keydown");
+      return;
+    }
     if (e.type !== "keydown") return;
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
-      return this.done(null);
+      this.done(null);
+      return;
     }
     const c = this.cur;
     const next =
@@ -212,7 +223,7 @@ export class Picker {
     if (next !== undefined) {
       e.preventDefault();
       if (next) {
-        next.scrollIntoView?.({ block: "nearest" });
+        next.scrollIntoView({ block: "nearest" });
         this.show(next);
       } else if (!c)
         this.show(document.querySelector("main, [role=main]") ?? document.body.firstElementChild);

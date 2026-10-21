@@ -22,6 +22,7 @@ import {
   qk,
   type RenderedEmail,
 } from "@/lib/api";
+import { useSyncedState } from "@/lib/use-synced-state";
 
 type Draft = { subject: string; body: string };
 
@@ -47,18 +48,15 @@ export function EmailTemplates() {
   });
   const [key, setKey] = useState<EmailTemplateKey>("feedback_created");
   const current = list.data?.templates.find((t) => t.key === key);
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [testResult, setTestResult] = useState<EmailTestResult | null>(null);
+  // A new template (or a save/reset) replaces the draft and clears the last test result.
+  const savedKey = current ? `${current.key}:${current.subject}:${current.body}` : "";
+  const [draft, setDraft] = useSyncedState<Draft | null>(
+    current ? { subject: current.subject, body: current.body } : null,
+    savedKey,
+  );
+  const [testResult, setTestResult] = useSyncedState<EmailTestResult | null>(null, savedKey);
   const [confirmReset, setConfirmReset] = useState(false);
   const body = useRef<HTMLTextAreaElement>(null);
-
-  // A new template (or a save/reset) replaces the draft.
-  const savedKey = current ? `${current.key}:${current.subject}:${current.body}` : "";
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-sync only when the saved template changes
-  useEffect(() => {
-    if (current) setDraft({ subject: current.subject, body: current.body });
-    setTestResult(null);
-  }, [savedKey]);
 
   const debounced = useDebounced(draft, 350);
   const preview = useQuery({
@@ -124,8 +122,8 @@ export function EmailTemplates() {
     const el = body.current;
     const token = `{{${name}}}`;
     if (!el || !draft) return;
-    const start = el.selectionStart ?? draft.body.length;
-    const end = el.selectionEnd ?? start;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
     const next = draft.body.slice(0, start) + token + draft.body.slice(end);
     setDraft({ ...draft, body: next });
     requestAnimationFrame(() => {
@@ -146,7 +144,7 @@ export function EmailTemplates() {
       </CardHeader>
       <CardContent className="grid gap-4">
         <div className="flex flex-wrap items-center gap-2">
-          <Select items={items} value={key} onValueChange={(v) => v && setKey(v as EmailTemplateKey)}>
+          <Select items={items} value={key} onValueChange={(v) => v && setKey(v)}>
             <SelectTrigger className="w-64" aria-label="Template">
               <SelectValue />
             </SelectTrigger>

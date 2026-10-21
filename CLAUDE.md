@@ -6,19 +6,19 @@ The full specification lives in `blueprint/` (files 00–14). `blueprint/14-feat
 
 ## Commands
 
-- `pnpm i` — install
+- `pnpm i` — install (also installs the git hooks: lint-staged on pre-commit, commitlint on commit-msg)
 - `pnpm db:up` — local Postgres on 127.0.0.1:5433 (`docker/compose.dev.yml`)
 - `pnpm --filter @pinwren/widget build` then `pnpm --filter @pinwren/web dev -- -p 3100` — dashboard + API (port 3000 is taken on the owner's machine)
-- `node scripts/smoke.mjs http://localhost:3100` — 20-check end-to-end API test
+- `node scripts/smoke.mjs http://localhost:3100` — end-to-end API checks (165); start the server with `PINWREN_TRUST_PROXY=true GITHUB_API_URL=http://127.0.0.1:4790 PINWREN_ADMIN_EMAILS=smoke-admin@example.com`
 - `docker compose -f docker/compose.yml --env-file docker/.env up -d --build` — self-host stack
+- `pnpm verify` — format:check + lint + typecheck + test + build (run before pushing)
+- `pnpm format` / `pnpm format:check` — Prettier (Tailwind class sorting via prettier-plugin-tailwindcss)
+- `pnpm lint` / `pnpm lint:fix` — ESLint 9 flat config (`eslint.config.mjs`): typescript-eslint strict type-checked, eslint-config-next, React Compiler rules, jsx-a11y. Disable a rule only per line with a reason: `// eslint-disable-next-line rule -- why`
+- `pnpm typecheck` — `tsc` per package (the dashboard runs `next typegen` first for typed routes)
+- `pnpm test` — Vitest unit tests (core, api, widget)
+- `pnpm test:e2e` — Playwright: widget (port 5180, mocked API) then dashboard (port 3100, dev Postgres)
 - `pnpm build` — all packages (Turborepo, cached)
-- `pnpm lint` / `pnpm lint:fix` — Biome + dependency-boundary check
-- `pnpm typecheck`
-- `pnpm test` — unit + component + integration (Testcontainers; Docker required)
-- `pnpm test:e2e` — Playwright (`--project=smoke` for the quick set)
-- `pnpm size` — widget bundle budgets
 - `pnpm db:generate` / `pnpm db:migrate` — Drizzle migrations
-- `pnpm openapi` — regenerate `apps/server/openapi.json` (commit the diff)
 
 ## Architecture rules
 
@@ -39,7 +39,7 @@ The full specification lives in `blueprint/` (files 00–14). `blueprint/14-feat
 - Conventional Commits. One logical change per commit.
 - UI: `packages/ui` components only — shadcn/ui on Base UI. No browser-native pickers/selects/date inputs.
 - Every new screen ships empty, loading and error states, keyboard access and dark mode.
-- Comments explain *why*; match surrounding density.
+- Comments explain _why_; match surrounding density.
 - Untrusted content (feedback text, names, URLs, metadata) is escaped/sanitised at every output: dashboard, emails, chat messages, issue bodies.
 
 ## Licensing rules

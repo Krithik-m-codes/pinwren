@@ -94,7 +94,7 @@ export async function saveBrandAsset(orgId: string, dataUrl: string, userId: str
   } catch (err) {
     throw new ApiError(400, "INVALID_IMAGE", err instanceof Error ? err.message : "Invalid image");
   }
-  const key = `branding/${crypto.randomUUID()}.${EXTENSIONS[file.contentType]}`;
+  const key = `branding/${crypto.randomUUID()}.${EXTENSIONS[file.contentType] ?? "bin"}`;
   await storage().put(key, file.bytes, file.contentType);
   const [a] = await getDb()
     .insert(brandAsset)

@@ -1,5 +1,5 @@
 import { h, ICONS, icon } from "./dom";
-import { type Key, t } from "./i18n";
+import { t } from "./i18n";
 
 // Presentation helpers shared by pins, cards and the panel.
 
@@ -15,7 +15,7 @@ export const KIND_LIST = Object.keys(KIND_DEFS) as Kind[];
 /** Colour and translated label of a feedback kind (unknown kinds render as comments). */
 export const kindOf = (k: string) => {
   const [color, key] = KIND_DEFS[(k in KIND_DEFS ? k : "comment") as Kind];
-  return { color, label: t(key as Key) };
+  return { color, label: t(key) };
 };
 
 export const tag = (kind: string) => {
@@ -38,15 +38,25 @@ export function initials(name: string | null | undefined): string {
 export function shortName(name: string | null | undefined): string {
   const words = (name ?? "").trim().split(/\s+/).filter(Boolean);
   if (!words.length) return t("visitor");
-  return words.length > 1 ? `${words[0]} ${words[words.length - 1]?.[0]?.toUpperCase()}.` : (words[0] ?? "");
+  const first = words[0] ?? "";
+  return words.length > 1 ? `${first} ${words.at(-1)?.[0]?.toUpperCase() ?? ""}.` : first;
 }
 
-const AVATAR = ["#5b5bd6", "#0d74ce", "#12a594", "#30a46c", "#d6409f", "#8e4ec6", "#e54d2e", "#ad5700"];
+const AVATAR = [
+  "#5b5bd6",
+  "#0d74ce",
+  "#12a594",
+  "#30a46c",
+  "#d6409f",
+  "#8e4ec6",
+  "#e54d2e",
+  "#ad5700",
+] as const;
 
 export function colorFor(name: string | null | undefined): string {
   let n = 0;
   for (const c of name ?? "") n = (n * 31 + c.charCodeAt(0)) >>> 0;
-  return AVATAR[n % AVATAR.length] as string;
+  return AVATAR[n % AVATAR.length] ?? AVATAR[0];
 }
 
 export function ago(iso: string, now = Date.now()): string {

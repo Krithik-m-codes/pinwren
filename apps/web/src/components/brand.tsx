@@ -21,7 +21,7 @@ export function BrandMark({ className }: { className?: string }) {
   const b = useBranding().data?.branding;
   if (b?.logoUrl) {
     return (
-      // biome-ignore lint/performance/noImgElement: user-uploaded logo served by the API
+      // eslint-disable-next-line @next/next/no-img-element -- user-uploaded logo (any host, any size); nothing for next/image to optimise
       <img
         src={b.logoUrl}
         alt=""

@@ -44,5 +44,5 @@ export async function sendEmail(msg: EmailMessage): Promise<SendResult> {
     html: msg.html,
     text: msg.text,
   });
-  return { sent: true, messageId: String(info.messageId ?? "") };
+  return { sent: true, messageId: info.messageId };
 }

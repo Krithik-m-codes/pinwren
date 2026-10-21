@@ -23,7 +23,7 @@ export const QUEUES = {
 } as const;
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 
-const g = globalThis as unknown as { __pinwrenBoss?: Promise<PgBoss> };
+const g = globalThis as unknown as { __pinwrenBoss?: Promise<PgBoss> | undefined };
 
 /** The process-wide PgBoss instance, started (and its schema installed) on first use. */
 export function getBoss(): Promise<PgBoss> {
@@ -47,7 +47,7 @@ export function getBoss(): Promise<PgBoss> {
       boss.createQueue(QUEUES.update, { retryLimit: 0 }),
     ]);
     return boss;
-  })().catch((err) => {
+  })().catch((err: unknown) => {
     g.__pinwrenBoss = undefined;
     throw err;
   });

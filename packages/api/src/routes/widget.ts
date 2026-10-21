@@ -283,13 +283,15 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
         assets.map((a) =>
           storage()
             .remove(a.key)
-            .catch(() => {}),
+            .catch(() => {
+              // Orphaned files are swept by the nightly cleanup job.
+            }),
         ),
       );
     };
     try {
       for (const f of decoded) {
-        const key = `${p.id}/${crypto.randomUUID()}.${EXTENSIONS[f.contentType]}`;
+        const key = `${p.id}/${crypto.randomUUID()}.${EXTENSIONS[f.contentType] ?? "bin"}`;
         await storage().put(key, f.bytes, f.contentType);
         assets.push({ kind: f.kind, key, contentType: f.contentType, bytes: f.bytes.length, name: f.name });
       }

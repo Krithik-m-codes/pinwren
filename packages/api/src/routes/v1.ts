@@ -37,7 +37,7 @@ const requireToken = createMiddleware<{ Variables: TokenVars }>(async (c, next) 
 
   const digest = sha256Hex(secret);
   const hit = verified.get(digest);
-  if (!hit || hit.tokenId !== t.id || hit.until < Date.now()) {
+  if (hit?.tokenId !== t.id || hit.until < Date.now()) {
     if (!(await verifyToken(secret, t.hash))) throw invalidToken();
     if (verified.size > 1000) verified.clear();
     verified.set(digest, { tokenId: t.id, until: Date.now() + VERIFIED_TTL_MS });

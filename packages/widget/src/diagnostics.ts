@@ -26,16 +26,14 @@ function serialize(value: unknown, depth = 0): string {
     if (value instanceof Element) return `<${value.tagName.toLowerCase()}${value.id ? `#${value.id}` : ""}>`;
     if (typeof value !== "object" || value === null) return String(value);
     if (depth > 2) return "[Object]";
-    const seen = new WeakSet();
-    return (
-      JSON.stringify(value, (_k, v) => {
-        if (typeof v === "object" && v !== null) {
-          if (seen.has(v)) return "[Circular]";
-          seen.add(v);
-        }
-        return v;
-      })?.slice(0, 1000) ?? String(value)
-    );
+    const seen = new WeakSet<object>();
+    return JSON.stringify(value, (_k, v: unknown) => {
+      if (typeof v === "object" && v !== null) {
+        if (seen.has(v)) return "[Circular]";
+        seen.add(v);
+      }
+      return v;
+    }).slice(0, 1000);
   } catch {
     return "[Unserializable]";
   }
@@ -96,7 +94,9 @@ export function installDiagnostics(cfg: Pick<CaptureCfg, "console" | "network">)
     });
     po.observe({ type: "largest-contentful-paint", buffered: true });
     undo.push(() => po.disconnect());
-  } catch {}
+  } catch {
+    // LCP is unsupported in Safari and Firefox
+  }
 
   for (const level of LEVELS[cfg.console]) {
     wrap(
@@ -119,7 +119,9 @@ export function installDiagnostics(cfg: Pick<CaptureCfg, "console" | "network">)
               },
               MAX_CONSOLE,
             );
-          } catch {}
+          } catch {
+            // never let capture break the page's own console call
+          }
         },
       live,
     );
@@ -153,7 +155,9 @@ export function uninstallDiagnostics() {
   for (const fn of undo.reverse()) {
     try {
       fn();
-    } catch {}
+    } catch {
+      // one failed restore must not stop the others
+    }
   }
   undo = [];
   installed = false;
@@ -200,9 +204,9 @@ function installNetwork(cfg: Pick<CaptureCfg, "network">, live: { on: boolean })
     (open) =>
       function (this: Xhr, method: string, url: string | URL, ...rest: unknown[]) {
         this.__pinwren = { m: method.toUpperCase(), u: String(url) };
-        // biome-ignore lint/suspicious/noExplicitAny: forwarding the original variadic signature
-        return (open as any).call(this, method, url, ...rest);
-      } as typeof proto.open,
+        // Forward every argument as given: open() has overloads (async, user, password).
+        Reflect.apply(open, this, [method, url, ...rest]);
+      },
     live,
   );
   wrap(
@@ -225,7 +229,7 @@ function installNetwork(cfg: Pick<CaptureCfg, "network">, live: { on: boolean })
               });
           });
         }
-        return send.call(this, body);
+        send.call(this, body);
       },
     live,
   );
@@ -258,6 +262,8 @@ export function performanceTiming(): Record<string, number> {
     }
     set("fcpMs", performance.getEntriesByName("first-contentful-paint")[0]?.startTime);
     set("lcpMs", lcp);
-  } catch {}
+  } catch {
+    // timing entries are optional; send what we have
+  }
   return out;
 }

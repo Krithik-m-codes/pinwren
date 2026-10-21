@@ -1,25 +1,58 @@
 {
   "name": "pinwren",
+  "version": "0.1.0",
   "private": true,
+  "description": "Self-hostable visual feedback: pinned comments and annotated bug reports for any website, with a triage dashboard.",
   "license": "AGPL-3.0-only",
+  "author": "Krithik-m-codes (https://github.com/Krithik-m-codes)",
+  "homepage": "https://pinwren.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Krithik-m-codes/pinwren.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Krithik-m-codes/pinwren/issues"
+  },
   "packageManager": "pnpm@12.6.0",
   "engines": {
     "node": ">=22.12"
   },
   "scripts": {
+    "prepare": "simple-git-hooks",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "lint": "biome check .",
-    "lint:fix": "biome check --write .",
+    "test:e2e": "pnpm --filter @pinwren/widget build && pnpm --filter @pinwren/widget test:e2e && pnpm --filter @pinwren/web test:e2e",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "db:generate": "pnpm --filter @pinwren/db generate",
     "db:migrate": "pnpm --filter @pinwren/db migrate",
     "db:up": "docker compose -f docker/compose.dev.yml up -d"
   },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm exec lint-staged",
+    "commit-msg": "pnpm exec commitlint --edit \"$1\""
+  },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.0",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "16.4.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "lint-staged": "^17.6.0",
+    "prettier": "^3.9.10",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "simple-git-hooks": "^2.14.0",
     "turbo": "^2.6.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.0"
   }
 }

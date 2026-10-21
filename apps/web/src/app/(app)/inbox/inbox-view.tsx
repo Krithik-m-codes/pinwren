@@ -51,6 +51,7 @@ import { type FeedbackPatch, useDeleteFeedback, useMembers, useUpdateFeedback } 
 import { cn } from "@/lib/utils";
 import { BoardView } from "./board-view";
 import { type DetailMenu, FeedbackDetailPanel } from "./feedback-detail";
+import { here } from "@/lib/routes";
 
 const STATUS_TABS = [
   { value: "active", label: "Active" },
@@ -107,7 +108,7 @@ export function InboxView() {
         if (v === null || v === "") next.delete(k);
         else next.set(k, v);
       }
-      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+      router.replace(here(pathname, next), { scroll: false });
     },
     [params, pathname, router],
   );
@@ -133,14 +134,15 @@ export function InboxView() {
   const update = useUpdateFeedback();
   const remove = useDeleteFeedback();
 
-  // Selection survives refetches but drops items that left the list.
-  useEffect(() => {
-    setChecked((prev) => {
-      const ids = new Set(items.map((i) => i.id));
-      const next = new Set([...prev].filter((id) => ids.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [items]);
+  // Selection survives refetches but drops items that left the list — adjusted while rendering (not in
+  // an effect), so a stale selection is never painted.
+  const [checkedFor, setCheckedFor] = useState(items);
+  if (checkedFor !== items) {
+    setCheckedFor(items);
+    const ids = new Set(items.map((i) => i.id));
+    const next = new Set([...checked].filter((id) => ids.has(id)));
+    if (next.size !== checked.size) setChecked(next);
+  }
 
   const undo = useCallback(() => {
     const last = undoStack.current;
@@ -174,26 +176,24 @@ export function InboxView() {
     [items, update, undo],
   );
 
-  const toggleCheck = useCallback(
-    (id: string, range = false) => {
-      setChecked((prev) => {
-        const next = new Set(prev);
-        if (range && lastAnchor.current) {
-          const a = items.findIndex((i) => i.id === lastAnchor.current);
-          const b = items.findIndex((i) => i.id === id);
-          if (a >= 0 && b >= 0) {
-            for (const it of items.slice(Math.min(a, b), Math.max(a, b) + 1)) next.add(it.id);
-            return next;
-          }
-        }
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        lastAnchor.current = id;
-        return next;
-      });
-    },
-    [items],
-  );
+  // Shift-click adds the span from the last toggled row; a plain click toggles one row and moves the anchor.
+  const toggleCheck = (id: string, range = false) => {
+    const anchor = range ? lastAnchor.current : null;
+    const a = anchor ? items.findIndex((i) => i.id === anchor) : -1;
+    const b = a >= 0 ? items.findIndex((i) => i.id === id) : -1;
+    if (a >= 0 && b >= 0) {
+      const span = items.slice(Math.min(a, b), Math.max(a, b) + 1).map((it) => it.id);
+      setChecked((prev) => new Set([...prev, ...span]));
+      return;
+    }
+    lastAnchor.current = id;
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   // Keyboard map (blueprint 06 §5). The listener is attached once and reads the latest state from a
   // ref updated before paint, so a key pressed right after the list renders is never lost, and quick
@@ -607,8 +607,8 @@ function FeedbackListRow({
         checked && "bg-primary/[0.06] hover:bg-primary/[0.08]",
       )}
     >
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: the click only widens the checkbox hit area */}
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: the checkbox inside is the keyboard control */}
+      {/* The click only widens the checkbox's hit area; the checkbox inside is the keyboard control. */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
       <div
         className={cn(
           "flex w-9 shrink-0 justify-center self-stretch pt-3.5 pl-2 transition-opacity",

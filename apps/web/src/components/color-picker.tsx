@@ -1,11 +1,12 @@
 "use client";
 
 import { Check } from "lucide-react";
-import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
+import { useSyncedState } from "@/lib/use-synced-state";
+import { sliderValue } from "@/lib/form";
 
 const SWATCHES = [
   "#5b5bd6",
@@ -28,7 +29,7 @@ export const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 function hexToHsl(hex: string): [number, number, number] {
   let h = hex.replace("#", "");
-  if (h.length === 3) h = [...h].map((c) => c + c).join("");
+  if (h.length === 3) h = h.replace(/./g, "$&$&");
   const r = Number.parseInt(h.slice(0, 2), 16) / 255;
   const g = Number.parseInt(h.slice(2, 4), 16) / 255;
   const b = Number.parseInt(h.slice(4, 6), 16) / 255;
@@ -76,8 +77,7 @@ export function ColorPicker({
   /** Accessible name; the current value is appended. */
   label?: string;
 }) {
-  const [text, setText] = useState(value);
-  useEffect(() => setText(value), [value]);
+  const [text, setText] = useSyncedState(value);
   const valid = HEX.test(value);
   const [h, s0, l0] = valid ? hexToHsl(value) : [240, 60, 60];
   const [s, l] = tone(s0, l0);
@@ -133,8 +133,8 @@ export function ColorPicker({
             min={0}
             max={360}
             value={[Math.round(h)]}
-            onValueChange={(v) => onChange(hslToHex(Array.isArray(v) ? (v[0] ?? 0) : v, s, l))}
-            onValueCommitted={(v) => onCommit(hslToHex(Array.isArray(v) ? (v[0] ?? 0) : v, s, l))}
+            onValueChange={(v) => onChange(hslToHex(sliderValue(v), s, l))}
+            onValueCommitted={(v) => onCommit(hslToHex(sliderValue(v), s, l))}
           />
         </div>
         <div className="grid gap-1">

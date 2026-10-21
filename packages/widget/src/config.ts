@@ -89,7 +89,7 @@ export function resolveConfig(raw: unknown, accentOverride?: string): WidgetConf
   const c = merge(DEFAULT_CONFIG, raw);
   const l = c.launcher;
   if (!POSITIONS.includes(l.position)) l.position = DEFAULT_CONFIG.launcher.position;
-  if (l.shape !== "round" && l.shape !== "pill") l.shape = "round";
+  if (!["round", "pill"].includes(l.shape)) l.shape = "round";
   if (!["pin", "comment", "bug"].includes(l.icon)) l.icon = "pin";
   if (accentOverride && HEX.test(accentOverride)) l.accent = accentOverride;
   // The accent goes into a CSS custom property; only plain hex colours are accepted.
@@ -148,7 +148,9 @@ export function safeLogoUrl(raw: unknown, endpoint: string): string | null {
     if (u.protocol === "https:") return u.href;
     // The contract names /api/assets/; the server stores uploaded logos under /api/brand-assets/.
     if (u.origin === base.origin && /^\/api\/(brand-)?assets\//.test(u.pathname)) return u.href;
-  } catch {}
+  } catch {
+    // not a URL — no logo
+  }
   return null;
 }
 

@@ -1,7 +1,7 @@
 import { actionHref, visitorActions } from "./actions";
 import type { Pin, Reply } from "./api";
 import type { WidgetConfig } from "./config";
-import { adoptStyle, h, icon } from "./dom";
+import { adoptStyle, guard, h, icon } from "./dom";
 import { errText } from "./env";
 import { cleanPageUrl, deepLink } from "./export";
 import { t } from "./i18n";
@@ -136,14 +136,7 @@ export function threadCard(
       try {
         const author = me.name || me.email ? stripEmpty(me) : undefined;
         const { comment } = await host.api.reply(pin.id, body, author);
-        list.append(
-          message(
-            comment?.authorName ?? me.name ?? t("you"),
-            comment?.createdAt ?? new Date().toISOString(),
-            body,
-            false,
-          ),
-        );
+        list.append(message(comment.authorName ?? me.name ?? t("you"), comment.createdAt, body, false));
         list.scrollTop = list.scrollHeight;
         pin.replyCount++;
         box.value = "";
@@ -154,7 +147,7 @@ export function threadCard(
       }
       send.disabled = false;
     };
-    send.addEventListener("click", go);
+    send.addEventListener("click", guard(go));
     box.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
@@ -193,27 +186,35 @@ export function threadCard(
 
   copy.addEventListener("click", () => {
     const link = deepLink(location.href, pin.id);
-    navigator.clipboard?.writeText(link).then(
+    // No Clipboard API on insecure (http://) pages: show the link so it can be copied by hand.
+    if (!("clipboard" in navigator)) {
+      host.toast(link);
+      return;
+    }
+    navigator.clipboard.writeText(link).then(
       () => host.toast(t("linkCopied")),
       () => host.toast(link),
-    ) ?? host.toast(link);
+    );
   });
   if (resolve)
-    resolve.addEventListener("click", async () => {
-      resolve.disabled = true;
-      const next = isClosed(pin.status) ? "open" : "resolved";
-      try {
-        await host.api.setStatus(pin.id, next, token);
-        pin.status = next;
-        host.toast(t(next === "resolved" ? "resolvedN" : "reopenedN", { n: pin.number }));
-        host.close();
-        host.statusChanged();
-      } catch (err) {
-        resolve.disabled = false;
-        host.toast(errText(err, t("genericError")));
-        host.error(errText(err, t("genericError")));
-      }
-    });
+    resolve.addEventListener(
+      "click",
+      guard(async () => {
+        resolve.disabled = true;
+        const next = isClosed(pin.status) ? "open" : "resolved";
+        try {
+          await host.api.setStatus(pin.id, next, token);
+          pin.status = next;
+          host.toast(t(next === "resolved" ? "resolvedN" : "reopenedN", { n: pin.number }));
+          host.close();
+          host.statusChanged();
+        } catch (err) {
+          resolve.disabled = false;
+          host.toast(errText(err, t("genericError")));
+          host.error(errText(err, t("genericError")));
+        }
+      }),
+    );
 
   host.api.replies(pin.id).then(
     ({ items }) => {

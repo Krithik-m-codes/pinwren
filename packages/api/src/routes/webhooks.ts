@@ -108,7 +108,7 @@ async function deliverNow(e: Endpoint, payload: WebhookPayload) {
       endpointId: e.id,
       eventId: payload.id,
       event: payload.event,
-      payload: payload as unknown as Record<string, unknown>,
+      payload: payload,
       status: "pending",
     })
     .returning({ id: webhookDelivery.id });

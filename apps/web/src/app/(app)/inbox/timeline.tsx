@@ -64,10 +64,15 @@ function actorOf(e: ActivityEvent): string {
   return "Someone";
 }
 
+/** Event data is JSON from the API: show strings and numbers, anything else as `fallback`. */
+function str(v: unknown, fallback = ""): string {
+  return typeof v === "string" || typeof v === "number" ? String(v) : fallback;
+}
+
 function names(v: unknown): string {
   if (!Array.isArray(v) || !v.length) return "";
   return v
-    .map((u) => (u && typeof u === "object" && "name" in u ? String(u.name ?? "a former member") : "?"))
+    .map((u: unknown) => (u && typeof u === "object" && "name" in u ? str(u.name, "a former member") : "?"))
     .join(", ");
 }
 
@@ -118,7 +123,7 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
     icon = <PencilLine className="size-3.5" />;
     body = (
       <>
-        {who} renamed this to <span className="text-foreground">“{String(to ?? "")}”</span>
+        {who} renamed this to <span className="text-foreground">“{str(to)}”</span>
       </>
     );
   } else if (e.type === "action_run") {
@@ -126,23 +131,20 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
     body = (
       <>
         {who} ran{" "}
-        <span className="text-foreground">“{String(e.data.label ?? e.data.actionId ?? "an action")}”</span>
+        <span className="text-foreground">“{str(e.data.label ?? e.data.actionId, "an action")}”</span>
         {e.data.ok === true ? (
           typeof e.data.message === "string" && e.data.message ? (
             <> — {e.data.message}</>
           ) : null
         ) : (
-          <span className="text-destructive">
-            {" "}
-            — failed ({String(e.data.error ?? e.data.status ?? "error")})
-          </span>
+          <span className="text-destructive"> — failed ({str(e.data.error ?? e.data.status, "error")})</span>
         )}
       </>
     );
   } else if (e.type === "issue_linked") {
     icon = <ExternalLink className="size-3.5" />;
     const url = typeof e.data.url === "string" && /^https?:\/\//.test(e.data.url) ? e.data.url : null;
-    const label = `${e.data.provider === "gitlab" ? "GitLab" : "GitHub"} issue #${String(e.data.number ?? "")}`;
+    const label = `${e.data.provider === "gitlab" ? "GitLab" : "GitHub"} issue #${str(e.data.number)}`;
     body = (
       <>
         Linked{" "}
@@ -294,6 +296,7 @@ function CommentCard({ comment: c, feedbackId }: { comment: Comment; feedbackId:
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             rows={3}
+            // eslint-disable-next-line jsx-a11y/no-autofocus -- opened by the Edit action, which hands focus to the field
             autoFocus
             aria-label="Edit comment"
             onKeyDown={(e) => {

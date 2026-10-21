@@ -41,8 +41,8 @@ const schema = z.object({
   PINWREN_UPDATE_REPO: z
     .string()
     .regex(/^[\w.-]+\/[\w.-]+$/)
-    .default("pinwren-dev/pinwren"),
-  PINWREN_VERSION: z.string().default("0.1.0"),
+    .default("Krithik-m-codes/pinwren"),
+  PINWREN_VERSION: z.string().default("0.1.0"), // x-release-please-version
 
   // Issue trackers (F-076/F-077). Per-integration base URLs override these (GHES, self-managed GitLab).
   GITHUB_API_URL: z.url().default("https://api.github.com"),

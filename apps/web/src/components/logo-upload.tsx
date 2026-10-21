@@ -15,7 +15,7 @@ export type UploadedLogo = { id: string; url: string };
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
-    r.onload = () => resolve(String(r.result));
+    r.onload = () => resolve(typeof r.result === "string" ? r.result : "");
     r.onerror = () => reject(r.error ?? new Error("Couldn't read the file"));
     r.readAsDataURL(file);
   });
@@ -88,7 +88,7 @@ export function LogoUpload({
         )}
       >
         {value ? (
-          // biome-ignore lint/performance/noImgElement: user-uploaded logo served by the API
+          // eslint-disable-next-line @next/next/no-img-element -- user-uploaded logo (any host, any size); nothing for next/image to optimise
           <img src={value} alt="Current logo" className="size-full object-contain p-1" />
         ) : (
           <ImageUp className="size-5 text-muted-foreground" />

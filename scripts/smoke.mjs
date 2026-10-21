@@ -723,7 +723,7 @@ const fakeServer = createServer((req, res) => {
     if (p.endsWith("/releases/latest")) {
       return json(200, {
         tag_name: "v99.0.0",
-        html_url: "https://github.com/pinwren-dev/pinwren/releases/tag/v99.0.0",
+        html_url: "https://github.com/Krithik-m-codes/pinwren/releases/tag/v99.0.0",
       });
     }
     const gh = /^\/repos\/([^/]+)\/([^/]+)(\/issues(?:\/(\d+))?)?$/.exec(p);

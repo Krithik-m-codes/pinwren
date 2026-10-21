@@ -2,7 +2,6 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Palette, RotateCcw } from "lucide-react";
-import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ColorPicker } from "@/components/color-picker";
 import { Logo } from "@/components/logo";
@@ -16,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { contrastText, useBranding, useMeInfo } from "@/lib/account-hooks";
 import { api, isAdminRole, type OrgBranding, qk } from "@/lib/api";
 import { SectionTitle } from "../settings-shell";
+import { useSyncedState } from "@/lib/use-synced-state";
 
 const DEFAULT_ACCENT = "#5b5bd6";
 
@@ -27,13 +27,9 @@ export function BrandingSettings() {
   const query = useBranding();
   const me = useMeInfo();
   const b = query.data?.branding;
-  const [name, setName] = useState("");
-  const [accent, setAccent] = useState(DEFAULT_ACCENT);
-  useEffect(() => {
-    if (!b) return;
-    setName(b.productName ?? "");
-    setAccent(b.accent ?? DEFAULT_ACCENT);
-  }, [b]);
+  // Both follow the saved branding whenever it (re)loads.
+  const [name, setName] = useSyncedState(b?.productName ?? "", b);
+  const [accent, setAccent] = useSyncedState(b?.accent ?? DEFAULT_ACCENT, b);
 
   const save = useMutation({
     mutationFn: ({ patch }: { patch: Patch; message: string }) =>
@@ -169,7 +165,7 @@ export function BrandingSettings() {
             <div className="rounded-lg bg-white p-4 shadow-xs">
               <div className="mb-3 flex items-center gap-2">
                 {b.logoUrl ? (
-                  // biome-ignore lint/performance/noImgElement: user-uploaded logo served by the API
+                  // eslint-disable-next-line @next/next/no-img-element -- user-uploaded logo (any host, any size); nothing for next/image to optimise
                   <img src={b.logoUrl} alt="" className="size-7 rounded-md object-contain" />
                 ) : (
                   <Logo compact />

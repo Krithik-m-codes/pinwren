@@ -40,7 +40,7 @@ export function loadChunk<T>(endpoint: string, name: ChunkName): Promise<T> {
         reject(new Error(`Couldn't load widget-${name}.js`));
       };
       document.head.append(s);
-    }).catch((err) => {
+    }).catch((err: unknown) => {
       pending.delete(name); // allow a retry next time
       throw err;
     });
@@ -51,5 +51,7 @@ export function loadChunk<T>(endpoint: string, name: ChunkName): Promise<T> {
 
 /** Start fetching a chunk the visitor is likely to need next; failures are silent (the real load reports). */
 export function preload(endpoint: string, name: ChunkName) {
-  loadChunk(endpoint, name).catch(() => {});
+  loadChunk(endpoint, name).catch(() => {
+    // Preloading is opportunistic; the real load reports its own failure.
+  });
 }

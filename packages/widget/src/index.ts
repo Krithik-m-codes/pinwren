@@ -13,18 +13,19 @@ import { PinwrenWidget, type Mode, type WidgetEvent, type WidgetOptions } from "
 
 type Handler = (data?: unknown) => void;
 type InitOptions = Pick<WidgetOptions, "projectKey" | "endpoint" | "accent" | "locale">;
+// Properties, not methods: none of them use `this`, so the queued-call replay below can call them bare.
 type Api = {
-  init(o: InitOptions): void;
-  open(mode?: Mode): void;
-  close(): void;
-  on(event: WidgetEvent, cb: Handler): () => void;
-  identify(user: Reporter): void;
-  destroy(): void;
+  init: (o: InitOptions) => void;
+  open: (mode?: Mode) => void;
+  close: () => void;
+  on: (event: WidgetEvent, cb: Handler) => () => void;
+  identify: (user: Reporter) => void;
+  destroy: () => void;
 };
 
 const g = window as unknown as {
   Pinwren?: Api & { q?: unknown[] };
-  __pinwrenInstance?: PinwrenWidget;
+  __pinwrenInstance?: PinwrenWidget | undefined;
   __pinwrenLib?: typeof lib;
 };
 // Shared with the lazy chunks (see chunks.ts / build.mjs).
@@ -63,13 +64,15 @@ const init = safe((opts: InitOptions) => {
   if (g.__pinwrenInstance) return; // one widget per page
   const w = new PinwrenWidget({ ...opts, emit, identity });
   g.__pinwrenInstance = w;
-  void w.start().catch((err) => console.warn("[pinwren]", err));
+  void w.start().catch((err: unknown) => console.warn("[pinwren]", err));
   if (pendingOpen) w.open(pendingOpen[0]);
   pendingOpen = null;
 }, undefined);
 
 const queued = Array.isArray(g.Pinwren?.q) ? g.Pinwren.q : [];
-const noop = () => {};
+const noop = () => {
+  // the fallback for a call that failed: nothing to return
+};
 
 const api: Api = {
   init,
@@ -89,7 +92,8 @@ const api: Api = {
     if (event === "ready" && isReady) queueMicrotask(() => set.has(cb) && call(cb));
     return () => set.delete(cb);
   }, noop),
-  identify: safe((user: Reporter) => {
+  // Plain-JS hosts can pass anything; only well-typed fields are kept.
+  identify: safe((user: { name?: unknown; email?: unknown } | null | undefined) => {
     identity = {
       name: typeof user?.name === "string" ? user.name.slice(0, 120) : undefined,
       email: typeof user?.email === "string" ? user.email.slice(0, 254) : undefined,

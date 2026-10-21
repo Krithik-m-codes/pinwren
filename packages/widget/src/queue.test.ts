@@ -48,10 +48,9 @@ describe("Outbox", () => {
   it("retries with backoff and the same payload until it goes through", async () => {
     const calls: string[] = [];
     let fail = 2;
-    const { box, sent, kv } = setup(async (p) => {
+    const { box, sent, kv } = setup((p) => {
       calls.push(p);
-      if (fail-- > 0) throw new HttpError("down", 503);
-      return "ok";
+      return fail-- > 0 ? Promise.reject(new HttpError("down", 503)) : Promise.resolve("ok");
     });
     await box.add("c1", "report-1");
     expect(calls).toEqual([]); // nothing until the first backoff (2 s) elapses
@@ -72,7 +71,7 @@ describe("Outbox", () => {
   });
 
   it("flush(force) ignores the backoff (the `online` event and page load)", async () => {
-    const { box, sent } = setup(async () => "ok");
+    const { box, sent } = setup(() => Promise.resolve("ok"));
     await box.add("c1", "a");
     await box.flush(true);
     expect(sent).toEqual(["c1"]);
@@ -80,9 +79,7 @@ describe("Outbox", () => {
   });
 
   it("drops items the server rejects for good, and expired ones", async () => {
-    const { box, kv, dropped } = setup(async (p) => {
-      throw new HttpError(p, 422);
-    });
+    const { box, kv, dropped } = setup((p) => Promise.reject(new HttpError(p, 422)));
     await box.add("bad", "x");
     await kv.set("old", {
       clientId: "old",
@@ -100,9 +97,7 @@ describe("Outbox", () => {
   });
 
   it("only touches its own project's items and reports the pending count", async () => {
-    const { box, kv, changes, sent } = setup(async () => {
-      throw new TypeError("Failed to fetch");
-    });
+    const { box, kv, changes, sent } = setup(() => Promise.reject(new TypeError("Failed to fetch")));
     await kv.set("other", {
       clientId: "other",
       project: "pk_2",
@@ -122,9 +117,9 @@ describe("Outbox", () => {
 
   it("concurrent flushes share one run (no double send)", async () => {
     let calls = 0;
-    const { box } = setup(async () => {
+    const { box } = setup(() => {
       calls++;
-      return "ok";
+      return Promise.resolve("ok");
     });
     await box.add("c1", "a");
     await Promise.all([box.flush(true), box.flush(true), box.flush(true)]);
@@ -134,9 +129,9 @@ describe("Outbox", () => {
 
   it("stop() cancels pending retries", async () => {
     let calls = 0;
-    const { box } = setup(async () => {
+    const { box } = setup(() => {
       calls++;
-      return "ok";
+      return Promise.resolve("ok");
     });
     await box.add("c1", "a");
     box.stop();

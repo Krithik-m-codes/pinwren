@@ -52,7 +52,7 @@ export function TokensSettings() {
   const revoke = useMutation({
     mutationFn: (id: string) => api(`/tokens/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      toast.success(`Token “${revoking?.name}” revoked`);
+      toast.success(`Token “${revoking?.name ?? ""}” revoked`);
       setRevoking(null);
       void qc.invalidateQueries({ queryKey: tokensKey });
     },
@@ -76,7 +76,7 @@ export function TokensSettings() {
         </div>
         {tokens.isPending && <Skeleton className="h-24" />}
         {tokens.isError && <ErrorState error={tokens.error} retry={() => tokens.refetch()} />}
-        {tokens.data && tokens.data.tokens.length === 0 && (
+        {tokens.data?.tokens.length === 0 && (
           <EmptyState
             icon={KeyRound}
             title="No tokens yet"
@@ -187,8 +187,14 @@ function CreateTokenDialog({
           className="grid gap-4"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!name.trim()) return setError("Give the token a name");
-            if (!scopes.length) return setError("Pick at least one scope");
+            if (!name.trim()) {
+              setError("Give the token a name");
+              return;
+            }
+            if (!scopes.length) {
+              setError("Pick at least one scope");
+              return;
+            }
             setError(null);
             create.mutate();
           }}
@@ -205,6 +211,7 @@ function CreateTokenDialog({
               maxLength={80}
               onChange={(e) => setName(e.target.value)}
               placeholder="CI triage bot"
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- the dialog's first field; focus moves into a dialog on open
               autoFocus
             />
           </div>
@@ -227,7 +234,7 @@ function CreateTokenDialog({
           </fieldset>
           <div className="grid gap-2">
             <Label>Expires</Label>
-            <Select items={EXPIRY} value={expiry} onValueChange={(v) => v && setExpiry(String(v))}>
+            <Select items={EXPIRY} value={expiry} onValueChange={(v) => v && setExpiry(v)}>
               <SelectTrigger className="w-40" aria-label="Expires">
                 <SelectValue />
               </SelectTrigger>

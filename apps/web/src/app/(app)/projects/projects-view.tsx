@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, type Project } from "@/lib/api";
+import { here } from "@/lib/routes";
 
 export function ProjectsView() {
   const params = useSearchParams();
@@ -33,7 +34,7 @@ export function ProjectsView() {
     queryFn: () => api<{ projects: Project[] }>("/projects"),
   });
   const creating = params.get("new") === "1";
-  const setCreating = (open: boolean) => router.replace(open ? `${pathname}?new=1` : pathname);
+  const setCreating = (open: boolean) => router.replace(here(pathname, open ? "new=1" : undefined));
 
   return (
     <>
@@ -141,6 +142,7 @@ function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               onChange={(e) => setName(e.target.value)}
               placeholder="Marketing site"
               required
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- the dialog's only field; focus moves into a dialog on open
               autoFocus
             />
           </div>

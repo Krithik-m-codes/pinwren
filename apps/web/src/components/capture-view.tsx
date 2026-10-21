@@ -37,7 +37,7 @@ export function CaptureView({
   const Tag = decorative ? "span" : "button";
   return (
     <div className={cn("relative overflow-hidden rounded-lg border bg-muted/40", className)}>
-      {/* biome-ignore lint/performance/noImgElement: authenticated asset route, not optimisable */}
+      {/* eslint-disable-next-line @next/next/no-img-element -- session-authenticated asset; next/image would fetch it without the cookie */}
       <img src={src} alt={alt} className="block w-full select-none" draggable={false} />
       {showMarkers &&
         markers.map((m) => {

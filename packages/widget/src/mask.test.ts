@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { blockGeometry, maskedRects, PRIVACY_MASKS } from "./mask";
 
 describe("blockGeometry", () => {
@@ -54,8 +54,9 @@ describe("maskedRects", () => {
       <input id="name"><input type="checkbox" id="cb"><input type="hidden" id="hid"><textarea id="ta"></textarea>
       <div data-pinwren-ignore><input id="ignored"></div><p contenteditable="true" id="ce">x</p>`;
     const seen: string[] = [];
-    const orig = Element.prototype.getBoundingClientRect;
-    Element.prototype.getBoundingClientRect = function (this: Element) {
+    const spy = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: Element,
+    ) {
       seen.push(this.id);
       return {
         left: 1,
@@ -66,15 +67,15 @@ describe("maskedRects", () => {
         bottom: 6,
         x: 1,
         y: 2,
-        toJSON() {},
-      } as DOMRect;
-    };
+        toJSON: () => ({}),
+      };
+    });
     try {
       const rects = maskedRects([...PRIVACY_MASKS, "::not-a-selector("]);
       expect(seen.sort()).toEqual(["ce", "name", "ta"]);
       expect(rects).toHaveLength(3);
     } finally {
-      Element.prototype.getBoundingClientRect = orig;
+      spy.mockRestore();
     }
   });
 });

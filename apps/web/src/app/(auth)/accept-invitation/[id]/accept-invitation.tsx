@@ -11,17 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { authClient, signIn, signOut, signUp, useSession } from "@/lib/auth-client";
-
-type InvitationInfo = {
-  id: string;
-  email: string;
-  role: string;
-  status: string;
-  organizationId: string;
-  organizationName: string;
-  inviterEmail: string;
-  expiresAt: string | Date;
-};
+import { formText } from "@/lib/form";
 
 /**
  * Invitation emails link here (wave-1 §8). Signed out: sign in or create an account with the invited
@@ -51,11 +41,11 @@ function AuthFirst() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const email = String(form.get("email"));
-    const password = String(form.get("password"));
+    const email = formText(form, "email");
+    const password = formText(form, "password");
     setPending(true);
     setError(null);
     const { error } =
@@ -64,7 +54,7 @@ function AuthFirst() {
         : await signUp.email({
             email,
             password,
-            name: String(form.get("name") ?? "") || email.split("@")[0] || email,
+            name: formText(form, "name") || email.split("@")[0] || email,
           });
     setPending(false);
     // On success the session store updates and this page re-renders into the accept step.
@@ -141,8 +131,8 @@ function Accept({ id, email }: { id: string; email: string }) {
     queryKey: ["invitation", id],
     queryFn: async () => {
       const { data, error } = await authClient.organization.getInvitation({ query: { id } });
-      if (error || !data) throw new Error(error?.message ?? "Invitation not found");
-      return data as unknown as InvitationInfo;
+      if (error) throw new Error(error.message ?? "Invitation not found");
+      return data;
     },
     retry: false,
   });
@@ -151,9 +141,10 @@ function Accept({ id, email }: { id: string; email: string }) {
     setPending("accept");
     setError(null);
     const { data, error } = await authClient.organization.acceptInvitation({ invitationId: id });
-    if (error || !data) {
+    if (error) {
       setPending(null);
-      return setError(error?.message ?? "Couldn't accept the invitation");
+      setError(error.message ?? "Couldn't accept the invitation");
+      return;
     }
     const orgId =
       invitation.data?.organizationId ??
@@ -195,7 +186,7 @@ function Accept({ id, email }: { id: string; email: string }) {
         <CardContent className="grid gap-2">
           <p className="text-sm text-muted-foreground">{invitation.error.message}</p>
           <div className="flex flex-wrap gap-2 pt-2">
-            <Button variant="outline" onClick={async () => void (await signOut())}>
+            <Button variant="outline" onClick={() => void signOut()}>
               Use another account
             </Button>
             <Button variant="ghost" onClick={() => router.replace("/inbox")}>

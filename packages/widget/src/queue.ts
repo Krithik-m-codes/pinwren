@@ -77,7 +77,7 @@ export class Outbox<P, R> {
     };
     await this.o.kv.set(clientId, item);
     await this.changed();
-    this.arm();
+    await this.arm();
   }
 
   /** Send every due item (all of them when `force`, e.g. on `online`). Concurrent calls share one run. */
@@ -115,7 +115,7 @@ export class Outbox<P, R> {
       }
     }
     await this.changed();
-    this.arm();
+    await this.arm();
   }
 
   private async changed() {
@@ -127,6 +127,7 @@ export class Outbox<P, R> {
     clearTimeout(this.timer);
     if (this.stopped) return;
     const next = Math.min(...(await this.pending()).map((q) => q.nextAt));
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- stop() can run during the await above
     if (!Number.isFinite(next) || this.stopped) return;
     this.timer = setTimeout(() => void this.flush(), Math.max(0, next - this.now()));
   }

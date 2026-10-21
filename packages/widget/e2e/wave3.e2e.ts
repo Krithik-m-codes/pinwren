@@ -33,9 +33,7 @@ async function ready(page: Page, url = "/") {
 const active = (page: Page) =>
   page.evaluate(() => {
     const a = document.querySelector("pinwren-root")?.shadowRoot?.activeElement ?? document.activeElement;
-    return a
-      ? `${a.tagName.toLowerCase()}|${a.getAttribute("aria-label") ?? a.textContent?.trim() ?? ""}`
-      : "";
+    return a ? `${a.tagName.toLowerCase()}|${a.getAttribute("aria-label") ?? a.textContent.trim()}` : "";
   });
 
 /** True when focus is inside the element matching `sel` in the widget's shadow root. */
@@ -43,7 +41,7 @@ const focusIn = (page: Page, sel: string) =>
   page.evaluate((s) => {
     const r = document.querySelector("pinwren-root")?.shadowRoot;
     const a = r?.activeElement;
-    return !!a && !!r?.querySelector(s)?.contains(a);
+    return !!a && !!r.querySelector(s)?.contains(a);
   }, sel);
 
 /** RGB of the editor canvas (the captured screenshot) at canvas pixel (x, y). */
@@ -67,11 +65,15 @@ const imagePixel = (page: Page, src: string, x: number, y: number) =>
           const c = document.createElement("canvas");
           c.width = img.naturalWidth;
           c.height = img.naturalHeight;
-          const ctx = c.getContext("2d") as CanvasRenderingContext2D;
+          const ctx = c.getContext("2d");
+          if (!ctx) {
+            resolve([]);
+            return;
+          }
           ctx.drawImage(img, 0, 0);
-          resolve(Array.from(ctx.getImageData(Number(px), Number(py), 1, 1).data).slice(0, 3));
+          resolve(Array.from(ctx.getImageData(px, py, 1, 1).data).slice(0, 3));
         };
-        img.src = String(s);
+        img.src = s;
       }),
     [src, Math.round(x), Math.round(y)] as const,
   );
@@ -256,7 +258,8 @@ test("privacy mode: text fields and masked nodes are solid blocks in every captu
   await dlg.getByLabel("Describe the bug").fill("Masked");
   await dlg.getByRole("button", { name: "Send report" }).click();
   await expect(toast(page)).toContainText("#1 sent");
-  const p = mock.items[0]?.payload as Record<string, unknown>;
+  const p = mock.items[0]?.payload;
+  if (!p) throw new Error("nothing was sent");
   // The exported (lossy WebP) screenshot still shows the block.
   expect(close(await imagePixel(page, String(p.screenshot), cx - form.x, cy - form.y), BLOCK, 12)).toBe(true);
   expect(p.metadata).toBeUndefined();
@@ -346,10 +349,14 @@ test("panel export downloads CSV (BOM, escaping, formula-safe) and JSON", async 
     panel.getByRole("menuitem", { name: "JSON" }).click(),
   ]);
   expect(jsonDl.suggestedFilename()).toMatch(/\.json$/);
-  const data = JSON.parse(await readFile(await jsonDl.path(), "utf8"));
-  expect(data.map((r: { number: number }) => r.number)).toEqual([2, 1]);
-  expect(data[1].body).toBe('=HYPERLINK("http://evil.test","click")');
-  expect(data[0].deepLink).toBe("http://localhost:5180/?pinwren=fb_2");
+  const data = JSON.parse(await readFile(await jsonDl.path(), "utf8")) as {
+    number: number;
+    body: string;
+    deepLink: string;
+  }[];
+  expect(data.map((r) => r.number)).toEqual([2, 1]);
+  expect(data[1]?.body).toBe('=HYPERLINK("http://evil.test","click")');
+  expect(data[0]?.deepLink).toBe("http://localhost:5180/?pinwren=fb_2");
 
   // Export follows the list: a search that matches nothing exports nothing.
   await panel.getByLabel("Search comments").fill("zzz");
@@ -578,6 +585,8 @@ test("ready event (queued before load and added late) and destroy() restores con
     const w = window as unknown as Record<string, unknown>;
     w.readyCalls = 0;
     w.origError = console.error;
+    // Kept only to compare identity later (the widget must restore the original).
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     w.origFetch = window.fetch;
     w.Pinwren = { q: [["on", "ready", () => (w.readyCalls as number)++]] };
   });

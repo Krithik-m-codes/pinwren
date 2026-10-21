@@ -47,7 +47,7 @@ type FullOrg = {
 const orgKey = ["org-full"] as const;
 const invitationsKey = ["invitations"] as const;
 
-function unwrap<T>(res: { data: T | null; error: { message?: string } | null }): T {
+function unwrap<T>(res: { data: T | null; error: { message?: string | undefined } | null }): T {
   if (res.error || !res.data) throw new Error(res.error?.message ?? "Request failed");
   return res.data;
 }
@@ -119,7 +119,7 @@ export function MembersSettings() {
           {invitations.isError && (
             <ErrorState error={invitations.error} retry={() => invitations.refetch()} />
           )}
-          {invitations.data && invitations.data.invitations.length === 0 && (
+          {invitations.data?.invitations.length === 0 && (
             <EmptyState icon={MailPlus} title="No pending invitations" className="py-6" />
           )}
           {invitations.data && invitations.data.invitations.length > 0 && (
@@ -141,9 +141,7 @@ function InviteCard({ onInvited }: { onInvited: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const invite = useMutation({
     mutationFn: async () =>
-      unwrap(
-        await authClient.organization.inviteMember({ email: email.trim(), role: role as "member" | "admin" }),
-      ),
+      unwrap(await authClient.organization.inviteMember({ email: email.trim(), role: role })),
     onSuccess: () => {
       toast.success(`Invitation sent to ${email.trim()}`);
       setEmail("");
@@ -165,8 +163,10 @@ function InviteCard({ onInvited }: { onInvited: () => void }) {
           className="grid gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
-              return setError("Enter a valid email address");
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+              setError("Enter a valid email address");
+              return;
+            }
             setError(null);
             invite.mutate();
           }}
@@ -187,7 +187,7 @@ function InviteCard({ onInvited }: { onInvited: () => void }) {
             <Select
               items={ROLES.filter((r) => r.value !== "owner")}
               value={role}
-              onValueChange={(v) => v && setRole(v as Role)}
+              onValueChange={(v) => v && setRole(v)}
             >
               <SelectTrigger className="sm:w-32" aria-label="Role">
                 <SelectValue />

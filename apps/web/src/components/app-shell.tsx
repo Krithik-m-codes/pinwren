@@ -81,7 +81,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function AppSidebar({ user }: { user: { name: string; email: string; image?: string | null } }) {
+function AppSidebar({ user }: { user: { name: string; email: string; image?: string | null | undefined } }) {
   const pathname = usePathname();
   const router = useRouter();
   const { setTheme } = useTheme();

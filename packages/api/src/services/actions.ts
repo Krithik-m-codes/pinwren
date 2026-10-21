@@ -40,7 +40,7 @@ export async function rotateActionSecret(projectId: string): Promise<string> {
 /** The receiver's `{ "message": "…" }`, if it sent one — shown as a toast. */
 function messageOf(text: string): string | null {
   try {
-    const j = JSON.parse(text) as { message?: unknown };
+    const j = JSON.parse(text) as { message?: unknown } | null;
     if (typeof j?.message !== "string" || !j.message.trim()) return null;
     const m = j.message.replace(/\s+/g, " ").trim();
     return m.length > MAX_MESSAGE ? `${m.slice(0, MAX_MESSAGE - 1)}…` : m;

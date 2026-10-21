@@ -62,7 +62,7 @@ export function NotificationSettings() {
           </div>
         )}
         {prefs.isError && <ErrorState error={prefs.error} retry={() => prefs.refetch()} />}
-        {prefs.data && prefs.data.preferences.length === 0 && (
+        {prefs.data?.preferences.length === 0 && (
           <EmptyState
             icon={BellOff}
             title="No projects yet"
@@ -99,7 +99,7 @@ export function NotificationSettings() {
                           className="mx-auto"
                           checked={p[c.key]}
                           aria-label={`${c.label} for ${p.projectName}`}
-                          onCheckedChange={(v) => save.mutate({ projectId: p.projectId, [c.key]: !!v })}
+                          onCheckedChange={(v) => save.mutate({ projectId: p.projectId, [c.key]: v })}
                         />
                       </td>
                     ))}

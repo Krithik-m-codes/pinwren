@@ -99,7 +99,9 @@ export function fileName(pageUrl: string, ext: "csv" | "json", now = new Date())
   let host = "page";
   try {
     host = new URL(pageUrl).hostname.replace(/[^a-z0-9.-]/gi, "") || "page";
-  } catch {}
+  } catch {
+    // not a URL — keep "page"
+  }
   return `pinwren-${host}-${now.toISOString().slice(0, 10)}.${ext}`;
 }
 

@@ -175,11 +175,18 @@ function ConnectCard({ project, provider }: { project: ProjectDetail; provider: 
             onSubmit={(e) => {
               e.preventDefault();
               setError(null);
-              if (f.token.trim().length < 8) return setError("Paste an access token");
-              if (!/^[\w.-]+(\/[\w.-]+)+$/.test(f.repo.trim()))
-                return setError(`Enter the ${m.repoLabel.toLowerCase()} as ${m.repoPlaceholder}`);
-              if (f.apiUrl.trim() && !/^https?:\/\/\S+$/.test(f.apiUrl.trim()))
-                return setError("Enter a full URL, like https://…");
+              if (f.token.trim().length < 8) {
+                setError("Paste an access token");
+                return;
+              }
+              if (!/^[\w.-]+(\/[\w.-]+)+$/.test(f.repo.trim())) {
+                setError(`Enter the ${m.repoLabel.toLowerCase()} as ${m.repoPlaceholder}`);
+                return;
+              }
+              if (f.apiUrl.trim() && !/^https?:\/\/\S+$/.test(f.apiUrl.trim())) {
+                setError("Enter a full URL, like https://…");
+                return;
+              }
               create.mutate();
             }}
           >

@@ -103,7 +103,9 @@ async function recordError(i: Integration, err: unknown) {
     .update(issueIntegration)
     .set({ lastError: message })
     .where(eq(issueIntegration.id, i.id))
-    .catch(() => {});
+    .catch(() => {
+      // Best effort: the job's own failure (and retry) is what matters.
+    });
 }
 
 /**
@@ -120,7 +122,7 @@ export async function createIssueFor(feedbackId: string, integrationId: string):
     .where(and(eq(issueLink.feedbackId, feedbackId), eq(issueLink.integrationId, i.id)));
   if (existing) return existing;
   const ctx = await loadFeedbackContext(feedbackId);
-  if (!ctx || ctx.payload.projectId !== i.projectId) throw notFound("Feedback");
+  if (ctx?.payload.projectId !== i.projectId) throw notFound("Feedback");
   const [row] = await db
     .select({ environment: feedback.environment, status: feedback.status })
     .from(feedback)
@@ -138,7 +140,7 @@ export async function createIssueFor(feedbackId: string, integrationId: string):
         body: f.body,
         pageUrl: f.pageUrl,
         reporterName: f.reporterName,
-        environment: (row?.environment ?? null) as IssueBodyInput["environment"],
+        environment: row?.environment ?? null,
         link: feedbackLink(f.id),
         productName: brand.productName,
       }),

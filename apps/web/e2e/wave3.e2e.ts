@@ -13,8 +13,8 @@ async function fakeServer(handler: (req: Seen) => { status: number; json: unknow
   const seen: Seen[] = [];
   const server: Server = createServer((req, res) => {
     let body = "";
-    req.on("data", (c) => {
-      body += c;
+    req.on("data", (c: Buffer) => {
+      body += c.toString();
     });
     req.on("end", () => {
       const entry = { method: req.method ?? "GET", url: req.url ?? "/", headers: req.headers, body };
@@ -102,10 +102,10 @@ test.describe("wave 3", () => {
       await actions.getByRole("button", { name: "Send to agent" }).click();
       await expect(page.getByText("Agent picked it up (run 42)").first()).toBeVisible();
       const hit = receiver.seen.find((s) => s.url === "/hook");
-      expect(hit).toBeTruthy();
-      const ts = String(hit?.headers["pinwren-timestamp"]);
-      const expected = `v1=${createHmac("sha256", secret).update(`${ts}.${hit?.body}`).digest("hex")}`;
-      expect(hit?.headers["pinwren-signature"]).toBe(expected);
+      if (!hit) throw new Error("the receiver saw no /hook request");
+      const ts = String(hit.headers["pinwren-timestamp"]);
+      const expected = `v1=${createHmac("sha256", secret).update(`${ts}.${hit.body}`).digest("hex")}`;
+      expect(hit.headers["pinwren-signature"]).toBe(expected);
       const timeline = page.getByTestId("feedback-detail").getByRole("region", { name: "Activity" });
       await expect(timeline.getByText(/ran “Send to agent”/)).toBeVisible();
       await shoot(page, "inbox-actions");
@@ -182,7 +182,7 @@ test.describe("wave 3", () => {
     await expect(page.getByTestId("product-name")).toHaveText("Acme Feedback");
 
     // A real 64×64 PNG made in the browser.
-    const png = await page.evaluate(async () => {
+    const png = await page.evaluate(() => {
       const c = document.createElement("canvas");
       c.width = 64;
       c.height = 64;

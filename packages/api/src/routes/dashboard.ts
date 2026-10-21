@@ -51,6 +51,13 @@ export function newPublicKey() {
   return `pk_${randomBytes(18).toString("base64url")}`;
 }
 
+/** Drop keys whose value is `undefined` (optional fields the request left out), so a patch names only real changes. */
+function withoutUndefined<T extends object>(o: T): { [K in keyof T]?: Exclude<T[K], undefined> } {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as {
+    [K in keyof T]?: Exclude<T[K], undefined>;
+  };
+}
+
 function slugify(name: string) {
   return (
     name
@@ -219,7 +226,7 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
     const where = and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId));
     const [current] = await db.select().from(project).where(where);
     if (!current) throw notFound("Project");
-    const set: Partial<typeof project.$inferInsert> = { ...rest };
+    const set: Partial<typeof project.$inferInsert> = withoutUndefined(rest);
     if (archived !== undefined) set.archivedAt = archived ? (current.archivedAt ?? new Date()) : null;
     if (widgetPatch) {
       const before = parseWidgetConfig(current.widgetConfig);

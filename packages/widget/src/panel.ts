@@ -261,7 +261,10 @@ export class Panel {
 
   private export(fmt: "csv" | "json") {
     const rows = this.visibleRows().filter((r) => !r.pin.id.startsWith("tmp:"));
-    if (!rows.length) return this.host.toast(t("exportEmpty"));
+    if (!rows.length) {
+      this.host.toast(t("exportEmpty"));
+      return;
+    }
     const page = this.host.pageUrl();
     const data = toRows(
       rows.map((r) => r.pin),
