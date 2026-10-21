@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_CONFIG, resolveConfig } from "./config";
+import { DEFAULT_CONFIG, readableOn, resolveBranding, resolveConfig, safeLogoUrl } from "./config";
 
 describe("resolveConfig", () => {
   it("fills every key from the contract defaults", () => {
@@ -20,6 +20,8 @@ describe("resolveConfig", () => {
       readOnly: false,
       visitorsCanResolve: true,
       consent: { enabled: false, text: null, privacyUrl: null },
+      panelActions: [],
+      privacyMode: false,
     });
   });
 
@@ -78,5 +80,94 @@ describe("resolveConfig", () => {
     resolveConfig({ launcher: { position: "nope", offset: { x: 1e9, y: 3 } } });
     resolveConfig(null);
     expect(JSON.stringify(DEFAULT_CONFIG)).toBe(before);
+  });
+});
+
+describe("panel actions (wave-3 §1)", () => {
+  const ok = {
+    id: "jira",
+    label: "Create ticket",
+    kind: "link",
+    url: "https://x.test/{id}",
+    visibleTo: "everyone",
+  };
+
+  it("keeps well-formed actions and defaults the icon", () => {
+    const [a] = resolveConfig({ panelActions: [ok] }).panelActions;
+    expect(a).toEqual({ ...ok, icon: null });
+  });
+
+  it("drops malformed ones, non-http URLs and anything past five", () => {
+    const c = resolveConfig({
+      panelActions: [
+        { ...ok, id: "Bad Id" },
+        { ...ok, url: "javascript:alert(1)" },
+        { ...ok, kind: "email" },
+        { ...ok, label: "  " },
+        "nope",
+        ...Array.from({ length: 7 }, (_, i) => ({ ...ok, id: `a${i}`, icon: "rocket", visibleTo: "x" })),
+      ],
+    });
+    expect(c.panelActions.map((a) => a.id)).toEqual(["a0", "a1", "a2", "a3", "a4"]);
+    expect(c.panelActions[0]?.icon).toBeNull();
+    // An unknown audience is treated as the safer one: dashboard only.
+    expect(c.panelActions[0]?.visibleTo).toBe("team");
+    expect(resolveConfig({ panelActions: { 0: ok } }).panelActions).toEqual([]);
+  });
+
+  it("truncates long labels", () => {
+    expect(
+      resolveConfig({ panelActions: [{ ...ok, label: "x".repeat(60) }] }).panelActions[0]?.label,
+    ).toHaveLength(40);
+  });
+});
+
+describe("branding (wave-3 §2)", () => {
+  const api = "https://annota.example.com";
+
+  it("defaults to Annota's own branding", () => {
+    expect(resolveBranding(undefined, api)).toEqual({
+      hidePoweredBy: false,
+      dialogAccent: null,
+      logoUrl: null,
+    });
+  });
+
+  it("only accepts a hex dialog accent", () => {
+    expect(resolveBranding({ dialogAccent: "#0f766e" }, api).dialogAccent).toBe("#0f766e");
+    expect(resolveBranding({ dialogAccent: "red;}*{display:none" }, api).dialogAccent).toBeNull();
+    expect(resolveBranding({ hidePoweredBy: "yes" }, api).hidePoweredBy).toBe(false);
+    expect(resolveBranding({ hidePoweredBy: true }, api).hidePoweredBy).toBe(true);
+  });
+
+  it("accepts https logos and the server's own /api/assets/ URLs, nothing else", () => {
+    expect(safeLogoUrl("https://cdn.example.com/logo.png", api)).toBe("https://cdn.example.com/logo.png");
+    expect(safeLogoUrl("/api/assets/abc", api)).toBe("https://annota.example.com/api/assets/abc");
+    // Plain-http dev server: its own asset URLs work, other http URLs don't.
+    expect(safeLogoUrl("/api/assets/abc", "http://localhost:3100")).toBe(
+      "http://localhost:3100/api/assets/abc",
+    );
+    expect(safeLogoUrl("http://localhost:3100/api/assets/abc", "http://localhost:3100")).toBe(
+      "http://localhost:3100/api/assets/abc",
+    );
+    expect(safeLogoUrl("http://evil.test/api/assets/abc", "http://localhost:3100")).toBeNull();
+    expect(safeLogoUrl("http://localhost:3100/api/brand-assets/b1", "http://localhost:3100")).toBe(
+      "http://localhost:3100/api/brand-assets/b1",
+    );
+    expect(safeLogoUrl("/api/other/x", "http://localhost:3100")).toBeNull();
+    expect(safeLogoUrl("/api/assets/../users", "http://localhost:3100")).toBeNull();
+    expect(safeLogoUrl("http://cdn.example.com/logo.png", api)).toBeNull();
+    expect(safeLogoUrl("javascript:alert(1)", api)).toBeNull();
+    expect(safeLogoUrl("data:image/svg+xml,<svg/>", api)).toBeNull();
+    expect(safeLogoUrl("https://user:pw@cdn.example.com/x.png", api)).toBeNull();
+    expect(safeLogoUrl(42, api)).toBeNull();
+    expect(safeLogoUrl("", api)).toBeNull();
+  });
+
+  it("picks readable text for the accent", () => {
+    expect(readableOn("#5b5bd6")).toBe("#ffffff");
+    expect(readableOn("#0f766e")).toBe("#ffffff");
+    expect(readableOn("#fde047")).toBe("#18181b");
+    expect(readableOn("#fff")).toBe("#18181b");
   });
 });

@@ -76,6 +76,9 @@ export default {
   escAgain: "Pulsa Esc otra vez para descartar este comentario",
   sent: "#{n} enviado",
   genericError: "Algo salió mal — inténtalo de nuevo",
+  commentOnSelection: "Comentar la selección",
+  selectionPlaceholder: "¿Qué pasa con este texto?",
+  selectedText: "Texto seleccionado",
 
   // Thread
   resolve: "Resolver",
@@ -89,6 +92,8 @@ export default {
   replyPlaceholder: "Responder…",
   reply: "Responder",
   sendReply: "Enviar respuesta",
+  actions: "Acciones",
+  newTab: "{label} (se abre en una pestaña nueva)",
 
   // Panel
   comments: "Comentarios",
@@ -109,6 +114,11 @@ export default {
   pressC: "Pulsa C y luego haz clic o arrastra en la página.",
   usePlus: "Usa + para comentar en la página.",
   willShowHere: "Los comentarios de esta página aparecerán aquí.",
+  exportComments: "Exportar",
+  exportCsv: "CSV (Excel, Sheets)",
+  exportJson: "JSON",
+  exportEmpty: "No hay nada que exportar",
+  loadFailed: "No se pudo cargar — revisa tu conexión",
 
   // Bug report
   reportIntro: "Marca el problema en la captura y cuéntanos qué pasó.",

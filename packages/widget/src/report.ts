@@ -2,23 +2,27 @@ import type { WidgetFeedbackCreate } from "@annota/core";
 import type { Created } from "./api";
 import { type Attachment, MAX_FILES, readFile, sanitizeAttachments, validateFiles } from "./attachments";
 import type { CaptureMode, CaptureModule } from "./capture";
-import type { CaptureCfg, WidgetConfig } from "./config";
+import { loadChunk } from "./chunks";
+import type { Branding, CaptureCfg, WidgetConfig } from "./config";
 import { diagnosticsSummary, performanceTiming, snapshotDiagnostics } from "./diagnostics";
-import { h, ICONS, icon } from "./dom";
+import { adoptStyle, h, ICONS, icon, trapFocus } from "./dom";
 import type { Editor } from "./editor";
 import { environment, errText, uuid } from "./env";
 import { consentBlock, identityFields } from "./form";
-import { t, tn } from "./i18n";
+import { addEnglish, t, tn } from "./i18n";
+import * as I from "./icons";
 import { idbKV } from "./idb";
+import { enReport } from "./locales/en-report";
 import { Picker } from "./picker";
 import { isRetryable } from "./queue";
+import { REPORT_CSS } from "./report-styles";
 import { COLORS, type Shape, type Size, sanitizeShapes, type Tool } from "./shapes";
 import type { Reporter } from "./store";
 import { ago } from "./ui";
 
-// Bug report mode (F-003): capture → annotate → describe → send. The heavy parts (SnapDOM, the editor) live
-// in widget-capture.js and load on first use; this file is the form, the capture orchestration, drafts
-// (F-010, IndexedDB) and the hand-off to the offline outbox.
+// Bug report mode (F-003): capture → annotate → describe → send. This file is the lazy widget-report.js
+// chunk: the form, the capture orchestration, drafts (F-010, IndexedDB) and the hand-off to the offline
+// outbox. The heavy parts (SnapDOM, the editor) live in widget-capture.js, loaded alongside it.
 
 export type ReportCtx = {
   host: HTMLElement;
@@ -26,7 +30,11 @@ export type ReportCtx = {
   endpoint: string;
   project: string;
   cfg: WidgetConfig;
+  /** Mask selectors already include the privacy-mode field masks when that is on. */
   capture: CaptureCfg;
+  branding: Branding;
+  /** Where focus goes back to when the report closes. */
+  opener: Element | null;
   identity: Reporter;
   submit: (p: WidgetFeedbackCreate) => Promise<Created>;
   queue: (clientId: string, p: WidgetFeedbackCreate) => Promise<void>;
@@ -51,29 +59,15 @@ type Draft = {
   attachments: Attachment[];
 };
 
+addEnglish(enReport);
+
 const SEVERITIES: Severity[] = ["low", "medium", "high", "critical"];
 const SEV_KEYS = { low: "sevLow", medium: "sevMedium", high: "sevHigh", critical: "sevCritical" } as const;
 const PRIORITY = { low: "low", medium: "medium", high: "high", critical: "urgent" } as const;
 const CAPTURE_TIMEOUT = 8000;
 const drafts = idbKV<Draft>("drafts");
 
-let mod: Promise<CaptureModule> | null = null;
-function loadModule(endpoint: string): Promise<CaptureModule> {
-  const w = window as unknown as { __annotaCapture?: CaptureModule };
-  if (w.__annotaCapture) return Promise.resolve(w.__annotaCapture);
-  mod ??= new Promise<CaptureModule>((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = `${endpoint}/widget-capture.js`;
-    s.async = true;
-    s.onload = () => (w.__annotaCapture ? resolve(w.__annotaCapture) : reject(new Error("capture missing")));
-    s.onerror = () => reject(new Error("Couldn't load the screenshot tool"));
-    document.head.append(s);
-  }).catch((err) => {
-    mod = null; // allow a retry next time
-    throw err;
-  });
-  return mod;
-}
+const loadModule = (endpoint: string) => loadChunk<CaptureModule>(endpoint, "capture");
 
 const timeout = <T>(p: Promise<T>, ms: number) =>
   Promise.race([
@@ -115,8 +109,6 @@ async function readDraft(project: string): Promise<Draft | null> {
   };
 }
 
-export const hasDraft = (project: string) => readDraft(project).then((d) => !!d);
-
 const fmtSize = (n: number) =>
   n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1)} MB`;
 
@@ -155,7 +147,9 @@ export class BugReport {
   private sending = false;
   private cleanup: (() => void)[] = [];
 
-  constructor(private readonly ctx: ReportCtx) {}
+  constructor(private readonly ctx: ReportCtx) {
+    adoptStyle(ctx.root, "report", REPORT_CSS);
+  }
 
   /** Entry point: offer to resume a saved draft, otherwise capture the visible area and open the form. */
   async start() {
@@ -183,6 +177,7 @@ export class BugReport {
   private askResume(d: Draft): Promise<"resume" | "discard" | "cancel"> {
     return new Promise((resolve) => {
       const answer = (a: "resume" | "discard" | "cancel") => {
+        release();
         el.remove();
         off();
         resolve(a);
@@ -216,6 +211,7 @@ export class BugReport {
       const off = () => document.removeEventListener("keydown", onKey, true);
       this.cleanup.push(off);
       this.ctx.root.append(el);
+      const release = trapFocus(el, this.ctx.opener);
       resume.focus();
     });
   }
@@ -280,7 +276,7 @@ export class BugReport {
     const drop = h(
       "div",
       { class: "drop" },
-      icon(ICONS.clip),
+      icon(I.clip),
       h(
         "span",
         { class: "grow" },
@@ -323,7 +319,15 @@ export class BugReport {
             h(
               "div",
               { class: "side-head" },
-              h("span", { class: "side-ico" }, icon(ICONS.bug)),
+              ctx.branding.logoUrl
+                ? h("img", {
+                    class: "side-logo",
+                    src: ctx.branding.logoUrl,
+                    alt: "",
+                    referrerpolicy: "no-referrer",
+                    draggable: "false",
+                  })
+                : h("span", { class: "side-ico" }, icon(ICONS.bug)),
               h("span", { class: "grow" }, h("b", {}, t("reportBug")), h("small", {}, t("reportIntro"))),
             ),
             h(
@@ -417,6 +421,7 @@ export class BugReport {
     this.renderFiles();
     this.setShot(this.state, shapes);
     ctx.root.append(modal);
+    this.cleanup.unshift(trapFocus(modal, ctx.opener)); // first, so it runs while the modal is attached
     this.body.focus();
   }
 
@@ -447,7 +452,7 @@ export class BugReport {
         h(
           "div",
           { class: "note fail" },
-          h("span", { class: "note-ico" }, icon(ICONS.alert)),
+          h("span", { class: "note-ico" }, icon(I.alert)),
           h("b", {}, t("capFailed")),
           h("span", {}, t("capFailedSub")),
           h(
@@ -457,14 +462,14 @@ export class BugReport {
               h(
                 "button",
                 { class: "btn primary", onclick: () => this.recapture("screen") },
-                icon(ICONS.screen),
+                icon(I.screen),
                 t("useScreenShare"),
               ),
             h("button", { class: "btn sm", onclick: () => this.setShot("none") }, t("sendWithout")),
           ),
         ),
       );
-    } else this.stage.replaceChildren(h("div", { class: "note" }, icon(ICONS.view), t("noShotNote")));
+    } else this.stage.replaceChildren(h("div", { class: "note" }, icon(I.view), t("noShotNote")));
     this.renderTools();
     this.renderCapbar();
     this.renderSummary();
@@ -472,10 +477,10 @@ export class BugReport {
 
   private renderCapbar() {
     const modes: [Mode, string, string][] = [
-      ["visible", ICONS.view, t("capVisible")],
-      ["full", ICONS.page, t("capFull")],
-      ["element", ICONS.target, t("capElement")],
-      ["screen", ICONS.screen, t("capScreen")],
+      ["visible", I.view, t("capVisible")],
+      ["full", I.page, t("capFull")],
+      ["element", I.target, t("capElement")],
+      ["screen", I.screen, t("capScreen")],
     ];
     this.capbar.replaceChildren(
       ...modes
@@ -507,13 +512,13 @@ export class BugReport {
   private buildTools() {
     const ed = () => this.editor;
     const tools: [Tool, string, string, string][] = [
-      ["rect", ICONS.rect, t("toolRect"), "R"],
-      ["ellipse", ICONS.ellipse, t("toolEllipse"), "O"],
-      ["arrow", ICONS.arrow, t("toolArrow"), "A"],
-      ["pen", ICONS.pen, t("toolPen"), "P"],
-      ["text", ICONS.text, t("toolText"), "T"],
-      ["blur", ICONS.blur, t("toolBlur"), "B"],
-      ["crop", ICONS.crop, t("toolCrop"), "C"],
+      ["rect", I.rect, t("toolRect"), "R"],
+      ["ellipse", I.ellipse, t("toolEllipse"), "O"],
+      ["arrow", I.arrow, t("toolArrow"), "A"],
+      ["pen", I.pen, t("toolPen"), "P"],
+      ["text", I.text, t("toolText"), "T"],
+      ["blur", I.blur, t("toolBlur"), "B"],
+      ["crop", I.crop, t("toolCrop"), "C"],
     ];
     const mac = /Mac|iPhone|iPad/.test(navigator.platform);
     /** A toolbar button whose pressed/disabled state follows the editor. */
@@ -588,14 +593,14 @@ export class BugReport {
       h("span", { class: "sep" }),
       btn(
         tip(t("undo"), undoKey),
-        icon(ICONS.undo),
+        icon(I.undo),
         () => ed()?.undo(),
         null,
         () => !!ed()?.canUndo,
       ),
       btn(
         tip(t("redo"), redoKey),
-        icon(ICONS.redo),
+        icon(I.redo),
         () => ed()?.redo(),
         null,
         () => !!ed()?.canRedo,
@@ -604,7 +609,7 @@ export class BugReport {
       h(
         "button",
         { type: "button", class: "tb", "aria-label": t("close"), onclick: () => this.close() },
-        icon(ICONS.close),
+        icon(I.close),
       ),
     );
   }
@@ -634,6 +639,7 @@ export class BugReport {
           () => {
             root.style.visibility = "";
           },
+          this.ctx.capture.maskSelectors,
         );
         this.mode = mode;
         this.baseUrl = null;
@@ -706,7 +712,7 @@ export class BugReport {
           { class: "file" },
           a.contentType.startsWith("image/")
             ? h("img", { src: a.dataUrl, alt: "" })
-            : h("span", { class: "fi" }, icon(ICONS.file)),
+            : h("span", { class: "fi" }, icon(I.file)),
           h(
             "span",
             { class: "grow" },
@@ -725,7 +731,7 @@ export class BugReport {
                 this.saveSoon();
               },
             },
-            icon(ICONS.close),
+            icon(I.close),
           ),
         ),
       ),
@@ -736,25 +742,25 @@ export class BugReport {
 
   private renderSummary() {
     const d = diagnosticsSummary();
-    const env = environment();
+    const env = environment(this.ctx.cfg.privacyMode);
     const row = (svg: string, text: string, ok: boolean) =>
       h(
         "li",
         { class: ok ? "on" : "off" },
         icon(svg),
         h("span", { class: "grow" }, text),
-        icon(ok ? ICONS.check : ICONS.minus),
+        icon(ok ? I.check : I.minus),
       );
     this.summary.replaceChildren(
-      row(ICONS.view, this.state === "ready" ? t("screenshot") : t("noScreenshot"), this.state === "ready"),
-      row(ICONS.terminal, tn("console", d.errors), d.errors > 0),
-      row(ICONS.wifi, tn("network", d.failures), d.failures > 0),
+      row(I.view, this.state === "ready" ? t("screenshot") : t("noScreenshot"), this.state === "ready"),
+      row(I.terminal, tn("console", d.errors), d.errors > 0),
+      row(I.wifi, tn("network", d.failures), d.failures > 0),
       row(
-        ICONS.globe,
+        I.globe,
         [env.browser, env.os, `${env.viewport.w}×${env.viewport.h}`].filter(Boolean).join(" · "),
         true,
       ),
-      ...(this.attachments.length ? [row(ICONS.clip, tn("files", this.attachments.length), true)] : []),
+      ...(this.attachments.length ? [row(I.clip, tn("files", this.attachments.length), true)] : []),
     );
   }
 
@@ -816,10 +822,11 @@ export class BugReport {
       body,
       priority: PRIORITY[this.severity],
       page: { url: location.href, title: document.title.slice(0, 300) },
-      environment: environment(),
+      environment: environment(this.ctx.cfg.privacyMode),
       reporter: reporter as WidgetFeedbackCreate["reporter"],
       diagnostics: snapshotDiagnostics(),
-      metadata: { performance: performanceTiming() },
+      // Privacy mode (wave-3 §3) sends no page-timing metadata.
+      metadata: this.ctx.cfg.privacyMode ? undefined : { performance: performanceTiming() },
       screenshot: this.state === "ready" ? this.editor?.export() : undefined,
       attachments: this.attachments.length
         ? (this.attachments.map((a) => ({
@@ -864,9 +871,14 @@ export class BugReport {
     this.picker?.stop();
     this.picker = null;
     this.editor?.destroy();
-    this.modal?.remove();
-    for (const f of this.cleanup) f();
+    const cleanup = this.cleanup;
     this.cleanup = [];
+    cleanup[0]?.(); // focus release runs while the modal is still attached
+    this.modal?.remove();
+    for (const f of cleanup.slice(1)) f();
     this.ctx.done();
   }
 }
+
+export type ReportModule = { BugReport: typeof BugReport };
+(window as unknown as { __annotaReport: ReportModule }).__annotaReport = { BugReport };

@@ -11,8 +11,11 @@ export function uuid(): string {
   );
 }
 
-export function environment(): WidgetFeedbackCreate["environment"] {
-  const ua = navigator.userAgent;
+/**
+ * Browser details sent with feedback. In privacy mode (wave-3 §3) the user agent is reduced to the browser and
+ * OS families — no versions, no device model, nothing that narrows down who the visitor is.
+ */
+export function environment(privacy = false, ua = navigator.userAgent): WidgetFeedbackCreate["environment"] {
   const browser =
     /Edg\/(\d+)/.exec(ua)?.[0]?.replace("Edg/", "Edge ") ??
     /Chrome\/(\d+)/.exec(ua)?.[0]?.replace("/", " ") ??
@@ -29,6 +32,17 @@ export function environment(): WidgetFeedbackCreate["environment"] {
           : /Linux/.test(ua)
             ? "Linux"
             : undefined;
+  if (privacy) {
+    const family = browser?.replace(/ \d+$/, "");
+    return {
+      userAgent: [family ?? "Unknown browser", os ?? "unknown OS"].join(" on "),
+      browser: family,
+      os,
+      viewport: { w: innerWidth, h: innerHeight },
+      dpr: Math.min(8, Math.max(0.5, devicePixelRatio || 1)),
+      locale: navigator.language,
+    };
+  }
   return {
     userAgent: ua.slice(0, 500),
     browser,

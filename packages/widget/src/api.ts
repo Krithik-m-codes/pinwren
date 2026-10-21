@@ -1,5 +1,12 @@
 import type { WidgetFeedbackCreate } from "@annota/core";
-import { type CaptureCfg, resolveCapture, resolveConfig, type WidgetConfig } from "./config";
+import {
+  type Branding,
+  type CaptureCfg,
+  resolveBranding,
+  resolveCapture,
+  resolveConfig,
+  type WidgetConfig,
+} from "./config";
 import { HttpError } from "./queue";
 
 // Wire shapes from docs/contracts/wave-1.md §3–§5.
@@ -22,9 +29,11 @@ export type Reply = { id: string; body: string; createdAt: string; authorName: s
 export type Created = { feedback: { id: string; number: number; reporterToken?: string } };
 
 export type Loaded = {
-  project: { name: string; publicRead: boolean };
+  /** `slug` fills the `{projectSlug}` action placeholder; empty when the server doesn't send it. */
+  project: { name: string; publicRead: boolean; slug: string };
   widget: WidgetConfig;
   capture: CaptureCfg;
+  branding: Branding;
 };
 
 export class WidgetApi {
@@ -61,14 +70,21 @@ export class WidgetApi {
 
   async config(accent?: string): Promise<Loaded> {
     const raw = await this.req<{
-      project?: { name?: string; publicRead?: boolean };
+      project?: { name?: string; publicRead?: boolean; slug?: unknown };
       widget?: unknown;
       capture?: unknown;
+      branding?: unknown;
     }>("/config");
+    const slug = raw.project?.slug;
     return {
-      project: { name: raw.project?.name ?? "", publicRead: raw.project?.publicRead !== false },
+      project: {
+        name: raw.project?.name ?? "",
+        publicRead: raw.project?.publicRead !== false,
+        slug: typeof slug === "string" ? slug.slice(0, 100) : "",
+      },
       widget: resolveConfig(raw.widget, accent),
       capture: resolveCapture(raw.capture),
+      branding: resolveBranding(raw.branding, this.endpoint),
     };
   }
   pins(url: string, includeClosed: boolean) {

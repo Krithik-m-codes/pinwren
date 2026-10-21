@@ -76,6 +76,9 @@ export default {
   escAgain: "इस टिप्पणी को हटाने के लिए फिर से Esc दबाएँ",
   sent: "#{n} भेजा गया",
   genericError: "कुछ गड़बड़ हो गई — फिर से कोशिश करें",
+  commentOnSelection: "चुने हुए पर टिप्पणी करें",
+  selectionPlaceholder: "इस टेक्स्ट के बारे में क्या?",
+  selectedText: "चुना हुआ टेक्स्ट",
 
   // Thread
   resolve: "हल करें",
@@ -89,6 +92,8 @@ export default {
   replyPlaceholder: "जवाब दें…",
   reply: "जवाब दें",
   sendReply: "जवाब भेजें",
+  actions: "कार्रवाइयाँ",
+  newTab: "{label} (नए टैब में खुलेगा)",
 
   // Panel
   comments: "टिप्पणियाँ",
@@ -109,6 +114,11 @@ export default {
   pressC: "C दबाएँ, फिर पेज पर क्लिक या ड्रैग करें।",
   usePlus: "पेज पर टिप्पणी करने के लिए + का इस्तेमाल करें।",
   willShowHere: "इस पेज की टिप्पणियाँ यहाँ दिखेंगी।",
+  exportComments: "एक्सपोर्ट",
+  exportCsv: "CSV (Excel, Sheets)",
+  exportJson: "JSON",
+  exportEmpty: "एक्सपोर्ट करने को कुछ नहीं",
+  loadFailed: "लोड नहीं हो सका — अपना कनेक्शन जाँचें",
 
   // Bug report
   reportIntro: "स्क्रीनशॉट पर समस्या को मार्क करें, फिर हमें बताएँ कि क्या हुआ।",

@@ -61,118 +61,174 @@ const LEVELS = {
 } as const;
 
 let lcp: number | undefined;
+/** Undo steps of the current install; `destroy()` runs them (blueprint 05 §3: wrappers are reversible). */
+let undo: (() => void)[] = [];
+
+/**
+ * Replace `obj[key]` with a wrapper and register its removal. If something else wrapped it after us, we can't
+ * unwrap without dropping their wrapper too — then ours stays in the chain but goes inert (`live.on`).
+ */
+function wrap<O extends object, K extends keyof O>(
+  obj: O,
+  key: K,
+  make: (orig: O[K]) => O[K],
+  live: { on: boolean },
+) {
+  const orig = obj[key];
+  const ours = make(orig);
+  obj[key] = ours;
+  undo.push(() => {
+    live.on = false;
+    if (obj[key] === ours) obj[key] = orig;
+  });
+}
 
 export function installDiagnostics(cfg: Pick<CaptureCfg, "console" | "network">) {
   if (installed) return;
   installed = true;
+  const live = { on: true };
 
   try {
     // Largest Contentful Paint is only observable, not queryable; `buffered` replays what already happened.
-    new PerformanceObserver((list) => {
+    const po = new PerformanceObserver((list) => {
       const last = list.getEntries().at(-1);
       if (last) lcp = last.startTime;
-    }).observe({ type: "largest-contentful-paint", buffered: true });
+    });
+    po.observe({ type: "largest-contentful-paint", buffered: true });
+    undo.push(() => po.disconnect());
   } catch {}
 
   for (const level of LEVELS[cfg.console]) {
-    const original = console[level];
-    console[level] = function (...args: unknown[]) {
-      original.apply(this, args);
-      try {
-        push(
-          consoleBuf,
-          {
-            level,
-            message: args
-              .map((a) => serialize(a))
-              .join(" ")
-              .slice(0, 4000),
-            at: Date.now(),
-          },
-          MAX_CONSOLE,
-        );
-      } catch {}
-    };
+    wrap(
+      console,
+      level,
+      (original) =>
+        function (this: Console, ...args: unknown[]) {
+          original.apply(this, args);
+          if (!live.on) return;
+          try {
+            push(
+              consoleBuf,
+              {
+                level,
+                message: args
+                  .map((a) => serialize(a))
+                  .join(" ")
+                  .slice(0, 4000),
+                at: Date.now(),
+              },
+              MAX_CONSOLE,
+            );
+          } catch {}
+        },
+      live,
+    );
   }
 
-  if (cfg.console === "off") return installNetwork(cfg);
-  addEventListener("error", (e) => {
-    push(
-      consoleBuf,
-      { level: "error", message: serialize(e.error ?? e.message), at: Date.now() },
-      MAX_CONSOLE,
-    );
-  });
-  addEventListener("unhandledrejection", (e) => {
-    push(
-      consoleBuf,
-      { level: "error", message: `Unhandled rejection: ${serialize(e.reason)}`, at: Date.now() },
-      MAX_CONSOLE,
-    );
-  });
-  installNetwork(cfg);
+  if (cfg.console !== "off") {
+    const onError = (e: ErrorEvent) =>
+      push(
+        consoleBuf,
+        { level: "error", message: serialize(e.error ?? e.message), at: Date.now() },
+        MAX_CONSOLE,
+      );
+    const onRejection = (e: PromiseRejectionEvent) =>
+      push(
+        consoleBuf,
+        { level: "error", message: `Unhandled rejection: ${serialize(e.reason)}`, at: Date.now() },
+        MAX_CONSOLE,
+      );
+    addEventListener("error", onError);
+    addEventListener("unhandledrejection", onRejection);
+    undo.push(() => {
+      removeEventListener("error", onError);
+      removeEventListener("unhandledrejection", onRejection);
+    });
+  }
+  installNetwork(cfg, live);
 }
 
-function installNetwork(cfg: Pick<CaptureCfg, "network">) {
-  if (cfg.network === "off") return;
-  const originalFetch = window.fetch;
-  window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
-    const started = performance.now();
-    const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
-    const url = input instanceof Request ? input.url : String(input);
+/** Restore console, fetch and XHR and stop listening; buffers are cleared. Safe to call repeatedly. */
+export function uninstallDiagnostics() {
+  for (const fn of undo.reverse()) {
     try {
-      const res = await originalFetch.call(this, input, init);
-      const ms = performance.now() - started;
-      if ((res.status >= 400 || ms > 3000) && !url.includes("/w/")) {
-        push(
-          networkBuf,
-          { method, url: redactUrl(url), status: res.status, durationMs: ms, at: Date.now() },
-          MAX_NETWORK,
-        );
-      }
-      return res;
-    } catch (err) {
-      push(
-        networkBuf,
-        { method, url: redactUrl(url), status: 0, durationMs: performance.now() - started, at: Date.now() },
-        MAX_NETWORK,
-      );
-      throw err;
-    }
-  };
+      fn();
+    } catch {}
+  }
+  undo = [];
+  installed = false;
+  consoleBuf.length = 0;
+  networkBuf.length = 0;
+}
 
-  const open = XMLHttpRequest.prototype.open;
-  const send = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.open = function (
-    this: XMLHttpRequest & { __annota?: { m: string; u: string } },
-    method: string,
-    url: string | URL,
-    ...rest: unknown[]
-  ) {
-    this.__annota = { m: method.toUpperCase(), u: String(url) };
-    // biome-ignore lint/suspicious/noExplicitAny: forwarding the original variadic signature
-    return (open as any).call(this, method, url, ...rest);
-  } as typeof XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.send = function (
-    this: XMLHttpRequest & { __annota?: { m: string; u: string } },
-    body?: Document | XMLHttpRequestBodyInit | null,
-  ) {
-    const meta = this.__annota;
-    const started = performance.now();
-    if (meta) {
-      this.addEventListener("loadend", () => {
-        const ms = performance.now() - started;
-        if (this.status >= 400 || this.status === 0 || ms > 3000) {
-          push(
-            networkBuf,
-            { method: meta.m, url: redactUrl(meta.u), status: this.status, durationMs: ms, at: Date.now() },
-            MAX_NETWORK,
-          );
+function installNetwork(cfg: Pick<CaptureCfg, "network">, live: { on: boolean }) {
+  if (cfg.network === "off") return;
+  const record = (e: NetworkEntry) => live.on && push(networkBuf, e, MAX_NETWORK);
+  wrap(
+    window,
+    "fetch",
+    (originalFetch) =>
+      async function (this: unknown, input: RequestInfo | URL, init?: RequestInit) {
+        const started = performance.now();
+        const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+        const url = input instanceof Request ? input.url : String(input);
+        try {
+          const res = await originalFetch.call(this, input, init);
+          const ms = performance.now() - started;
+          if ((res.status >= 400 || ms > 3000) && !url.includes("/w/"))
+            record({ method, url: redactUrl(url), status: res.status, durationMs: ms, at: Date.now() });
+          return res;
+        } catch (err) {
+          record({
+            method,
+            url: redactUrl(url),
+            status: 0,
+            durationMs: performance.now() - started,
+            at: Date.now(),
+          });
+          throw err;
         }
-      });
-    }
-    return send.call(this, body);
-  };
+      },
+    live,
+  );
+
+  type Xhr = XMLHttpRequest & { __annota?: { m: string; u: string } };
+  const proto = XMLHttpRequest.prototype;
+  wrap(
+    proto,
+    "open",
+    (open) =>
+      function (this: Xhr, method: string, url: string | URL, ...rest: unknown[]) {
+        this.__annota = { m: method.toUpperCase(), u: String(url) };
+        // biome-ignore lint/suspicious/noExplicitAny: forwarding the original variadic signature
+        return (open as any).call(this, method, url, ...rest);
+      } as typeof proto.open,
+    live,
+  );
+  wrap(
+    proto,
+    "send",
+    (send) =>
+      function (this: Xhr, body?: Document | XMLHttpRequestBodyInit | null) {
+        const meta = this.__annota;
+        const started = performance.now();
+        if (meta) {
+          this.addEventListener("loadend", () => {
+            const ms = performance.now() - started;
+            if (this.status >= 400 || this.status === 0 || ms > 3000)
+              record({
+                method: meta.m,
+                url: redactUrl(meta.u),
+                status: this.status,
+                durationMs: ms,
+                at: Date.now(),
+              });
+          });
+        }
+        return send.call(this, body);
+      },
+    live,
+  );
 }
 
 export function snapshotDiagnostics() {

@@ -1,16 +1,23 @@
 import { en } from "./locales/en";
+import type { enPanel } from "./locales/en-panel";
+import type { enReport } from "./locales/en-report";
 
-// Widget i18n (F-013). English ships in the core bundle; every other catalogue is a small separate file
-// (`widget-i18n-<code>.js`, built next to widget.js) that registers itself on `window.__annotaI18n`, so a
-// visitor only downloads their own language.
+// Widget i18n (F-013). The core's English ships in widget.js and each lazy chunk brings its own English
+// (`addEnglish`); every other catalogue is a small separate file (`widget-i18n-<code>.js`, built next to
+// widget.js) that registers itself on `window.__annotaI18n`, so a visitor only downloads their own language.
 
-export type Key = keyof typeof en;
-export type Catalog = Record<Key, string>;
+export type English = typeof en & typeof enPanel & typeof enReport;
+export type Key = keyof English;
+/** English plural forms are `_one`/`_other`; languages with more forms (Russian: 2–4 vs 5–20) add `_few`/`_many`. */
+type ExtraPlural = { [k: `${string}_few` | `${string}_many`]: string };
+export type Catalog = Record<Key, string> & ExtraPlural;
 type Vars = Record<string, string | number>;
 
-export const LOCALES = ["en", "es", "fr", "de", "pt-BR", "it", "ja", "hi", "nl", "zh"] as const;
+export const LOCALES = ["en", "es", "fr", "de", "pt-BR", "it", "ja", "hi", "nl", "zh", "ru"] as const;
 export type Locale = (typeof LOCALES)[number];
 
+/** English fallback: the core's strings plus whatever the loaded chunks registered. */
+let base: Partial<Record<Key, string>> = en;
 let cat: Partial<Catalog> = en;
 let lang: Locale = "en";
 let rules: Intl.PluralRules | null = null;
@@ -30,6 +37,12 @@ export function pickLocale(attr: string | undefined | null, langs: readonly stri
   return "en";
 }
 
+/** A chunk's English strings (the fallback for keys a translation lacks, and the English UI itself). */
+export function addEnglish(strings: Partial<Record<Key, string>>) {
+  base = { ...base, ...strings };
+  if (lang === "en") cat = base;
+}
+
 export function setCatalog(code: Locale, c: Partial<Catalog>) {
   lang = code;
   cat = c;
@@ -40,12 +53,14 @@ export const locale = () => lang;
 
 /** Translate; missing keys fall back to English, `{name}` placeholders are filled from `vars`. */
 export function t(key: Key, vars?: Vars): string {
-  const s = cat[key] ?? en[key];
-  return vars ? s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m)) : s;
+  return fill(cat[key] ?? base[key] ?? key, vars);
 }
 
-/** Plural form: picks `<base>_one` or `<base>_other` by the locale's plural rules. */
-export function tn(base: string, n: number, vars?: Vars): string {
+const fill = (s: string, vars?: Vars) =>
+  vars ? s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m)) : s;
+
+/** Plural form by the locale's rules: `<base>_<form>` when the catalogue has it, else `_one` / `_other`. */
+export function tn(stem: string, n: number, vars?: Vars): string {
   let form = "other";
   try {
     rules ??= new Intl.PluralRules(lang);
@@ -53,13 +68,15 @@ export function tn(base: string, n: number, vars?: Vars): string {
   } catch {
     form = n === 1 ? "one" : "other";
   }
-  const key = (form === "one" ? `${base}_one` : `${base}_other`) as Key;
-  return t(key in en ? key : (`${base}_other` as Key), { n, ...vars });
+  const exact = (cat as Record<string, string | undefined>)[`${stem}_${form}`];
+  if (exact && form !== "one" && form !== "other") return fill(exact, { n, ...vars });
+  const key = (form === "one" ? `${stem}_one` : `${stem}_other`) as Key;
+  return t(key in base || key in cat ? key : (`${stem}_other` as Key), { n, ...vars });
 }
 
 /** Load a non-English catalogue from `<endpoint>/widget-i18n-<code>.js`. Never throws; English stays on failure. */
 export async function loadLocale(code: Locale, endpoint: string, timeoutMs = 3000): Promise<void> {
-  if (code === "en") return setCatalog("en", en);
+  if (code === "en") return setCatalog("en", base);
   const w = window as unknown as { __annotaI18n?: Record<string, Partial<Catalog>> };
   if (!w.__annotaI18n?.[code]) {
     try {

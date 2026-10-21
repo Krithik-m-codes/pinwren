@@ -1,4 +1,7 @@
-import { type Key, t } from "./i18n";
+import { addEnglish, type Key, t } from "./i18n";
+import { enReport } from "./locales/en-report";
+
+addEnglish(enReport); // this module is part of widget-report.js, which brings its own English
 
 // Report attachments (wave-1 contract §2): at most 3 files, ≤ 5 MB each, images or PDF.
 

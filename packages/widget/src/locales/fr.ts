@@ -76,6 +76,9 @@ export default {
   escAgain: "Appuyez à nouveau sur Échap pour supprimer ce commentaire",
   sent: "#{n} envoyé",
   genericError: "Une erreur s'est produite — veuillez réessayer",
+  commentOnSelection: "Commenter la sélection",
+  selectionPlaceholder: "Qu'en est-il de ce texte ?",
+  selectedText: "Texte sélectionné",
 
   // Thread
   resolve: "Résoudre",
@@ -89,6 +92,8 @@ export default {
   replyPlaceholder: "Répondre…",
   reply: "Répondre",
   sendReply: "Envoyer la réponse",
+  actions: "Actions",
+  newTab: "{label} (s'ouvre dans un nouvel onglet)",
 
   // Panel
   comments: "Commentaires",
@@ -109,6 +114,11 @@ export default {
   pressC: "Appuyez sur C, puis cliquez ou faites glisser sur la page.",
   usePlus: "Utilisez + pour commenter la page.",
   willShowHere: "Les commentaires de cette page apparaîtront ici.",
+  exportComments: "Exporter",
+  exportCsv: "CSV (Excel, Sheets)",
+  exportJson: "JSON",
+  exportEmpty: "Rien à exporter",
+  loadFailed: "Chargement impossible — vérifiez votre connexion",
 
   // Bug report
   reportIntro: "Indiquez le problème sur la capture d'écran, puis décrivez-nous ce qui s'est passé.",

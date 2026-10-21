@@ -1,0 +1,42 @@
+// English for the side panel and thread card (widget-panel.js): shipped inside that chunk and registered with
+// i18n.addEnglish() when it loads. Same rules as en.ts.
+export const enPanel = {
+  // Thread
+  resolve: "Resolve",
+  reopen: "Reopen",
+  copyLink: "Copy link",
+  linkCopied: "Link copied",
+  resolvedN: "Resolved #{n}",
+  reopenedN: "Reopened #{n}",
+  loadingReplies: "Loading replies…",
+  repliesFailed: "Couldn't load replies",
+  replyPlaceholder: "Reply…",
+  reply: "Reply",
+  sendReply: "Send reply",
+  actions: "Actions",
+  newTab: "{label} (opens in a new tab)",
+
+  // Panel
+  comments: "Comments",
+  commentsOnPage: "Comments on this page",
+  closeComments: "Close comments",
+  filter: "Filter",
+  filterOpen: "Open",
+  filterResolved: "Resolved",
+  filterMine: "Mine",
+  search: "Search",
+  searchComments: "Search comments",
+  showResolved: "Show resolved",
+  notOnVersion: "Not on this version of the page",
+  noMatches: "No matches",
+  nothingFromYou: "Nothing from you yet",
+  noComments: "No comments here",
+  tryDifferent: "Try a different search.",
+  pressC: "Press C, then click or drag on the page.",
+  usePlus: "Use + to comment on the page.",
+  willShowHere: "Comments on this page will show up here.",
+  exportComments: "Export",
+  exportCsv: "CSV (Excel, Sheets)",
+  exportJson: "JSON",
+  exportEmpty: "Nothing to export",
+};

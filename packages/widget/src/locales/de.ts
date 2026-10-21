@@ -76,6 +76,9 @@ export default {
   escAgain: "Erneut Esc drücken, um diesen Kommentar zu verwerfen",
   sent: "#{n} gesendet",
   genericError: "Etwas ist schiefgelaufen — bitte erneut versuchen",
+  commentOnSelection: "Auswahl kommentieren",
+  selectionPlaceholder: "Was ist mit diesem Text?",
+  selectedText: "Ausgewählter Text",
 
   // Thread
   resolve: "Erledigen",
@@ -89,6 +92,8 @@ export default {
   replyPlaceholder: "Antworten…",
   reply: "Antworten",
   sendReply: "Antwort senden",
+  actions: "Aktionen",
+  newTab: "{label} (öffnet in neuem Tab)",
 
   // Panel
   comments: "Kommentare",
@@ -109,6 +114,11 @@ export default {
   pressC: "C drücken, dann auf die Seite klicken oder ziehen.",
   usePlus: "Mit + die Seite kommentieren.",
   willShowHere: "Kommentare zu dieser Seite erscheinen hier.",
+  exportComments: "Exportieren",
+  exportCsv: "CSV (Excel, Sheets)",
+  exportJson: "JSON",
+  exportEmpty: "Nichts zu exportieren",
+  loadFailed: "Konnte nicht geladen werden — Verbindung prüfen",
 
   // Bug report
   reportIntro: "Markiere das Problem auf dem Screenshot und beschreibe, was passiert ist.",

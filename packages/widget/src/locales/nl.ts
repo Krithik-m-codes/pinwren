@@ -76,6 +76,9 @@ export default {
   escAgain: "Druk nogmaals op Esc om deze opmerking te verwijderen",
   sent: "#{n} verstuurd",
   genericError: "Er ging iets mis — probeer het opnieuw",
+  commentOnSelection: "Reageer op selectie",
+  selectionPlaceholder: "Wat is er met deze tekst?",
+  selectedText: "Geselecteerde tekst",
 
   // Thread
   resolve: "Oplossen",
@@ -89,6 +92,8 @@ export default {
   replyPlaceholder: "Reageren…",
   reply: "Reageren",
   sendReply: "Reactie versturen",
+  actions: "Acties",
+  newTab: "{label} (opent in een nieuw tabblad)",
 
   // Panel
   comments: "Opmerkingen",
@@ -109,6 +114,11 @@ export default {
   pressC: "Druk op C en klik of sleep dan op de pagina.",
   usePlus: "Gebruik + om op de pagina te reageren.",
   willShowHere: "Opmerkingen op deze pagina verschijnen hier.",
+  exportComments: "Exporteren",
+  exportCsv: "CSV (Excel, Sheets)",
+  exportJson: "JSON",
+  exportEmpty: "Niets om te exporteren",
+  loadFailed: "Laden mislukt — controleer je verbinding",
 
   // Bug report
   reportIntro: "Markeer het probleem op de screenshot en vertel ons wat er gebeurde.",

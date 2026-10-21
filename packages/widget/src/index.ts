@@ -1,3 +1,4 @@
+import * as lib from "./lib";
 import type { Reporter } from "./store";
 import { AnnotaWidget, type Mode, type WidgetEvent, type WidgetOptions } from "./widget";
 
@@ -8,6 +9,7 @@ import { AnnotaWidget, type Mode, type WidgetEvent, type WidgetOptions } from ".
 //
 // Public API (blueprint 05 §8): Annota.init / open / close / on / identify / destroy. Calls made before
 // this script loads can be queued as `window.Annota = { q: [["open", "comment"], …] }`.
+// Events: open, close, submit, error, ready. A `ready` handler added after the widget is ready still runs.
 
 type Handler = (data?: unknown) => void;
 type InitOptions = Pick<WidgetOptions, "projectKey" | "endpoint" | "accent" | "locale">;
@@ -20,19 +22,29 @@ type Api = {
   destroy(): void;
 };
 
-const g = window as unknown as { Annota?: Api & { q?: unknown[] }; __annotaInstance?: AnnotaWidget };
+const g = window as unknown as {
+  Annota?: Api & { q?: unknown[] };
+  __annotaInstance?: AnnotaWidget;
+  __annotaLib?: typeof lib;
+};
+// Shared with the lazy chunks (see chunks.ts / build.mjs).
+g.__annotaLib = lib;
 const handlers = new Map<WidgetEvent, Set<Handler>>();
 let identity: Reporter = {};
 let pendingOpen: [Mode | undefined] | null = null;
+let isReady = false;
+
+const call = (cb: Handler, data?: unknown) => {
+  try {
+    cb(data);
+  } catch (err) {
+    console.warn("[annota] event handler failed", err);
+  }
+};
 
 const emit = (event: WidgetEvent, data?: unknown) => {
-  for (const cb of handlers.get(event) ?? []) {
-    try {
-      cb(data);
-    } catch (err) {
-      console.warn("[annota] event handler failed", err);
-    }
-  }
+  if (event === "ready") isReady = true;
+  for (const cb of handlers.get(event) ?? []) call(cb, data);
 };
 
 /** Every entry point is wrapped: nothing the widget does may throw into the host page. */
@@ -74,6 +86,7 @@ const api: Api = {
     const set = handlers.get(event) ?? new Set();
     set.add(cb);
     handlers.set(event, set);
+    if (event === "ready" && isReady) queueMicrotask(() => set.has(cb) && call(cb));
     return () => set.delete(cb);
   }, noop),
   identify: safe((user: Reporter) => {
@@ -86,6 +99,7 @@ const api: Api = {
   destroy: safe(() => {
     g.__annotaInstance?.destroy();
     g.__annotaInstance = undefined;
+    isReady = false;
   }, undefined),
 };
 g.Annota = api;

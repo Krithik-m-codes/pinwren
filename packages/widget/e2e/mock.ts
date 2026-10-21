@@ -40,6 +40,8 @@ export type WidgetCfg = DeepPartial<{
   readOnly: boolean;
   visitorsCanResolve: boolean;
   consent: { enabled: boolean; text: string | null; privacyUrl: string | null };
+  panelActions: Record<string, unknown>[];
+  privacyMode: boolean;
 }>;
 
 const CLOSED = ["resolved", "wont_fix", "duplicate"];
@@ -80,7 +82,14 @@ const json = (route: Route, status: number, body: unknown) =>
 
 export async function mockApi(
   page: Page,
-  opts: { widget?: WidgetCfg; items?: Item[]; publicRead?: boolean; capture?: Record<string, unknown> } = {},
+  opts: {
+    widget?: WidgetCfg;
+    items?: Item[];
+    publicRead?: boolean;
+    capture?: Record<string, unknown>;
+    /** `branding` block of /w/config (wave-3 §2); omitted like an older server when not given. */
+    branding?: Record<string, unknown>;
+  } = {},
 ): Promise<Mock> {
   const mock: Mock = { items: opts.items ?? [], requests: [], postStatus: null, offline: false };
   const widget = opts.widget ?? {};
@@ -103,8 +112,9 @@ export async function mockApi(
 
     if (path === "/config")
       return json(route, 200, {
-        project: { name: "Lumen", publicRead: opts.publicRead ?? true },
+        project: { name: "Lumen", slug: "lumen", publicRead: opts.publicRead ?? true },
         widget,
+        ...(opts.branding ? { branding: opts.branding } : {}),
         capture: {
           console: "warnings",
           network: "failures",

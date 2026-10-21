@@ -76,6 +76,9 @@ export default {
   escAgain: "もう一度 Esc を押すとこのコメントを破棄します",
   sent: "#{n} を送信しました",
   genericError: "問題が発生しました。もう一度お試しください",
+  commentOnSelection: "選択範囲にコメント",
+  selectionPlaceholder: "このテキストについて",
+  selectedText: "選択したテキスト",
 
   // Thread
   resolve: "解決",
@@ -89,6 +92,8 @@ export default {
   replyPlaceholder: "返信…",
   reply: "返信",
   sendReply: "返信を送信",
+  actions: "アクション",
+  newTab: "{label}（新しいタブで開きます）",
 
   // Panel
   comments: "コメント",
@@ -109,6 +114,11 @@ export default {
   pressC: "C を押して、ページをクリックまたはドラッグしてください。",
   usePlus: "+ からページにコメントできます。",
   willShowHere: "このページのコメントがここに表示されます。",
+  exportComments: "エクスポート",
+  exportCsv: "CSV（Excel、スプレッドシート）",
+  exportJson: "JSON",
+  exportEmpty: "エクスポートするものがありません",
+  loadFailed: "読み込めませんでした。接続を確認してください",
 
   // Bug report
   reportIntro: "スクリーンショット上で問題箇所をマークし、何が起きたかを教えてください。",

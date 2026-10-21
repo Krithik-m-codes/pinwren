@@ -76,6 +76,9 @@ export default {
   escAgain: "再次按 Esc 以放弃此评论",
   sent: "#{n} 已发送",
   genericError: "出了点问题，请重试",
+  commentOnSelection: "评论所选内容",
+  selectionPlaceholder: "这段文字有什么问题？",
+  selectedText: "所选文字",
 
   // Thread
   resolve: "解决",
@@ -89,6 +92,8 @@ export default {
   replyPlaceholder: "回复…",
   reply: "回复",
   sendReply: "发送回复",
+  actions: "操作",
+  newTab: "{label}（在新标签页中打开）",
 
   // Panel
   comments: "评论",
@@ -109,6 +114,11 @@ export default {
   pressC: "按 C，然后在页面上点击或拖动。",
   usePlus: "使用 + 在页面上评论。",
   willShowHere: "本页的评论将显示在这里。",
+  exportComments: "导出",
+  exportCsv: "CSV（Excel、表格）",
+  exportJson: "JSON",
+  exportEmpty: "没有可导出的内容",
+  loadFailed: "无法加载，请检查网络连接",
 
   // Bug report
   reportIntro: "在截图上标出问题，然后告诉我们发生了什么。",

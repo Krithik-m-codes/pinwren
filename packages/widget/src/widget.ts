@@ -1,17 +1,22 @@
 import type { AnchorBundle, WidgetFeedbackCreate } from "@annota/core";
 import { captureAnchor, resolveAnchor } from "./anchor";
 import { type Created, type Pin, WidgetApi } from "./api";
-import { type CaptureCfg, DEFAULT_CONFIG, type WidgetConfig } from "./config";
-import { installDiagnostics, snapshotDiagnostics } from "./diagnostics";
-import { h, ICONS, icon } from "./dom";
+import { loadChunk, preload } from "./chunks";
+import { type Branding, type CaptureCfg, DEFAULT_CONFIG, readableOn, type WidgetConfig } from "./config";
+import { installDiagnostics, snapshotDiagnostics, uninstallDiagnostics } from "./diagnostics";
+import { focused, h, ICONS, icon, trapFocus } from "./dom";
+import { hasDraft } from "./drafts";
 import { environment, errText as errOr, uuid } from "./env";
 import { consentBlock, identityFields } from "./form";
 import { loadLocale, pickLocale, t, tn } from "./i18n";
 import { idbKV } from "./idb";
+import { PRIVACY_MASKS } from "./mask";
+import type { Panel, PanelModule, PanelRow } from "./panel";
 import { elementAt, type Pick, Picker } from "./picker";
 import { Outbox } from "./queue";
 import { type Box, isRegion, type PinPct, pinBox, placeCard, regionPin } from "./region";
-import { BugReport, hasDraft } from "./report";
+import type { ReportModule } from "./report";
+import { findQuote, pageSelection, textRects, toTextRange } from "./selection";
 import { type Reporter, store } from "./store";
 import { STYLES } from "./styles";
 import {
@@ -27,7 +32,7 @@ import {
   tag,
 } from "./ui";
 
-export type WidgetEvent = "open" | "close" | "submit" | "error";
+export type WidgetEvent = "open" | "close" | "submit" | "error" | "ready";
 export type Mode = "comment" | "bug" | "panel";
 export type WidgetOptions = {
   projectKey: string;
@@ -39,7 +44,16 @@ export type WidgetOptions = {
   locale?: string | undefined;
 };
 
-type Placed = { pin: Pin; el: Element; marker: HTMLButtonElement; area: HTMLElement | null; moved: boolean };
+/** Highlight boxes for a quoted text range, re-measured every frame. */
+type Quote = { range: Range; hls: HTMLElement[] };
+type Placed = {
+  pin: Pin;
+  el: Element;
+  marker: HTMLButtonElement;
+  area: HTMLElement | null;
+  moved: boolean;
+  quote: Quote | null;
+};
 type Card = {
   el: HTMLElement;
   target: () => Box | null;
@@ -48,17 +62,10 @@ type Card = {
   off?: () => void;
   /** Composer only: true once the person typed something, so an outside click doesn't discard it. */
   dirty?: () => boolean;
+  /** Set by showCard: ends the focus trap and returns focus to whatever opened the card. */
+  release?: () => void;
 };
-type Filter = "open" | "resolved" | "mine";
-type Panel = {
-  el: HTMLElement;
-  list: HTMLElement;
-  count: HTMLElement;
-  filters: HTMLButtonElement[];
-  toggle: HTMLButtonElement;
-  filter: Filter;
-  q: string;
-};
+type Selected = { range: Range; el: Element };
 
 const PIN = 32; // marker size, px
 const SHEET = 640; // below this width cards become bottom sheets and the panel goes full screen
@@ -83,6 +90,15 @@ export class AnnotaWidget {
   private preview: { el: HTMLElement; p: Placed } | null = null;
   private previewTimer = 0;
   private panel: Panel | null = null;
+  /** Bumped by every panel open/close request, so a slow chunk load can't reopen a panel closed meanwhile. */
+  private panelWant = 0;
+  private panelLoading = false;
+  private reportWant = 0;
+  private reportLoading = false;
+  private branding: Branding = { hidePoweredBy: false, dialogAccent: null, logoUrl: null };
+  private projectSlug = "";
+  /** The "Comment on selection" offer and the selection it would use. */
+  private selOffer: { el: HTMLElement; sel: Selected } | null = null;
   private placed: Placed[] = [];
   private orphans: Pin[] = [];
   private showPins = true;
@@ -90,7 +106,7 @@ export class AnnotaWidget {
   private haveClosed = false;
   private loadSeq = 0;
   private picker: Picker | null = null;
-  private draft: { el: Element; pin: PinPct; node: HTMLElement } | null = null;
+  private draft: { el: Element; pin: PinPct; node: HTMLElement; quote: Quote | null } | null = null;
   private modalClose: (() => void) | null = null;
   private busy = false;
   private isOpen = false;
@@ -133,9 +149,16 @@ export class AnnotaWidget {
     this.capture = loaded.capture;
     installDiagnostics(loaded.capture);
     this.cfg = loaded.widget;
+    this.branding = loaded.branding;
+    this.projectSlug = loaded.project.slug;
     this.root.lang = lang;
     this.publicRead = loaded.project.publicRead;
     this.root.style.setProperty("--annota-accent", this.cfg.launcher.accent);
+    const dialog = this.branding.dialogAccent;
+    if (dialog) {
+      this.root.style.setProperty("--annota-dialog-accent", dialog);
+      this.root.style.setProperty("--annota-dialog-accent-fg", readableOn(dialog));
+    }
 
     const reposition = () => this.schedule();
     this.listen(window, "scroll", reposition, { passive: true, capture: true });
@@ -150,6 +173,21 @@ export class AnnotaWidget {
       true,
     );
     this.listen(window, "contextmenu", this.onContext);
+    this.listen(document, "selectionchange", () => {
+      // The offer follows the selection; in comment mode the shield keeps the selection, so it stays.
+      if (this.selOffer && !this.picker && !pageSelection(this.host, isEditable)) this.hideSelOffer();
+    });
+    // Host-page focus traps (modal libraries) pull focus back into their dialog on `focusin`. Our UI is
+    // outside their DOM subtree, so our own focus events stop at the window before page listeners see them.
+    for (const type of ["focusin", "focusout"])
+      this.listen(
+        window,
+        type,
+        (e: FocusEvent) => {
+          if (e.target === this.host) e.stopImmediatePropagation();
+        },
+        true,
+      );
     // Like Figma: clicking the page closes an open thread, or a composer that is still empty.
     this.listen(
       document,
@@ -187,6 +225,7 @@ export class AnnotaWidget {
     this.cleanup.push(() => observer.disconnect());
 
     this.ready = true;
+    this.emit("ready");
     const deepLink = new URLSearchParams(location.search).get("annota");
     if (deepLink) setTimeout(() => void this.focusPin(deepLink), 300);
     if (this.pending) {
@@ -203,10 +242,13 @@ export class AnnotaWidget {
     this.stopPicking();
     this.closeCard();
     this.closeMenu();
+    this.closePanel();
+    this.hideSelOffer();
     clearTimeout(this.previewTimer);
     for (const fn of this.cleanup) fn();
     this.cleanup = [];
     cancelAnimationFrame(this.raf);
+    uninstallDiagnostics();
     this.host.remove();
   }
 
@@ -225,12 +267,13 @@ export class AnnotaWidget {
       if (this.canComment) this.startPicking();
     } else if (mode === "bug") {
       if (this.canBug) void this.startBugReport();
-    } else if (mode === "panel") this.openPanel();
+    } else if (mode === "panel") void this.openPanel();
     else this.openMenu();
   }
 
   close() {
     this.pending = null;
+    this.reportWant++; // a bug report still loading won't open
     this.modalClose?.();
     this.stopPicking();
     this.closeCard();
@@ -264,6 +307,7 @@ export class AnnotaWidget {
     queueMicrotask(() => {
       if (!this.isOpen || this.picker || this.card || this.menu || this.panel || this.modalClose || this.busy)
         return;
+      if (this.panelLoading || this.reportLoading) return;
       this.isOpen = false;
       this.emit("close");
     });
@@ -293,10 +337,13 @@ export class AnnotaWidget {
     if (e.key === "Escape") {
       if (this.card) this.closeCard();
       else if (this.menu) this.closeMenu();
+      else if (this.selOffer) this.hideSelOffer();
       else if (this.panel) this.closePanel();
       return;
     }
-    if (path.includes(this.host) || !this.cfg.shortcuts || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!this.cfg.shortcuts || e.ctrlKey || e.metaKey || e.altKey) return;
+    // Focus may sit on one of our own buttons (it returns to the launcher when a card closes); shortcuts work
+    // there too. Typing in any field — ours or the page's — is never hijacked.
     if (isEditable(path[0] ?? e.target) || this.modalClose || e.repeat) return;
     const k = e.key.toLowerCase();
     if (k === "c" && this.canComment) {
@@ -318,7 +365,12 @@ export class AnnotaWidget {
     if (Date.now() - r.t > 1500 || Math.abs(e.clientX - r.x) > 4 || Math.abs(e.clientY - r.y) > 4) return;
     const path = e.composedPath();
     if (path.includes(this.host) || isEditable(path[0] ?? e.target)) return;
-    if (getSelection()?.toString().trim()) return; // they probably want "Copy"
+    if (getSelection()?.toString().trim()) {
+      // They probably want "Copy", so the browser menu stays — next to it we offer to comment on the text.
+      const sel = pageSelection(this.host, isEditable);
+      if (sel) this.offerSelection(sel);
+      return;
+    }
     const el = elementAt(this.host, e.clientX, e.clientY);
     if (!el) return;
     e.preventDefault();
@@ -349,6 +401,9 @@ export class AnnotaWidget {
         "aria-expanded": "false",
         "data-tip": l.shape === "round" ? (tooltip ?? undefined) : undefined,
         onclick: () => (this.menu ? this.closeMenu() : this.open()),
+        // Intent to open: fetch the small chunks now so the panel / report form appear without a wait.
+        onpointerenter: () => this.prefetch(),
+        onfocus: () => this.prefetch(),
       },
       h("span", { class: "li" }, icon(ICONS[l.icon === "pin" ? "logo" : l.icon])),
       l.shape === "pill" && label ? h("span", { class: "ll" }, label) : null,
@@ -398,7 +453,7 @@ export class AnnotaWidget {
           this.closeMenu();
           void this.outbox?.flush(true);
         }),
-      h("div", { class: "foot" }, t("poweredBy")),
+      !this.branding.hidePoweredBy && h("div", { class: "foot" }, t("poweredBy")),
     );
     menu.style.setProperty(v, `${(l.hidden ? 0 : 60) + l.offset.y}px`);
     menu.style.setProperty(hz, `${l.offset.x}px`);
@@ -418,11 +473,22 @@ export class AnnotaWidget {
       if (!e.composedPath().includes(this.host)) this.closeMenu();
     };
     document.addEventListener("pointerdown", this.menuAway, true);
+    this.prefetch();
     this.active("menu");
+  }
+
+  private prefetched = false;
+  private prefetch() {
+    if (this.prefetched || !this.ready) return;
+    this.prefetched = true;
+    if (this.publicRead) preload(this.opts.endpoint, "panel");
+    if (this.canBug) preload(this.opts.endpoint, "report");
   }
 
   private closeMenu() {
     if (!this.menu) return;
+    // Keyboard users go back to the launcher (Esc, or an item that opens nothing focusable).
+    if (this.menu.contains(focused(this.root))) this.launcher?.focus({ preventScroll: true });
     this.menu.remove();
     this.menu = null;
     if (this.menuAway) document.removeEventListener("pointerdown", this.menuAway, true);
@@ -478,14 +544,24 @@ export class AnnotaWidget {
       h("span", { class: "n" }),
     );
     const area = isRegion(pin.anchor.pin) ? h("div", { class: `area${moved ? " moved" : ""}` }) : null;
-    const p: Placed = { pin, el: found.element, marker, area, moved };
+    // A comment on selected text highlights the quote again — only while that text is still on the page.
+    const tr = pin.anchor.textRange;
+    const range = tr ? findQuote(found.element, tr) : null;
+    const quote = range ? { range, hls: [] } : null;
+    const p: Placed = { pin, el: found.element, marker, area, moved, quote };
     marker.addEventListener("click", (e) => {
       e.stopPropagation();
-      this.openThread(pin, p);
+      void this.openThread(pin, p);
     });
-    marker.addEventListener("pointerenter", () => this.hover(p, true));
+    marker.addEventListener("pointerenter", () => {
+      preload(this.opts.endpoint, "panel"); // a click opens the thread card, which lives in that chunk
+      this.hover(p, true);
+    });
     marker.addEventListener("pointerleave", () => this.hover(p, false));
-    marker.addEventListener("focus", () => this.hover(p, true));
+    marker.addEventListener("focus", () => {
+      preload(this.opts.endpoint, "panel");
+      this.hover(p, true);
+    });
     marker.addEventListener("blur", () => this.hover(p, false));
     this.label(p);
     if (area) this.root.append(area);
@@ -497,6 +573,7 @@ export class AnnotaWidget {
   private unplace(p: Placed) {
     p.marker.remove();
     p.area?.remove();
+    for (const el of p.quote?.hls ?? []) el.remove();
     this.placed = this.placed.filter((x) => x !== p);
   }
 
@@ -523,13 +600,32 @@ export class AnnotaWidget {
     if (!p.el.isConnected) return null;
     const r = p.el.getBoundingClientRect();
     if (r.width + r.height === 0) return null;
-    return pinBox(r, (p.pin.anchor as AnchorBundle).pin);
+    const end = p.quote && quoteEnd(p.quote.range);
+    return end ?? pinBox(r, (p.pin.anchor as AnchorBundle).pin);
   }
 
-  /** What a card attached to this pin must stay clear of. */
+  /** What a card attached to this pin must stay clear of: the marker, plus the region or quoted text. */
   private targetOf(p: Placed): Box | null {
     const b = this.boxOf(p);
-    return b && withMarker(b, !!p.area);
+    if (!b) return null;
+    const q = p.quote && union(textRects(p.quote.range));
+    return q ? union([q, withMarker(b, false)]) : withMarker(b, !!p.area);
+  }
+
+  /** Lay highlight boxes over a quoted range (re-using the elements from the last frame). */
+  private paintQuote(q: Quote, cls: string, show: boolean) {
+    const rects = show ? textRects(q.range, 60) : [];
+    while (q.hls.length > rects.length) q.hls.pop()?.remove();
+    while (q.hls.length < rects.length) {
+      const el = h("div", { "aria-hidden": "true" });
+      q.hls.push(el);
+      this.root.prepend(el); // under pins and cards
+    }
+    for (const [i, r] of rects.entries()) {
+      const el = q.hls[i] as HTMLElement;
+      el.className = cls;
+      box(el, { left: r.left, top: r.top, width: r.width, height: r.height });
+    }
   }
 
   private schedule() {
@@ -549,6 +645,10 @@ export class AnnotaWidget {
       p.marker.hidden = !b;
       if (p.area) p.area.hidden = !b;
       p.marker.classList.toggle("resolved", isClosed(p.pin.status));
+      if (p.quote) {
+        const hot = p.marker.classList.contains("active") || this.preview?.p === p;
+        this.paintQuote(p.quote, `hl${hot ? " hot" : ""}${p.moved ? " moved" : ""}`, !!b);
+      }
       if (!b) continue;
       if (p.area) box(p.area, b);
       // The marker's tail points at the pin; for regions it sits on the top-right corner.
@@ -557,7 +657,9 @@ export class AnnotaWidget {
     }
     if (this.draft) {
       const r = this.draft.el.getBoundingClientRect();
-      const b = pinBox(r, this.draft.pin);
+      const q = this.draft.quote;
+      if (q) this.paintQuote(q, "hl draft", true);
+      const b = (q && quoteEnd(q.range)) || pinBox(r, this.draft.pin);
       if (isRegion(this.draft.pin)) box(this.draft.node, b);
       else {
         this.draft.node.style.left = `${b.left}px`;
@@ -565,6 +667,7 @@ export class AnnotaWidget {
       }
     }
     if (this.card) this.position(this.card.el, this.card.target());
+    if (this.selOffer) this.placeSelOffer();
     if (this.preview) {
       const t = this.targetOf(this.preview.p);
       if (t) this.position(this.preview.el, t);
@@ -601,15 +704,21 @@ export class AnnotaWidget {
     const n = this.openCount();
     this.badge.hidden = !n;
     this.badge.textContent = n > 99 ? "99+" : String(n);
-    if (this.panel) this.panel.count.textContent = String(n);
+    this.panel?.setCount(n);
   }
 
   private hover(p: Placed, on: boolean) {
     p.area?.classList.toggle("hot", on || this.card?.id === p.pin.id);
     clearTimeout(this.previewTimer);
-    if (!on) return this.hidePreview();
+    if (!on) {
+      this.hidePreview();
+      return this.schedule();
+    }
     if (this.card?.id === p.pin.id) return;
-    this.previewTimer = window.setTimeout(() => this.showPreview(p), 120);
+    this.previewTimer = window.setTimeout(() => {
+      this.showPreview(p);
+      this.schedule();
+    }, 120);
   }
 
   private showPreview(p: Placed) {
@@ -627,6 +736,7 @@ export class AnnotaWidget {
         isClosed(pin.status) && h("span", { class: "chip ok" }, t("resolved")),
       ),
       pin.title && h("b", { class: "title" }, pin.title),
+      p.quote && h("p", { class: "quote" }, pin.anchor?.textRange?.quote ?? ""),
       h("p", { class: "text clamp" }, pin.body),
       h(
         "div",
@@ -665,33 +775,40 @@ export class AnnotaWidget {
       target.el.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "center" });
       setTimeout(() => {
         target.marker.classList.add("pulse");
-        this.openThread(target.pin, target);
+        void this.openThread(target.pin, target);
       }, 450);
     } else if (o) {
-      this.openPanel();
-      this.openThread(o, null);
+      await this.openPanel();
+      void this.openThread(o, null);
     }
   }
 
   // --- Cards --------------------------------------------------------------------------------------
 
-  private showCard(card: Card) {
+  private showCard(card: Card, opener?: Element | null) {
+    // Whatever had focus (a pin, a panel row, the launcher) gets it back when the card closes.
+    const was = opener ?? focused(this.root);
     this.closeCard();
     this.hidePreview();
     this.card = card;
     this.root.append(card.el);
+    card.release = trapFocus(card.el, was, this.launcher);
     this.position(card.el, card.target());
     this.active(card.kind);
+    this.schedule();
   }
 
   private closeCard() {
     if (!this.card) return;
     const c = this.card;
     this.card = null;
+    c.release?.();
     c.el.remove();
     c.off?.();
     this.draft?.node.remove();
+    for (const el of this.draft?.quote?.hls ?? []) el.remove();
     this.draft = null;
+    this.schedule();
     this.idle();
   }
 
@@ -702,11 +819,14 @@ export class AnnotaWidget {
     this.closeCard();
     this.hidePreview();
     if (innerWidth < SHEET) this.closePanel();
+    // Read before the shield goes up: text the visitor selected is offered as the thing to comment on.
+    const sel = pageSelection(this.host, isEditable);
     this.picker = new Picker(this.host, this.root, (pick) => {
       if (pick) this.openComposer(pick);
       else this.stopPicking();
     });
     this.root.classList.add("picking");
+    if (sel) this.offerSelection(sel);
     this.active("comment");
   }
 
@@ -715,13 +835,67 @@ export class AnnotaWidget {
     this.picker.stop();
     this.picker = null;
     this.root.classList.remove("picking");
+    this.hideSelOffer();
     this.idle();
   }
 
-  private openComposer(pick: Pick, restore?: { text: string; kind: Kind; error: string; clientId: string }) {
+  // --- Comment on selection -----------------------------------------------------------------------
+
+  private offerSelection(sel: Selected) {
+    this.hideSelOffer();
+    const el = h(
+      "button",
+      { class: "selbtn", onclick: () => this.commentOnSelection(sel) },
+      icon(ICONS.comment),
+      t("commentOnSelection"),
+    );
+    // Keep the page selection: a press on the button must not collapse it.
+    el.addEventListener("pointerdown", (e) => e.preventDefault());
+    this.selOffer = { el, sel };
+    this.root.append(el);
+    this.placeSelOffer();
+  }
+
+  /** Under the end of the selection (above its start if there's no room), inside the viewport. */
+  private placeSelOffer() {
+    const o = this.selOffer;
+    if (!o) return;
+    const rects = textRects(o.sel.range, 200);
+    const first = rects[0];
+    const last = rects.at(-1);
+    if (!first || !last) return this.hideSelOffer();
+    const w = o.el.offsetWidth || 180;
+    const hgt = o.el.offsetHeight || 32;
+    let top = last.bottom + 8;
+    if (top + hgt > innerHeight - 8) top = first.top - hgt - 8;
+    o.el.style.left = `${Math.max(8, Math.min(last.right - w / 2, innerWidth - w - 8))}px`;
+    o.el.style.top = `${Math.max(8, Math.min(top, innerHeight - hgt - 8))}px`;
+  }
+
+  private hideSelOffer() {
+    this.selOffer?.el.remove();
+    this.selOffer = null;
+  }
+
+  private commentOnSelection(sel: Selected) {
+    this.hideSelOffer();
+    if (!this.canComment || !sel.el.isConnected) return;
+    const end = quoteEnd(sel.range);
+    const r = sel.el.getBoundingClientRect();
+    this.closeMenu();
+    this.openComposer({ el: sel.el, x: end?.left ?? r.left, y: end?.top ?? r.top, range: sel.range });
+    getSelection()?.removeAllRanges(); // our highlight takes over from the browser's
+  }
+
+  private openComposer(
+    pick: Pick & { range?: Range },
+    restore?: { text: string; kind: Kind; error: string; clientId: string },
+  ) {
     this.stopPicking();
     const anchor = captureAnchor(pick.el, pick.x, pick.y);
     if (pick.region) anchor.pin = regionPin(pick.el.getBoundingClientRect(), pick.region);
+    if (pick.range) anchor.textRange = toTextRange(pick.el, pick.range);
+    const quote = pick.range ? { range: pick.range, hls: [] } : null;
     const region = isRegion(anchor.pin);
     const clientId = restore?.clientId ?? uuid();
     let kind: Kind = restore?.kind ?? "comment";
@@ -743,7 +917,11 @@ export class AnnotaWidget {
       ),
     );
     const text = h("textarea", {
-      placeholder: region ? t("regionPlaceholder") : t("commentPlaceholder"),
+      placeholder: quote
+        ? t("selectionPlaceholder")
+        : region
+          ? t("regionPlaceholder")
+          : t("commentPlaceholder"),
       "aria-label": t("yourComment"),
       maxlength: 10000,
     });
@@ -791,6 +969,8 @@ export class AnnotaWidget {
       "div",
       { class: "card composer", role: "dialog", "aria-label": t("newComment") },
       h("div", { class: "kinds", role: "radiogroup", "aria-label": t("type") }, ...chips),
+      anchor.textRange &&
+        h("blockquote", { class: "quote", "aria-label": t("selectedText") }, anchor.textRange.quote),
       text,
       ...ident.els,
       consent.el,
@@ -812,20 +992,24 @@ export class AnnotaWidget {
       kind: "composer",
       dirty: () => !!text.value.trim(),
       target: () => {
+        const q = quote && union(textRects(quote.range, 200));
+        const end = quote && quoteEnd(quote.range);
+        if (q && end) return union([q, withMarker(end, false)]);
         const r = pick.el.getBoundingClientRect();
         return withMarker(pinBox(r, anchor.pin), region);
       },
     });
-    this.draft = { el: pick.el, pin: anchor.pin, node };
+    this.draft = { el: pick.el, pin: anchor.pin, node, quote };
     this.root.append(node);
     this.frame();
     text.focus();
   }
 
   private async submitComment(
-    pick: Pick,
+    pick: Pick & { range?: Range },
     anchor: AnchorBundle,
     kind: Kind,
+
     body: string,
     reporter: Reporter,
     clientId: string,
@@ -854,7 +1038,7 @@ export class AnnotaWidget {
         body,
         page: { url: location.href, title: document.title.slice(0, 300) },
         anchor,
-        environment: environment(),
+        environment: environment(this.cfg.privacyMode),
         reporter: (reporter.name || reporter.email
           ? reporter
           : undefined) as WidgetFeedbackCreate["reporter"],
@@ -884,361 +1068,146 @@ export class AnnotaWidget {
     }
   }
 
-  private message(name: string | null, at: string, body: string, team: boolean, title?: string | null) {
-    return h(
-      "div",
-      { class: `msg${team ? " team" : ""}` },
-      avatar(name),
-      h(
-        "div",
-        { class: "mb" },
-        h(
-          "div",
-          { class: "meta" },
-          h("b", {}, name ?? t("visitor")),
-          team && h("span", { class: "chip team" }, t("team")),
-          h("span", { class: "muted" }, ago(at)),
-        ),
-        title && h("b", { class: "title" }, title),
-        h("p", { class: "text" }, body),
-      ),
-    );
+  /** The viewer chunk (side panel + thread card), or null after telling the visitor it couldn't load. */
+  private async viewer(): Promise<PanelModule | null> {
+    try {
+      return await loadChunk<PanelModule>(this.opts.endpoint, "panel");
+    } catch (err) {
+      console.warn("[annota]", err);
+      if (!this.destroyed) this.toast(t("loadFailed"));
+      return null;
+    }
   }
 
-  private openThread(pin: Pin, p: Placed | null) {
+  private threadSeq = 0;
+
+  private async openThread(pin: Pin, p: Placed | null) {
     if (pin.id.startsWith("tmp:")) return;
+    const seq = ++this.threadSeq;
+    const opener = focused(this.root);
+    const mod = await this.viewer();
+    if (!mod || seq !== this.threadSeq || this.destroyed) return;
     if (innerWidth < SHEET) this.closePanel();
-    const token = store.mine(this.opts.projectKey).find((m) => m.id === pin.id)?.token;
-    const canResolve = !this.cfg.readOnly && (this.cfg.visitorsCanResolve || !!token);
-    const closed = isClosed(pin.status);
-    const resolve =
-      canResolve &&
-      h(
-        "button",
-        { class: "btn sm" },
-        icon(closed ? ICONS.reopen : ICONS.check),
-        closed ? t("reopen") : t("resolve"),
-      );
-    const copy = h(
-      "button",
-      { class: "ib", "aria-label": t("copyLink"), title: t("copyLink") },
-      icon(ICONS.link),
-    );
-    const list = h(
-      "div",
-      { class: "scroll" },
-      this.message(pin.reporterName, pin.createdAt, pin.body, false, pin.title),
-    );
-    const loading = pin.replyCount > 0 ? h("p", { class: "muted pad" }, t("loadingReplies")) : null;
-    if (loading) list.append(loading);
-
-    let reply: HTMLElement | null = null;
-    if (!this.cfg.readOnly) {
-      const box = h("textarea", {
-        placeholder: t("replyPlaceholder"),
-        "aria-label": t("reply"),
-        rows: 1,
-        maxlength: 5000,
-      });
-      const send = h("button", { class: "send", "aria-label": t("sendReply") }, icon(ICONS.send));
-      const go = async () => {
-        const body = box.value.trim();
-        if (!body || send.disabled) return;
-        send.disabled = true;
-        const me = { ...store.reporter(), ...stripEmpty(this.identity) };
-        try {
-          const author = me.name || me.email ? stripEmpty(me) : undefined;
-          const { comment } = await this.api.reply(pin.id, body, author);
-          list.append(
-            this.message(
-              comment?.authorName ?? me.name ?? t("you"),
-              comment?.createdAt ?? new Date().toISOString(),
-              body,
-              false,
-            ),
-          );
-          list.scrollTop = list.scrollHeight;
-          pin.replyCount++;
-          box.value = "";
-          this.renderList();
-        } catch (err) {
-          this.toast(errText(err));
-          this.emit("error", { message: errText(err) });
-        }
-        send.disabled = false;
-      };
-      send.addEventListener("click", go);
-      box.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-          e.preventDefault();
-          void go();
-        }
-      });
-      reply = h("div", { class: "reply" }, box, send);
-    }
-
-    const el = h(
-      "div",
+    const el = mod.threadCard(
       {
-        class: "card thread",
-        role: "dialog",
-        "aria-label": `${kindOf(pin.kind).label} #${pin.number}`,
-        tabindex: -1,
-      },
-      h(
-        "div",
-        { class: "head" },
-        tag(pin.kind),
-        h("span", { class: "muted" }, `#${pin.number}`),
-        closed && h("span", { class: "chip ok" }, t("resolved")),
-        p?.moved && h("span", { class: "chip warn", title: t("movedTip") }, t("moved")),
-        !p && h("span", { class: "chip warn" }, t("notOnPage")),
-        h("span", { class: "grow" }),
-        resolve,
-        copy,
-        h(
-          "button",
-          { class: "ib", "aria-label": t("close"), onclick: () => this.closeCard() },
-          icon(ICONS.close),
-        ),
-      ),
-      list,
-      reply,
-    );
-
-    copy.addEventListener("click", () => {
-      const u = new URL(location.href);
-      u.searchParams.set("annota", pin.id);
-      const link = u.toString();
-      navigator.clipboard?.writeText(link).then(
-        () => this.toast(t("linkCopied")),
-        () => this.toast(link),
-      ) ?? this.toast(link);
-    });
-    if (resolve)
-      resolve.addEventListener("click", async () => {
-        resolve.disabled = true;
-        const next = isClosed(pin.status) ? "open" : "resolved";
-        try {
-          await this.api.setStatus(pin.id, next, token);
-          pin.status = next;
-          this.toast(t(next === "resolved" ? "resolvedN" : "reopenedN", { n: pin.number }));
-          this.closeCard();
+        root: this.root,
+        cfg: this.cfg,
+        projectKey: this.opts.projectKey,
+        projectSlug: this.projectSlug,
+        identity: () => this.identity,
+        api: this.api,
+        toast: (text) => this.toast(text),
+        error: (message) => this.emit("error", { message }),
+        close: () => this.closeCard(),
+        statusChanged: () => {
           this.schedule();
           this.updateCount();
           this.renderList();
-        } catch (err) {
-          resolve.disabled = false;
-          this.toast(errText(err));
-          this.emit("error", { message: errText(err) });
-        }
-      });
-
+        },
+        replied: () => this.renderList(),
+        isOpen: (card) => this.card?.el === card,
+        relayout: () => this.schedule(),
+      },
+      pin,
+      { onPage: !!p, moved: !!p?.moved },
+    );
     p?.marker.classList.add("active");
     p?.area?.classList.add("hot");
     // Bring a pin that sits at the viewport edge into view; the card follows it as the page scrolls.
     const at = p && this.boxOf(p);
     if (at && (at.top < 48 || at.top + at.height > innerHeight - 48))
       scrollBy({ top: at.top + at.height / 2 - innerHeight / 2, behavior: reduced() ? "auto" : "smooth" });
-    this.showCard({
-      el,
-      kind: "thread",
-      id: pin.id,
-      target: () => (p ? this.targetOf(p) : null),
-      off: () => {
-        p?.marker.classList.remove("active");
-        p?.area?.classList.remove("hot");
+    this.showCard(
+      {
+        el,
+        kind: "thread",
+        id: pin.id,
+        target: () => (p ? this.targetOf(p) : null),
+        off: () => {
+          p?.marker.classList.remove("active");
+          p?.area?.classList.remove("hot");
+        },
       },
-    });
-    el.focus({ preventScroll: true });
-
-    this.api.replies(pin.id).then(
-      ({ items }) => {
-        loading?.remove();
-        if (this.card?.el !== el || !items.length) return;
-        pin.replyCount = Math.max(pin.replyCount, items.length);
-        const replies = items.map((m) => this.message(m.authorName, m.createdAt, m.body, m.team));
-        list.firstElementChild?.after(h("div", { class: "replies" }, ...replies));
-        this.schedule();
-      },
-      () => {
-        if (loading) loading.textContent = t("repliesFailed");
-      },
+      opener,
     );
+    el.focus({ preventScroll: true });
   }
 
-  // --- Side panel (F-011) -------------------------------------------------------------------------
+  // --- Side panel (F-011), lazy widget-panel.js ---------------------------------------------------
 
-  private openPanel() {
-    if (this.panel) return;
+  private async openPanel(): Promise<void> {
+    if (this.panel || this.panelLoading) return;
     this.closeMenu();
-    const list = h("div", { class: "plist" });
-    const count = h("span", { class: "chip" });
-    const names = { open: t("filterOpen"), resolved: t("filterResolved"), mine: t("filterMine") };
-    const filters = (["open", "resolved", "mine"] as const).map((f) =>
-      h("button", { "aria-pressed": String(f === "open"), onclick: () => this.setFilter(f) }, names[f]),
-    );
-    const search = h("input", {
-      type: "search",
-      placeholder: t("search"),
-      "aria-label": t("searchComments"),
-    });
-    search.addEventListener("input", () => {
-      if (!this.panel) return;
-      this.panel.q = search.value;
-      this.renderList();
-    });
-    const toggle = h(
-      "button",
-      {
-        class: "switch",
-        role: "switch",
-        "aria-checked": String(this.showResolved),
-        onclick: () => this.toggleResolved(),
+    const want = ++this.panelWant;
+    this.panelLoading = true;
+    let mod: PanelModule;
+    try {
+      mod = await loadChunk<PanelModule>(this.opts.endpoint, "panel");
+    } catch (err) {
+      console.warn("[annota]", err);
+      if (want === this.panelWant && !this.destroyed) this.toast(t("loadFailed"));
+      return;
+    } finally {
+      this.panelLoading = false;
+      this.idle();
+    }
+    if (want !== this.panelWant || this.destroyed || this.panel) return;
+    this.panel = new mod.Panel({
+      root: this.root,
+      rows: () => this.rows(),
+      mine: () => new Set(store.mine(this.opts.projectKey).map((m) => m.id)),
+      canComment: this.canComment,
+      shortcuts: this.cfg.shortcuts,
+      showResolved: () => this.showResolved,
+      toggleResolved: () => this.toggleResolved(),
+      needClosed: () => {
+        if (!this.haveClosed) void this.loadPins();
       },
-      h("span", { class: "knob" }),
-      t("showResolved"),
-    );
-    const el = h(
-      "aside",
-      { class: "panel", role: "complementary", "aria-label": t("commentsOnPage") },
-      h(
-        "div",
-        { class: "phead" },
-        h("b", {}, t("comments")),
-        count,
-        h("span", { class: "grow" }),
-        this.canComment &&
-          h(
-            "button",
-            { class: "ib", "aria-label": t("addComment"), onclick: () => this.open("comment") },
-            icon(ICONS.plus),
-          ),
-        h(
-          "button",
-          { class: "ib", "aria-label": t("closeComments"), onclick: () => this.closePanel() },
-          icon(ICONS.close),
-        ),
-      ),
-      h(
-        "div",
-        { class: "ptools" },
-        h("div", { class: "seg", role: "group", "aria-label": t("filter") }, ...filters),
-        h("label", { class: "search" }, icon(ICONS.search), search),
-        toggle,
-      ),
-      list,
-    );
-    this.panel = { el, list, count, filters, toggle, filter: "open", q: "" };
-    this.root.append(el);
+      openItem: (row) => {
+        const p = this.placed.find((x) => x.pin === row.pin);
+        if (p) {
+          p.el.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "center" });
+          setTimeout(() => this.openThread(p.pin, p), reduced() ? 0 : 350);
+        } else void this.openThread(row.pin, null);
+      },
+      comment: () => this.open("comment"),
+      close: () => this.closePanel(),
+      pageUrl: () => location.href,
+      toast: (text) => this.toast(text),
+    });
     this.updateCount();
-    this.renderList();
     this.schedule();
     this.active("panel");
   }
 
+  private rows(): PanelRow[] {
+    return [
+      ...this.placed.map((p) => ({ pin: p.pin, onPage: true, moved: p.moved })),
+      ...this.orphans.map((pin) => ({ pin, onPage: false, moved: false })),
+    ];
+  }
+
   private closePanel() {
-    if (!this.panel) return;
-    this.panel.el.remove();
+    this.panelWant++;
+    const panel = this.panel;
+    if (!panel) return;
     this.panel = null;
+    const had = panel.el.contains(focused(this.root));
+    panel.destroy();
+    if (had) this.launcher?.focus({ preventScroll: true });
     this.schedule();
     this.idle();
   }
 
-  private setFilter(f: Filter) {
-    const panel = this.panel;
-    if (!panel) return;
-    panel.filter = f;
-    for (const [i, b] of panel.filters.entries())
-      b.setAttribute("aria-pressed", String(["open", "resolved", "mine"][i] === f));
-    if (f === "resolved" && !this.haveClosed) void this.loadPins();
-    this.renderList();
-  }
-
   private toggleResolved() {
     this.showResolved = !this.showResolved;
-    this.panel?.toggle.setAttribute("aria-checked", String(this.showResolved));
+    this.panel?.syncResolved();
     if (this.showResolved && !this.haveClosed) void this.loadPins();
     this.schedule();
   }
 
   private renderList() {
-    const panel = this.panel;
-    if (!panel) return;
-    const mine = new Set(store.mine(this.opts.projectKey).map((m) => m.id));
-    const q = panel.q.trim().toLowerCase();
-    const rows = [
-      ...this.placed.map((p) => ({ pin: p.pin, p: p as Placed | null })),
-      ...this.orphans.map((pin) => ({ pin, p: null as Placed | null })),
-    ]
-      .filter(({ pin }) =>
-        panel.filter === "open"
-          ? !isClosed(pin.status)
-          : panel.filter === "resolved"
-            ? isClosed(pin.status)
-            : mine.has(pin.id) || pin.id.startsWith("tmp:"),
-      )
-      .filter(
-        ({ pin }) =>
-          !q ||
-          `${pin.title ?? ""} ${pin.body} ${pin.reporterName ?? ""} #${pin.number}`.toLowerCase().includes(q),
-      )
-      .sort((a, b) => Date.parse(b.pin.createdAt) - Date.parse(a.pin.createdAt));
-
-    const item = ({ pin, p }: { pin: Pin; p: Placed | null }) =>
-      h(
-        "button",
-        {
-          class: "item",
-          "aria-label": `${kindOf(pin.kind).label} #${pin.number}: ${pin.body.slice(0, 80)}`,
-          onclick: () => {
-            if (p) {
-              p.el.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "center" });
-              setTimeout(() => this.openThread(pin, p), reduced() ? 0 : 350);
-            } else this.openThread(pin, null);
-          },
-        },
-        avatar(pin.reporterName),
-        h(
-          "span",
-          { class: "ib-body" },
-          h(
-            "span",
-            { class: "meta" },
-            h("b", {}, shortName(pin.reporterName)),
-            h("span", { class: "muted" }, `${pin.number ? `#${pin.number} · ` : ""}${ago(pin.createdAt)}`),
-            h("span", { class: "grow" }),
-            tag(pin.kind),
-          ),
-          h("span", { class: "text clamp2" }, pin.body),
-          h(
-            "span",
-            { class: "meta" },
-            pin.replyCount > 0 && h("span", { class: "muted" }, tn("reply", pin.replyCount)),
-            isClosed(pin.status) && h("span", { class: "chip ok" }, t("resolved")),
-            p?.moved && h("span", { class: "chip warn" }, t("moved")),
-            !p && h("span", { class: "chip warn" }, t("notOnVersion")),
-          ),
-        ),
-      );
-
-    const empty = h(
-      "div",
-      { class: "empty" },
-      h("b", {}, panel.q ? t("noMatches") : panel.filter === "mine" ? t("nothingFromYou") : t("noComments")),
-      h(
-        "span",
-        { class: "muted" },
-        panel.q
-          ? t("tryDifferent")
-          : this.canComment
-            ? this.cfg.shortcuts
-              ? t("pressC")
-              : t("usePlus")
-            : t("willShowHere"),
-      ),
-    );
-    panel.list.replaceChildren(...(rows.length ? rows.map(item) : [empty]));
+    this.panel?.render();
   }
 
   // --- Bug report mode (F-003) and offline outbox (F-010) ------------------------------------------
@@ -1266,18 +1235,44 @@ export class AnnotaWidget {
   }
 
   private async startBugReport() {
-    if (this.busy || this.modalClose) return;
+    if (this.busy || this.modalClose || this.reportLoading) return;
+    const opener = focused(this.root);
     this.closeCard();
     this.closePanel();
     this.active("bug");
-    const report = new BugReport({
+    // The form (widget-report.js) and the screenshot engine (widget-capture.js) load side by side.
+    const want = ++this.reportWant;
+    this.reportLoading = true;
+    preload(this.opts.endpoint, "capture");
+    let mod: ReportModule;
+    try {
+      mod = await loadChunk<ReportModule>(this.opts.endpoint, "report");
+    } catch (err) {
+      console.warn("[annota]", err);
+      if (want === this.reportWant && !this.destroyed) {
+        this.toast(t("loadFailed"));
+        this.emit("error", { message: t("loadFailed") });
+      }
+      return;
+    } finally {
+      this.reportLoading = false;
+      this.idle();
+    }
+    if (want !== this.reportWant || this.destroyed || this.modalClose) return;
+    const masks = this.cfg.privacyMode
+      ? [...this.capture.maskSelectors, ...PRIVACY_MASKS]
+      : this.capture.maskSelectors;
+    const report = new mod.BugReport({
       host: this.host,
       root: this.root,
       endpoint: this.opts.endpoint,
       project: this.opts.projectKey,
       cfg: this.cfg,
-      capture: this.capture,
+      capture: { ...this.capture, maskSelectors: masks },
+      branding: this.branding,
+      opener: opener && opener !== document.body ? opener : this.launcher,
       identity: this.identity,
+
       submit: (p) => this.api.submitOnce(p),
       queue: async (id, p) => {
         await this.outbox?.add(id, p);
@@ -1313,16 +1308,30 @@ function withMarker(b: Box, region: boolean): Box {
     : { left: b.left, top: b.top - PIN, width: 0, height: PIN };
 }
 
+/** The point a quote's marker sits on: the top-right of its first line, so the marker never covers the text. */
+function quoteEnd(range: Range): Box | null {
+  const first = textRects(range, 1)[0];
+  return first ? { left: first.right, top: first.top, width: 0, height: 0 } : null;
+}
+
+function union(boxes: readonly { left: number; top: number; width: number; height: number }[]): Box | null {
+  if (!boxes.length) return null;
+  let l = Infinity;
+  let tp = Infinity;
+  let r = -Infinity;
+  let b = -Infinity;
+  for (const x of boxes) {
+    l = Math.min(l, x.left);
+    tp = Math.min(tp, x.top);
+    r = Math.max(r, x.left + x.width);
+    b = Math.max(b, x.top + x.height);
+  }
+  return { left: l, top: tp, width: r - l, height: b - tp };
+}
+
 function box(el: HTMLElement, b: Box) {
   el.style.left = `${b.left}px`;
   el.style.top = `${b.top}px`;
   el.style.width = `${b.width}px`;
   el.style.height = `${b.height}px`;
-}
-
-function stripEmpty(r: Reporter): { name?: string; email?: string } {
-  const out: { name?: string; email?: string } = {};
-  if (r.name) out.name = r.name;
-  if (r.email) out.email = r.email;
-  return out;
 }
