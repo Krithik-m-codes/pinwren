@@ -1,0 +1,14 @@
+# Local development database only. Run the app itself with `pnpm dev`.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: annota
+      POSTGRES_PASSWORD: annota
+      POSTGRES_DB: annota
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - annota-dev-db:/var/lib/postgresql/data
+volumes:
+  annota-dev-db:
