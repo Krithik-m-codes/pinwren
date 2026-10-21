@@ -1,9 +1,12 @@
+import { HSTS_HEADER, httpsDecision } from "@annota/core";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
 import { getAuth } from "./auth";
+import { env } from "./env";
 import { ApiError, problem } from "./errors";
 import { dashboard } from "./routes/dashboard";
+import { inbound } from "./routes/inbound";
 import { v1 } from "./routes/v1";
 import { widget } from "./routes/widget";
 
@@ -16,10 +19,22 @@ export { startJobs, stopJobs } from "./jobs";
  * with any Fetch-API server.
  */
 export const app = new Hono()
+  // ANNOTA_ENFORCE_HTTPS (the Next.js proxy applies the same rule to pages; this covers the API when
+  // it runs on its own).
+  .use("*", async (c, next) => {
+    const e = env();
+    const d = httpsDecision(c.req.raw, { enforce: e.ANNOTA_ENFORCE_HTTPS, trustProxy: e.ANNOTA_TRUST_PROXY });
+    if (d.action === "redirect") return c.redirect(d.location, 308);
+    if (d.action === "refuse") return problem(c, 403, "HTTPS_REQUIRED", "This server only accepts HTTPS");
+    await next();
+    if (d.hsts) c.res.headers.set("strict-transport-security", HSTS_HEADER);
+  })
   .get("/api/health", (c) => c.json({ ok: true }))
   .on(["GET", "POST"], "/api/auth/*", (c) => getAuth().handler(c.req.raw))
   // Token-authenticated public API first: the session middleware below covers the rest of /api.
   .route("/api/v1", v1)
+  // Logos and tracker webhooks: no session (verified by random id / signature).
+  .route("/api", inbound)
   .route("/api", dashboard)
   .route("/w", widget)
   .notFound((c) => problem(c, 404, "NOT_FOUND", "Not found"))

@@ -8,10 +8,12 @@ import { PageHeader } from "@/components/page-header";
 import { ErrorState } from "@/components/states";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ActionsTab } from "./actions-tab";
 import { CaptureTab } from "./capture-tab";
 import { DangerTab } from "./danger-tab";
 import { InstallTab } from "./install-tab";
 import { PrivacyTab } from "./privacy-tab";
+import { TrackersTab } from "./trackers-tab";
 import { useProject } from "./use-project";
 import { WidgetTab } from "./widget-tab";
 
@@ -19,6 +21,8 @@ const TABS = [
   { value: "install", label: "Install" },
   { value: "widget", label: "Widget" },
   { value: "capture", label: "Capture" },
+  { value: "actions", label: "Actions" },
+  { value: "trackers", label: "Issue trackers" },
   { value: "privacy", label: "Privacy & data" },
   { value: "danger", label: "Danger zone" },
 ] as const;
@@ -95,6 +99,12 @@ export function ProjectSettings({ params }: { params: Promise<{ id: string }> })
           </TabsContent>
           <TabsContent value="capture" className="pt-3">
             <CaptureTab project={p} />
+          </TabsContent>
+          <TabsContent value="actions" className="pt-3">
+            <ActionsTab project={p} />
+          </TabsContent>
+          <TabsContent value="trackers" className="pt-3">
+            <TrackersTab project={p} />
           </TabsContent>
           <TabsContent value="privacy" className="pt-3">
             <PrivacyTab project={p} />

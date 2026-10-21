@@ -54,6 +54,7 @@ import {
 } from "@/lib/feedback-hooks";
 import { captureOf, isRegion, placeOn } from "@/lib/geometry";
 import { cn } from "@/lib/utils";
+import { ItemActions } from "./item-actions";
 import { CommentComposer, Timeline } from "./timeline";
 
 export type DetailMenu = "status" | "priority" | "assignee" | null;
@@ -234,6 +235,8 @@ export function FeedbackDetailPanel({
             </SelectContent>
           </Select>
         </div>
+
+        <ItemActions data={data} />
 
         <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{f.body}</p>
 

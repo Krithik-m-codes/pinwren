@@ -7,7 +7,7 @@ export type DomainEvent = {
   orgId: string;
   feedbackId: string;
   commentId?: string;
-  actor: { kind: "user" | "guest" | "api"; id: string | null };
+  actor: { kind: "user" | "guest" | "api" | "integration"; id: string | null };
   /** For feedback.updated / status_changed / assigned: field → { from, to }. */
   changes?: Record<string, { from: unknown; to: unknown }>;
   at: string;

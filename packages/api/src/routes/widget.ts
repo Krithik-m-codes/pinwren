@@ -5,8 +5,11 @@ import {
   MAX_ATTACHMENT_BYTES,
   normalizePageUrl,
   parseCaptureConfig,
+  parseWidgetBranding,
   parseWidgetConfig,
+  publicWidgetConfig,
   REPORTER_TOKEN_HEADER,
+  type WidgetFeedbackCreate,
   widgetCommentCreate,
   widgetFeedbackCreate,
   widgetFeedbackStatusUpdate,
@@ -14,12 +17,12 @@ import {
 import { activity, comment, diagnostics, feedback, feedbackAsset, getDb, page, project } from "@annota/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import type { Context } from "hono";
 import { Hono } from "hono";
 import { randomToken, safeEqualHex, sha256Hex } from "../crypto";
 import { env } from "../env";
 import { ApiError, notFound } from "../errors";
 import { emit } from "../events";
+import { clientIp, family } from "../net";
 import { consume } from "../rate-limit";
 import { decodeDataUrl, decodeImageDataUrl, EXTENSIONS, storage } from "../storage";
 
@@ -35,17 +38,44 @@ const corsHeaders = (origin: string) => ({
   vary: "Origin",
 });
 
-function clientIp(c: Context): string {
-  if (env().ANNOTA_TRUST_PROXY) {
-    const fwd = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
-    if (fwd) return fwd;
-  }
-  return c.req.header("x-real-ip") ?? "unknown";
-}
+const inPrivacyMode = (p: typeof project.$inferSelect) => parseWidgetConfig(p.widgetConfig).privacyMode;
 
 /** Per-project override (dashboard setting) or the instance default. */
 const rateLimitFor = (p: typeof project.$inferSelect) =>
   p.widgetRateLimitPerMin ?? env().WIDGET_RATE_LIMIT_PER_MIN;
+
+/**
+ * Privacy mode (F-021), enforced on the server too so an old or modified widget can't send more:
+ * console entries above errors are dropped, `metadata.performance` is removed and the user agent is
+ * reduced to the browser/OS family.
+ */
+function privacyFilter(input: WidgetFeedbackCreate): WidgetFeedbackCreate {
+  const environment = input.environment;
+  const browser = family(environment.browser);
+  const os = family(environment.os);
+  const out: WidgetFeedbackCreate = {
+    ...input,
+    environment: {
+      ...environment,
+      userAgent: [browser, os].filter(Boolean).join(" on ") || "unknown",
+      ...(browser ? { browser } : {}),
+      ...(os ? { os } : {}),
+    },
+  };
+  if (!browser) delete out.environment.browser;
+  if (!os) delete out.environment.os;
+  if (input.metadata && "performance" in input.metadata) {
+    const { performance: _drop, ...rest } = input.metadata;
+    out.metadata = rest;
+  }
+  if (input.diagnostics?.console) {
+    out.diagnostics = {
+      ...input.diagnostics,
+      console: input.diagnostics.console.filter((e) => e.level === "error"),
+    };
+  }
+  return out;
+}
 
 type StoredAsset = {
   kind: "screenshot" | "attachment";
@@ -90,11 +120,18 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
     if (!p.lastSeenAt || Date.now() - p.lastSeenAt.getTime() > LAST_SEEN_INTERVAL_MS) {
       await getDb().update(project).set({ lastSeenAt: new Date() }).where(eq(project.id, p.id));
     }
-    // Stored JSON holds only what an admin changed; the widget always gets every key.
+    // Stored JSON holds only what an admin changed; the widget always gets every key. Privacy mode
+    // and dashboard-only actions are applied here (wave-3 contract §1, §3).
+    const { widget: w, capture } = publicWidgetConfig(
+      parseWidgetConfig(p.widgetConfig),
+      parseCaptureConfig(p.captureConfig),
+    );
     return c.json({
-      project: { name: p.name, publicRead: p.publicRead },
-      widget: parseWidgetConfig(p.widgetConfig),
-      capture: parseCaptureConfig(p.captureConfig),
+      // slug fills `{projectSlug}` in panel-action links (wave-3 contract §1).
+      project: { name: p.name, slug: p.slug, publicRead: p.publicRead },
+      widget: w,
+      capture,
+      branding: parseWidgetBranding(p.widgetBranding),
     });
   })
 
@@ -164,8 +201,9 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
 
   .post("/feedback", zValidator("json", widgetFeedbackCreate), async (c) => {
     const p = c.var.project;
-    const input = c.req.valid("json");
-    const ip = clientIp(c);
+    const privacy = inPrivacyMode(p);
+    const input = privacy ? privacyFilter(c.req.valid("json")) : c.req.valid("json");
+    const ip = clientIp(c, { privacy });
     if (!(await consume(`w:${p.id}:${ip}`, rateLimitFor(p), 60))) {
       throw new ApiError(429, "RATE_LIMITED", "Too many reports — try again in a minute");
     }
@@ -389,7 +427,7 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
     if (parseWidgetConfig(p.widgetConfig).readOnly) {
       throw new ApiError(403, "READ_ONLY", "This project is not accepting replies from the page");
     }
-    if (!(await consume(`wc:${p.id}:${clientIp(c)}`, rateLimitFor(p), 60))) {
+    if (!(await consume(`wc:${p.id}:${clientIp(c, { privacy: inPrivacyMode(p) })}`, rateLimitFor(p), 60))) {
       throw new ApiError(429, "RATE_LIMITED", "Too many replies — try again in a minute");
     }
     const db = getDb();

@@ -1,4 +1,11 @@
-import { FEEDBACK_KINDS, FEEDBACK_STATUSES, PRIORITIES, WEBHOOK_KINDS } from "@annota/core";
+import {
+  FEEDBACK_KINDS,
+  FEEDBACK_STATUSES,
+  ISSUE_AUTO_CREATE,
+  ISSUE_PROVIDERS,
+  PRIORITIES,
+  WEBHOOK_KINDS,
+} from "@annota/core";
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -8,6 +15,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -63,6 +71,10 @@ export const project = pgTable(
     notifyReporter: boolean("notify_reporter").notNull().default(false),
     /** Widget reports/replies per IP per minute; null = `WIDGET_RATE_LIMIT_PER_MIN`. */
     widgetRateLimitPerMin: integer("widget_rate_limit_per_min"),
+    /** Widget branding (wave-3 contract §2): hidePoweredBy, dialogAccent, logoUrl. */
+    widgetBranding: jsonb("widget_branding").$type<Record<string, unknown>>().notNull().default({}),
+    /** AES-256-GCM ciphertext of the secret that signs webhook panel actions (F-016). */
+    actionSecret: text("action_secret"),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps,
@@ -323,4 +335,114 @@ export const apiToken = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("api_token_prefix_uq").on(t.prefix), index("api_token_org_idx").on(t.orgId)],
+);
+
+/** Per-organisation settings (branding, …) as JSON by key. */
+export const orgSetting = pgTable(
+  "org_setting",
+  {
+    orgId: orgId(),
+    key: text("key").notNull(),
+    value: jsonb("value").$type<Record<string, unknown>>().notNull().default({}),
+    updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [primaryKey({ columns: [t.orgId, t.key] })],
+);
+
+/**
+ * Logos for dashboard, email and widget branding. Served without a session by random id
+ * (`/api/brand-assets/:id`) because email clients and third-party pages must load them.
+ */
+export const brandAsset = pgTable(
+  "brand_asset",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    storageKey: text("storage_key").notNull(),
+    contentType: text("content_type").notNull(),
+    bytes: integer("bytes").notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("brand_asset_org_idx").on(t.orgId)],
+);
+
+/** Per-organisation overrides of an email template's subject and Markdown body (F-020). */
+export const emailTemplate = pgTable(
+  "email_template",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    key: text("key").notNull(),
+    subject: text("subject").notNull(),
+    body: text("body").notNull(),
+    updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("email_template_org_key_uq").on(t.orgId, t.key)],
+);
+
+export const issueProviderEnum = pgEnum("issue_provider", ISSUE_PROVIDERS);
+
+/** GitHub / GitLab issue sync for one project, authenticated by an access token (ADR 0015). */
+export const issueIntegration = pgTable(
+  "issue_integration",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    provider: issueProviderEnum("provider").notNull(),
+    /** AES-256-GCM ciphertext of the access token. */
+    token: text("token").notNull(),
+    /** Last 4 characters, to recognise the token in the UI. */
+    tokenHint: text("token_hint").notNull(),
+    repo: text("repo").notNull(),
+    /** GitHub Enterprise / self-managed GitLab base URL; null = instance default. */
+    apiUrl: text("api_url"),
+    labels: text("labels").array().notNull().default(sql`'{}'::text[]`),
+    autoCreate: text("auto_create", { enum: ISSUE_AUTO_CREATE }).notNull().default("manual"),
+    /** AES-256-GCM ciphertext of the inbound webhook secret (X-Hub-Signature-256 / X-Gitlab-Token). */
+    webhookSecret: text("webhook_secret").notNull(),
+    active: boolean("active").notNull().default(true),
+    lastError: text("last_error"),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("issue_integration_project_provider_uq").on(t.projectId, t.provider),
+    index("issue_integration_repo_idx").on(t.provider, t.repo),
+  ],
+);
+
+/** One tracker issue per feedback item and integration. */
+export const issueLink = pgTable(
+  "issue_link",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    feedbackId: uuid("feedback_id")
+      .notNull()
+      .references(() => feedback.id, { onDelete: "cascade" }),
+    integrationId: uuid("integration_id")
+      .notNull()
+      .references(() => issueIntegration.id, { onDelete: "cascade" }),
+    provider: issueProviderEnum("provider").notNull(),
+    /** GitHub issue number / GitLab issue iid. */
+    number: integer("number").notNull(),
+    url: text("url").notNull(),
+    state: text("state", { enum: ["open", "closed"] })
+      .notNull()
+      .default("open"),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("issue_link_feedback_integration_uq").on(t.feedbackId, t.integrationId),
+    index("issue_link_integration_number_idx").on(t.integrationId, t.number),
+  ],
 );

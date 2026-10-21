@@ -9,9 +9,11 @@ import {
   notificationPreferenceInput,
   notificationsRead,
   parseCaptureConfig,
+  parseWidgetBranding,
   parseWidgetConfig,
   projectCreate,
   projectUpdate,
+  widgetBranding,
   widgetConfig,
 } from "@annota/core";
 import {
@@ -31,11 +33,15 @@ import { zValidator } from "@hono/zod-validator";
 import { and, asc, count, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import type { z } from "zod";
-import { isOrgAdmin, requireSession, type SessionVars } from "../context";
+import { isInstanceAdmin, isOrgAdmin, requireOrgAdmin, requireSession, type SessionVars } from "../context";
 import { ApiError, forbidden, notFound } from "../errors";
+import { ensureActionSecret, rotateActionSecret, runPanelAction } from "../services/actions";
 import { addTeamComment, getFeedbackDetail, listFeedback, updateFeedback } from "../services/feedback";
+import { getSecuritySettings } from "../settings/instance";
 import { storage } from "../storage";
 import { admin } from "./admin";
+import { branding } from "./branding";
+import { integrations } from "./integrations";
 import { tokens } from "./tokens";
 import { webhooks } from "./webhooks";
 
@@ -56,12 +62,20 @@ function slugify(name: string) {
 }
 
 type ProjectRow = typeof project.$inferSelect;
-/** Projects always go out with complete configs (defaults filled), so forms never see gaps. */
-const projectOut = (p: ProjectRow) => ({
+/**
+ * Projects always go out with complete configs (defaults filled), so forms never see gaps. The
+ * action signing secret never does — only whether one exists.
+ */
+const projectOut = ({ actionSecret, ...p }: ProjectRow) => ({
   ...p,
   widgetConfig: parseWidgetConfig(p.widgetConfig),
   captureConfig: parseCaptureConfig(p.captureConfig),
+  widgetBranding: parseWidgetBranding(p.widgetBranding),
+  hasActionSecret: actionSecret !== null,
 });
+
+/** Privacy mode shortens a "keep forever" retention to this (F-021). */
+const PRIVACY_RETENTION_DAYS = 90;
 
 /** Merge a partial config onto the stored one and validate the result as a whole. */
 function mergeAndValidate<S extends z.ZodType>(
@@ -93,7 +107,16 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       .select({ id: user.id, name: user.name, email: user.email, image: user.image })
       .from(user)
       .where(eq(user.id, c.var.userId));
-    return c.json({ user: u, orgId: c.var.orgId, role: c.var.role });
+    // Instance admins also learn whether a newer release exists ("Update available").
+    const instanceAdmin = await isInstanceAdmin(c.var.userId);
+    const update = instanceAdmin ? (await getSecuritySettings()).update : null;
+    return c.json({
+      user: u,
+      orgId: c.var.orgId,
+      role: c.var.role,
+      instanceAdmin,
+      update: update?.available ? { latest: update.latest, url: update.url } : null,
+    });
   })
 
   .get("/members", async (c) => {
@@ -186,18 +209,38 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
 
   .patch("/projects/:id", zValidator("json", projectUpdate), async (c) => {
     const db = getDb();
-    const { widgetConfig: widgetPatch, captureConfig: capturePatch, archived, ...rest } = c.req.valid("json");
+    const {
+      widgetConfig: widgetPatch,
+      captureConfig: capturePatch,
+      widgetBranding: brandingPatch,
+      archived,
+      ...rest
+    } = c.req.valid("json");
     const where = and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId));
     const [current] = await db.select().from(project).where(where);
     if (!current) throw notFound("Project");
     const set: Partial<typeof project.$inferInsert> = { ...rest };
     if (archived !== undefined) set.archivedAt = archived ? (current.archivedAt ?? new Date()) : null;
     if (widgetPatch) {
-      set.widgetConfig = mergeAndValidate(
-        widgetConfig,
-        parseWidgetConfig(current.widgetConfig),
-        widgetPatch,
-        "INVALID_WIDGET_CONFIG",
+      const before = parseWidgetConfig(current.widgetConfig);
+      const next = mergeAndValidate(widgetConfig, before, widgetPatch, "INVALID_WIDGET_CONFIG");
+      set.widgetConfig = next;
+      // Turning privacy mode on shortens "keep forever" to 90 days, unless this request sets it.
+      if (
+        next.privacyMode &&
+        !before.privacyMode &&
+        rest.retentionDays === undefined &&
+        current.retentionDays === null
+      ) {
+        set.retentionDays = PRIVACY_RETENTION_DAYS;
+      }
+    }
+    if (brandingPatch) {
+      set.widgetBranding = mergeAndValidate(
+        widgetBranding,
+        parseWidgetBranding(current.widgetBranding),
+        brandingPatch,
+        "INVALID_WIDGET_BRANDING",
       );
     }
     if (capturePatch) {
@@ -222,6 +265,25 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       .returning();
     if (!p) throw notFound("Project");
     return c.json({ project: projectOut(p) });
+  })
+
+  /** The secret that signs webhook panel actions (created on first read). Org admins only. */
+  .get("/projects/:id/action-secret", requireOrgAdmin, async (c) => {
+    const [p] = await getDb()
+      .select({ id: project.id, actionSecret: project.actionSecret })
+      .from(project)
+      .where(and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId)));
+    if (!p) throw notFound("Project");
+    return c.json({ secret: await ensureActionSecret(p) });
+  })
+
+  .post("/projects/:id/action-secret/rotate", requireOrgAdmin, async (c) => {
+    const [p] = await getDb()
+      .select({ id: project.id })
+      .from(project)
+      .where(and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId)));
+    if (!p) throw notFound("Project");
+    return c.json({ secret: await rotateActionSecret(p.id) });
   })
 
   // --- Feedback ------------------------------------------------------------------------------------
@@ -250,6 +312,11 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
     if (!f) throw notFound("Feedback");
     return c.body(null, 204);
   })
+
+  /** Run a webhook panel action (F-016): `{ ok, status, message, error }`, logged in the timeline. */
+  .post("/feedback/:id/actions/:actionId", async (c) =>
+    c.json(await runPanelAction(c.var.orgId, c.var.userId, c.req.param("id"), c.req.param("actionId"))),
+  )
 
   .post("/feedback/:id/comments", zValidator("json", commentCreate), async (c) => {
     const created = await addTeamComment(
@@ -434,4 +501,6 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
 
   .route("/", webhooks)
   .route("/", tokens)
+  .route("/", integrations)
+  .route("/", branding)
   .route("/admin", admin);

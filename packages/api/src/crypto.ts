@@ -55,6 +55,13 @@ export function safeEqualHex(a: string, b: string): boolean {
   return ab.length === bb.length && ab.length > 0 && timingSafeEqual(ab, bb);
 }
 
+/** Constant-time string comparison (webhook signatures and tokens). */
+export function safeEqualStr(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ab.length === bb.length && ab.length > 0 && timingSafeEqual(ab, bb);
+}
+
 export const randomToken = (bytes = 32) => randomBytes(bytes).toString("base64url");
 
 export const hmacSha256Hex = (secret: string, data: string) =>

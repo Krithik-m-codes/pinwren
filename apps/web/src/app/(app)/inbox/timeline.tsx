@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   CircleDot,
+  ExternalLink,
   Flag,
   Lock,
   MoreHorizontal,
@@ -12,6 +13,7 @@ import {
   PencilLine,
   Trash2,
   UserRound,
+  Zap,
 } from "lucide-react";
 import { forwardRef, useState } from "react";
 import { toast } from "sonner";
@@ -57,6 +59,8 @@ const isPriority = (v: unknown): v is Priority => typeof v === "string" && v in 
 function actorOf(e: ActivityEvent): string {
   if (e.actorName) return e.actorName;
   if (e.actorKind === "guest") return e.data.via === "reporter" ? "The reporter" : "A visitor";
+  if (e.actorKind === "integration")
+    return e.data.via === "gitlab" ? "GitLab" : e.data.via === "github" ? "GitHub" : "An integration";
   return "Someone";
 }
 
@@ -87,6 +91,7 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
         )}
         <span className="text-foreground">{STATUS_META[to].label}</span>
         {e.data.via === "api" && " via API"}
+        {typeof e.data.issue === "number" && ` (issue #${e.data.issue})`}
       </>
     );
   } else if (e.type === "priority_changed" && isPriority(to)) {
@@ -114,6 +119,45 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
     body = (
       <>
         {who} renamed this to <span className="text-foreground">“{String(to ?? "")}”</span>
+      </>
+    );
+  } else if (e.type === "action_run") {
+    icon = <Zap className="size-3.5" />;
+    body = (
+      <>
+        {who} ran{" "}
+        <span className="text-foreground">“{String(e.data.label ?? e.data.actionId ?? "an action")}”</span>
+        {e.data.ok === true ? (
+          typeof e.data.message === "string" && e.data.message ? (
+            <> — {e.data.message}</>
+          ) : null
+        ) : (
+          <span className="text-destructive">
+            {" "}
+            — failed ({String(e.data.error ?? e.data.status ?? "error")})
+          </span>
+        )}
+      </>
+    );
+  } else if (e.type === "issue_linked") {
+    icon = <ExternalLink className="size-3.5" />;
+    const url = typeof e.data.url === "string" && /^https?:\/\//.test(e.data.url) ? e.data.url : null;
+    const label = `${e.data.provider === "gitlab" ? "GitLab" : "GitHub"} issue #${String(e.data.number ?? "")}`;
+    body = (
+      <>
+        Linked{" "}
+        {url ? (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground underline-offset-4 hover:underline"
+          >
+            {label}
+          </a>
+        ) : (
+          <span className="text-foreground">{label}</span>
+        )}
       </>
     );
   } else if (e.type === "comment_deleted") {

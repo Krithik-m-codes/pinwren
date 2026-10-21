@@ -1,6 +1,11 @@
 "use client";
 
-import { type CaptureConfigInput, mergeConfig, type WidgetConfigInput } from "@annota/core";
+import {
+  type CaptureConfigInput,
+  mergeConfig,
+  type WidgetBrandingInput,
+  type WidgetConfigInput,
+} from "@annota/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api, type ProjectDetail, qk } from "@/lib/api";
@@ -13,6 +18,7 @@ export type ProjectPatch = Partial<
 > & {
   widgetConfig?: WidgetConfigInput;
   captureConfig?: CaptureConfigInput;
+  widgetBranding?: WidgetBrandingInput;
   archived?: boolean;
 };
 
@@ -38,11 +44,13 @@ export function useProjectPatch(id: string) {
       await qc.cancelQueries({ queryKey: qk.project(id) });
       const prev = qc.getQueryData<{ project: ProjectDetail }>(qk.project(id));
       if (prev) {
-        const { widgetConfig, captureConfig, archived, ...rest } = patch;
+        const { widgetConfig, captureConfig, widgetBranding, archived, ...rest } = patch;
         const next: ProjectDetail = { ...prev.project, ...rest };
         if (widgetConfig) next.widgetConfig = mergeConfig(prev.project.widgetConfig, widgetConfig) as never;
         if (captureConfig)
           next.captureConfig = mergeConfig(prev.project.captureConfig, captureConfig) as never;
+        if (widgetBranding)
+          next.widgetBranding = mergeConfig(prev.project.widgetBranding, widgetBranding) as never;
         if (archived !== undefined) next.archivedAt = archived ? new Date().toISOString() : null;
         qc.setQueryData(qk.project(id), { project: next });
       }

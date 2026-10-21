@@ -8,7 +8,7 @@ import { createServer } from "node:http";
 
 const B = process.argv[2] ?? "http://localhost:3100";
 const mainJar = { cookie: "" };
-async function call(path, { method = "GET", json, headers = {}, jar = mainJar } = {}) {
+async function call(path, { method = "GET", json, rawBody, headers = {}, jar = mainJar } = {}) {
   const res = await fetch(B + path, {
     method,
     headers: {
@@ -17,7 +17,7 @@ async function call(path, { method = "GET", json, headers = {}, jar = mainJar } 
       origin: B,
       ...headers,
     },
-    body: json ? JSON.stringify(json) : undefined,
+    body: rawBody ?? (json ? JSON.stringify(json) : undefined),
     redirect: "manual",
   });
   const set = res.headers.getSetCookie?.() ?? [];
@@ -688,6 +688,780 @@ if (r.status === 403) {
     });
     check("SMTP password cleared", r.status === 200 && r.body.email?.passwordSet === false);
   }
+}
+
+// =============================================================================================
+// Wave 3: panel actions, branding, email templates, privacy mode, issue sync, instance security
+// =============================================================================================
+const r0 = await call("/api/admin/settings/security", { jar: adminJar });
+const isInstanceAdmin = r0.status === 200;
+const security = r0.body.security;
+
+// One local server plays every outside party: action/webhook receivers, a fake GitHub API (also the
+// release feed for the update check — start the server with GITHUB_API_URL pointing here) and a fake
+// self-managed GitLab under /gitlab. SMOKE_FAKE_API_PORT (default 4790) must match GITHUB_API_URL.
+const fake = { requests: [], issues: new Map(), nextIssue: 100 };
+const GH_TOKEN = "ghp_smoke_token_1234";
+const GL_TOKEN = "glpat-smoke-token-5678";
+const fakeServer = createServer((req, res) => {
+  let body = "";
+  req.on("data", (c) => {
+    body += c;
+  });
+  req.on("end", () => {
+    const url = new URL(req.url, "http://fake");
+    const entry = { method: req.method, path: url.pathname, headers: req.headers, body };
+    fake.requests.push(entry);
+    const json = (status, data) => {
+      res.statusCode = status;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify(data));
+    };
+    const p = url.pathname;
+    if (p === "/action") return json(200, { message: "Ticket ABC-1 created\nfor you" });
+    if (p === "/action-fail") return json(500, { message: "Receiver is down" });
+    if (p.endsWith("/releases/latest")) {
+      return json(200, {
+        tag_name: "v99.0.0",
+        html_url: "https://github.com/annota-dev/annota/releases/tag/v99.0.0",
+      });
+    }
+    const gh = /^\/repos\/([^/]+)\/([^/]+)(\/issues(?:\/(\d+))?)?$/.exec(p);
+    if (gh) {
+      if (req.headers.authorization !== `Bearer ${GH_TOKEN}`)
+        return json(401, { message: "Bad credentials" });
+      if (!gh[3]) return json(200, { full_name: `${gh[1]}/${gh[2]}` });
+      if (req.method === "POST") {
+        const number = fake.nextIssue++;
+        fake.issues.set(`gh:${number}`, { ...JSON.parse(body), state: "open" });
+        return json(201, { number, html_url: `https://github.example/${gh[1]}/${gh[2]}/issues/${number}` });
+      }
+      const issue = fake.issues.get(`gh:${gh[4]}`);
+      if (!issue) return json(404, { message: "Not Found" });
+      Object.assign(issue, JSON.parse(body));
+      return json(200, { number: Number(gh[4]), state: issue.state });
+    }
+    const gl = /^\/gitlab\/api\/v4\/projects\/([^/]+)(\/issues(?:\/(\d+))?)?$/.exec(p);
+    if (gl) {
+      if (req.headers["private-token"] !== GL_TOKEN) return json(401, { message: "401 Unauthorized" });
+      const path = decodeURIComponent(gl[1]);
+      if (!gl[2]) return json(200, { path_with_namespace: path });
+      if (req.method === "POST") {
+        const iid = fake.nextIssue++;
+        fake.issues.set(`gl:${iid}`, { ...JSON.parse(body), state: "opened" });
+        return json(201, { iid, web_url: `https://gitlab.example/${path}/-/issues/${iid}` });
+      }
+      const issue = fake.issues.get(`gl:${gl[3]}`);
+      if (!issue) return json(404, { message: "404 Not found" });
+      const ev = JSON.parse(body).state_event;
+      issue.state = ev === "close" ? "closed" : "opened";
+      return json(200, { iid: Number(gl[3]), state: issue.state });
+    }
+    json(404, { message: "no route" });
+  });
+});
+const fakePort = Number(process.env.SMOKE_FAKE_API_PORT ?? 4790);
+const fakeUp = await new Promise((resolve) => {
+  fakeServer.once("error", () => resolve(false));
+  fakeServer.listen(fakePort, listenHost, () => resolve(true));
+});
+if (!fakeUp) await new Promise((resolve) => fakeServer.listen(0, listenHost, resolve));
+const fakeBase = `http://${receiverHost}:${fakeServer.address().port}`;
+
+try {
+  // --- Panel actions (F-016) ------------------------------------------------------------------------
+  console.log("\n— panel actions");
+  const actions = [
+    {
+      id: "jira",
+      label: "Create Jira ticket",
+      kind: "link",
+      url: "https://jira.example.com/create?summary={number}&page={url}&p={projectSlug}",
+      icon: "ticket",
+    },
+    {
+      id: "agent",
+      label: "Send to agent",
+      kind: "webhook",
+      url: `${fakeBase}/action`,
+      visibleTo: "everyone",
+      icon: "bot",
+    },
+    { id: "broken", label: "Broken hook", kind: "webhook", url: `${fakeBase}/action-fail` },
+    {
+      id: "internal",
+      label: "Internal docs",
+      kind: "link",
+      url: "https://wiki.example.com/{id}",
+      visibleTo: "team",
+    },
+  ];
+  r = await call(`/api/projects/${projectId}`, {
+    method: "PATCH",
+    json: { widgetConfig: { panelActions: actions } },
+  });
+  const savedActions = r.body.project?.widgetConfig?.panelActions ?? [];
+  check(
+    "panel actions saved; webhook actions forced to the team",
+    r.status === 200 &&
+      savedActions.length === 4 &&
+      savedActions.find((a) => a.id === "agent")?.visibleTo === "team" &&
+      savedActions.find((a) => a.id === "jira")?.visibleTo === "everyone",
+    r.status,
+  );
+  check("project never returns the action secret", r.body.project && !("actionSecret" in r.body.project));
+  r = await call(`/api/projects/${projectId}`, {
+    method: "PATCH",
+    json: {
+      widgetConfig: { panelActions: [{ id: "x", label: "X", kind: "link", url: "javascript:alert(1)" }] },
+    },
+  });
+  check(
+    "javascript: action URL rejected",
+    r.status === 400 && r.body.code === "INVALID_WIDGET_CONFIG",
+    r.status,
+  );
+  r = await call(`/api/projects/${projectId}`, {
+    method: "PATCH",
+    json: {
+      widgetConfig: {
+        panelActions: [{ id: "x", label: "X", kind: "link", url: "https://x.example/{token}" }],
+      },
+    },
+  });
+  check("unknown placeholder rejected", r.status === 400, r.status);
+  r = await W("/w/config");
+  check(
+    "widget config gets only visitor link actions (no webhook URLs)",
+    r.body.widget?.panelActions?.length === 1 &&
+      r.body.widget.panelActions[0].id === "jira" &&
+      !JSON.stringify(r.body).includes("/action"),
+  );
+  check(
+    "widget config carries the project slug for {projectSlug}",
+    typeof r.body.project?.slug === "string" && r.body.project.slug.length > 0,
+  );
+  r = await call(`/api/feedback/${fid}`);
+  check(
+    "item detail lists every action + project slug",
+    r.body.panelActions?.length === 4 && typeof r.body.feedback?.projectSlug === "string",
+  );
+  r = await call(`/api/projects/${projectId}/action-secret`, { jar: memberJar });
+  check("members can't read the action secret", r.status === 403, r.status);
+  r = await call(`/api/projects/${projectId}/action-secret`);
+  const actionSecret = r.body.secret;
+  check("admins reveal the action secret", r.status === 200 && actionSecret?.startsWith("whsec_"));
+  const before3 = fake.requests.length;
+  r = await call(`/api/feedback/${fid}/actions/agent`, { method: "POST", jar: memberJar });
+  const actionReq = fake.requests.slice(before3).find((x) => x.path === "/action");
+  check(
+    "webhook action returns the receiver's message",
+    r.status === 200 &&
+      r.body.ok === true &&
+      r.body.status === 200 &&
+      r.body.message === "Ticket ABC-1 created for you",
+    JSON.stringify(r.body),
+  );
+  check("webhook action is signed with the action secret", !!actionReq && verify(actionReq, actionSecret));
+  const actionPayload = actionReq ? JSON.parse(actionReq.body) : {};
+  check(
+    "action payload carries the feedback and the action",
+    actionPayload.event === "action.run" &&
+      actionPayload.data?.feedback?.id === fid &&
+      actionPayload.data?.action?.id === "agent",
+  );
+  r = await call(`/api/feedback/${fid}/actions/broken`, { method: "POST" });
+  check(
+    "failing receiver reported, not thrown",
+    r.status === 200 && r.body.ok === false && r.body.status === 500,
+  );
+  r = await call(`/api/feedback/${fid}/actions/jira`, { method: "POST" });
+  check("link actions don't run on the server", r.status === 400, r.status);
+  r = await call(`/api/feedback/${fid}/actions/nope`, { method: "POST" });
+  check("unknown action is 404", r.status === 404, r.status);
+  r = await call(`/api/feedback/${fid}`);
+  check(
+    "action runs logged in activity",
+    r.body.activity?.filter((a) => a.type === "action_run").length === 2 &&
+      r.body.activity.some(
+        (a) => a.type === "action_run" && a.data.ok === true && a.data.label === "Send to agent",
+      ),
+  );
+  r = await call(`/api/projects/${projectId}/action-secret/rotate`, { method: "POST" });
+  const rotated = r.body.secret;
+  const before4 = fake.requests.length;
+  await call(`/api/feedback/${fid}/actions/agent`, { method: "POST" });
+  const afterRotate = fake.requests.slice(before4).find((x) => x.path === "/action");
+  check(
+    "rotated secret signs the next run",
+    rotated &&
+      rotated !== actionSecret &&
+      !!afterRotate &&
+      verify(afterRotate, rotated) &&
+      !verify(afterRotate, actionSecret),
+  );
+
+  // --- Branding (F-094) ---------------------------------------------------------------------------
+  console.log("\n— branding");
+  r = await call("/api/branding", { jar: memberJar });
+  check("members read the branding", r.status === 200 && "productName" in (r.body.branding ?? {}));
+  r = await call("/api/branding", { method: "PATCH", json: { productName: "Hacked" }, jar: memberJar });
+  check("members can't change the branding", r.status === 403, r.status);
+  r = await call("/api/branding/assets", {
+    method: "POST",
+    json: { dataUrl: `data:image/svg+xml;base64,${Buffer.from("<svg onload=alert(1)>").toString("base64")}` },
+  });
+  check("SVG logos refused", r.status === 400, r.status);
+  r = await call("/api/branding/assets", {
+    method: "POST",
+    json: { dataUrl: "data:image/png;base64,PHN2Zz4=" },
+  });
+  check("logo with fake PNG bytes refused", r.status === 400 && r.body.code === "INVALID_IMAGE", r.status);
+  r = await call("/api/branding/assets", { method: "POST", json: { dataUrl: png } });
+  const logo = r.body.asset;
+  check("logo uploaded", r.status === 201 && logo?.url?.includes(`/api/brand-assets/${logo.id}`), r.status);
+  r = await call("/api/branding", { method: "PATCH", json: { accent: "red" } });
+  check("invalid accent refused", r.status === 400, r.status);
+  r = await call("/api/branding", {
+    method: "PATCH",
+    json: { productName: "Acme Feedback", accent: "#e5484d", logoAssetId: logo?.id },
+  });
+  check(
+    "branding saved",
+    r.status === 200 &&
+      r.body.branding?.productName === "Acme Feedback" &&
+      r.body.branding?.accent === "#e5484d" &&
+      r.body.branding?.logoUrl === logo?.url,
+  );
+  r = await call(`/api/brand-assets/${logo?.id}`, { jar: { cookie: "" } });
+  check(
+    "logo served without a session (emails, widget)",
+    r.status === 200 &&
+      r.headers.get("content-type") === "image/png" &&
+      (r.headers.get("content-security-policy") ?? "").includes("sandbox"),
+  );
+  r = await call(`/api/projects/${projectId}`, {
+    method: "PATCH",
+    json: { widgetBranding: { hidePoweredBy: true, dialogAccent: "#112233", logoUrl: logo?.url } },
+  });
+  check(
+    "project widget branding saved",
+    r.status === 200 && r.body.project?.widgetBranding?.hidePoweredBy === true,
+  );
+  r = await call(`/api/projects/${projectId}`, {
+    method: "PATCH",
+    json: { widgetBranding: { logoUrl: "javascript:alert(1)" } },
+  });
+  check(
+    "unsafe widget logo URL refused",
+    r.status === 400 && r.body.code === "INVALID_WIDGET_BRANDING",
+    r.status,
+  );
+  r = await W("/w/config");
+  check(
+    "widget config carries branding",
+    r.body.branding?.hidePoweredBy === true &&
+      r.body.branding?.dialogAccent === "#112233" &&
+      r.body.branding?.logoUrl === logo?.url,
+  );
+
+  // --- Email templates (F-020) --------------------------------------------------------------------
+  console.log("\n— email templates");
+  r = await call("/api/email-templates", { jar: memberJar });
+  check("members can't edit email templates", r.status === 403, r.status);
+  r = await call("/api/email-templates");
+  const tpl = r.body.templates?.find((t) => t.key === "feedback_created");
+  check(
+    "templates listed with their variables",
+    r.status === 200 &&
+      r.body.templates.length === 7 &&
+      tpl?.variables?.some((v) => v.name === "reporterName") &&
+      tpl.customized === false,
+  );
+  r = await call("/api/email-templates/feedback_created", {
+    method: "PUT",
+    json: { subject: "New: {{title}}", body: "Hi {{secretToken}}" },
+  });
+  check("unknown variables refused", r.status === 400 && r.body.code === "UNKNOWN_VARIABLE", r.status);
+  r = await call("/api/email-templates/feedback_created", {
+    method: "PUT",
+    json: {
+      subject: "[{{productName}}] {{title}} from {{reporterName}}",
+      body: "# Heads up\n\n**{{reporterName}}** wrote on [the page]({{pageUrl}}):\n\n> {{body}}\n\n<img src=x onerror=alert(1)>",
+    },
+  });
+  check("template saved", r.status === 200 && r.body.template?.customized === true);
+  r = await call("/api/email-templates/feedback_created/preview", {
+    method: "POST",
+    json: { variables: { reporterName: "<script>alert(1)</script>", pageUrl: "javascript:alert(2)" } },
+  });
+  const pv = r.body.preview ?? {};
+  check(
+    "preview escapes a <script> reporter name",
+    r.status === 200 &&
+      !pv.html?.includes("<script>") &&
+      pv.html?.includes("&lt;script&gt;alert(1)&lt;/script&gt;") &&
+      !pv.subject?.includes("\n"),
+  );
+  check(
+    "preview: raw HTML in the template is text, unsafe link dropped",
+    !pv.html?.includes("<img src=x") &&
+      !/href="javascript/.test(pv.html ?? "") &&
+      pv.html?.includes("<strong>"),
+  );
+  check(
+    "preview uses the branding",
+    pv.subject?.startsWith("[Acme Feedback]") &&
+      pv.html?.includes("Sent by Acme Feedback") &&
+      pv.html?.includes("#e5484d"),
+  );
+  r = await call("/api/email-templates/feedback_created/test", { method: "POST", json: {} });
+  check("template test send answers cleanly", r.status === 200 && typeof r.body.sent === "boolean");
+  r = await call("/api/email-templates/feedback_created", { method: "DELETE" });
+  check(
+    "reset to the default wording",
+    r.status === 200 &&
+      r.body.template?.customized === false &&
+      r.body.template.subject === tpl?.defaultSubject,
+  );
+
+  // --- Privacy mode (F-021) -----------------------------------------------------------------------
+  console.log("\n— privacy mode");
+  r = await call("/api/projects", {
+    method: "POST",
+    json: { name: "Privacy site", allowedOrigins: ["localhost:5173"] },
+  });
+  const privacyProject = r.body.project;
+  const PW = (path, opts = {}) =>
+    call(path, {
+      ...opts,
+      jar: { cookie: "" },
+      headers: { "x-annota-key": privacyProject.publicKey, origin: site, ...(opts.headers ?? {}) },
+    });
+  r = await call(`/api/projects/${privacyProject.id}`, {
+    method: "PATCH",
+    json: {
+      widgetConfig: { privacyMode: true },
+      captureConfig: { console: "all" },
+      widgetRateLimitPerMin: 2,
+    },
+  });
+  check(
+    "privacy mode on shortens retention to 90 days",
+    r.status === 200 &&
+      r.body.project?.widgetConfig?.privacyMode === true &&
+      r.body.project.retentionDays === 90,
+  );
+  r = await PW("/w/config");
+  check(
+    "privacy mode forces consent and caps console capture",
+    r.body.widget?.consent?.enabled === true &&
+      r.body.capture?.console === "errors" &&
+      r.body.widget.privacyMode === true,
+  );
+  r = await PW("/w/feedback", {
+    method: "POST",
+    headers: { "x-forwarded-for": "203.0.113.5" },
+    json: {
+      ...report,
+      clientId: crypto.randomUUID(),
+      screenshot: undefined,
+      environment: {
+        ...report.environment,
+        userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 8) Chrome/140.0.1",
+      },
+      metadata: { performance: { lcp: 1200 }, plan: "pro" },
+      diagnostics: {
+        console: [
+          { level: "error", message: "TypeError", at: 1 },
+          { level: "warn", message: "deprecated", at: 2 },
+          { level: "log", message: "user=alice@example.com", at: 3 },
+        ],
+      },
+    },
+  });
+  const pfid = r.body.feedback?.id;
+  r = await call(`/api/feedback/${pfid}`);
+  check(
+    "server keeps only console errors",
+    r.body.diagnostics?.console?.length === 1 && r.body.diagnostics.console[0].level === "error",
+  );
+  check(
+    "server drops metadata.performance and the full user agent",
+    r.body.feedback?.metadata?.plan === "pro" &&
+      !("performance" in (r.body.feedback?.metadata ?? {})) &&
+      r.body.feedback?.environment?.userAgent === "Chrome on Android" &&
+      r.body.feedback?.environment?.browser === "Chrome",
+    JSON.stringify(r.body.feedback?.environment),
+  );
+  if (security?.trustProxy === false) {
+    skip(
+      "IP truncation shares one rate-limit bucket per /24",
+      "start the server with ANNOTA_TRUST_PROXY=true",
+    );
+  } else {
+    r = await PW("/w/feedback", {
+      method: "POST",
+      headers: { "x-forwarded-for": "203.0.113.99" },
+      json: { ...report, clientId: crypto.randomUUID(), screenshot: undefined },
+    });
+    const second = r.status;
+    r = await PW("/w/feedback", {
+      method: "POST",
+      headers: { "x-forwarded-for": "203.0.113.7" },
+      json: { ...report, clientId: crypto.randomUUID(), screenshot: undefined },
+    });
+    check(
+      "privacy mode truncates IPs (one /24 = one rate-limit bucket)",
+      second === 201 && r.status === 429,
+      `${second} ${r.status}`,
+    );
+  }
+
+  // --- GitHub issue sync (F-076) ------------------------------------------------------------------
+  console.log("\n— GitHub");
+  const ghCreate = {
+    provider: "github",
+    token: GH_TOKEN,
+    repo: "acme/site",
+    apiUrl: fakeBase,
+    labels: ["feedback"],
+    autoCreate: "bugs",
+  };
+  r = await call(`/api/projects/${projectId}/integrations`, {
+    method: "POST",
+    json: ghCreate,
+    jar: memberJar,
+  });
+  check("members can't add integrations", r.status === 403, r.status);
+  r = await call(`/api/projects/${projectId}/integrations`, {
+    method: "POST",
+    json: { ...ghCreate, repo: "a/b/c" },
+  });
+  check("GitHub repo must be owner/name", r.status === 400, r.status);
+  r = await call(`/api/projects/${projectId}/integrations`, { method: "POST", json: ghCreate });
+  const gh = r.body.integration;
+  const ghSecret = r.body.webhookSecret;
+  check(
+    "GitHub integration created (token hidden)",
+    r.status === 201 &&
+      gh?.tokenHint === `…${GH_TOKEN.slice(-4)}` &&
+      !JSON.stringify(r.body).includes(GH_TOKEN),
+    r.status,
+  );
+  r = await call(`/api/projects/${projectId}/integrations`, { method: "POST", json: ghCreate });
+  check("one GitHub integration per project", r.status === 409, r.status);
+  r = await call(`/api/integrations/${gh?.id}/test`, { method: "POST" });
+  check(
+    "test connection reaches the repository",
+    r.body.ok === true && r.body.name === "acme/site",
+    JSON.stringify(r.body),
+  );
+  r = await call(`/api/integrations/${gh?.id}/webhook-secret`);
+  check(
+    "webhook secret + URL revealed to admins",
+    r.body.secret === ghSecret && r.body.url?.endsWith("/api/integrations/github/webhook"),
+  );
+
+  // A bug auto-creates an issue; the reporter's text is escaped in the body.
+  r = await W("/w/feedback", {
+    method: "POST",
+    json: {
+      ...report,
+      clientId: crypto.randomUUID(),
+      screenshot: undefined,
+      body: "Pay fails <script>alert(1)</script> cc @everyone see #1",
+      reporter: { name: "<img src=x onerror=alert(1)>" },
+    },
+  });
+  const bugId = r.body.feedback?.id;
+  const autoIssue = await waitFor(async () => {
+    const d = await call(`/api/feedback/${bugId}`);
+    return d.body.issues?.[0];
+  });
+  check(
+    "bug auto-creates a GitHub issue (job)",
+    !!autoIssue && autoIssue.provider === "github",
+    autoIssue ? "" : "timeout",
+  );
+  const ghIssue = autoIssue ? fake.issues.get(`gh:${autoIssue.number}`) : null;
+  check(
+    "issue body escapes the reporter's text and links to the dashboard",
+    !!ghIssue &&
+      !ghIssue.body.includes("<script>") &&
+      !ghIssue.body.includes("<img") &&
+      !ghIssue.body.includes("@everyone") &&
+      ghIssue.body.includes(`/inbox?status=all&item=${bugId}`) &&
+      !ghIssue.body.includes("/api/assets/") &&
+      ghIssue.labels?.[0] === "feedback",
+  );
+  // Comments aren't auto-created ("bugs"); send one by hand.
+  r = await call(`/api/feedback/${fid2}/issues`, {
+    method: "POST",
+    json: { integrationId: gh?.id },
+    jar: memberJar,
+  });
+  const manual = r.body.issue;
+  check(
+    "Send to GitHub (any member)",
+    r.status === 201 && manual?.url?.startsWith("https://github.example/"),
+    r.status,
+  );
+  r = await call(`/api/feedback/${fid2}/issues`, { method: "POST", json: { integrationId: gh?.id } });
+  check("sending again returns the same issue", r.body.issue?.number === manual?.number);
+  r = await call(`/api/feedback/${fid2}`);
+  check(
+    "item detail shows the issue link and the integration",
+    r.body.issues?.[0]?.url === manual?.url &&
+      r.body.integrations?.some((i) => i.id === gh?.id) &&
+      r.body.activity?.some((a) => a.type === "issue_linked"),
+  );
+
+  // Annota → GitHub: resolving closes the issue (job).
+  await call(`/api/feedback/${fid2}`, { method: "PATCH", json: { status: "resolved" } });
+  const closed = await waitFor(() => fake.issues.get(`gh:${manual?.number}`)?.state === "closed");
+  check("resolving in Annota closes the GitHub issue", !!closed, closed ? "" : "timeout");
+
+  // GitHub → Annota: signed webhooks reopen / close the item.
+  const hook = async (payload, { secret = ghSecret, event = "issues" } = {}) => {
+    const raw = JSON.stringify(payload);
+    return call("/api/integrations/github/webhook", {
+      method: "POST",
+      jar: { cookie: "" },
+      headers: {
+        "content-type": "application/json",
+        "x-github-event": event,
+        "x-hub-signature-256": `sha256=${createHmac("sha256", secret).update(raw).digest("hex")}`,
+      },
+      rawBody: raw,
+    });
+  };
+  const reopen = {
+    action: "reopened",
+    issue: { number: manual?.number },
+    repository: { full_name: "acme/site" },
+  };
+  r = await hook(reopen, { secret: "whsec_wrong" });
+  check("GitHub webhook with a bad signature is rejected", r.status === 401, r.status);
+  r = await call("/api/integrations/github/webhook", {
+    method: "POST",
+    jar: { cookie: "" },
+    headers: { "content-type": "application/json", "x-github-event": "issues" },
+    rawBody: JSON.stringify(reopen),
+  });
+  check("GitHub webhook without a signature is rejected", r.status === 401, r.status);
+  r = await hook({ ...reopen, repository: { full_name: "acme/other" } });
+  check("GitHub webhook for an unknown repo is rejected", r.status === 401, r.status);
+  r = await hook({ zen: "hi", repository: { full_name: "acme/site" } }, { event: "ping" });
+  check("GitHub ping verifies", r.status === 200 && r.body.event === "ping", r.status);
+  const patchesBefore = fake.requests.filter((x) => x.method === "PATCH").length;
+  r = await hook(reopen);
+  check(
+    "reopening the issue reopens the item",
+    r.status === 200 && r.body.feedback?.status === "open",
+    JSON.stringify(r.body),
+  );
+  r = await call(`/api/feedback/${fid2}`);
+  check(
+    "inbound change is written as the integration",
+    r.body.feedback?.status === "open" &&
+      r.body.activity?.some(
+        (a) => a.type === "status_changed" && a.actorKind === "integration" && a.data.via === "github",
+      ),
+  );
+  r = await hook({ ...reopen, action: "closed" });
+  check("closing the issue resolves the item", r.status === 200 && r.body.feedback?.status === "resolved");
+  await new Promise((res) => setTimeout(res, 2500));
+  check(
+    "inbound changes are not echoed back to GitHub",
+    fake.requests.filter((x) => x.method === "PATCH").length === patchesBefore,
+  );
+
+  // --- GitLab issue sync (F-077) ------------------------------------------------------------------
+  console.log("\n— GitLab");
+  r = await call(`/api/projects/${projectId}/integrations`, {
+    method: "POST",
+    json: {
+      provider: "gitlab",
+      token: "glpat-wrong-token-000",
+      repo: "grp/sub/site",
+      apiUrl: `${fakeBase}/gitlab`,
+      labels: ["feedback", "annota"],
+    },
+  });
+  const gl = r.body.integration;
+  const glSecret = r.body.webhookSecret;
+  check(
+    "GitLab integration (self-managed URL, nested group)",
+    r.status === 201 && gl?.autoCreate === "manual",
+    r.status,
+  );
+  r = await call(`/api/integrations/${gl?.id}/test`, { method: "POST" });
+  check(
+    "a wrong token is reported by the connection test",
+    r.body.ok === false && /token/.test(r.body.message ?? ""),
+  );
+  r = await call(`/api/integrations/${gl?.id}`, { method: "PATCH", json: { token: GL_TOKEN } });
+  check("token replaced", r.status === 200 && r.body.integration?.tokenHint === `…${GL_TOKEN.slice(-4)}`);
+  r = await call(`/api/feedback/${fid3}/issues`, { method: "POST", json: { integrationId: gl?.id } });
+  const glIssue = r.body.issue;
+  const glStored = glIssue ? fake.issues.get(`gl:${glIssue.number}`) : null;
+  check(
+    "Send to GitLab",
+    r.status === 201 && glIssue?.provider === "gitlab" && glStored?.labels === "feedback,annota",
+    r.status,
+  );
+  const glHook = (payload, token = glSecret) =>
+    call("/api/integrations/gitlab/webhook", {
+      method: "POST",
+      jar: { cookie: "" },
+      headers: {
+        "content-type": "application/json",
+        "x-gitlab-token": token,
+        "x-gitlab-event": "Issue Hook",
+      },
+      rawBody: JSON.stringify(payload),
+    });
+  const glClose = {
+    object_kind: "issue",
+    project: { path_with_namespace: "grp/sub/site" },
+    object_attributes: { iid: glIssue?.number, action: "close" },
+  };
+  r = await glHook(glClose, "not-the-secret");
+  check("GitLab webhook with a wrong X-Gitlab-Token is rejected", r.status === 401, r.status);
+  r = await glHook(glClose);
+  check(
+    "closing the GitLab issue resolves the item",
+    r.status === 200 && r.body.feedback?.status === "resolved",
+  );
+  await call(`/api/feedback/${fid3}`, { method: "PATCH", json: { status: "open" } });
+  const glReopened = await waitFor(() => fake.issues.get(`gl:${glIssue?.number}`)?.state === "opened");
+  check("reopening in Annota reopens the GitLab issue", !!glReopened, glReopened ? "" : "timeout");
+
+  // --- Instance security ----------------------------------------------------------------------------
+  console.log("\n— instance security");
+  r = await call("/api/admin/settings/security", { jar: memberJar });
+  check("members can't read security settings", r.status === 403, r.status);
+  if (!isInstanceAdmin) {
+    skip(
+      "security settings, update check",
+      "start the server with ANNOTA_ADMIN_EMAILS=smoke-admin@example.com",
+    );
+  } else {
+    check(
+      "admin reads security settings",
+      typeof security.sessionDays === "number" && "enforceHttps" in security,
+    );
+    if (security.locked.sessionDays) {
+      skip("session lifetime", "ANNOTA_SESSION_DAYS locks it");
+    } else {
+      r = await call("/api/admin/settings/security", {
+        method: "PATCH",
+        json: { sessionDays: 0 },
+        jar: adminJar,
+      });
+      check("session lifetime must be 1–90 days", r.status === 400, r.status);
+      r = await call("/api/admin/settings/security", {
+        method: "PATCH",
+        json: { sessionDays: 2 },
+        jar: adminJar,
+      });
+      check("session lifetime saved", r.status === 200 && r.body.security?.sessionDays === 2);
+      const fresh = { cookie: "" };
+      await call("/api/auth/sign-in/email", {
+        method: "POST",
+        json: { email, password: "correct-horse-1" },
+        jar: fresh,
+      });
+      r = await call("/api/auth/get-session", { jar: fresh });
+      const ttlDays = (new Date(r.body?.session?.expiresAt).getTime() - Date.now()) / 86_400_000;
+      check("new sessions get the configured lifetime", ttlDays > 1.9 && ttlDays <= 2.01, ttlDays.toFixed(3));
+      await call("/api/admin/settings/security", {
+        method: "PATCH",
+        json: { sessionDays: security.sessionDays },
+        jar: adminJar,
+      });
+    }
+
+    // Update check: skipped while any project uses privacy mode, then reads the (fake) release feed.
+    r = await call("/api/admin/update-check", { method: "POST", jar: adminJar });
+    check(
+      "update check is off while a project uses privacy mode",
+      r.body.checked === false && r.body.reason === "privacy_mode",
+      JSON.stringify(r.body),
+    );
+    await call(`/api/projects/${privacyProject.id}`, { method: "PATCH", json: { archived: true } });
+    r = await call("/api/admin/settings/security", { jar: adminJar });
+    if (r.body.security?.privacyModeProjects > 0) {
+      skip("update available", "another project on this instance uses privacy mode");
+    } else if (!security.updateCheck) {
+      skip("update available", "update check switched off on this instance");
+    } else {
+      r = await call("/api/admin/update-check", { method: "POST", jar: adminJar });
+      if (r.body.state?.error) {
+        skip(
+          "update available",
+          `release feed unreachable (${r.body.state.error}); set GITHUB_API_URL=${fakeBase}`,
+        );
+      } else {
+        check(
+          "update check reads the latest release",
+          r.body.checked === true && r.body.state?.latest === "v99.0.0",
+        );
+        r = await call("/api/me", { jar: adminJar });
+        check(
+          "instance admins see Update available",
+          r.body.instanceAdmin === true && r.body.update?.latest === "v99.0.0",
+        );
+        r = await call("/api/me");
+        check("non-admins don't", r.body.update === null);
+      }
+    }
+
+    // HTTPS enforcement: forwarded headers count only behind a trusted proxy.
+    if (!security.trustProxy) {
+      skip("HTTPS enforcement", "start the server with ANNOTA_TRUST_PROXY=true");
+    } else {
+      const fwd = (proto) => ({ "x-forwarded-proto": proto, "x-forwarded-host": "feedback.example.com" });
+      if (security.enforceHttps) {
+        r = await call("/api/health", { headers: fwd("http"), jar: { cookie: "" } });
+        check(
+          "HTTPS on: plain-HTTP GET redirects to https",
+          r.status === 308 && r.headers.get("location") === "https://feedback.example.com/api/health",
+          r.status,
+        );
+        r = await call("/inbox", { headers: fwd("http"), jar: { cookie: "" } });
+        check("HTTPS on: pages redirect too", r.status === 308, r.status);
+        r = await call("/api/auth/sign-in/email", {
+          method: "POST",
+          headers: fwd("http"),
+          json: { email, password: "x" },
+          jar: { cookie: "" },
+        });
+        check(
+          "HTTPS on: plain-HTTP POST refused",
+          r.status === 403 && r.body.code === "HTTPS_REQUIRED",
+          r.status,
+        );
+        r = await call("/api/health", { headers: fwd("https"), jar: { cookie: "" } });
+        check(
+          "HTTPS on: https requests pass with HSTS",
+          r.status === 200 && (r.headers.get("strict-transport-security") ?? "").includes("max-age="),
+        );
+        r = await call("/api/health", { jar: { cookie: "" } });
+        check("HTTPS on: localhost stays reachable", r.status === 200);
+      } else {
+        r = await call("/api/health", { headers: fwd("http"), jar: { cookie: "" } });
+        check(
+          "HTTPS off: plain HTTP is served, no HSTS",
+          r.status === 200 && !r.headers.get("strict-transport-security"),
+          r.status,
+        );
+      }
+    }
+  }
+} finally {
+  fakeServer.close();
 }
 
 console.log(`\n${passed} passed, ${failed} failed, ${skipped} skipped`);

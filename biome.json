@@ -5,6 +5,7 @@
       "**",
       "!**/node_modules",
       "!**/.next",
+      "!**/.next-*",
       "!**/dist",
       "!**/drizzle/meta",
       "!apps/web/src/components/ui",

@@ -1,10 +1,12 @@
+import { MAX_SESSION_DAYS } from "@annota/core";
 import { getDb, schema } from "@annota/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization } from "better-auth/plugins/organization";
-import { invitationEmail } from "./email/templates";
+import { renderEmail } from "./email/render";
 import { env } from "./env";
 import { enqueue, QUEUES } from "./jobs/boss";
+import { sessionLifetimeDays } from "./settings/instance";
 
 /** Dashboard page that accepts an invitation (calls Better Auth's accept-invitation endpoint). */
 export const acceptInvitationUrl = (id: string) =>
@@ -34,20 +36,37 @@ function createAuth() {
         async sendInvitationEmail(data) {
           await enqueue(QUEUES.email, {
             to: data.email,
-            ...invitationEmail({
+            ...(await renderEmail(data.organization.id, "invitation", {
               orgName: data.organization.name,
               inviterName: data.inviter.user.name || data.inviter.user.email,
               role: data.role,
               acceptUrl: acceptInvitationUrl(data.id),
-              expiresAt: new Date(data.invitation.expiresAt),
-            }),
+              expiresAt: new Date(data.invitation.expiresAt).toUTCString(),
+            })),
           });
         },
       }),
     ],
     // Signed session cache in a cookie: most dashboard requests skip the session lookup in Postgres.
     // Revocation (sign-out elsewhere) takes effect within maxAge.
-    session: { cookieCache: { enabled: true, maxAge: 60 } },
+    // Session lifetime is an instance setting (Settings › Security). The cookie may live as long as
+    // the longest allowed lifetime; each session row gets its own expiry when it is created, and
+    // sessions are not slid forward, so the admin's lifetime is a hard limit from sign-in.
+    session: {
+      cookieCache: { enabled: true, maxAge: 60 },
+      expiresIn: MAX_SESSION_DAYS * 24 * 3600,
+      disableSessionRefresh: true,
+    },
+    databaseHooks: {
+      session: {
+        create: {
+          async before(session) {
+            const days = await sessionLifetimeDays();
+            return { data: { ...session, expiresAt: new Date(Date.now() + days * 24 * 3600 * 1000) } };
+          },
+        },
+      },
+    },
     advanced: { database: { generateId: () => crypto.randomUUID() } },
     trustedOrigins: [e.ANNOTA_URL],
   });

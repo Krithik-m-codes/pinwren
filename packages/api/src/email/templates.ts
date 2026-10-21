@@ -1,72 +1,227 @@
-// Email templates: small functions returning { subject, html, text }. Everything that came from a
-// user (feedback text, names, URLs, project names) goes through `esc` / `safeUrl` — feedback is
-// written by anonymous visitors.
+import type { EmailTemplateKey } from "@annota/core";
+import { esc, renderMarkdown, renderSubject, safeHref, VARIABLE, variablesIn } from "./markdown";
+
+// Email templates (F-020): each one is a subject + Markdown body with `{{variable}}` placeholders.
+// Organisations can override both per template; the defaults below apply otherwise. Every value
+// that reaches a template came from users (feedback text, names, URLs) and is escaped by
+// `renderMarkdown` — the template author can format, the variables never can.
+
+export { esc } from "./markdown";
 
 export type Rendered = { subject: string; html: string; text: string };
 
-export function esc(s: unknown): string {
-  return String(s ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
+/** Organisation branding applied to every email (F-094). */
+export type EmailBrand = { productName: string; accent: string; logoUrl: string | null };
+export const DEFAULT_BRAND: EmailBrand = { productName: "Annota", accent: "#5b5bd6", logoUrl: null };
 
-/** Only http(s) links survive; anything else (javascript:, data:) renders as plain text. */
-export function safeUrl(u: unknown): string | null {
-  if (typeof u !== "string") return null;
-  try {
-    const url = new URL(u);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
+export type TemplateVariable = { name: string; description: string; sample: string };
 
-/** Subjects are headers: no line breaks, bounded length. */
-function subject(s: string): string {
-  const one = s.replace(/[\r\n\t]+/g, " ").trim();
-  return one.length > 150 ? `${one.slice(0, 149)}…` : one;
-}
-
-const excerpt = (s: string | null | undefined, n = 600) => {
-  const t = (s ?? "").trim();
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+export type TemplateDefinition = {
+  key: EmailTemplateKey;
+  name: string;
+  description: string;
+  variables: TemplateVariable[];
+  subject: string;
+  body: string;
+  /** The button under the body: a fixed label and the variable holding its URL. */
+  cta: { label: string; urlVariable: string } | null;
 };
 
-function layout(opts: {
-  heading: string;
-  paragraphs: string[];
-  quote?: string;
-  cta?: { label: string; url: string };
-}) {
-  const cta = opts.cta ? safeUrl(opts.cta.url) : null;
-  const html = `<!doctype html><html><body style="margin:0;padding:24px;background:#f6f6f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1c1c24">
+const v = (name: string, description: string, sample: string): TemplateVariable => ({
+  name,
+  description,
+  sample,
+});
+
+/** Available in every template. */
+const COMMON = [v("productName", "Your product name from Settings › Branding", "Annota")];
+
+const FEEDBACK = [
+  v("projectName", "Project name", "Marketing site"),
+  v("number", "Feedback number", "42"),
+  v("kind", "comment, bug, idea or question", "bug"),
+  v("title", "Title, or the start of the text", "Checkout button does nothing"),
+  v("body", "The feedback text (shortened)", "Clicked Pay now twice, nothing happened."),
+  v("pageUrl", "Page the feedback was left on", "https://example.com/checkout"),
+  v("reporterName", "Who sent it (or “a visitor”)", "Dana Reviewer"),
+  v("link", "Link to the item in the dashboard", "https://feedback.example.com/inbox?item=42"),
+];
+
+export const TEMPLATES: Record<EmailTemplateKey, TemplateDefinition> = {
+  invitation: {
+    key: "invitation",
+    name: "Invitation",
+    description: "Sent when someone is invited to the workspace.",
+    variables: [
+      v("inviterName", "Who sent the invitation", "Avery Admin"),
+      v("orgName", "Workspace name", "Acme Studio"),
+      v("role", "Role they'll have", "member"),
+      v("acceptUrl", "Link to accept", "https://feedback.example.com/accept-invitation/abc"),
+      v("expiresAt", "When the invitation expires", "Tue, 28 Oct 2026 12:00:00 GMT"),
+    ],
+    subject: "{{inviterName}} invited you to {{orgName}} on {{productName}}",
+    body: "# You're invited\n\n{{inviterName}} invited you to join **{{orgName}}** on {{productName}} as {{role}}.\n\nThe invitation expires on {{expiresAt}}.",
+    cta: { label: "Accept invitation", urlVariable: "acceptUrl" },
+  },
+  feedback_created: {
+    key: "feedback_created",
+    name: "New feedback",
+    description: "To team members who follow new feedback on a project.",
+    variables: FEEDBACK,
+    subject: "[{{projectName}}] #{{number}} {{title}}",
+    body: "# #{{number}} {{title}}\n\nNew {{kind}} in **{{projectName}}** from {{reporterName}}.\n\nPage: {{pageUrl}}\n\n> {{body}}",
+    cta: { label: "Open in {{productName}}", urlVariable: "link" },
+  },
+  feedback_assigned: {
+    key: "feedback_assigned",
+    name: "Assigned to you",
+    description: "To the person an item was assigned to.",
+    variables: [...FEEDBACK, v("assignerName", "Who assigned it", "Avery Admin")],
+    subject: "[{{projectName}}] Assigned to you: #{{number}} {{title}}",
+    body: "# Assigned to you\n\n{{assignerName}} assigned you **#{{number}} {{title}}** in {{projectName}}.\n\n> {{body}}",
+    cta: { label: "Open in {{productName}}", urlVariable: "link" },
+  },
+  comment_created: {
+    key: "comment_created",
+    name: "New reply",
+    description: "To the team involved in an item when someone replies.",
+    variables: [
+      ...FEEDBACK,
+      v("authorName", "Who replied (or “A visitor”)", "Dana Reviewer"),
+      v("reply", "The reply (shortened)", "Still broken on Safari."),
+    ],
+    subject: "[{{projectName}}] New reply: #{{number}} {{title}}",
+    body: "# New reply\n\n{{authorName}} replied on **#{{number}} {{title}}** in {{projectName}}.\n\n> {{reply}}",
+    cta: { label: "Open in {{productName}}", urlVariable: "link" },
+  },
+  status_changed: {
+    key: "status_changed",
+    name: "Status changed",
+    description: "To assignees when an item's status changes.",
+    variables: [
+      ...FEEDBACK,
+      v("status", "The new status", "resolved"),
+      v("actorName", "Who changed it", "Avery Admin"),
+    ],
+    subject: "[{{projectName}}] #{{number}} {{title}} is {{status}}",
+    body: "# Status changed\n\n{{actorName}} marked **#{{number}} {{title}}** as {{status}}.",
+    cta: { label: "Open in {{productName}}", urlVariable: "link" },
+  },
+  reporter_reply: {
+    key: "reporter_reply",
+    name: "Reply to the reporter",
+    description: "To the reporter when the team replies publicly (project setting “Email the reporter”).",
+    variables: [
+      v("projectName", "Project name", "Marketing site"),
+      v("title", "Their feedback, shortened", "Checkout button does nothing"),
+      v("authorName", "Who replied (or “The team”)", "Avery Admin"),
+      v("reply", "The reply (shortened)", "Fixed in today's release — thanks!"),
+      v("pageUrl", "Page the feedback was left on", "https://example.com/checkout"),
+    ],
+    subject: "Re: your feedback on {{projectName}}",
+    body: "# New reply to your feedback\n\n{{authorName}} from {{projectName}} replied to your feedback “{{title}}”.\n\n> {{reply}}",
+    cta: { label: "View the page", urlVariable: "pageUrl" },
+  },
+  reporter_status: {
+    key: "reporter_status",
+    name: "Status update to the reporter",
+    description: "To the reporter when the team changes the status of what they sent.",
+    variables: [
+      v("projectName", "Project name", "Marketing site"),
+      v("title", "Their feedback, shortened", "Checkout button does nothing"),
+      v("status", "The new status", "resolved"),
+      v("pageUrl", "Page the feedback was left on", "https://example.com/checkout"),
+    ],
+    subject: "Your feedback on {{projectName}} is {{status}}",
+    body: "# Status update\n\nYour feedback “{{title}}” on {{projectName}} is now **{{status}}**.",
+    cta: { label: "View the page", urlVariable: "pageUrl" },
+  },
+};
+
+/** Variables a template may use (its own plus the common ones). */
+export const allowedVariables = (key: EmailTemplateKey) => [...COMMON, ...TEMPLATES[key].variables];
+
+/** Placeholders in subject/body that the template doesn't offer. */
+export function unknownVariables(key: EmailTemplateKey, subject: string, body: string): string[] {
+  const allowed = new Set(allowedVariables(key).map((x) => x.name));
+  return variablesIn(`${subject}\n${body}`).filter((n) => !allowed.has(n));
+}
+
+export const sampleVariables = (key: EmailTemplateKey): Record<string, string> =>
+  Object.fromEntries(allowedVariables(key).map((x) => [x.name, x.sample]));
+
+const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+/** Black or white text, whichever reads better on the accent. */
+export function contrastText(hex: string): string {
+  const h = hex.length === 4 ? hex.replace(/^#(.)(.)(.)$/, "#$1$1$2$2$3$3") : hex;
+  const [r, g, b] = [1, 3, 5].map((i) => Number.parseInt(h.slice(i, i + 2), 16) / 255);
+  const lin = (c = 0) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const l = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return l > 0.4 ? "#111118" : "#ffffff";
+}
+
+function layout(content: string, brand: EmailBrand, cta: { label: string; url: string } | null): string {
+  const accent = HEX.test(brand.accent) ? brand.accent : DEFAULT_BRAND.accent;
+  const logo = brand.logoUrl ? safeHref(brand.logoUrl) : null;
+  const button = cta
+    ? `<p style="margin:16px 0 0"><a href="${esc(cta.url)}" style="display:inline-block;background:${accent};color:${contrastText(accent)};text-decoration:none;padding:8px 14px;border-radius:6px;font-size:14px">${esc(cta.label)}</a></p>`
+    : "";
+  return `<!doctype html><html><body style="margin:0;padding:24px;background:#f6f6f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1c1c24">
 <table role="presentation" width="100%" style="max-width:560px;margin:0 auto;background:#fff;border-radius:8px;padding:24px">
 <tr><td>
-<h1 style="font-size:18px;margin:0 0 16px">${esc(opts.heading)}</h1>
-${opts.paragraphs.map((p) => `<p style="font-size:14px;line-height:1.5;margin:0 0 12px">${p}</p>`).join("\n")}
-${opts.quote ? `<blockquote style="margin:0 0 16px;padding:8px 12px;border-left:3px solid #5b5bd6;background:#f6f6f9;font-size:14px;white-space:pre-wrap">${esc(opts.quote)}</blockquote>` : ""}
-${cta && opts.cta ? `<p style="margin:16px 0 0"><a href="${esc(cta)}" style="display:inline-block;background:#5b5bd6;color:#fff;text-decoration:none;padding:8px 14px;border-radius:6px;font-size:14px">${esc(opts.cta.label)}</a></p>` : ""}
+${logo ? `<p style="margin:0 0 16px"><img src="${esc(logo)}" alt="${esc(brand.productName)}" height="28" style="height:28px;max-width:200px"></p>` : ""}
+${content}
+${button}
 </td></tr></table>
-<p style="text-align:center;font-size:12px;color:#8b8b99;margin-top:16px">Sent by Annota</p>
+<p style="text-align:center;font-size:12px;color:#8b8b99;margin-top:16px">Sent by ${esc(brand.productName)}</p>
 </body></html>`;
-  return html;
 }
 
-const strip = (html: string) =>
-  html
-    .replace(/<[^>]+>/g, "")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&#39;", "'")
-    .replaceAll("&amp;", "&");
-
-function text(lines: (string | null | undefined | false)[]) {
-  return lines.filter((l) => l !== null && l !== undefined && l !== false).join("\n");
+/**
+ * Render one template (default or override) with its variables. Pure: callers load the override and
+ * branding (see `render.ts`).
+ */
+export function renderTemplate(
+  key: EmailTemplateKey,
+  source: { subject: string; body: string },
+  vars: Record<string, string>,
+  brand: EmailBrand = DEFAULT_BRAND,
+): Rendered {
+  const def = TEMPLATES[key];
+  const all: Record<string, string> = { ...vars, productName: brand.productName };
+  const accent = HEX.test(brand.accent) ? brand.accent : DEFAULT_BRAND.accent;
+  const md = renderMarkdown(source.body, all, { accent });
+  const ctaUrl = def.cta ? safeHref(all[def.cta.urlVariable] ?? "") : null;
+  const cta =
+    def.cta && ctaUrl
+      ? { label: def.cta.label.replace(VARIABLE, (_m, n: string) => all[n] ?? ""), url: ctaUrl }
+      : null;
+  return {
+    subject: renderSubject(source.subject, all),
+    html: layout(md.html, brand, cta),
+    text: [md.text, cta ? `${cta.label}: ${cta.url}` : null].filter(Boolean).join("\n\n"),
+  };
 }
+
+export const renderDefault = (key: EmailTemplateKey, vars: Record<string, string>, brand?: EmailBrand) =>
+  renderTemplate(key, TEMPLATES[key], vars, brand);
+
+/** Not editable: proves delivery works. */
+export function testEmail(brand: EmailBrand = DEFAULT_BRAND): Rendered {
+  const p = `This is a test message from your ${brand.productName} instance. Email delivery works.`;
+  return {
+    subject: `${brand.productName} test email`.replace(/[\r\n]+/g, " ").slice(0, 150),
+    html: layout(
+      `<h1 style="font-size:18px;margin:0 0 16px">It works</h1><p style="font-size:14px;line-height:1.5;margin:0 0 12px">${esc(p)}</p>`,
+      brand,
+      null,
+    ),
+    text: p,
+  };
+}
+
+// --- Variables from domain data ---------------------------------------------------------------------
 
 export type FeedbackSummary = {
   projectName: string;
@@ -79,84 +234,12 @@ export type FeedbackSummary = {
   link: string;
 };
 
-const label = (f: Pick<FeedbackSummary, "number" | "title" | "body">) =>
-  `#${f.number} ${f.title?.trim() || excerpt(f.body, 60)}`;
+export const excerpt = (s: string | null | undefined, n = 600) => {
+  const t = (s ?? "").trim();
+  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+};
 
-export function invitationEmail(d: {
-  orgName: string;
-  inviterName: string;
-  role: string;
-  acceptUrl: string;
-  expiresAt: Date;
-}): Rendered {
-  const p = [
-    `${esc(d.inviterName)} invited you to join <strong>${esc(d.orgName)}</strong> on Annota as ${esc(d.role)}.`,
-    `The invitation expires on ${esc(d.expiresAt.toUTCString())}.`,
-  ];
-  return {
-    subject: subject(`${d.inviterName} invited you to ${d.orgName} on Annota`),
-    html: layout({
-      heading: "You're invited",
-      paragraphs: p,
-      cta: { label: "Accept invitation", url: d.acceptUrl },
-    }),
-    text: text([strip(p.join("\n")), "", `Accept: ${d.acceptUrl}`]),
-  };
-}
-
-export function newFeedbackEmail(f: FeedbackSummary): Rendered {
-  const page = safeUrl(f.pageUrl);
-  const p = [
-    `New ${esc(f.kind)} in <strong>${esc(f.projectName)}</strong>${f.reporterName ? ` from ${esc(f.reporterName)}` : ""}.`,
-    page ? `Page: ${esc(page)}` : "",
-  ].filter(Boolean);
-  return {
-    subject: subject(`[${f.projectName}] ${label(f)}`),
-    html: layout({
-      heading: label(f),
-      paragraphs: p,
-      quote: excerpt(f.body),
-      cta: { label: "Open in Annota", url: f.link },
-    }),
-    text: text([strip(p.join("\n")), "", excerpt(f.body), "", f.link]),
-  };
-}
-
-export function assignedEmail(f: FeedbackSummary & { assignerName: string | null }): Rendered {
-  const p = [
-    `${f.assignerName ? esc(f.assignerName) : "Someone"} assigned you <strong>${esc(label(f))}</strong> in ${esc(f.projectName)}.`,
-  ];
-  return {
-    subject: subject(`[${f.projectName}] Assigned to you: ${label(f)}`),
-    html: layout({
-      heading: "Assigned to you",
-      paragraphs: p,
-      quote: excerpt(f.body),
-      cta: { label: "Open in Annota", url: f.link },
-    }),
-    text: text([strip(p.join("\n")), "", excerpt(f.body), "", f.link]),
-  };
-}
-
-export function publicReplyEmail(
-  f: FeedbackSummary & { authorName: string | null; reply: string },
-): Rendered {
-  const p = [
-    `${f.authorName ? esc(f.authorName) : "A visitor"} replied on <strong>${esc(label(f))}</strong> in ${esc(f.projectName)}.`,
-  ];
-  return {
-    subject: subject(`[${f.projectName}] New reply: ${label(f)}`),
-    html: layout({
-      heading: "New reply",
-      paragraphs: p,
-      quote: excerpt(f.reply),
-      cta: { label: "Open in Annota", url: f.link },
-    }),
-    text: text([strip(p.join("\n")), "", excerpt(f.reply), "", f.link]),
-  };
-}
-
-const STATUS_LABELS: Record<string, string> = {
+export const STATUS_LABELS: Record<string, string> = {
   open: "open",
   in_progress: "in progress",
   in_review: "in review",
@@ -164,82 +247,18 @@ const STATUS_LABELS: Record<string, string> = {
   wont_fix: "won't fix",
   duplicate: "a duplicate",
 };
+export const statusLabel = (s: string) => STATUS_LABELS[s] ?? s;
 
-/** To the reporter: a team reply or a status change on what they sent. No dashboard link. */
-export function reporterUpdateEmail(
-  f: Omit<FeedbackSummary, "link"> &
-    ({ type: "reply"; reply: string; authorName: string | null } | { type: "status"; status: string }),
-): Rendered {
-  const page = safeUrl(f.pageUrl);
-  const what = f.title?.trim() || excerpt(f.body, 80);
-  if (f.type === "reply") {
-    const p = [
-      `${f.authorName ? esc(f.authorName) : "The team"} from ${esc(f.projectName)} replied to your feedback “${esc(what)}”.`,
-    ];
-    return {
-      subject: subject(`Re: your feedback on ${f.projectName}`),
-      html: layout({
-        heading: "New reply to your feedback",
-        paragraphs: p,
-        quote: excerpt(f.reply),
-        ...(page ? { cta: { label: "View the page", url: page } } : {}),
-      }),
-      text: text([strip(p.join("\n")), "", excerpt(f.reply), page ? `\n${page}` : null]),
-    };
-  }
-  const p = [
-    `Your feedback “${esc(what)}” on ${esc(f.projectName)} is now <strong>${esc(STATUS_LABELS[f.status] ?? f.status)}</strong>.`,
-  ];
+/** Template variables for a feedback item. Missing values get readable fallbacks. */
+export function feedbackVars(f: FeedbackSummary): Record<string, string> {
   return {
-    subject: subject(`Your feedback on ${f.projectName} is ${STATUS_LABELS[f.status] ?? f.status}`),
-    html: layout({
-      heading: "Status update",
-      paragraphs: p,
-      ...(page ? { cta: { label: "View the page", url: page } } : {}),
-    }),
-    text: text([strip(p.join("\n")), page ? `\n${page}` : null]),
-  };
-}
-
-export function statusChangedEmail(
-  f: FeedbackSummary & { status: string; actorName: string | null },
-): Rendered {
-  const p = [
-    `${f.actorName ? esc(f.actorName) : "Someone"} marked <strong>${esc(label(f))}</strong> as ${esc(STATUS_LABELS[f.status] ?? f.status)}.`,
-  ];
-  return {
-    subject: subject(`[${f.projectName}] ${label(f)} is ${STATUS_LABELS[f.status] ?? f.status}`),
-    html: layout({ heading: "Status changed", paragraphs: p, cta: { label: "Open in Annota", url: f.link } }),
-    text: text([strip(p.join("\n")), "", f.link]),
-  };
-}
-
-/** Daily digest — template only; scheduling it is a later work package. */
-export function digestEmail(d: {
-  userName: string;
-  items: FeedbackSummary[];
-  dashboardUrl: string;
-}): Rendered {
-  const p = [
-    `Hi ${esc(d.userName)}, here is what came in:`,
-    ...d.items.slice(0, 20).map((f) => `• ${esc(f.projectName)} — ${esc(label(f))}`),
-  ];
-  return {
-    subject: subject(`Annota digest: ${d.items.length} new item${d.items.length === 1 ? "" : "s"}`),
-    html: layout({
-      heading: "Your Annota digest",
-      paragraphs: p,
-      cta: { label: "Open the inbox", url: d.dashboardUrl },
-    }),
-    text: text([strip(p.join("\n")), "", d.dashboardUrl]),
-  };
-}
-
-export function testEmail(): Rendered {
-  const p = ["This is a test message from your Annota instance. Email delivery works."];
-  return {
-    subject: "Annota test email",
-    html: layout({ heading: "It works", paragraphs: p }),
-    text: p.join("\n"),
+    projectName: f.projectName,
+    number: String(f.number),
+    kind: f.kind,
+    title: f.title?.trim() || excerpt(f.body, 60),
+    body: excerpt(f.body),
+    pageUrl: safeHref(f.pageUrl ?? "") ?? "",
+    reporterName: f.reporterName || "a visitor",
+    link: f.link,
   };
 }

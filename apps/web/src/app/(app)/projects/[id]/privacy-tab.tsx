@@ -1,5 +1,6 @@
 "use client";
 
+import { ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { NumberInput } from "@/components/number-input";
 import { SettingGroup, SettingRow } from "@/components/setting-row";
@@ -26,8 +27,59 @@ export function PrivacyTab({ project: p }: { project: ProjectDetail }) {
   const [custom, setCustom] = useState(!isPreset);
   const retentionValue = custom ? "custom" : preset;
 
+  const privacy = p.widgetConfig.privacyMode;
+
   return (
     <div className="grid max-w-3xl gap-4">
+      <Card className={privacy ? "ring-1 ring-emerald-500/40" : undefined}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className={privacy ? "size-4 text-emerald-600" : "size-4 text-muted-foreground"} />
+            EU privacy mode
+          </CardTitle>
+          <CardDescription>One switch for stricter data handling on this project.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SettingRow
+            label="Privacy mode"
+            htmlFor="privacy-mode"
+            description="For sites that must keep visitor data to a minimum (GDPR). Turning it on:"
+          >
+            <Switch
+              id="privacy-mode"
+              checked={privacy}
+              onCheckedChange={(privacyMode) =>
+                save.mutate({
+                  patch: { widgetConfig: { privacyMode } },
+                  message: privacyMode ? "Privacy mode on" : "Privacy mode off",
+                })
+              }
+            />
+          </SettingRow>
+          <ul
+            className="mt-3 grid gap-1.5 text-sm text-muted-foreground sm:grid-cols-2"
+            aria-label="What privacy mode does"
+          >
+            {[
+              "Shows the consent notice before anything is sent",
+              "Masks every text field in screenshots",
+              "Keeps console errors only — no warnings or logs",
+              "Stores only the browser and OS family, no performance data",
+              "Truncates visitor IP addresses (/24, /48) before they are stored",
+              "Turns off the instance's update check (no third-party calls)",
+              "Shortens “keep forever” retention to 90 days",
+            ].map((t) => (
+              <li key={t} className="flex items-start gap-2">
+                <span
+                  className={`mt-1.5 size-1.5 shrink-0 rounded-full ${privacy ? "bg-emerald-500" : "bg-muted-foreground/40"}`}
+                />
+                {t}
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Visibility</CardTitle>

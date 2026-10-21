@@ -1,6 +1,8 @@
 import { sendEmail } from "../email/send";
 import { env } from "../env";
 import type { DomainEvent } from "../events";
+import { type IssueJob, runIssueJob } from "../integrations/issues";
+import { runUpdateCheck } from "../settings/instance";
 import { runDelivery } from "../webhooks/deliver";
 import { getBoss, QUEUES } from "./boss";
 import { dispatchEvent } from "./dispatch";
@@ -40,9 +42,17 @@ export function startJobs(): Promise<void> {
     );
     await boss.work(QUEUES.retention, each(applyRetention));
     await boss.work(QUEUES.cleanup, each(cleanupTrash));
+    // One job per fetch: a failing issue must only retry itself.
+    await boss.work<IssueJob>(QUEUES.issues, { pollingIntervalSeconds: 1 }, each(runIssueJob));
+    // Never throws (offline instances record the error); retries would only repeat the same miss.
+    await boss.work(
+      QUEUES.update,
+      each(() => runUpdateCheck()),
+    );
     // Cron schedules are stored in Postgres; pg-boss creates each occurrence once across processes.
     await boss.schedule(QUEUES.retention, "15 3 * * *");
     await boss.schedule(QUEUES.cleanup, "45 3 * * *");
+    await boss.schedule(QUEUES.update, "30 4 * * *");
     console.log("[annota] job workers started");
   })().catch((err) => {
     g.__annotaWorkers = undefined;

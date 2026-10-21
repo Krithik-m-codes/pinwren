@@ -1,4 +1,4 @@
-import { type FeedbackListQuery, type FeedbackUpdate, isClosedStatus } from "@annota/core";
+import { type FeedbackListQuery, type FeedbackUpdate, isClosedStatus, parseWidgetConfig } from "@annota/core";
 import {
   activity,
   comment,
@@ -6,6 +6,8 @@ import {
   feedback,
   feedbackAsset,
   getDb,
+  issueIntegration,
+  issueLink,
   member,
   page,
   project,
@@ -67,14 +69,21 @@ export async function listFeedback(orgId: string, q: FeedbackListQuery) {
 export async function getFeedbackDetail(orgId: string, id: string) {
   const db = getDb();
   const [row] = await db
-    .select({ f: feedback, projectName: project.name, pageUrl: page.url, pageTitle: page.title })
+    .select({
+      f: feedback,
+      projectName: project.name,
+      projectSlug: project.slug,
+      widgetConfig: project.widgetConfig,
+      pageUrl: page.url,
+      pageTitle: page.title,
+    })
     .from(feedback)
     .innerJoin(project, eq(project.id, feedback.projectId))
     .leftJoin(page, eq(page.id, feedback.pageId))
     .where(and(eq(feedback.id, id), eq(feedback.orgId, orgId), isNull(feedback.deletedAt)));
   if (!row) throw notFound("Feedback");
 
-  const [assets, comments, events, diag, assignees] = await Promise.all([
+  const [assets, comments, events, diag, assignees, issues, trackers] = await Promise.all([
     db
       .select({
         id: feedbackAsset.id,
@@ -115,6 +124,24 @@ export async function getFeedbackDetail(orgId: string, id: string) {
       .orderBy(asc(activity.createdAt)),
     db.select().from(diagnostics).where(eq(diagnostics.feedbackId, id)),
     userNames(row.f.assigneeIds),
+    db
+      .select({
+        id: issueLink.id,
+        integrationId: issueLink.integrationId,
+        provider: issueLink.provider,
+        number: issueLink.number,
+        url: issueLink.url,
+        state: issueLink.state,
+      })
+      .from(issueLink)
+      .where(eq(issueLink.feedbackId, id))
+      .orderBy(asc(issueLink.createdAt)),
+    // Trackers the item can be sent to ("Send to GitHub/GitLab"); never the token.
+    db
+      .select({ id: issueIntegration.id, provider: issueIntegration.provider, repo: issueIntegration.repo })
+      .from(issueIntegration)
+      .where(and(eq(issueIntegration.projectId, row.f.projectId), eq(issueIntegration.active, true)))
+      .orderBy(asc(issueIntegration.provider)),
   ]);
 
   // Activity rows store user ids for assignee changes; resolve names so the timeline can read them.
@@ -136,7 +163,17 @@ export async function getFeedbackDetail(orgId: string, id: string) {
 
   const { reporterTokenHash: _hidden, ...f } = row.f;
   return {
-    feedback: { ...f, projectName: row.projectName, pageUrl: row.pageUrl, pageTitle: row.pageTitle },
+    feedback: {
+      ...f,
+      projectName: row.projectName,
+      projectSlug: row.projectSlug,
+      pageUrl: row.pageUrl,
+      pageTitle: row.pageTitle,
+    },
+    // Every panel action, team-only ones included: this is the dashboard (wave-3 contract §1).
+    panelActions: parseWidgetConfig(row.widgetConfig).panelActions,
+    issues,
+    integrations: trackers,
     assignees,
     assets,
     comments,

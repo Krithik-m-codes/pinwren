@@ -1,11 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { FolderKanban, Inbox, LogOut, Monitor, Moon, Plus, Settings, Sun } from "lucide-react";
+import { ArrowUpCircle, FolderKanban, Inbox, LogOut, Monitor, Moon, Plus, Settings, Sun } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect } from "react";
+import { BrandMark, BrandTheme, useProductName } from "@/components/brand";
 import { Logo } from "@/components/logo";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -35,6 +36,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { initials } from "@/components/user-avatar";
+import { useMeInfo } from "@/lib/account-hooks";
 import { api, type Project } from "@/lib/api";
 import { authClient, signOut, useSession } from "@/lib/auth-client";
 
@@ -72,6 +74,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
+      <BrandTheme />
       <AppSidebar user={session.user} />
       <SidebarInset className="min-w-0">{children}</SidebarInset>
     </SidebarProvider>
@@ -83,6 +86,8 @@ function AppSidebar({ user }: { user: { name: string; email: string; image?: str
   const router = useRouter();
   const { setTheme } = useTheme();
   const { data: activeOrg } = authClient.useActiveOrganization();
+  const productName = useProductName();
+  const update = useMeInfo().data?.update;
   const projects = useQuery({
     queryKey: ["projects"],
     queryFn: () => api<{ projects: Project[] }>("/projects"),
@@ -98,10 +103,12 @@ function AppSidebar({ user }: { user: { name: string; email: string; image?: str
     <Sidebar variant="inset">
       <SidebarHeader>
         <div className="flex items-center gap-2 px-1 py-1">
-          <Logo compact />
+          <BrandMark />
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{activeOrg?.name ?? "…"}</p>
-            <p className="truncate text-xs text-muted-foreground">Workspace</p>
+            <p className="truncate text-sm font-semibold" data-testid="product-name">
+              {productName}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">{activeOrg?.name ?? "…"}</p>
           </div>
         </div>
       </SidebarHeader>
@@ -156,6 +163,20 @@ function AppSidebar({ user }: { user: { name: string; email: string; image?: str
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
+        {update && (
+          <a
+            href={update.url ?? "#"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-ring"
+            data-testid="update-available"
+          >
+            <ArrowUpCircle className="size-3.5 shrink-0 text-primary" />
+            <span className="min-w-0 flex-1 truncate">
+              Update available <span className="text-muted-foreground">· {update.latest}</span>
+            </span>
+          </a>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={

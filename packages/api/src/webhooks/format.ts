@@ -40,6 +40,8 @@ export type WebhookPayload = {
     comment?: CommentPayload;
     changes?: Record<string, { from: unknown; to: unknown }>;
     actor?: { kind: string; id: string | null };
+    /** Panel action runs (`action.run`, F-016). */
+    action?: { id: string; label: string };
   };
 };
 

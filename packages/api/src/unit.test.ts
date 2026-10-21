@@ -84,34 +84,174 @@ describe("webhook formatting", () => {
 });
 
 describe("email templates", () => {
-  it("escape user content and drop unsafe links", async () => {
-    const { newFeedbackEmail, reporterUpdateEmail } = await import("./email/templates");
-    const m = newFeedbackEmail({
-      projectName: "<b>P</b>",
-      number: 1,
-      kind: "bug",
-      title: "x\r\nBcc: victim@example.com",
-      body: "<script>alert(1)</script>",
-      pageUrl: "javascript:alert(1)",
-      reporterName: '"><img src=x>',
-      link: "http://localhost:3100/inbox",
-    });
+  const vars = {
+    projectName: "<b>P</b>",
+    number: "1",
+    kind: "bug",
+    title: "x\r\nBcc: victim@example.com",
+    body: "<script>alert(1)</script> **not bold**",
+    pageUrl: "javascript:alert(1)",
+    reporterName: '<script>alert("r")</script>',
+    link: "http://localhost:3100/inbox",
+  };
+
+  it("escape variables, never format them, and drop unsafe links", async () => {
+    const { renderDefault } = await import("./email/templates");
+    const m = renderDefault("feedback_created", vars);
     expect(m.html).not.toContain("<script>");
-    expect(m.html).not.toContain("<img src=x>");
-    expect(m.html).not.toContain("javascript:");
+    expect(m.html).toContain("&lt;script&gt;alert(&quot;r&quot;)&lt;/script&gt;");
+    expect(m.html).not.toContain("<strong>not bold</strong>");
+    expect(m.html).not.toMatch(/href="javascript/);
     expect(m.subject).not.toMatch(/[\r\n]/);
-    const r = reporterUpdateEmail({
-      projectName: "P",
-      number: 1,
+    expect(m.html).toContain('href="http://localhost:3100/inbox"');
+    expect(m.text).toContain('<script>alert("r")</script>');
+  });
+
+  it("render admin Markdown safely: raw HTML is text, only http(s)/mailto links", async () => {
+    const { renderTemplate } = await import("./email/templates");
+    const r = renderTemplate(
+      "feedback_created",
+      {
+        subject: "{{title}}",
+        body: [
+          "# Hi {{reporterName}}",
+          "",
+          "<img src=x onerror=alert(1)> **bold** [ok]({{link}}) [bad](javascript:alert(1)) [var]({{pageUrl}})",
+          "",
+          "- one",
+          "- two",
+        ].join("\n"),
+      },
+      vars,
+      { productName: "Acme Feedback", accent: "#e5484d", logoUrl: "https://cdn.example.com/logo.png" },
+    );
+    expect(r.html).not.toContain("<img src=x");
+    expect(r.html).toContain("&lt;img src=x onerror=alert(1)&gt;");
+    expect(r.html).toContain("<strong>bold</strong>");
+    expect(r.html).toContain('<a href="http://localhost:3100/inbox"');
+    expect(r.html).not.toMatch(/href="javascript/);
+    expect(r.html).toContain("<li>one</li>");
+    expect(r.html).toContain("Sent by Acme Feedback");
+    expect(r.html).toContain("#e5484d");
+    expect(r.html).toContain('src="https://cdn.example.com/logo.png"');
+  });
+
+  it("list unknown variables", async () => {
+    const { unknownVariables } = await import("./email/templates");
+    expect(unknownVariables("feedback_created", "{{title}}", "{{ reporterName }} {{secret}}")).toEqual([
+      "secret",
+    ]);
+    expect(unknownVariables("invitation", "{{productName}}", "{{acceptUrl}}")).toEqual([]);
+  });
+
+  it("pick readable button text", async () => {
+    const { contrastText } = await import("./email/templates");
+    expect(contrastText("#5b5bd6")).toBe("#ffffff");
+    expect(contrastText("#ffe066")).toBe("#111118");
+  });
+});
+
+describe("issue sync", () => {
+  it("escapes the reporter's text in issue bodies", async () => {
+    const { issueBody, issueTitle } = await import("./integrations/issues");
+    const body = issueBody({
+      number: 7,
       kind: "bug",
-      title: null,
-      body: "b",
-      pageUrl: "https://example.com/a",
-      reporterName: null,
-      type: "status",
-      status: "resolved",
+      projectName: "Site",
+      body: "<script>x</script> @everyone fixes #1 [x](javascript:alert(1)) | col",
+      pageUrl: "https://example.com/a?b=1",
+      reporterName: "@octocat",
+      environment: { browser: "Chrome 140", os: "macOS", viewport: { w: 1280, h: 800 } },
+      link: "http://localhost:3100/inbox?item=1",
+      productName: "Annota",
     });
-    expect(r.text).toContain("resolved");
+    expect(body).not.toContain("<script>");
+    expect(body).not.toMatch(/@everyone|@octocat|#1\b/);
+    expect(body).not.toContain("[x](javascript");
+    expect(body).toContain("[Open #7 in Annota](http://localhost:3100/inbox?item=1)");
+    expect(body).toContain("1280 × 800");
+    expect(issueTitle({ number: 7, title: null, body: "a\nb" })).toBe("#7 a b");
+  });
+
+  it("calls GitHub and GitLab the way their APIs expect", async () => {
+    const { createIssue, setIssueState } = await import("./integrations/trackers");
+    const seen: { url: string; method: string; headers: Headers; body: unknown }[] = [];
+    const fake = (async (url: string, init: RequestInit) => {
+      seen.push({
+        url,
+        method: init.method ?? "GET",
+        headers: new Headers(init.headers),
+        body: init.body ? JSON.parse(String(init.body)) : null,
+      });
+      return new Response(
+        JSON.stringify(
+          url.includes("/api/v4/")
+            ? { iid: 3, web_url: "https://gl.example/x/-/issues/3" }
+            : { number: 5, html_url: "https://gh.example/o/r/issues/5" },
+        ),
+        { status: 201 },
+      );
+    }) as unknown as typeof fetch;
+    const gh = { provider: "github" as const, token: "ghp_x", repo: "o/r", apiUrl: "https://gh.example/api" };
+    expect(await createIssue(gh, { title: "t", body: "b", labels: ["bug"] }, fake)).toEqual({
+      number: 5,
+      url: "https://gh.example/o/r/issues/5",
+    });
+    await setIssueState(gh, 5, "closed", fake);
+    const gl = {
+      provider: "gitlab" as const,
+      token: "glpat",
+      repo: "grp/sub/proj",
+      apiUrl: "https://gl.example",
+    };
+    expect((await createIssue(gl, { title: "t", body: "b", labels: ["a", "b"] }, fake)).number).toBe(3);
+    await setIssueState(gl, 3, "open", fake);
+    expect(seen.map((s) => `${s.method} ${s.url}`)).toEqual([
+      "POST https://gh.example/api/repos/o/r/issues",
+      "PATCH https://gh.example/api/repos/o/r/issues/5",
+      "POST https://gl.example/api/v4/projects/grp%2Fsub%2Fproj/issues",
+      "PUT https://gl.example/api/v4/projects/grp%2Fsub%2Fproj/issues/3",
+    ]);
+    expect(seen[0]?.headers.get("authorization")).toBe("Bearer ghp_x");
+    expect(seen[0]?.body).toEqual({ title: "t", body: "b", labels: ["bug"] });
+    expect(seen[1]?.body).toEqual({ state: "closed", state_reason: "completed" });
+    expect(seen[2]?.headers.get("private-token")).toBe("glpat");
+    expect(seen[2]?.body).toEqual({ title: "t", description: "b", labels: "a,b" });
+    expect(seen[3]?.body).toEqual({ state_event: "reopen" });
+  });
+
+  it("reports tracker errors with a hint", async () => {
+    const { createIssue, TrackerError } = await import("./integrations/trackers");
+    const fake = (async () =>
+      new Response(JSON.stringify({ message: "Bad credentials" }), {
+        status: 401,
+      })) as unknown as typeof fetch;
+    const gh = { provider: "github" as const, token: "bad", repo: "o/r", apiUrl: "https://gh.example" };
+    await expect(createIssue(gh, { title: "t", body: "b", labels: [] }, fake)).rejects.toThrow(TrackerError);
+    await expect(createIssue(gh, { title: "t", body: "b", labels: [] }, fake)).rejects.toThrow(
+      /Bad credentials \(check the token\)/,
+    );
+  });
+});
+
+describe("update check", () => {
+  it("compares versions numerically", async () => {
+    const { isNewerVersion } = await import("./settings/instance");
+    expect(isNewerVersion("v0.2.0", "0.1.0")).toBe(true);
+    expect(isNewerVersion("1.2.10", "1.2.9")).toBe(true);
+    expect(isNewerVersion("v0.1.0", "0.1.0")).toBe(false);
+    expect(isNewerVersion("0.1.0-beta.1", "0.1.0")).toBe(false);
+    expect(isNewerVersion("0.0.9", "0.1.0")).toBe(false);
+  });
+});
+
+describe("privacy helpers", () => {
+  it("keep only browser and OS family", async () => {
+    const { family } = await import("./net");
+    expect(family("Chrome 140.0.1")).toBe("Chrome");
+    expect(family("Windows 11")).toBe("Windows");
+    expect(family("macOS 15.1")).toBe("macOS");
+    expect(family(undefined)).toBeUndefined();
   });
 });
 

@@ -15,6 +15,13 @@
       "when": 1792586245395,
       "tag": "0001_wave1_backend",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792599335961,
+      "tag": "0002_wave3_parity",
+      "breakpoints": true
     }
   ]
 }

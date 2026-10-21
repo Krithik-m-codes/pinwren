@@ -16,6 +16,10 @@ export const QUEUES = {
   retention: "retention.apply",
   /** Daily: purge soft-deleted feedback (and its files) after the trash window. */
   cleanup: "assets.cleanup",
+  /** GitHub/GitLab: create an issue, or push a close/reopen (retried with backoff). */
+  issues: "issues.sync",
+  /** Daily: look for a newer Annota release (skipped in privacy mode). */
+  update: "update.check",
 } as const;
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 
@@ -39,6 +43,8 @@ export function getBoss(): Promise<PgBoss> {
       boss.createQueue(QUEUES.webhook, { retryLimit: 0, expireInSeconds: 120 }),
       boss.createQueue(QUEUES.retention, { retryLimit: 2, retryDelay: 600 }),
       boss.createQueue(QUEUES.cleanup, { retryLimit: 2, retryDelay: 600 }),
+      boss.createQueue(QUEUES.issues, { retryLimit: 6, retryDelay: 30, retryBackoff: true }),
+      boss.createQueue(QUEUES.update, { retryLimit: 0 }),
     ]);
     return boss;
   })().catch((err) => {

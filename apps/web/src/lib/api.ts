@@ -2,12 +2,17 @@ import type {
   AnchorBundle,
   API_TOKEN_SCOPES,
   CaptureConfig,
+  EmailTemplateKey,
   FeedbackKind,
   FeedbackStatus,
+  ISSUE_AUTO_CREATE,
+  IssueProvider,
   NOTIFICATION_TYPES,
+  PanelAction,
   Priority,
   WEBHOOK_EVENTS,
   WEBHOOK_KINDS,
+  WidgetBranding,
   WidgetConfig,
 } from "@annota/core";
 
@@ -64,6 +69,8 @@ export type ProjectDetail = Project & {
   retentionDays: number | null;
   notifyReporter: boolean;
   widgetRateLimitPerMin: number | null;
+  widgetBranding: WidgetBranding;
+  hasActionSecret: boolean;
   archivedAt: string | null;
   updatedAt: string;
 };
@@ -135,9 +142,15 @@ export type FeedbackDetail = {
     metadata: Record<string, unknown> | null;
     anchor: AnchorBundle | null;
     pageTitle: string | null;
+    projectSlug: string;
     resolvedAt: string | null;
     updatedAt: string;
   };
+  /** Every panel action of the project, team-only ones included (wave-3 contract §1). */
+  panelActions: PanelAction[];
+  issues: IssueLink[];
+  /** Trackers this item can be sent to. */
+  integrations: { id: string; provider: IssueProvider; repo: string }[];
   assignees: { id: string; name: string; email: string; image: string | null }[];
   assets: Asset[];
   comments: Comment[];
@@ -244,6 +257,80 @@ export type EmailSettings = {
 
 export type EmailTestResult = { sent: true; to: string } | { sent: false; skipped: boolean; reason: string };
 
+export type IssueLink = {
+  id: string;
+  integrationId: string;
+  provider: IssueProvider;
+  number: number;
+  url: string;
+  state: "open" | "closed";
+};
+
+export type IssueIntegration = {
+  id: string;
+  projectId: string;
+  provider: IssueProvider;
+  repo: string;
+  apiUrl: string | null;
+  labels: string[];
+  autoCreate: (typeof ISSUE_AUTO_CREATE)[number];
+  active: boolean;
+  tokenHint: string;
+  lastError: string | null;
+  webhookUrl: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ActionResult = { ok: boolean; status: number; message: string | null; error: string | null };
+
+export type OrgBranding = {
+  productName: string | null;
+  accent: string | null;
+  logoAssetId: string | null;
+  logoUrl: string | null;
+};
+
+export type EmailTemplate = {
+  key: EmailTemplateKey;
+  name: string;
+  description: string;
+  variables: { name: string; description: string; sample: string }[];
+  defaultSubject: string;
+  defaultBody: string;
+  subject: string;
+  body: string;
+  customized: boolean;
+  updatedAt: string | null;
+};
+
+export type RenderedEmail = { subject: string; html: string; text: string };
+
+export type SecuritySettings = {
+  sessionDays: number;
+  updateCheck: boolean;
+  enforceHttps: boolean;
+  trustProxy: boolean;
+  locked: { sessionDays: boolean; updateCheck: boolean };
+  privacyModeProjects: number;
+  version: string;
+  update: {
+    checkedAt: string;
+    latest: string | null;
+    url: string | null;
+    available: boolean;
+    error: string | null;
+  } | null;
+};
+
+export type MeResponse = {
+  user: { id: string; name: string; email: string; image: string | null };
+  orgId: string;
+  role: string;
+  instanceAdmin: boolean;
+  update: { latest: string | null; url: string | null } | null;
+};
+
 // --- Query keys -------------------------------------------------------------------------------------
 // Lists and details live under ["feedback", …] so one invalidation refreshes both; thumbnails use their
 // own key so a mutation doesn't refetch every card's detail.
@@ -257,6 +344,11 @@ export const qk = {
   feedback: (id: string) => ["feedback", "detail", id] as const,
   thumb: (id: string) => ["feedback-thumb", id] as const,
   notifications: ["notifications"] as const,
+  me: ["me"] as const,
+  branding: ["branding"] as const,
+  integrations: (projectId: string) => ["integrations", projectId] as const,
+  emailTemplates: ["email-templates"] as const,
+  security: ["admin", "security"] as const,
 };
 
 /** First screenshot of an item (annotated preferred), for thumbnails. */

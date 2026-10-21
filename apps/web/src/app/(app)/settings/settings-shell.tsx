@@ -1,11 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Bell, KeyRound, Mail, UserRound, Users, Webhook } from "lucide-react";
+import { Bell, KeyRound, Mail, Palette, ShieldCheck, UserRound, Users, Webhook } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
-import { api, type EmailSettings, isForbidden } from "@/lib/api";
+import { useMeInfo } from "@/lib/account-hooks";
+import { api, type EmailSettings, isAdminRole, isForbidden } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -14,7 +15,9 @@ const NAV = [
   { href: "/settings/notifications", label: "Notifications", icon: Bell },
   { href: "/settings/integrations", label: "Integrations", icon: Webhook },
   { href: "/settings/tokens", label: "API tokens", icon: KeyRound },
-  { href: "/settings/email", label: "Email", icon: Mail, instance: true },
+  { href: "/settings/branding", label: "Branding", icon: Palette, access: "org" },
+  { href: "/settings/email", label: "Email", icon: Mail, access: "email" },
+  { href: "/settings/security", label: "Security", icon: ShieldCheck, access: "instance" },
 ] as const;
 
 export const emailSettingsKey = ["admin", "email"] as const;
@@ -30,9 +33,17 @@ export function useEmailSettings() {
 /** Settings: one main column with a section nav — a rail on desktop, a scrolling strip on phones. */
 export function SettingsShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const email = useEmailSettings();
-  // Instance settings are only for instance admins; hide the entry for everyone else.
-  const nav = NAV.filter((n) => !("instance" in n) || !isForbidden(email.error));
+  const me = useMeInfo().data;
+  const orgAdmin = isAdminRole(me?.role);
+  const instanceAdmin = !!me?.instanceAdmin;
+  // Hide what the user can't change: branding and templates are for workspace admins, SMTP and
+  // security for instance admins (blueprint 06 §3.7: no "you can't" screens in the nav).
+  const nav = NAV.filter((n) => {
+    if (!("access" in n)) return true;
+    if (n.access === "org") return orgAdmin;
+    if (n.access === "instance") return instanceAdmin;
+    return orgAdmin || instanceAdmin;
+  });
   const current = NAV.find((n) => n.href === pathname) ?? NAV[0];
 
   return (
@@ -59,7 +70,7 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
                   >
                     <Icon className="size-4" />
                     {label}
-                    {"instance" in rest && (
+                    {"access" in rest && rest.access === "instance" && (
                       <span className="ml-auto hidden text-[10px] tracking-wide text-muted-foreground uppercase md:inline">
                         Admin
                       </span>

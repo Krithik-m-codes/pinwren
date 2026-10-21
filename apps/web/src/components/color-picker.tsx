@@ -65,6 +65,7 @@ export function ColorPicker({
   onChange,
   onCommit,
   id = "color",
+  label = "Accent colour",
 }: {
   value: string;
   /** Live updates while picking (drives the preview). */
@@ -72,6 +73,8 @@ export function ColorPicker({
   /** The final value — save it. */
   onCommit: (hex: string) => void;
   id?: string;
+  /** Accessible name; the current value is appended. */
+  label?: string;
 }) {
   const [text, setText] = useState(value);
   useEffect(() => setText(value), [value]);
@@ -88,7 +91,7 @@ export function ColorPicker({
     >
       <PopoverTrigger
         render={<Button id={id} variant="outline" className="w-36 justify-start gap-2 font-mono" />}
-        aria-label={`Accent colour ${value}`}
+        aria-label={`${label} ${value}`}
       >
         <span
           className="size-4 rounded-[4px] ring-1 ring-foreground/15"

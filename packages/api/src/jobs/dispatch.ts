@@ -8,16 +8,10 @@ import {
   webhookEndpoint,
 } from "@annota/db";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
-import {
-  assignedEmail,
-  type FeedbackSummary,
-  newFeedbackEmail,
-  publicReplyEmail,
-  type Rendered,
-  reporterUpdateEmail,
-  statusChangedEmail,
-} from "../email/templates";
+import { renderEmail } from "../email/render";
+import { excerpt, type FeedbackSummary, feedbackVars, type Rendered, statusLabel } from "../email/templates";
 import type { DomainEvent } from "../events";
+import { autoCreateIssues, syncIssueState } from "../integrations/issues";
 import { type FeedbackContext, loadCommentPayload, loadFeedbackContext } from "../services/feedback-payload";
 import { queueDelivery } from "../webhooks/deliver";
 import { WEBHOOK_API_VERSION, type WebhookPayload } from "../webhooks/format";
@@ -80,7 +74,7 @@ async function notify(
   ctx: FeedbackContext,
   recipients: Recipient[],
   data: Record<string, unknown>,
-  render: () => Rendered,
+  render: () => Promise<Rendered>,
 ) {
   const list = recipients.filter((r) => r.userId !== e.actor.id);
   if (!list.length) return;
@@ -101,7 +95,8 @@ async function notify(
         },
       })),
     );
-  const rendered = render();
+  if (!list.some((r) => r.wantsEmail)) return;
+  const rendered = await render();
   for (const r of list) if (r.wantsEmail) await enqueue(QUEUES.email, { to: r.email, ...rendered });
 }
 
@@ -112,11 +107,19 @@ async function notifications(
 ) {
   const projectId = ctx.payload.projectId;
   const s = summary(ctx);
+  const vars = feedbackVars(s);
   const by = await actorName(e);
+  const reporterVars = {
+    projectName: s.projectName,
+    title: s.title?.trim() || excerpt(s.body, 80),
+    pageUrl: vars.pageUrl ?? "",
+  };
 
   if (e.type === "feedback.created") {
     const r = await membersWanting(e.orgId, projectId, "newFeedback");
-    await notify(e, ctx, r, { actorName: ctx.payload.reporterName }, () => newFeedbackEmail(s));
+    await notify(e, ctx, r, { actorName: ctx.payload.reporterName }, () =>
+      renderEmail(e.orgId, "feedback_created", vars),
+    );
     return;
   }
 
@@ -125,21 +128,24 @@ async function notifications(
     const before = new Set(Array.isArray(ch?.from) ? (ch.from as string[]) : []);
     const added = (Array.isArray(ch?.to) ? (ch.to as string[]) : []).filter((id) => !before.has(id));
     const r = await membersWanting(e.orgId, projectId, "assigned", added);
-    await notify(e, ctx, r, { actorName: by }, () => assignedEmail({ ...s, assignerName: by }));
+    await notify(e, ctx, r, { actorName: by }, () =>
+      renderEmail(e.orgId, "feedback_assigned", { ...vars, assignerName: by ?? "Someone" }),
+    );
     return;
   }
 
   if (e.type === "feedback.status_changed") {
     const to = String(e.changes?.status?.to ?? ctx.payload.status);
     const r = await membersWanting(e.orgId, projectId, "statusChanges", ctx.payload.assigneeIds);
+    const actor = by ?? (e.actor.kind === "integration" ? "An issue tracker" : "Someone");
     await notify(e, ctx, r, { actorName: by, status: to }, () =>
-      statusChangedEmail({ ...s, status: to, actorName: by }),
+      renderEmail(e.orgId, "status_changed", { ...vars, status: statusLabel(to), actorName: actor }),
     );
     // The reporter hears about team decisions only, not about their own resolve from the page.
     if (e.actor.kind !== "guest" && ctx.notifyReporter && ctx.reporterEmail) {
       await enqueue(QUEUES.email, {
         to: ctx.reporterEmail,
-        ...reporterUpdateEmail({ ...s, type: "status", status: to }),
+        ...(await renderEmail(e.orgId, "reporter_status", { ...reporterVars, status: statusLabel(to) })),
       });
     }
     return;
@@ -156,17 +162,20 @@ async function notifications(
     const scope = !commentInfo.team && involved.length === 0 ? undefined : involved;
     const r = await membersWanting(e.orgId, projectId, "replies", scope);
     await notify(e, ctx, r, { actorName: commentInfo.authorName, commentId: commentInfo.id }, () =>
-      publicReplyEmail({ ...s, authorName: commentInfo.authorName, reply: commentInfo.body }),
+      renderEmail(e.orgId, "comment_created", {
+        ...vars,
+        authorName: commentInfo.authorName ?? "A visitor",
+        reply: excerpt(commentInfo.body),
+      }),
     );
     if (commentInfo.team && commentInfo.visibility === "public" && ctx.notifyReporter && ctx.reporterEmail) {
       await enqueue(QUEUES.email, {
         to: ctx.reporterEmail,
-        ...reporterUpdateEmail({
-          ...s,
-          type: "reply",
-          reply: commentInfo.body,
-          authorName: commentInfo.authorName,
-        }),
+        ...(await renderEmail(e.orgId, "reporter_reply", {
+          ...reporterVars,
+          authorName: commentInfo.authorName ?? "The team",
+          reply: excerpt(commentInfo.body),
+        })),
       });
     }
   }
@@ -215,7 +224,12 @@ export async function dispatchEvent(e: DomainEvent): Promise<void> {
   if (!ctx || ctx.orgId !== e.orgId) return; // deleted since
   const commentInfo = e.commentId ? await loadCommentPayload(e.commentId) : null;
   if (e.type === "comment.created" && !commentInfo) return;
-  // Webhooks first: a broken mail setup must not hold back integrations.
+  // Integrations first: a broken mail setup must not hold back webhooks or issue sync. Issue sync
+  // only queues jobs, which retry on their own.
   await webhooks(e, ctx, commentInfo);
+  if (e.type === "feedback.created") await autoCreateIssues(ctx);
+  if (e.type === "feedback.status_changed" && e.actor.kind !== "integration") {
+    await syncIssueState(e.feedbackId, String(e.changes?.status?.to ?? ctx.payload.status));
+  }
   await notifications(e, ctx, commentInfo);
 }

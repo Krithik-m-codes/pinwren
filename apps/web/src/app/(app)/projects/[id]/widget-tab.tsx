@@ -15,6 +15,7 @@ import type { ProjectDetail } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { LAUNCHER_ICONS, LauncherPreview } from "./launcher-preview";
 import { useProjectPatch } from "./use-project";
+import { WidgetBrandingCard } from "./widget-branding-card";
 
 const POSITIONS = [
   { value: "top-left", label: "Top left" },
@@ -333,6 +334,7 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
         </Card>
 
         <ConsentCard draft={draft} server={server} errors={errors} preview={preview} commit={commit} />
+        <WidgetBrandingCard project={project} />
       </div>
 
       <div className="lg:sticky lg:top-16">
@@ -372,11 +374,16 @@ function ConsentCard({
           <SettingRow
             label="Ask for consent"
             htmlFor="consent-enabled"
-            description="Shown once; the answer is remembered on that browser."
+            description={
+              draft.privacyMode
+                ? "Always shown while privacy mode is on (Privacy & data)."
+                : "Shown once; the answer is remembered on that browser."
+            }
           >
             <Switch
               id="consent-enabled"
-              checked={c.enabled}
+              checked={c.enabled || draft.privacyMode}
+              disabled={draft.privacyMode}
               onCheckedChange={(enabled) => commit({ consent: { enabled } })}
             />
           </SettingRow>
@@ -390,7 +397,7 @@ function ConsentCard({
               id="consent-text"
               rows={3}
               maxLength={1000}
-              disabled={!c.enabled}
+              disabled={!c.enabled && !draft.privacyMode}
               key={`consent-${server.consent.text}`}
               defaultValue={c.text ?? ""}
               placeholder="Your comment, the page address, browser details and any screenshot are sent to the site owner."
@@ -414,7 +421,7 @@ function ConsentCard({
                 id="consent-url"
                 type="url"
                 inputMode="url"
-                disabled={!c.enabled}
+                disabled={!c.enabled && !draft.privacyMode}
                 key={`url-${server.consent.privacyUrl}`}
                 defaultValue={c.privacyUrl ?? ""}
                 placeholder="https://example.com/privacy"

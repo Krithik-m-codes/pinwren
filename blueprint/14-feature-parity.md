@@ -11,7 +11,7 @@ Sources: SitePing — the MIT source and docs in the local fork (`E:\Shubpy\Site
 behaviour observed on the self-hosted instance at `bugs.shubpy.com` (routes, settings, widget modules). BugPin is
 AGPL: **study behaviour only, never copy code** (ADR 0011).
 
-_Last updated: 2026-10-21 (after wave 2: widget comments + bug reports, backend, dashboard)._
+_Last updated: 2026-10-21 (wave 3, server + dashboard: panel actions, issue sync, branding, privacy mode, templates, instance security)._
 
 ---
 
@@ -30,8 +30,8 @@ _Last updated: 2026-10-21 (after wave 2: widget comments + bug reports, backend,
 | "Who speaks as the team" | Team replies marked as team | `team` flag on widget replies | ✅ | — |
 | Reviewer emails hidden from the public | PII never listed to anonymous visitors | Widget API never returns emails | ✅ | — |
 | Instant right-click comment (opt-in) | Right-click → composer at cursor | F-015 | ✅ opt-in `rightClickComment`; skips modifiers, keyboard menus, inputs, links | — |
-| Panel actions | Custom buttons/links in the detail view (create ticket, hand to agent) | F-016 | ⬜ | WP-30 |
-| Screenshots of the annotated area with privacy masking | Opt-in capture, masked fields | F-003 + masking (05 §6) | ✅ viewport capture, password/cc/`data-annota-mask` hidden | — |
+| Panel actions | Custom buttons/links in the detail view (create ticket, hand to agent) | F-016 | ✅ widget: `link` actions for everyone in the thread card — `{id} {number} {url} {projectSlug}` URL-encoded, http(s) only, new tab with `noopener noreferrer` (Playwright `wave3.e2e.ts`, `actions.test.ts`); dashboard: Actions tab editor, link + signed webhook actions with the receiver's message as a toast, secret reveal/rotate, timeline entry (smoke, Playwright `apps/web/e2e/wave3.e2e.ts`) | — |
+| Screenshots of the annotated area with privacy masking | Opt-in capture, masked fields | F-003 + masking (05 §6) | ✅ viewport/full/element/screen-share capture; password, cc, `data-annota-mask` and `capture.maskSelectors` painted as solid neutral blocks (Playwright `wave3.e2e.ts` pixel checks, `mask.test.ts`) | — |
 | Console + network diagnostics (opt-in) | Errors and failed requests attached | F-005/F-006 | ✅ errors, warnings, failed/slow requests, redacted URLs | — |
 | Triage inbox (Linear-style, keyboard-first, light/dark) | `<SitepingInbox />` | F-050/F-051 dashboard | ✅ list + detail + board, j/k, `/`, `e` `s` `p` `a` `x` `u`, bulk bar, activity timeline, dark mode (Playwright `inbox.e2e.ts`) | — |
 | Headless inbox hook | Build your own inbox UI | `@annota/sdk` + REST API | ⬜ | WP-18 |
@@ -39,8 +39,8 @@ _Last updated: 2026-10-21 (after wave 2: widget comments + bug reports, backend,
 | Shadow DOM isolation | No CSS leaks either way | Closed shadow root | ✅ | — |
 | Dev-only by default / `forceShow` | Hidden in production unless forced | F-012 visibility rules | ⬜ | WP-20 |
 | `minViewportWidth`, phone/tablet behaviour | Skip or adapt on small screens | F-012 + mobile bottom sheet | ⬜ | WP-20 |
-| Lazy-loaded heavy parts | Panel, screenshot engine, locales on demand | `widget-capture.js` (SnapDOM + editor) on first bug report; `widget-i18n-<code>.js` per locale | ✅ screenshot, editor, locales; ⬜ panel | WP-20 |
-| 8 locales (en, fr, de, es, it, pt-BR, ru, ja) | Widget + inbox translated | F-013 | 🟡 widget: en, es, fr, de, pt-BR, it, ja, hi, nl, zh (ru not yet); ⬜ inbox | WP-20 |
+| Lazy-loaded heavy parts | Panel, screenshot engine, locales on demand | `widget-panel.js` (side panel, thread card, export), `widget-report.js` (bug form), `widget-capture.js` (SnapDOM + editor), `widget-i18n-<code>.js` per locale; core ≈26 KB gzip | ✅ all of them, prefetched on intent (launcher hover/menu, pin hover) | — |
+| 8 locales (en, fr, de, es, it, pt-BR, ru, ja) | Widget + inbox translated | F-013 | 🟡 widget ✅: en, es, fr, de, pt-BR, it, ja, hi, nl, zh, ru (Russian few/many plurals; `i18n.test.ts`, Playwright `wave3.e2e.ts`); ⬜ inbox | WP-20 |
 | Page scope / URL patterns (`getPageScope`, `urlPattern`) | Group pins across `/product/:id` | F-008 `setPageScope` | 🟡 field stored; no widget API yet | WP-20 |
 | Scope annotations by URL | Pins from one page never leak to another | Pins listed per normalised page URL | ✅ | — |
 | Deep links (`?siteping=<id>`) | Open the page focused on one feedback | `?annota=<id>` + "Open on page" | ✅ | — |
@@ -49,14 +49,14 @@ _Last updated: 2026-10-21 (after wave 2: widget comments + bug reports, backend,
 | Read-only mode | Viewers can't post | F-017 | ✅ `readOnly` hides create/reply/resolve | — |
 | Show/hide annotations toggle | Hide pins while browsing | Widget menu "Hide pins" | ✅ | — |
 | "Mine" filter (own feedback in localStorage) | See only what I sent | F-011 panel filters | ✅ side panel: Open / Resolved / Mine + search | — |
-| Export from the widget | Download page feedback | F-018 | ⬜ | WP-30 |
-| Events / callbacks (`onOpen`, `onFeedbackSent`, …) | Host app reacts to widget events | `Annota.on(...)` (05 §8) | 🟡 `open`/`close`/`submit`/`error` built; `ready` not yet | WP-20 |
+| Export from the widget | Download page feedback | F-018 | ✅ panel Export → CSV (UTF-8 BOM, RFC 4180, formula-injection safe) or JSON of the listed comments, with deep links (Playwright `wave3.e2e.ts`, `export.test.ts`) | — |
+| Events / callbacks (`onOpen`, `onFeedbackSent`, …) | Host app reacts to widget events | `Annota.on(...)` (05 §8) | ✅ `open`/`close`/`submit`/`error`/`ready` (a late `ready` handler still runs) (Playwright `wave3.e2e.ts`) | — |
 | React hook (`useSiteping`) | Framework-native install | `@annota/react` | ⬜ | WP-20 |
-| Over-your-modals handling | Works above host dialogs/focus traps | `z-index` + host on `<html>` | 🟡 needs focus-trap handling | WP-30 |
+| Over-your-modals handling | Works above host dialogs/focus traps | `z-index` + host on `<html>` | ✅ own focus trap in cards/modals with Esc + focus return; host focus traps can't pull focus out of the widget (Playwright `wave3.e2e.ts`); native `<dialog>.showModal()` top layer not covered | — |
 | Store-agnostic server (Prisma, Drizzle, memory, localStorage) | Choose your DB / no server | Postgres only (ADR 0001) | ➖ deliberate: one supported DB | — |
 | Screenshot storage backends (S3, R2, Cloudflare Images, DB, filesystem) | Keep images out of the DB | F-096 storage drivers | ✅ filesystem + S3-compatible (`STORAGE_DRIVER=s3`) | — |
 | Webhooks (Slack, Discord, generic) with escaping | Notify on new feedback | F-071/F-072/F-075 | ✅ API + dashboard: create (generic/Slack/Discord), events, test, delivery log, redeliver, rotate secret (Playwright `settings.e2e.ts`) | — |
-| GitHub / GitLab issue sync | One issue per feedback | F-076/F-077 | ⬜ | WP-17 |
+| GitHub / GitLab issue sync | One issue per feedback | F-076/F-077 | ✅ token-based (ADR 0015): auto/manual create, escaped bodies, two-way close/reopen via signed webhooks + retried jobs (smoke against fake GitHub/GitLab, Playwright `wave3.e2e.ts`) | — |
 | CLI (`init`, `sync`, `status`, `doctor`) | Setup and health checks | `annota doctor` (08 §5) | ⬜ | WP-12 |
 | Access policies (API key or custom auth, CSRF guards) | Who may read/write | Session auth for team, origin-bound public key for widget | ✅ | — |
 
@@ -85,8 +85,8 @@ _Last updated: 2026-10-21 (after wave 2: widget comments + bug reports, backend,
 | Offline support / draft storage (IndexedDB) | Queue and resume reports | F-010 | ✅ drafts (text, screenshot, vector annotations, attachments) resume after reload; offline outbox | — |
 | Consent notice before sending | Tell the reporter what is sent | F-019 | 🟡 widget notice + privacy link, acceptance remembered, text/link set in the dashboard; server-side record not yet | WP-13 |
 | Widget launcher customisation (position, shape, icon, text, tooltip, light/dark colours, hover effect) | Brand the button | F-001 | ✅ position, offset, round/pill + label, icon, accent, tooltip, hidden — dashboard live preview (`project-settings.e2e.ts`) + widget (`comments.e2e.ts` pill launcher); 🟡 separate light/dark colours and hover toggle | WP-20 |
-| Widget dialog colours | Brand the form | F-001 theming | ⬜ | WP-20 |
-| Widget i18n (de, en, es, fr, it, ja, nl, zh) | Translated widget | F-013 | ✅ those 8 + pt-BR, hi; `data-locale` or browser language | — |
+| Widget dialog colours | Brand the form | F-001 theming | ✅ widget applies `branding.dialogAccent` to cards/modals with a contrast-picked text colour (Playwright `wave3.e2e.ts`); dashboard setting in Widget › Widget branding (smoke) | — |
+| Widget i18n (de, en, es, fr, it, ja, nl, zh) | Translated widget | F-013 | ✅ those 8 + pt-BR, hi, ru; `data-locale` or browser language | — |
 | Admin dashboard: report list, detail, status, priority, assignee | Triage | F-050/F-051 | ✅ | — |
 | Report history | Per-report change log | `activity` timeline | ✅ status/priority/assignee/rename/comment-deleted events interleaved with comments in the item timeline (Playwright `inbox.e2e.ts`) | — |
 | Users with roles (admin, editor, viewer) | Access control | Better Auth org roles (owner/admin/member) | 🟡 roles exist; viewer/permissions not enforced | WP-24 |
@@ -94,18 +94,18 @@ _Last updated: 2026-10-21 (after wave 2: widget comments + bug reports, backend,
 | Team email notifications (new report, status, priority, assignment, deletion) | Email the team | F-054/F-070 | 🟡 new report, assignment, status, replies (email + in-app, per-project prefs); deletion not yet | WP-11 |
 | Reporter email notifications + two-way reporter messaging | Keep the reporter informed | F-054 reporter notifications + public replies | 🟡 public replies + reporter email (project `notifyReporter`) built; reporter unsubscribe not yet | WP-11 |
 | SMTP settings in the UI with test email | Configure mail without env | F-070 instance settings | ✅ Settings → Email: env-locked fields read-only with the variable name, write-only password, test send (Playwright `settings.e2e.ts`) | — |
-| Email templates (custom) | Edit message wording | F-020 | 🟡 built-in escaped templates; admin-editable wording not yet (Community in Annota) | WP-11 |
-| GitHub issue sync | Reports → issues | F-076 | ⬜ | WP-17 |
+| Email templates (custom) | Edit message wording | F-020 | ✅ per-workspace subject + Markdown body with listed `{{variables}}`, escaped rendering, preview, send test, reset (smoke, unit, Playwright `wave3.e2e.ts`; Community in Annota) | — |
+| GitHub issue sync | Reports → issues | F-076 | ✅ see section A (two-way) | — |
 | Outbound webhooks | Integrations | F-075 | ✅ API + dashboard UI (Community in Annota) | — |
 | API access tokens | Programmatic access | F-081 | ✅ scoped tokens + `/api/v1/feedback`; Settings → API tokens: create with scopes/expiry, secret shown once, revoke (Community in Annota) | — |
 | S3 storage | Off-disk screenshots | F-096 | ✅ (Enterprise in BugPin; **Community in Annota**) | — |
-| Custom branding (logo, colours, favicon) | Brand the console | F-094 | ⬜ | WP-25 |
-| White-label (remove BugPin branding) | Agency resale | F-094 | ⬜ (Enterprise in both) | WP-25 |
+| Custom branding (logo, colours, favicon) | Brand the console | F-094 | ✅ Settings › Branding: product name, logo upload, accent applied to the dashboard theme and emails (smoke, Playwright `wave3.e2e.ts`); ⬜ favicon | — |
+| White-label (remove BugPin branding) | Agency resale | F-094 | ✅ widget: `hidePoweredBy`, dialog accent, logo in the report header (Playwright `wave3.e2e.ts`, `config.test.ts`); server + dashboard: per-project widget branding in `/w/config`, product name/logo/accent in the dashboard and emails (smoke, Playwright); not yet behind the Enterprise entitlement (licensing is WP-23) | WP-25 |
 | Data retention (days) with cleanup job | Auto-delete old reports | F-095 | ✅ daily `retention.apply` job + per-project retention in Privacy & data | — |
-| Session lifetime setting | Security | Better Auth session config | ⬜ UI | WP-13 |
-| EU privacy mode | Stricter data handling | F-021 (IP truncation, no third-party calls, consent) | ⬜ | WP-13 |
-| Enforce HTTPS | Refuse plain HTTP | Reverse-proxy + `ANNOTA_URL` https check | ⬜ | WP-12 |
-| Update check | Tell admins about new versions | `ANNOTA_UPDATE_CHECK` | ⬜ | WP-12 |
+| Session lifetime setting | Security | Better Auth session config | ✅ Settings › Security (instance admins), `ANNOTA_SESSION_DAYS` locks it; applies to new sessions (smoke checks the issued expiry, Playwright) | — |
+| EU privacy mode | Stricter data handling | F-021 (IP truncation, no third-party calls, consent) | ✅ widget: every text field masked as a block, no performance metadata, user agent cut to browser/OS family (Playwright `wave3.e2e.ts`, `env.test.ts`); server: forced consent, console ≤ errors, the same filters re-applied at ingest, /24·/48 IPs in rate limiting, 90-day retention, update check off; dashboard toggle with explanation (smoke, Playwright) | — |
+| Enforce HTTPS | Refuse plain HTTP | `ANNOTA_ENFORCE_HTTPS` (Next proxy + API) | ✅ 308 for GET, 403 otherwise, localhost exempt, trusted-proxy headers, HSTS (unit + smoke with it on and off) | — |
+| Update check | Tell admins about new versions | `ANNOTA_UPDATE_CHECK` | ✅ daily job on GitHub releases, fails silently offline, off in privacy mode, “Update available” for instance admins (smoke against a fake release feed) | — |
 | Health endpoint | Ops | `/api/health` | ✅ | — |
 | Single-container self-host, Docker | Easy install | `docker/compose.yml` (app + Postgres) | ✅ | — |
 | Licence management (Enterprise key) | Unlock EE features | F-098 Ed25519 licence files | ⬜ | WP-23 |

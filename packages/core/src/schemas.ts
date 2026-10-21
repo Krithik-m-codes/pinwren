@@ -176,6 +176,8 @@ export const projectUpdate = z.object({
   widgetConfig: z.record(z.string(), z.unknown()).optional(),
   /** Partial capture config, deep-merged into the stored one and validated as a whole. */
   captureConfig: z.record(z.string(), z.unknown()).optional(),
+  /** Partial widget branding (wave-3 contract §2), merged and validated like the configs. */
+  widgetBranding: z.record(z.string(), z.unknown()).optional(),
   /** Hard-delete feedback older than this many days (daily job). null keeps everything. */
   retentionDays: z.number().int().min(1).max(3650).nullable().optional(),
   /** Email the reporter (when they left an address) about team replies and status changes. */
@@ -312,3 +314,112 @@ export const apiTokenCreate = z.object({
 
 /** Public API comment: always a team comment by the token's owner. */
 export const apiCommentCreate = commentCreate;
+
+// --- Branding (F-094): organisation-level dashboard + email branding ---------------------------------
+
+const hex = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Use a hex colour like #5b5bd6");
+
+export const orgBrandingUpdate = z.object({
+  /** Replaces "Annota" in the dashboard header and in emails. null = default. */
+  productName: z.string().trim().min(1).max(40).nullable().optional(),
+  accent: hex.nullable().optional(),
+  /** A brand asset uploaded with `POST /api/branding/assets`. null removes the logo. */
+  logoAssetId: z.uuid().nullable().optional(),
+});
+export type OrgBrandingUpdate = z.infer<typeof orgBrandingUpdate>;
+
+export const BRAND_ASSET_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+export const MAX_BRAND_ASSET_BYTES = 512 * 1024;
+
+export const brandAssetUpload = z.object({
+  /** PNG, JPEG or WebP as a base64 data URL, ≤ 512 KB. SVG is refused (it can carry script). */
+  dataUrl: z
+    .string()
+    .regex(/^data:image\/(png|jpeg|webp);base64,/)
+    .max(720_000),
+});
+
+// --- Email templates (F-020) -------------------------------------------------------------------------
+
+export const EMAIL_TEMPLATE_KEYS = [
+  "invitation",
+  "feedback_created",
+  "feedback_assigned",
+  "comment_created",
+  "status_changed",
+  "reporter_reply",
+  "reporter_status",
+] as const;
+export type EmailTemplateKey = (typeof EMAIL_TEMPLATE_KEYS)[number];
+
+export const emailTemplateUpdate = z.object({
+  subject: z.string().trim().min(1).max(200),
+  /** Markdown with `{{variable}}` placeholders. Raw HTML is shown as text, never rendered. */
+  body: z.string().trim().min(1).max(10_000),
+});
+
+export const emailTemplatePreview = z.object({
+  subject: z.string().max(200).optional(),
+  body: z.string().max(10_000).optional(),
+  /** Override sample values (e.g. to see how odd input renders). */
+  variables: z.record(z.string(), z.string().max(2000)).optional(),
+});
+
+export const emailTemplateTest = emailTemplatePreview.extend({ to: z.email().optional() });
+
+// --- Issue trackers (F-076 GitHub, F-077 GitLab) ------------------------------------------------------
+
+export const ISSUE_PROVIDERS = ["github", "gitlab"] as const;
+export type IssueProvider = (typeof ISSUE_PROVIDERS)[number];
+/** Which new feedback opens an issue on its own; "manual" = only the "Send to …" button. */
+export const ISSUE_AUTO_CREATE = ["manual", "bugs", "all"] as const;
+
+const repoPattern = /^[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)+$/;
+
+export const issueIntegrationCreate = z
+  .object({
+    provider: z.enum(ISSUE_PROVIDERS),
+    /** Personal / project access token. Stored encrypted, never returned. */
+    token: z.string().trim().min(8).max(500),
+    /** GitHub `owner/name`; GitLab `group/subgroup/project`. */
+    repo: z.string().trim().max(300).regex(repoPattern, "Use owner/name (GitLab: group/project)"),
+    /** GitHub Enterprise API or self-managed GitLab base URL. null = GITHUB_API_URL / GITLAB_URL. */
+    apiUrl: z
+      .url({ protocol: /^https?$/ })
+      .max(500)
+      .nullable()
+      .optional(),
+    labels: z.array(z.string().trim().min(1).max(50)).max(10).default([]),
+    autoCreate: z.enum(ISSUE_AUTO_CREATE).default("manual"),
+  })
+  .refine((v) => v.provider !== "github" || v.repo.split("/").length === 2, {
+    path: ["repo"],
+    message: "GitHub repositories are owner/name",
+  });
+
+export const issueIntegrationUpdate = z.object({
+  token: z.string().trim().min(8).max(500).optional(),
+  repo: z.string().trim().max(300).regex(repoPattern, "Use owner/name (GitLab: group/project)").optional(),
+  apiUrl: z
+    .url({ protocol: /^https?$/ })
+    .max(500)
+    .nullable()
+    .optional(),
+  labels: z.array(z.string().trim().min(1).max(50)).max(10).optional(),
+  autoCreate: z.enum(ISSUE_AUTO_CREATE).optional(),
+  active: z.boolean().optional(),
+});
+
+export const issueCreate = z.object({ integrationId: z.uuid() });
+
+// --- Instance security settings ----------------------------------------------------------------------
+
+export const MIN_SESSION_DAYS = 1;
+export const MAX_SESSION_DAYS = 90;
+
+export const securitySettingsUpdate = z.object({
+  /** Applies to sessions created after the change. */
+  sessionDays: z.number().int().min(MIN_SESSION_DAYS).max(MAX_SESSION_DAYS).optional(),
+  /** Daily check of the release feed; off on its own whenever a project uses privacy mode. */
+  updateCheck: z.boolean().optional(),
+});

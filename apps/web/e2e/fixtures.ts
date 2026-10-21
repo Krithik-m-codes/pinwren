@@ -5,6 +5,9 @@ import { test as base, expect } from "@playwright/test";
 const IGNORED = [
   /Could not validate that a segment in your UI has instant navigation/,
   /Download the React DevTools/,
+  // The email preview is an iframe with `sandbox=""` (no scripts, by design). Playwright instruments
+  // every frame it sees, and Chrome reports that blocked attempt; the page itself runs nothing there.
+  /^Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed/,
 ];
 
 /** Every test fails on a browser console error or uncaught exception (e.g. Base UI misuse warnings). */

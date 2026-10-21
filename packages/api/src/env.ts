@@ -27,6 +27,27 @@ const schema = z.object({
   ANNOTA_ADMIN_EMAILS: optionalString,
   WIDGET_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(10),
 
+  // Security. ANNOTA_ENFORCE_HTTPS redirects/refuses plain-HTTP requests that don't come from
+  // localhost (X-Forwarded-Proto/Host count only with ANNOTA_TRUST_PROXY).
+  ANNOTA_ENFORCE_HTTPS: bool("false"),
+  /** Session lifetime in days for new sign-ins; set here, it locks the admin-UI field. */
+  ANNOTA_SESSION_DAYS: z.coerce.number().int().min(1).max(90).optional(),
+  /** Daily release check (instance admins see "Update available"). Set here, it locks the UI switch. */
+  ANNOTA_UPDATE_CHECK: z
+    .enum(["0", "1", "true", "false"])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "1" || v === "true")),
+  /** GitHub repository whose latest release is compared with ANNOTA_VERSION. */
+  ANNOTA_UPDATE_REPO: z
+    .string()
+    .regex(/^[\w.-]+\/[\w.-]+$/)
+    .default("annota-dev/annota"),
+  ANNOTA_VERSION: z.string().default("0.1.0"),
+
+  // Issue trackers (F-076/F-077). Per-integration base URLs override these (GHES, self-managed GitLab).
+  GITHUB_API_URL: z.url().default("https://api.github.com"),
+  GITLAB_URL: z.url().default("https://gitlab.com"),
+
   // Email. Each variable set here overrides and locks the matching admin-UI field.
   SMTP_HOST: optionalString,
   SMTP_PORT: z.coerce.number().int().min(1).max(65535).optional(),
