@@ -1,5 +1,7 @@
-// Console + failed-network ring buffers (blueprint F-005/F-006). Wrappers are transparent: they
-// call the original first, never change arguments or results, and never throw.
+import type { CaptureCfg } from "./config";
+
+// Console + failed-network ring buffers (blueprint F-005/F-006), sized by the project's `capture` config.
+// Wrappers are transparent: they call the original first, never change arguments or results, and never throw.
 
 type ConsoleEntry = { level: "error" | "warn" | "info" | "log" | "debug"; message: string; at: number };
 type NetworkEntry = { method: string; url: string; status: number; durationMs: number; at: number };
@@ -51,11 +53,28 @@ export function redactUrl(raw: string): string {
   }
 }
 
-export function installDiagnostics() {
+const LEVELS = {
+  off: [],
+  errors: ["error"],
+  warnings: ["error", "warn"],
+  all: ["error", "warn", "info", "log", "debug"],
+} as const;
+
+let lcp: number | undefined;
+
+export function installDiagnostics(cfg: Pick<CaptureCfg, "console" | "network">) {
   if (installed) return;
   installed = true;
 
-  for (const level of ["error", "warn"] as const) {
+  try {
+    // Largest Contentful Paint is only observable, not queryable; `buffered` replays what already happened.
+    new PerformanceObserver((list) => {
+      const last = list.getEntries().at(-1);
+      if (last) lcp = last.startTime;
+    }).observe({ type: "largest-contentful-paint", buffered: true });
+  } catch {}
+
+  for (const level of LEVELS[cfg.console]) {
     const original = console[level];
     console[level] = function (...args: unknown[]) {
       original.apply(this, args);
@@ -76,6 +95,7 @@ export function installDiagnostics() {
     };
   }
 
+  if (cfg.console === "off") return installNetwork(cfg);
   addEventListener("error", (e) => {
     push(
       consoleBuf,
@@ -90,7 +110,11 @@ export function installDiagnostics() {
       MAX_CONSOLE,
     );
   });
+  installNetwork(cfg);
+}
 
+function installNetwork(cfg: Pick<CaptureCfg, "network">) {
+  if (cfg.network === "off") return;
   const originalFetch = window.fetch;
   window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
     const started = performance.now();
@@ -153,4 +177,31 @@ export function installDiagnostics() {
 
 export function snapshotDiagnostics() {
   return { console: consoleBuf.slice(), network: networkBuf.slice() };
+}
+
+/** Counts for the report form's "what we'll send" summary. */
+export function diagnosticsSummary() {
+  return {
+    errors: consoleBuf.filter((c) => c.level === "error").length,
+    failures: networkBuf.filter((n) => n.status === 0 || n.status >= 400).length,
+  };
+}
+
+/** Page-load timing for `metadata.performance` (ms, rounded; absent when the browser doesn't report it). */
+export function performanceTiming(): Record<string, number> {
+  const out: Record<string, number> = {};
+  const set = (k: string, v: number | undefined) => {
+    if (typeof v === "number" && Number.isFinite(v) && v > 0) out[k] = Math.round(v);
+  };
+  try {
+    const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    if (nav) {
+      set("ttfbMs", nav.responseStart - nav.startTime);
+      set("domContentLoadedMs", nav.domContentLoadedEventEnd - nav.startTime);
+      set("loadMs", nav.loadEventEnd - nav.startTime);
+    }
+    set("fcpMs", performance.getEntriesByName("first-contentful-paint")[0]?.startTime);
+    set("lcpMs", lcp);
+  } catch {}
+  return out;
 }
