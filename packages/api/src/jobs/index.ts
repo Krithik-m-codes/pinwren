@@ -1,0 +1,61 @@
+import { sendEmail } from "../email/send";
+import { env } from "../env";
+import type { DomainEvent } from "../events";
+import { runDelivery } from "../webhooks/deliver";
+import { getBoss, QUEUES } from "./boss";
+import { dispatchEvent } from "./dispatch";
+import { applyRetention, cleanupTrash } from "./maintenance";
+
+export { enqueue, getBoss, QUEUES } from "./boss";
+
+const g = globalThis as unknown as { __annotaWorkers?: Promise<void> };
+
+/**
+ * Start the job workers in this process (called from the Next.js Node instrumentation hook).
+ * Safe to call more than once. `ANNOTA_ROLE=web` processes only enqueue.
+ */
+export function startJobs(): Promise<void> {
+  g.__annotaWorkers ??= (async () => {
+    if (env().ANNOTA_ROLE === "web") return;
+    const boss = await getBoss();
+    const each =
+      <T>(fn: (data: T) => Promise<unknown>) =>
+      async (jobs: { data: T }[]) => {
+        for (const job of jobs) await fn(job.data);
+      };
+    await boss.work<DomainEvent>(
+      QUEUES.dispatch,
+      { batchSize: 5, pollingIntervalSeconds: 1 },
+      each(dispatchEvent),
+    );
+    await boss.work<{ to: string; subject: string; html: string; text: string }>(
+      QUEUES.email,
+      { pollingIntervalSeconds: 2 },
+      each(sendEmail),
+    );
+    await boss.work<{ deliveryId: string }>(
+      QUEUES.webhook,
+      { batchSize: 5, pollingIntervalSeconds: 1 },
+      each((d) => runDelivery(d.deliveryId)),
+    );
+    await boss.work(QUEUES.retention, each(applyRetention));
+    await boss.work(QUEUES.cleanup, each(cleanupTrash));
+    // Cron schedules are stored in Postgres; pg-boss creates each occurrence once across processes.
+    await boss.schedule(QUEUES.retention, "15 3 * * *");
+    await boss.schedule(QUEUES.cleanup, "45 3 * * *");
+    console.log("[annota] job workers started");
+  })().catch((err) => {
+    g.__annotaWorkers = undefined;
+    console.error("[annota] job workers failed to start", err);
+  });
+  return g.__annotaWorkers;
+}
+
+/** Stop workers and close the queue's pool (graceful shutdown, tests). */
+export async function stopJobs(): Promise<void> {
+  const g2 = globalThis as unknown as { __annotaBoss?: Promise<{ stop: (o?: object) => Promise<void> }> };
+  const boss = await g2.__annotaBoss?.catch(() => undefined);
+  await boss?.stop({ graceful: true, timeout: 10_000 });
+  g2.__annotaBoss = undefined;
+  g.__annotaWorkers = undefined;
+}

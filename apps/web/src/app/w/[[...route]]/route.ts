@@ -5,4 +5,5 @@ const handle = (request: Request) => app.fetch(request);
 
 export const GET = handle;
 export const POST = handle;
+export const PATCH = handle;
 export const OPTIONS = handle;

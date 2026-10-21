@@ -1,4 +1,4 @@
-import { FEEDBACK_KINDS, FEEDBACK_STATUSES, PRIORITIES } from "@annota/core";
+import { FEEDBACK_KINDS, FEEDBACK_STATUSES, PRIORITIES, WEBHOOK_KINDS } from "@annota/core";
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -57,6 +57,12 @@ export const project = pgTable(
     widgetConfig: jsonb("widget_config").$type<Record<string, unknown>>().notNull().default({}),
     captureConfig: jsonb("capture_config").$type<Record<string, unknown>>().notNull().default({}),
     feedbackCounter: integer("feedback_counter").notNull().default(0),
+    /** Hard-delete feedback older than this many days (`retention.apply` job). null = keep forever. */
+    retentionDays: integer("retention_days"),
+    /** Email reporters who left an address about team replies and status changes. */
+    notifyReporter: boolean("notify_reporter").notNull().default(false),
+    /** Widget reports/replies per IP per minute; null = `WIDGET_RATE_LIMIT_PER_MIN`. */
+    widgetRateLimitPerMin: integer("widget_rate_limit_per_min"),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps,
@@ -101,6 +107,8 @@ export const feedback = pgTable(
     reporterGuest: jsonb("reporter_guest").$type<ReporterGuest>(),
     assigneeIds: text("assignee_ids").array().notNull().default(sql`'{}'::text[]`),
     clientId: uuid("client_id").notNull(),
+    /** SHA-256 (hex) of the reporter token handed to the widget once; proves "I filed this". */
+    reporterTokenHash: text("reporter_token_hash"),
     anchor: jsonb("anchor"),
     environment: jsonb("environment"),
     metadata: jsonb("metadata"),
@@ -141,6 +149,8 @@ export const feedbackAsset = pgTable(
     storageKey: text("storage_key").notNull(),
     contentType: text("content_type").notNull(),
     bytes: integer("bytes").notNull(),
+    /** Original file name for attachments (display only; never used as a storage path). */
+    name: text("name"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("asset_feedback_idx").on(t.feedbackId)],
@@ -158,6 +168,7 @@ export const comment = pgTable(
     authorGuest: jsonb("author_guest").$type<ReporterGuest>(),
     body: text("body").notNull(),
     visibility: commentVisibilityEnum("visibility").notNull().default("internal"),
+    editedAt: timestamp("edited_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [index("comment_feedback_idx").on(t.feedbackId, t.createdAt)],
@@ -186,3 +197,130 @@ export const rateLimit = pgTable("rate_limit", {
   count: integer("count").notNull(),
   resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
 });
+
+/**
+ * Instance-level settings (self-host), e.g. SMTP set in the admin UI. `secret` holds the
+ * AES-256-GCM ciphertext of a write-only value (never returned by the API).
+ */
+export const setting = pgTable("setting", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").$type<Record<string, unknown>>().notNull().default({}),
+  secret: text("secret"),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+/** Per-user, per-project notification switches. No row = every switch on. */
+export const notificationPreference = pgTable(
+  "notification_preference",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    newFeedback: boolean("new_feedback").notNull().default(true),
+    assigned: boolean("assigned").notNull().default(true),
+    replies: boolean("replies").notNull().default(true),
+    statusChanges: boolean("status_changes").notNull().default(true),
+    email: boolean("email").notNull().default(true),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("notification_pref_user_project_uq").on(t.userId, t.projectId)],
+);
+
+/** In-app notification inbox. */
+export const notification = pgTable(
+  "notification",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    feedbackId: uuid("feedback_id").references(() => feedback.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("notification_user_created_idx").on(t.userId, t.createdAt)],
+);
+
+export const webhookKindEnum = pgEnum("webhook_kind", WEBHOOK_KINDS);
+
+export const webhookEndpoint = pgTable(
+  "webhook_endpoint",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    /** null = every project in the organisation. */
+    projectId: uuid("project_id").references(() => project.id, { onDelete: "cascade" }),
+    name: text("name"),
+    url: text("url").notNull(),
+    kind: webhookKindEnum("kind").notNull().default("generic"),
+    events: text("events").array().notNull().default(sql`'{}'::text[]`),
+    /** AES-256-GCM ciphertext of the signing secret (generic endpoints). */
+    secret: text("secret"),
+    active: boolean("active").notNull().default(true),
+    /** First failure of the current failing streak; the endpoint is disabled after 3 days. */
+    failingSince: timestamp("failing_since", { withTimezone: true }),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [index("webhook_endpoint_org_idx").on(t.orgId)],
+);
+
+/** One row per delivery attempt; attempts of one event share `eventId`. Pruned after 30 days. */
+export const webhookDelivery = pgTable(
+  "webhook_delivery",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    endpointId: uuid("endpoint_id")
+      .notNull()
+      .references(() => webhookEndpoint.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id").notNull(),
+    event: text("event").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    attempt: integer("attempt").notNull().default(1),
+    /** pending → success | failed (final) | retrying (another attempt scheduled). */
+    status: text("status").notNull().default("pending"),
+    responseCode: integer("response_code"),
+    responseBody: text("response_body"),
+    error: text("error"),
+    durationMs: integer("duration_ms"),
+    nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("webhook_delivery_endpoint_idx").on(t.endpointId, t.createdAt),
+    index("webhook_delivery_created_idx").on(t.createdAt),
+  ],
+);
+
+/** Personal API tokens for `/api/v1`. Only a scrypt hash is stored; `prefix` identifies it. */
+export const apiToken = pgTable(
+  "api_token",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    prefix: text("prefix").notNull(),
+    hash: text("hash").notNull(),
+    scopes: text("scopes").array().notNull().default(sql`'{}'::text[]`),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("api_token_prefix_uq").on(t.prefix), index("api_token_org_idx").on(t.orgId)],
+);

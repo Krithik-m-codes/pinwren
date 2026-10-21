@@ -4,10 +4,12 @@ import { ZodError } from "zod";
 import { getAuth } from "./auth";
 import { ApiError, problem } from "./errors";
 import { dashboard } from "./routes/dashboard";
+import { v1 } from "./routes/v1";
 import { widget } from "./routes/widget";
 
 export { getAuth } from "./auth";
 export { env } from "./env";
+export { startJobs, stopJobs } from "./jobs";
 
 /**
  * The whole Annota HTTP API. Mounted by the Next.js app under /api and /w, and runnable on its own
@@ -16,6 +18,8 @@ export { env } from "./env";
 export const app = new Hono()
   .get("/api/health", (c) => c.json({ ok: true }))
   .on(["GET", "POST"], "/api/auth/*", (c) => getAuth().handler(c.req.raw))
+  // Token-authenticated public API first: the session middleware below covers the rest of /api.
+  .route("/api/v1", v1)
   .route("/api", dashboard)
   .route("/w", widget)
   .notFound((c) => problem(c, 404, "NOT_FOUND", "Not found"))
@@ -29,6 +33,9 @@ export const app = new Hono()
     if (err instanceof ApiError) return problem(c, err.status, err.code, err.message);
     if (err instanceof ZodError) return problem(c, 400, "VALIDATION_ERROR", "Invalid request");
     if (err instanceof HTTPException) return problem(c, err.status, "HTTP_ERROR", err.message);
+    // A malformed id in the path (Postgres "invalid input syntax", e.g. for uuid) is a 404, not a crash.
+    const e = err as { code?: string; cause?: { code?: string } };
+    if ((e.cause?.code ?? e.code) === "22P02") return problem(c, 404, "NOT_FOUND", "Not found");
     console.error("[annota] unhandled error", err);
     return problem(c, 500, "INTERNAL_ERROR", "Something went wrong");
   });

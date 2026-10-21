@@ -1,7 +1,8 @@
-import { getDb, member } from "@annota/db";
-import { and, eq } from "drizzle-orm";
+import { getDb, member, user } from "@annota/db";
+import { and, asc, eq } from "drizzle-orm";
 import { createMiddleware } from "hono/factory";
 import { getAuth } from "./auth";
+import { env } from "./env";
 import { ApiError, unauthorized } from "./errors";
 
 export type SessionVars = {
@@ -28,5 +29,42 @@ export const requireSession = createMiddleware<{ Variables: SessionVars }>(async
   c.set("userId", session.user.id);
   c.set("orgId", orgId);
   c.set("role", m.role);
+  await next();
+});
+
+export const isOrgAdmin = (role: string) =>
+  role.split(",").some((r) => r.trim() === "owner" || r.trim() === "admin");
+
+/** Organisation owners/admins only (webhooks, deleting others' comments…). */
+export const requireOrgAdmin = createMiddleware<{ Variables: SessionVars }>(async (c, next) => {
+  if (!isOrgAdmin(c.var.role))
+    throw new ApiError(403, "ADMIN_REQUIRED", "Only organisation admins can do this");
+  await next();
+});
+
+/**
+ * Instance admin (self-host settings such as SMTP): listed in ANNOTA_ADMIN_EMAILS, or — when that
+ * is unset — the first user who signed up (the operator who installed the instance).
+ */
+export async function isInstanceAdmin(userId: string): Promise<boolean> {
+  const listed = env().ANNOTA_ADMIN_EMAILS;
+  const db = getDb();
+  if (listed) {
+    const [u] = await db.select({ email: user.email }).from(user).where(eq(user.id, userId));
+    const emails = listed.split(",").map((s) => s.trim().toLowerCase());
+    return !!u && emails.includes(u.email.toLowerCase());
+  }
+  const [first] = await db
+    .select({ id: user.id })
+    .from(user)
+    .orderBy(asc(user.createdAt), asc(user.id))
+    .limit(1);
+  return first?.id === userId;
+}
+
+export const requireInstanceAdmin = createMiddleware<{ Variables: SessionVars }>(async (c, next) => {
+  if (!(await isInstanceAdmin(c.var.userId))) {
+    throw new ApiError(403, "INSTANCE_ADMIN_REQUIRED", "Only instance administrators can change this");
+  }
   await next();
 });

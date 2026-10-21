@@ -11,7 +11,9 @@
       "!apps/web/src/hooks",
       "!apps/web/public",
       "!**/*.css",
-      "!scripts/demo-site"
+      "!scripts/demo-site",
+      "!**/test-results",
+      "!**/playwright-report"
     ]
   },
   "formatter": {

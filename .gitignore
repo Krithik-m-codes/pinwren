@@ -10,3 +10,5 @@ next-env.d.ts
 apps/web/public/widget.js
 apps/web/public/widget-capture.js
 .dev.log
+packages/widget/test-results
+packages/widget/playwright-report

@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@annota/core": "workspace:*",
+    "@opentelemetry/api": "^1.9.1",
     "drizzle-orm": "^0.45.4",
     "postgres": "^3.4.7"
   },

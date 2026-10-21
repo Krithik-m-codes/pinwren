@@ -99,6 +99,29 @@ const networkEntry = z.object({
   at: z.number(),
 });
 
+// --- Widget: attachments (wave-1 contract §2) -----------------------------------------------------
+
+export const ATTACHMENT_CONTENT_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "application/pdf",
+] as const;
+export const MAX_ATTACHMENTS = 3;
+export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+
+export const widgetAttachment = z.object({
+  name: z.string().trim().min(1).max(200),
+  contentType: z.enum(ATTACHMENT_CONTENT_TYPES),
+  // base64 of 5 MB is ~6.99 M characters, plus the data-URL prefix.
+  dataUrl: z
+    .string()
+    .regex(/^data:[a-z]+\/[a-z0-9.+-]+;base64,/)
+    .max(7_000_200),
+});
+export type WidgetAttachment = z.infer<typeof widgetAttachment>;
+
 // --- Widget: create feedback (blueprint 04 §2) ------------------------------------------------------
 
 export const widgetFeedbackCreate = z.object({
@@ -133,6 +156,7 @@ export const widgetFeedbackCreate = z.object({
     .regex(/^data:image\/(png|jpeg|webp);base64,/)
     .max(11_000_000)
     .optional(),
+  attachments: z.array(widgetAttachment).max(MAX_ATTACHMENTS).optional(),
 });
 export type WidgetFeedbackCreate = z.infer<typeof widgetFeedbackCreate>;
 
@@ -148,7 +172,18 @@ export const projectUpdate = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   allowedOrigins: z.array(z.string().trim().min(1).max(253)).max(50).optional(),
   publicRead: z.boolean().optional(),
+  /** Partial widget config, deep-merged into the stored one and validated as a whole. */
+  widgetConfig: z.record(z.string(), z.unknown()).optional(),
+  /** Partial capture config, deep-merged into the stored one and validated as a whole. */
+  captureConfig: z.record(z.string(), z.unknown()).optional(),
+  /** Hard-delete feedback older than this many days (daily job). null keeps everything. */
+  retentionDays: z.number().int().min(1).max(3650).nullable().optional(),
+  /** Email the reporter (when they left an address) about team replies and status changes. */
+  notifyReporter: z.boolean().optional(),
+  /** Widget reports + replies per IP per minute. null uses the instance default. */
+  widgetRateLimitPerMin: z.number().int().min(1).max(1000).nullable().optional(),
 });
+export type ProjectUpdate = z.infer<typeof projectUpdate>;
 
 export const feedbackUpdate = z.object({
   status: feedbackStatus.optional(),
@@ -173,7 +208,105 @@ export const commentCreate = z.object({
   visibility: z.enum(COMMENT_VISIBILITIES).default("internal"),
 });
 
+export const commentUpdate = z.object({
+  body: z.string().trim().min(1).max(10_000),
+});
+
 export const widgetCommentCreate = z.object({
   body: z.string().trim().min(1).max(10_000),
   author: z.object({ name: z.string().trim().max(120).optional(), email: z.email().optional() }).optional(),
 });
+
+/** `PATCH /w/feedback/:id` — resolve or reopen from the page (wave-1 contract §5). */
+export const widgetFeedbackStatusUpdate = z.object({
+  status: z.enum(["resolved", "open"]),
+});
+export const REPORTER_TOKEN_HEADER = "x-annota-reporter-token";
+
+// --- Notifications ---------------------------------------------------------------------------------
+
+export const NOTIFICATION_TYPES = [
+  "feedback.created",
+  "feedback.assigned",
+  "feedback.status_changed",
+  "comment.created",
+] as const;
+
+export const notificationPreferenceInput = z.object({
+  projectId: z.uuid(),
+  newFeedback: z.boolean().optional(),
+  assigned: z.boolean().optional(),
+  /** Mentions and replies on feedback you are involved in. */
+  replies: z.boolean().optional(),
+  statusChanges: z.boolean().optional(),
+  /** Also send email (in-app notifications are always written). */
+  email: z.boolean().optional(),
+});
+export type NotificationPreferenceInput = z.infer<typeof notificationPreferenceInput>;
+
+export const notificationsRead = z.union([
+  z.object({ ids: z.array(z.uuid()).min(1).max(200) }),
+  z.object({ all: z.literal(true) }),
+]);
+
+// --- Instance settings: email ------------------------------------------------------------------------
+
+export const emailSettingsUpdate = z.object({
+  host: z.string().trim().max(253).nullable().optional(),
+  port: z.number().int().min(1).max(65535).nullable().optional(),
+  user: z.string().trim().max(320).nullable().optional(),
+  /** Write-only. A string sets it, null clears it, omitted keeps it. Never returned. */
+  password: z.string().max(500).nullable().optional(),
+  secure: z.boolean().nullable().optional(),
+  from: z.string().trim().max(320).nullable().optional(),
+});
+export type EmailSettingsUpdate = z.infer<typeof emailSettingsUpdate>;
+
+export const emailTest = z.object({ to: z.email().optional() });
+
+// --- Webhooks ----------------------------------------------------------------------------------------
+
+export const WEBHOOK_EVENTS = [
+  "feedback.created",
+  "feedback.updated",
+  "feedback.status_changed",
+  "feedback.assigned",
+  "comment.created",
+] as const;
+export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
+export const WEBHOOK_KINDS = ["generic", "slack", "discord"] as const;
+
+export const webhookCreate = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  url: z.url({ protocol: /^https?$/ }).max(2000),
+  kind: z.enum(WEBHOOK_KINDS).default("generic"),
+  events: z.array(z.enum(WEBHOOK_EVENTS)).min(1).max(WEBHOOK_EVENTS.length),
+  /** Limit to one project; omitted = every project in the organisation. */
+  projectId: z.uuid().nullable().optional(),
+  active: z.boolean().default(true),
+});
+export const webhookUpdate = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  url: z
+    .url({ protocol: /^https?$/ })
+    .max(2000)
+    .optional(),
+  events: z.array(z.enum(WEBHOOK_EVENTS)).min(1).max(WEBHOOK_EVENTS.length).optional(),
+  projectId: z.uuid().nullable().optional(),
+  active: z.boolean().optional(),
+});
+
+// --- API tokens + public API ----------------------------------------------------------------------------
+
+export const API_TOKEN_SCOPES = ["feedback:read", "feedback:write", "comments:write"] as const;
+export type ApiTokenScope = (typeof API_TOKEN_SCOPES)[number];
+
+export const apiTokenCreate = z.object({
+  name: z.string().trim().min(1).max(80),
+  scopes: z.array(z.enum(API_TOKEN_SCOPES)).min(1).max(API_TOKEN_SCOPES.length),
+  /** Days until expiry; omitted = never expires. */
+  expiresInDays: z.number().int().min(1).max(3650).optional(),
+});
+
+/** Public API comment: always a team comment by the token's owner. */
+export const apiCommentCreate = commentCreate;
