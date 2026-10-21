@@ -1,0 +1,26 @@
+{
+  "name": "@annota/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@annota/core": "workspace:*",
+    "@annota/db": "workspace:*",
+    "@hono/zod-validator": "^0.7.0",
+    "better-auth": "^1.7.12",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.13",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "vitest": "^4.0.0"
+  }
+}
