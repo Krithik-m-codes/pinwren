@@ -11,3 +11,6 @@ apps/web/public/widget*.js
 .dev.log
 packages/widget/test-results
 packages/widget/playwright-report
+
+# Playwright screenshots are regenerated on every run
+**/e2e/__screenshots__/
