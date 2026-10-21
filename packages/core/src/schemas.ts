@@ -1,0 +1,179 @@
+import { z } from "zod";
+
+// Wire types shared by the API, the dashboard and the widget. Never hand-write a request or
+// response type elsewhere — derive it from these schemas (blueprint 04, "packages/core").
+
+export const FEEDBACK_KINDS = ["comment", "bug", "idea", "question"] as const;
+export const FEEDBACK_STATUSES = [
+  "open",
+  "in_progress",
+  "in_review",
+  "resolved",
+  "wont_fix",
+  "duplicate",
+] as const;
+export const PRIORITIES = ["none", "low", "medium", "high", "urgent"] as const;
+export const COMMENT_VISIBILITIES = ["public", "internal"] as const;
+
+export const feedbackKind = z.enum(FEEDBACK_KINDS);
+export const feedbackStatus = z.enum(FEEDBACK_STATUSES);
+export const priority = z.enum(PRIORITIES);
+
+export type FeedbackKind = z.infer<typeof feedbackKind>;
+export type FeedbackStatus = z.infer<typeof feedbackStatus>;
+export type Priority = z.infer<typeof priority>;
+
+export const CLOSED_STATUSES: readonly FeedbackStatus[] = ["resolved", "wont_fix", "duplicate"];
+export const isClosedStatus = (s: FeedbackStatus) => CLOSED_STATUSES.includes(s);
+
+// --- Anchor bundle (blueprint 05 §5) -------------------------------------------------------------
+
+export const anchorBundle = z.object({
+  v: z.literal(1),
+  attrs: z
+    .object({
+      annotaAnchor: z.string().max(200).optional(),
+      testId: z.string().max(200).optional(),
+      id: z.string().max(200).optional(),
+      ariaLabel: z.string().max(200).optional(),
+      name: z.string().max(200).optional(),
+    })
+    .optional(),
+  css: z.string().max(2000),
+  xpath: z.string().max(2000),
+  text: z.object({
+    content: z.string().max(200),
+    prefix: z.string().max(64),
+    suffix: z.string().max(64),
+  }),
+  tag: z.string().max(40),
+  role: z.string().max(40).optional(),
+  structure: z.object({
+    depth: z.number().int().min(0).max(500),
+    siblingIndex: z.number().int().min(0),
+    childTagsHash: z.string().max(64),
+  }),
+  rect: z.object({
+    x: z.number(),
+    y: z.number(),
+    w: z.number(),
+    h: z.number(),
+    vw: z.number(),
+    vh: z.number(),
+    scrollY: z.number(),
+  }),
+  pin: z.object({
+    xPct: z.number().min(0).max(100),
+    yPct: z.number().min(0).max(100),
+    wPct: z.number().min(0).max(100).optional(),
+    hPct: z.number().min(0).max(100).optional(),
+  }),
+  textRange: z
+    .object({ startOffset: z.number().int(), endOffset: z.number().int(), quote: z.string().max(500) })
+    .optional(),
+});
+export type AnchorBundle = z.infer<typeof anchorBundle>;
+
+export const environment = z.object({
+  userAgent: z.string().max(500),
+  browser: z.string().max(60).optional(),
+  os: z.string().max(60).optional(),
+  viewport: z.object({ w: z.number().int(), h: z.number().int() }),
+  dpr: z.number().min(0.5).max(8),
+  locale: z.string().max(35).optional(),
+  timezone: z.string().max(64).optional(),
+  referrer: z.string().max(2000).optional(),
+});
+export type Environment = z.infer<typeof environment>;
+
+const consoleEntry = z.object({
+  level: z.enum(["error", "warn", "info", "log", "debug"]),
+  message: z.string().max(4000),
+  at: z.number(),
+});
+const networkEntry = z.object({
+  method: z.string().max(10),
+  url: z.string().max(2000),
+  status: z.number().int(),
+  durationMs: z.number(),
+  at: z.number(),
+});
+
+// --- Widget: create feedback (blueprint 04 §2) ------------------------------------------------------
+
+export const widgetFeedbackCreate = z.object({
+  clientId: z.uuid(),
+  kind: feedbackKind,
+  title: z.string().trim().max(200).optional(),
+  body: z.string().trim().min(1).max(10_000),
+  priority: priority.optional(),
+  page: z.object({
+    url: z.url().max(2000),
+    title: z.string().max(300).optional(),
+    urlPattern: z.string().max(500).optional(),
+  }),
+  anchor: anchorBundle.optional(),
+  environment,
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  reporter: z
+    .object({
+      name: z.string().trim().max(120).optional(),
+      email: z.email().max(254).optional(),
+      externalId: z.string().max(200).optional(),
+    })
+    .optional(),
+  diagnostics: z
+    .object({
+      console: z.array(consoleEntry).max(200).optional(),
+      network: z.array(networkEntry).max(100).optional(),
+    })
+    .optional(),
+  screenshot: z
+    .string()
+    .regex(/^data:image\/(png|jpeg|webp);base64,/)
+    .max(11_000_000)
+    .optional(),
+});
+export type WidgetFeedbackCreate = z.infer<typeof widgetFeedbackCreate>;
+
+// --- Dashboard ---------------------------------------------------------------------------------
+
+export const projectCreate = z.object({
+  name: z.string().trim().min(1).max(80),
+  allowedOrigins: z.array(z.string().trim().min(1).max(253)).max(50).default([]),
+});
+export type ProjectCreate = z.infer<typeof projectCreate>;
+
+export const projectUpdate = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  allowedOrigins: z.array(z.string().trim().min(1).max(253)).max(50).optional(),
+  publicRead: z.boolean().optional(),
+});
+
+export const feedbackUpdate = z.object({
+  status: feedbackStatus.optional(),
+  priority: priority.optional(),
+  title: z.string().trim().max(200).nullable().optional(),
+  assigneeIds: z.array(z.string()).max(20).optional(),
+});
+export type FeedbackUpdate = z.infer<typeof feedbackUpdate>;
+
+export const feedbackListQuery = z.object({
+  projectId: z.uuid().optional(),
+  status: z.union([feedbackStatus, z.literal("active"), z.literal("all")]).default("active"),
+  kind: feedbackKind.optional(),
+  q: z.string().trim().max(200).optional(),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type FeedbackListQuery = z.infer<typeof feedbackListQuery>;
+
+export const commentCreate = z.object({
+  body: z.string().trim().min(1).max(10_000),
+  visibility: z.enum(COMMENT_VISIBILITIES).default("internal"),
+});
+
+export const widgetCommentCreate = z.object({
+  body: z.string().trim().min(1).max(10_000),
+  author: z.object({ name: z.string().trim().max(120).optional(), email: z.email().optional() }).optional(),
+});
