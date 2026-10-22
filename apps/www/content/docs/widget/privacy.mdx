@@ -1,0 +1,96 @@
+---
+title: Privacy & masking
+description: Keep personal data out of screenshots and reports with masking, privacy mode and a consent notice.
+---
+
+Pinwren runs on your visitors' pages, so it collects as little as it can by default and gives you three
+levers for the rest: **masking** (per element), **privacy mode** (per project) and a **consent notice**.
+
+## Masking
+
+Masked elements are hidden in the captured copy of the page _and_ painted over as solid grey blocks of the
+element's size, so whoever reads the report sees that something was withheld rather than a hole that looks
+like a rendering bug. Masking applies to every capture mode, including screen share of the current tab, and
+to [session replay](/docs/widget/bug-reports#session-replay).
+
+| Masked              | How                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------ |
+| Password fields     | Always — `input[type=password]`.                                                     |
+| Payment card fields | Always — anything with `autocomplete="cc-…"`.                                        |
+| Elements you mark   | Always — add `data-pinwren-mask` to an element; its whole subtree is blocked out.    |
+| Project selectors   | The project's `capture.maskSelectors`: up to 50 CSS selectors, set in the dashboard. |
+| Every text field    | In privacy mode — inputs, textareas, selects and `contenteditable` regions.          |
+
+```html
+<div class="account-summary" data-pinwren-mask>Jane Doe · IBAN DE89 3704 0044 0532 0130 00</div>
+```
+
+To leave something out of screenshots entirely — not even a block — use `data-pinwren-ignore`. The widget's
+own UI is always left out.
+
+```html
+<div class="debug-toolbar" data-pinwren-ignore>…</div>
+```
+
+<Callout type="warn" title="Masking covers pictures, not text you type">
+  Masking keeps elements out of screenshots and replays. It does not change what a visitor writes in a
+  comment, or the page URL and element text recorded with a pin's anchor. Keep secrets out of URLs.
+</Callout>
+
+## Privacy mode
+
+Turn on **privacy mode** in the project's widget settings for pages that show personal data (customer
+portals, health or finance apps, anything under GDPR scrutiny). It changes both sides:
+
+**In the widget**
+
+- every text field is masked in screenshots, on top of the built-in masks;
+- no page-timing metadata is sent;
+- the user agent is reduced to the browser and OS families (“Chrome on Windows”) — no versions, no device
+  model; time zone and referrer are left out;
+- session replay is off unless the page explicitly opts in (`allowReplayInPrivacyMode`). <sup>New in 0.1</sup>
+
+**On the server**
+
+- the consent notice is forced on, and console capture is capped at errors;
+- reports from older or modified widgets are filtered again on arrival: non-error console entries and timing
+  data are dropped and the user agent is reduced;
+- stored IP addresses are truncated, and the instance's outbound update check is switched off.
+
+## Consent notice
+
+With `consent.enabled`, the composer and the bug report show a short notice above the send button, which
+becomes **Agree & send**. The default text, in the visitor's language:
+
+> Sending shares your comment, this page's address, the element you marked and basic browser details (browser,
+> screen size, language) with the site owner. Bug reports also include recent console errors and failed
+> requests.
+
+Set `consent.text` for your own wording (up to 1,000 characters) and `consent.privacyUrl` to link your privacy
+policy. The visitor is asked once per project and browser; changing the text or link asks again.
+
+<NewIn>
+  Each submission also records which notice was accepted and when (`consent: { version, acceptedAt }`), stored
+  with the feedback.
+</NewIn>
+
+## What is sent, and when
+
+| Data                                      | Comments                   | Bug reports                            |
+| ----------------------------------------- | -------------------------- | -------------------------------------- |
+| Message, type, optional name and email    | ✓                          | ✓                                      |
+| Page URL and title                        | ✓                          | ✓                                      |
+| Anchor (selector, element text, geometry) | ✓                          | —                                      |
+| Browser environment                       | ✓                          | ✓                                      |
+| Console and failed requests               | Only when typed as **Bug** | ✓ (per capture settings)               |
+| Screenshot, attachments                   | —                          | ✓                                      |
+| Page timing                               | —                          | ✓ (not in privacy mode)                |
+| Session replay                            | —                          | When enabled and the reporter keeps it |
+
+Diagnostics stay in memory on the page; nothing is sent until someone submits. The widget keeps a few small
+values in the visitor's browser — the name and email they typed, the reporter tokens of their own items, the
+consent they gave (`localStorage`), and drafts and queued reports (IndexedDB) — and sets no cookies: its API
+requests are sent without credentials.
+
+Network capture never records request or response bodies, and redacts sensitive-looking query parameters — see
+[Bug reports](/docs/widget/bug-reports#network).

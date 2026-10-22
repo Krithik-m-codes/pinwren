@@ -1,0 +1,101 @@
+---
+title: CLI
+description: "@pinwren/cli — add the widget to a project, check an instance and list open feedback from the terminal."
+---
+
+<NewIn>The CLI is new in this release.</NewIn>
+
+`@pinwren/cli` (MIT) installs the `pinwren` command: one self-contained file with no dependencies. It needs
+Node 20 or newer. Run it with `npx`, or install it globally:
+
+```npm
+npx @pinwren/cli --help
+```
+
+```npm
+npm install -g @pinwren/cli
+```
+
+```text
+pinwren init   [--url <instance>] [--key <pk_…>] [--framework html|vite|next] [--write] [--file <path>]
+pinwren doctor --url <instance> [--key <pk_…>] [--origin <https://your-site>] [--json]
+pinwren status --url <instance> --token <pwt_…> [--json]
+```
+
+`-h` / `--help` prints the usage and `-v` / `--version` the version. The environment variables
+`PINWREN_URL`, `PINWREN_KEY` and `PINWREN_TOKEN` fill the matching flags.
+
+## `pinwren init`
+
+Prints the widget snippet for the project in the current folder — or, with `--write`, inserts it.
+
+- **URL and key.** It asks for your Pinwren URL and the project's public key (`pk_…`, from the project's
+  **Install** tab) unless you pass `--url` / `--key` (or set `PINWREN_URL` / `PINWREN_KEY`). Outside an
+  interactive terminal, a missing value is an error.
+- **Framework.** It reads `package.json` in the current folder: `next` in the dependencies means Next.js,
+  `vite` means Vite, anything else plain HTML. Override it with `--framework html|vite|next`.
+- **`--write`.** For HTML and Vite it adds the script tag before `</body>` of `index.html` (or
+  `public/index.html`, `src/index.html`); for Next.js it adds a `Script` element from `next/script` before `</body>`
+  of `app/layout.tsx` (or `src/app/layout.tsx`, or the `.jsx` versions) and imports `next/script` once. Use
+  `--file` to choose another file. It never adds the widget twice.
+
+```bash
+pinwren init --url https://feedback.example.com --key pk_123… --write
+pinwren init --framework html --file public/index.html --write
+```
+
+The HTML snippet is the one-line script tag described in [install the widget](/docs/widget):
+
+```html
+<script src="https://feedback.example.com/widget.js" data-project="pk_…" async></script>
+```
+
+For Next.js it is:
+
+```tsx
+<Script src="https://feedback.example.com/widget.js" data-project="pk_…" strategy="afterInteractive" />
+```
+
+Remember to add the site's origin (e.g. `localhost:5173` while you develop) to the project's
+[allowed sites](/docs/dashboard/settings#allowed-sites-origins).
+
+## `pinwren doctor`
+
+Checks a running instance and exits with `1` if anything fails:
+
+| Check           | What it does                                                                                                                                                   |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server`        | `GET /api/health` answers `{ "ok": true, "version": "…" }`; shows the version.                                                                                 |
+| `widget.js`     | `GET /widget.js` is served as JavaScript.                                                                                                                      |
+| `widget config` | With `--key`: `GET /w/config` with that key and `--origin` (default: the instance's own origin). Reports an unknown or archived key, or an origin not allowed. |
+
+```bash
+pinwren doctor --url https://feedback.example.com --key pk_123… --origin https://www.example.com
+```
+
+```text
+✓ server: reachable, Pinwren 0.1.0
+✓ widget.js: served
+✓ widget config: project "Marketing site" accepts https://www.example.com
+```
+
+Add `--json` for machine-readable output (`{ ok, checks: [{ name, ok, detail }] }`). Use it after an upgrade,
+behind a new reverse proxy, or when the widget doesn't appear.
+
+## `pinwren status`
+
+Shows who an [API token](/docs/api#authentication) acts as, and every project with its open feedback count
+(open, in progress and in review):
+
+```bash
+pinwren status --url https://feedback.example.com --token pwt_…
+```
+
+```text
+Signed in as Ada Lovelace (owner)
+  Marketing site    12 open
+  Docs               3 open
+```
+
+It calls `GET /api/v1/token` and `GET /api/v1/projects`, so a token with the `feedback:read` scope is enough.
+`--json` prints `{ user, role, projects: [{ id, name, openCount }] }`.

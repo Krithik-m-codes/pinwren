@@ -1,0 +1,134 @@
+---
+title: JavaScript SDK
+description: "@pinwren/sdk — a small, typed client for the REST API for Node, Deno, Bun and edge runtimes."
+---
+
+<NewIn />
+
+`@pinwren/sdk` (MIT) wraps [`/api/v1`](/docs/api) with typed methods. Its types are generated from the same Zod
+schemas the server validates with, so the client and your instance agree on every field. It has no dependencies,
+ships ESM and CommonJS, and uses the global `fetch` (Node 20+).
+
+```npm
+npm install @pinwren/sdk
+```
+
+## Create a client
+
+```ts title="pinwren.ts"
+import { Pinwren } from "@pinwren/sdk";
+
+export const pinwren = new Pinwren({
+  url: "https://feedback.example.com", // your instance
+  token: process.env.PINWREN_TOKEN!, // pwt_… from Settings › API tokens
+});
+```
+
+<TypeTable
+  type={{
+    url: { type: "string", description: "Your Pinwren instance.", required: true },
+    token: { type: "string", description: "An API token (`pwt_…`).", required: true },
+    fetch: {
+      type: "typeof fetch",
+      description: "A custom fetch for tests, proxies or edge runtimes.",
+      default: "globalThis.fetch",
+    },
+    timeoutMs: { type: "number", description: "Abort a request after this long.", default: "30000" },
+    userAgent: { type: "string", description: "Sent as `User-Agent` where the runtime allows it." },
+  }}
+/>
+
+`createClient(options)` is a shorthand for `new Pinwren(options)`. Keep tokens on the server — never ship one to a
+browser bundle.
+
+## Feedback
+
+```ts
+// One page, newest first
+const { items, nextCursor } = await pinwren.feedback.list({ status: "open", kind: "bug", limit: 50 });
+
+// Every match, following the cursor for you
+for await (const item of pinwren.feedback.iterate({ status: "active", priority: "urgent" })) {
+  console.log(`#${item.number} ${item.title ?? item.body}`);
+}
+
+// Full detail: thread, files, timeline, diagnostics
+const detail = await pinwren.feedback.get(id);
+
+// Triage (needs feedback:write)
+await pinwren.feedback.update(id, { status: "in_progress", assigneeIds: [userId] });
+
+// Resolve, with an internal note saying what fixed it (needs feedback:write, and comments:write for the note)
+await pinwren.feedback.resolve(id, "Fixed in https://github.com/acme/site/pull/2210");
+
+// Steps, failing requests and console errors for reproducing a bug report
+const repro = await pinwren.feedback.reproduction(id);
+console.log(repro.markdown);
+```
+
+| Method                        | Returns                                                            | Scope            |
+| ----------------------------- | ------------------------------------------------------------------ | ---------------- |
+| `feedback.list(query?)`       | `{ items, nextCursor }`                                            | `feedback:read`  |
+| `feedback.iterate(query?)`    | An async iterator over every matching item                         | `feedback:read`  |
+| `feedback.get(id)`            | The item with comments, assets, activity, diagnostics              | `feedback:read`  |
+| `feedback.update(id, patch)`  | The updated item                                                   | `feedback:write` |
+| `feedback.resolve(id, note?)` | The updated item                                                   | `feedback:write` |
+| `feedback.reproduction(id)`   | `{ feedbackId, markdown, steps, failingRequests, errors, replay }` | `feedback:read`  |
+
+`query` takes `projectId`, `status` (a status, `"active"` or `"all"`), `kind`, `priority`, `assigneeId`, `roundId`,
+`q` (full-text), `page` (part of the page URL), `since` (ISO 8601), `limit` (1–100) and `cursor`. `patch` takes
+`status`, `priority`, `title`, `assigneeIds` and `roundId`.
+
+## Comments, projects, rounds, files
+
+```ts
+// A public reply the reporter sees on the page (default visibility is "internal")
+await pinwren.comments.create(id, { body: "Thanks — fixed!", visibility: "public" });
+
+const projects = await pinwren.projects.list(); // with open counts
+
+const rounds = await pinwren.rounds.list(projectId);
+await pinwren.rounds.update(roundId, { status: "closed" });
+
+// Screenshots, attachments and replays, as bytes
+const { contentType, bytes } = await pinwren.assets.get(assetId);
+```
+
+| Method                           | Returns                                                      |
+| -------------------------------- | ------------------------------------------------------------ |
+| `comments.create(feedbackId, c)` | The comment (`comments:write`)                               |
+| `projects.list()`                | Projects with `openCount`                                    |
+| `rounds.list(projectId)`         | The project's [review rounds](/docs/dashboard/review-rounds) |
+| `rounds.get(id)`                 | One round, with its counts                                   |
+| `rounds.update(id, patch)`       | `{ name?, dueAt?, status? }` (`feedback:write`)              |
+| `assets.get(id)`                 | `{ contentType, bytes }`                                     |
+| `assets.url(id)`                 | The asset's URL (fetch it with the same Bearer token)        |
+| `request(method, path, init?)`   | Raw `Response` for any `/api/v1` path                        |
+
+## Errors
+
+Every failure throws a `PinwrenError` with the HTTP `status`, the stable `code` from the
+[problem details](/docs/api#errors) and the server's message. A network failure or timeout has `status` 0 and code
+`NETWORK_ERROR`.
+
+```ts
+import { PinwrenError } from "@pinwren/sdk";
+
+try {
+  await pinwren.feedback.update(id, { status: "resolved" });
+} catch (err) {
+  if (err instanceof PinwrenError && err.code === "INSUFFICIENT_SCOPE") {
+    console.error("This token can't change feedback — add feedback:write");
+  } else throw err;
+}
+```
+
+## Types
+
+All wire types are exported: `Feedback`, `FeedbackDetail`, `FeedbackListItem`, `FeedbackListQuery`,
+`FeedbackUpdate`, `FeedbackStatus`, `FeedbackKind`, `Priority`, `Comment`, `CommentCreate`, `Project`, `Round`,
+`RoundUpdate`, `Reproduction` and more.
+
+```ts
+import type { FeedbackListItem, FeedbackStatus } from "@pinwren/sdk";
+```

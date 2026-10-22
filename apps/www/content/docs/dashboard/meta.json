@@ -1,0 +1,4 @@
+{
+  "title": "Dashboard",
+  "pages": ["index", "board", "page-review", "review-rounds", "saved-views", "notifications", "settings"]
+}

@@ -1,0 +1,141 @@
+---
+title: Projects & team
+description: Projects, allowed sites and the install snippet; workspace members and roles; branding, email templates and instance settings.
+---
+
+## Projects
+
+A **project** is one website (or one environment of it). It has its own widget key, allowed sites, widget and capture
+settings, integrations and retention. Create one from **Projects › New project**; give it a name and the site it runs
+on.
+
+Each project has a **public key** (`pk_…`). It is meant to be public — it goes in the snippet on your site. What
+protects the project is the list of allowed sites and the rate limit, not the key.
+
+### Allowed sites (origins)
+
+The widget is accepted only from the sites on the project's list; requests from any other `Origin` get
+`403 ORIGIN_NOT_ALLOWED`. Add up to 50 patterns, each a hostname with an optional port and an optional leading `*.`:
+
+| Pattern          | Matches                                                          |
+| ---------------- | ---------------------------------------------------------------- |
+| `example.com`    | `example.com` on any port and scheme                             |
+| `*.example.com`  | any subdomain, such as `staging.example.com` — not `example.com` |
+| `localhost:3000` | `localhost` on port 3000 only                                    |
+
+Hostnames are compared exactly, so `example.com` never matches `evil-example.com`. A scheme or path you paste
+(`https://example.com/shop`) is ignored. Add `localhost:<port>` while you develop.
+
+### Project settings tabs
+
+| Tab                | What's in it                                                                                                                                                                     |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Install**        | The snippet for HTML, Next.js (`next/script`) and Google Tag Manager; the allowed sites; a live "Waiting for your site" / last-seen check that turns green once the widget loads |
+| **Widget**         | Launcher, modes, shortcuts, read-only mode and more — see [configuration](/docs/widget/configuration)                                                                            |
+| **Capture**        | Console and network capture, screenshot with every comment, masked selectors — see [bug reports](/docs/widget/bug-reports)                                                       |
+| **Actions**        | Custom buttons on threads — see [panel actions](/docs/widget/panel-actions)                                                                                                      |
+| **Issue trackers** | [GitHub](/docs/integrations/github) and [GitLab](/docs/integrations/gitlab) sync                                                                                                 |
+| **Privacy & data** | Privacy mode, showing pins to visitors, retention, emailing the reporter, the rate limit                                                                                         |
+| **Danger zone**    | Rotate the key, archive or restore the project                                                                                                                                   |
+
+### Privacy & data
+
+| Setting                            | Field                      | Notes                                                                                                                            |
+| ---------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Privacy mode**                   | `widgetConfig.privacyMode` | See [privacy & masking](/docs/widget/privacy). Turning it on shortens "keep forever" retention to 90 days                        |
+| **Show existing pins to visitors** | `publicRead`               | Reviewers see each other's comments on the page. Turn off for private bug reporting                                              |
+| **Retention**                      | `retentionDays`            | Keep forever, or 1–3,650 days (presets 30 days to 2 years). A daily job deletes older feedback with its screenshots and files    |
+| **Email the reporter**             | `notifyReporter`           | Email reporters who left an address about public replies and status changes — see [notifications](/docs/dashboard/notifications) |
+| **Reports and replies per minute** | `widgetRateLimitPerMin`    | Per visitor IP, 1–1,000, or the instance default `WIDGET_RATE_LIMIT_PER_MIN` (10). Over it, the widget gets `429 RATE_LIMITED`   |
+
+### Rotating the key and archiving
+
+- **Rotate the project key** issues a new `pk_…`. The old one stops working at once, so the widget on your site stops
+  until you update the snippet.
+- **Archive** hides the project from your lists and stops its widget key; nothing is deleted. Restore it from the
+  same tab.
+
+## Members and roles
+
+Your **workspace** holds the projects and the people who triage them. Invite people from **Settings › Members** by
+email; the invitation links to `/accept-invitation/<id>`, where they sign in or create an account. Pending
+invitations are listed until they are accepted, cancelled or expire.
+
+| Role       | Can                                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------------- |
+| **Member** | Triage feedback and comment                                                                             |
+| **Admin**  | Also manage members, projects and integrations (webhooks, issue trackers), branding and email templates |
+| **Owner**  | Full control, including the workspace itself                                                            |
+
+<NewIn>
+  A **Viewer** role reads everything but changes nothing: mutating dashboard requests from a viewer are
+  answered `403 READ_ONLY_ROLE`. Viewers can still manage their own notifications, API tokens (whose writes
+  are refused too) and personal saved views. Use it for clients or stakeholders who should follow progress
+  without triaging. The server enforces the role; the Members screen doesn't offer it yet, so for now invite
+  with `role: "viewer"` through Better Auth's `POST /api/auth/organization/invite-member`.
+</NewIn>
+
+The people who leave feedback through the widget are not members and need no account; they are unlimited.
+
+Once your team has accounts, set `PINWREN_DISABLE_SIGNUP=true` so new people can only join by invitation — see the
+[environment reference](/docs/self-hosting/environment).
+
+## Branding
+
+**Settings › Branding** (admins) sets the workspace's **product name** (up to 40 characters, replacing "Pinwren"),
+**logo** (PNG, JPEG or WebP up to 512 KB; SVG is refused) and **accent colour**. They apply to the dashboard header,
+buttons and links, and to every email the workspace sends.
+
+The widget's own branding — hiding "Powered by Pinwren", the dialog accent and a logo in the report form — is set per
+project under **Widget**; see [configuration](/docs/widget/configuration).
+
+## Email templates
+
+**Settings › Email** lets admins rewrite every email the workspace sends. Each template is a subject and a Markdown
+body with `{{variable}}` placeholders; raw HTML is shown as text, never rendered, and variables are escaped. Every
+template has a live preview, **Send test** and **Reset to default**.
+
+| Template                          | Sent                                                 |
+| --------------------------------- | ---------------------------------------------------- |
+| **Invitation**                    | When someone is invited to the workspace             |
+| **New feedback**                  | To members who follow new feedback on a project      |
+| **Assigned to you**               | To the person an item was assigned to                |
+| **New reply**                     | To the team involved in an item when someone replies |
+| **Status changed**                | To assignees when an item's status changes           |
+| **Reply to the reporter**         | To the reporter when the team replies publicly       |
+| **Status update to the reporter** | To the reporter when the team changes the status     |
+
+Variables:
+
+| Variable                                                                            | Available in                                                    |
+| ----------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `productName`                                                                       | Every template                                                  |
+| `projectName`, `number`, `kind`, `title`, `body`, `pageUrl`, `reporterName`, `link` | Team templates about an item                                    |
+| `assignerName`                                                                      | Assigned to you                                                 |
+| `authorName`, `reply`                                                               | New reply, Reply to the reporter                                |
+| `status`, `actorName`                                                               | Status changed (`status` also in Status update to the reporter) |
+| `inviterName`, `orgName`, `role`, `acceptUrl`, `expiresAt`                          | Invitation                                                      |
+| `projectName`, `title`, `pageUrl`                                                   | Reporter templates                                              |
+
+A placeholder that isn't available in a template is rejected when you save.
+
+## Instance settings
+
+Two pages belong to whoever runs the server — the **instance admins**: the addresses in `PINWREN_ADMIN_EMAILS`, or,
+when that is unset, the first person who signed up.
+
+- **Settings › Email** — the SMTP server, with **Send test**. See [email](/docs/integrations/email).
+- **Settings › Security** — session lifetime (1–90 days, for new sign-ins), whether HTTPS is enforced and whether the
+  server trusts a reverse proxy (both read-only, set by `PINWREN_ENFORCE_HTTPS` and `PINWREN_TRUST_PROXY`), and the
+  daily update check with **Check now**.
+
+A field set by an environment variable is shown read-only, and changing it through the API returns
+`409 SETTING_LOCKED`.
+
+## Exporting feedback
+
+Visitors and team members can export the comments of a page, or every page they can see, as CSV or JSON from the
+widget's side panel — see [comments](/docs/widget/comments). For scripts and other tools, use the
+[REST API](/docs/api).
+
+<NewIn>A [review round](/docs/dashboard/review-rounds) exports as CSV or PDF.</NewIn>

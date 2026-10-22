@@ -1,0 +1,65 @@
+---
+title: Email (SMTP)
+description: Connect any SMTP server for notifications, invitations and replies to reporters — in the admin UI or with environment variables.
+---
+
+Pinwren sends email through any SMTP server: your provider's (Postmark, SES, Mailgun, Resend, Fastmail…), Gmail with
+an app password, or your own. Until SMTP is set up, every email is skipped and logged — nothing fails, and in-app
+notifications still work.
+
+Email is used for:
+
+- team notifications (new feedback, assignments, replies, status changes) — see
+  [notifications](/docs/dashboard/notifications);
+- workspace invitations;
+- replies and status updates to reporters who left an address, when the project has **Email the reporter** on.
+
+## Configure in the dashboard
+
+As an [instance admin](/docs/dashboard/settings#instance-settings), open **Settings › Email**:
+
+| Field            | Notes                                                                    |
+| ---------------- | ------------------------------------------------------------------------ |
+| **SMTP host**    | SMTP server, e.g. `smtp.postmarkapp.com`                                 |
+| **Port**         | Defaults to `587`, or `465` with TLS                                     |
+| **Username**     | Optional                                                                 |
+| **Password**     | Write-only: stored encrypted with `PINWREN_SECRET` and never shown again |
+| **Use TLS**      | On for implicit TLS (usually port 465); off uses STARTTLS when offered   |
+| **From address** | Sender, e.g. `Pinwren <feedback@example.com>` — required                 |
+
+Email is considered configured once **SMTP host** and **From address** are set. **Send test** sends a message to you (or the address
+you enter) right away and shows the SMTP server's error if it fails.
+
+## Configure with environment variables
+
+Each variable overrides its field and **locks** it: the dashboard shows it read-only, and the API answers a change with
+`409 SETTING_LOCKED`. Use this to keep mail credentials in your secret store.
+
+<EnvTable group="Email (SMTP)" />
+
+```bash title="docker/.env"
+SMTP_HOST=smtp.postmarkapp.com
+SMTP_PORT=587
+SMTP_USER=your-server-token
+SMTP_PASSWORD=your-server-token
+SMTP_SECURE=false
+EMAIL_FROM="Acme Feedback <feedback@acme.example>"
+```
+
+<Callout type="warn" title="Pass the variables to the container">
+  The stock `docker/compose.yml` forwards only the variables it lists under `environment:`. Add the `SMTP_*`
+  and `EMAIL_FROM` lines there (or an `env_file:`), or set SMTP in the dashboard instead. See [environment
+  variables](/docs/self-hosting/environment).
+</Callout>
+
+## Templates and branding
+
+Every email uses your workspace's product name, logo and accent from **Settings › Branding**, and each one has an
+editable Markdown template with a live preview and its own **Send test** — see
+[email templates](/docs/dashboard/settings#email-templates). Untrusted text (feedback, names, URLs) is escaped, so it
+can't inject markup into an email.
+
+## Delivery
+
+Emails are sent by a background job. If the SMTP server refuses or times out, the job retries with backoff (up to
+four more attempts), so a short outage doesn't lose notifications. Connections time out after 10 seconds.

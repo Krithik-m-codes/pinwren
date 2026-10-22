@@ -1,0 +1,169 @@
+---
+title: Bug reports
+description: Annotated screenshots, attachments, console and network diagnostics, drafts and the offline outbox.
+---
+
+**Report a bug** (or <kbd>B</kbd>) opens a dialog that captures the page, lets the reporter mark it up and sends
+it with the technical context a developer needs. The form, the screenshot engine (SnapDOM) and the annotation
+editor are separate chunks, fetched the moment someone hovers the launcher, so they cost nothing on page load.
+
+## The report
+
+| Field           | Notes                                                                                                                                            |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Screenshot      | Taken automatically when the dialog opens, then annotated in place.                                                                              |
+| Title           | Optional, up to 200 characters.                                                                                                                  |
+| Description     | Required.                                                                                                                                        |
+| Severity        | Low, Medium (default), High or Critical — stored as the item's priority (Critical → `urgent`).                                                   |
+| Attachments     | Up to 3 files.                                                                                                                                   |
+| Name and email  | Optional, remembered in the browser; collapsed to one line once the name is known (typed before, or from [`identify()`](/docs/widget/identity)). |
+| What we'll send | A summary of the diagnostics that go with the report.                                                                                            |
+
+## Capture modes
+
+Switch with the bar above the screenshot:
+
+| Mode             | What it captures                                                                                                                                                                                            |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Visible area** | The viewport, as the reporter sees it (default).                                                                                                                                                            |
+| **Full page**    | The whole scrollable document, scaled down if needed (canvas limits: 16,000 px per side, 36 megapixels).                                                                                                    |
+| **Element**      | Click one element on the page to capture just that.                                                                                                                                                         |
+| **Screen share** | One frame of a browser screen share the reporter approves. Pixel-exact, including cross-origin iframes and canvases. Only offered where the browser supports `getDisplayMedia` — desktop browsers on https. |
+
+Screenshots render at up to 2× device pixel ratio and are sent as WebP (JPEG where the browser can't encode
+WebP). The widget itself and anything marked `data-pinwren-ignore` are left out; masked elements appear as
+solid grey blocks ([Privacy & masking](/docs/widget/privacy)).
+
+If DOM capture fails or takes longer than 8 seconds, the dialog says so and offers **Capture with screen
+share** or **Send without screenshot**.
+
+## Annotation editor
+
+| Tool      | Key          | Notes                                                                              |
+| --------- | ------------ | ---------------------------------------------------------------------------------- |
+| Rectangle | <kbd>R</kbd> |                                                                                    |
+| Ellipse   | <kbd>O</kbd> |                                                                                    |
+| Arrow     | <kbd>A</kbd> |                                                                                    |
+| Pen       | <kbd>P</kbd> | Freehand strokes.                                                                  |
+| Text      | <kbd>T</kbd> | Click to place, type, click away to commit.                                        |
+| Hide      | <kbd>B</kbd> | Pixelates the area — irreversibly, unlike a blur, so it is safe for personal data. |
+| Crop      | <kbd>C</kbd> | Shown as a dimmed surround; pixels are cut when the report is sent.                |
+
+Five colours (red, amber, green, blue, near-black), three sizes, and undo / redo with
+
+<kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd> and <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd>
+.
+
+## Attachments
+
+Drop files on the dialog, paste them (a pasted image gets a readable name), or browse:
+
+- at most **3 files**, each up to **5 MB**;
+- PNG, JPEG, WebP, GIF or PDF.
+
+The server checks each file's bytes against its declared type and rejects mismatches with
+`400 INVALID_ATTACHMENT`.
+
+## Diagnostics
+
+Collected from the moment the widget loads, sized by the project's [capture settings](/docs/widget/configuration#capture),
+and sent with bug reports — and with comments whose type is set to **Bug**. Other comments carry the page,
+the anchor and the browser environment only.
+
+### Console
+
+| `capture.console`      | Recorded                                                           |
+| ---------------------- | ------------------------------------------------------------------ |
+| `off`                  | Nothing.                                                           |
+| `errors`               | `console.error`, uncaught errors and unhandled promise rejections. |
+| `warnings` _(default)_ | The above plus `console.warn`.                                     |
+| `all`                  | Every level: error, warn, info, log, debug.                        |
+
+The last 100 entries are kept, 4,000 characters each. Objects are serialised safely (circular references,
+DOM nodes as `<tag#id>`). The wrappers call your original `console` methods first and are removed by
+`destroy()`.
+
+### Network
+
+With `capture.network: "failures"` (default) the widget records `fetch` and `XMLHttpRequest` calls that
+failed (status ≥ 400 or no response) or took longer than 3 seconds — method, URL, status and duration, the
+last 50. Request and response bodies are never captured. Query parameters whose name looks sensitive
+(`token`, `key`, `secret`, `password`, `auth`, `session`, `code`, `sig`) are replaced with `[redacted]`, and
+same-origin URLs are stored as a path. The widget's own calls to Pinwren are ignored.
+
+### Environment and timing
+
+Every item records the browser, OS, user agent, viewport, device pixel ratio, language, time zone and
+referrer. Bug reports add page timing: time to first byte, DOMContentLoaded, load, first and largest
+contentful paint. In [privacy mode](/docs/widget/privacy) the user agent shrinks to “Chrome on Windows”, the
+time zone, referrer and timing are left out, and the console is capped at errors.
+
+## Session replay
+
+<NewIn>Session replay is new in this release and off by default (`capture.replay.enabled`).</NewIn>
+
+When enabled for a project, the widget lazily loads its replay chunk (rrweb's recorder) and keeps a rolling
+buffer of the last `capture.replay.seconds` (30–120, default 60) in memory. Nothing leaves the page unless a
+bug report is sent: the report form lists **Session replay · last 60 s** with a switch, so the reporter can
+leave it out. The recording is gzipped in the browser and stored with the report (up to 10 MB) — only when the
+project has replay turned on — as an asset you can download with `GET /api/v1/assets/:id`, and its steps feed the
+[reproduction context](/docs/api#more-endpoints) for AI agents. A player in the dashboard is still being built.
+
+Replay masks every input, does not record the widget, `.pinwren-block` or `[data-pinwren-ignore]` elements,
+and replaces the text of `.pinwren-mask`, `[data-pinwren-mask]` and the project's mask selectors. Privacy mode
+turns replay off unless the page explicitly allows it with the `allowReplayInPrivacyMode` init option — then
+all text is masked, and handling consent is up to you.
+
+## Drafts
+
+An unsent report — text, severity, screenshot with its annotations, attachments — is saved in the browser's
+IndexedDB as the reporter types. Closing the dialog keeps it (“Draft saved”), and the next **Report a bug**
+offers to **Resume** or **Start over**. A draft survives reloads; it is deleted when the report is sent.
+
+## Offline outbox
+
+A report that fails for a transient reason — offline, a server error, `429` or a timeout — goes into an
+IndexedDB outbox instead of failing:
+
+- retried with exponential backoff (2 s, 4 s, 8 s … capped at 5 minutes, with jitter), whenever the browser
+  comes back online, and on the next page load;
+- the launcher shows a queued state and the menu an entry such as **1 report waiting to send**; choosing it
+  retries immediately;
+- each retry reuses the report's `clientId`, so the server never stores a duplicate;
+- items older than 7 days, or that the server refuses for good (a `400` or `403` on retry), are dropped and
+  the `error` event fires.
+
+When a queued report gets through, the visitor sees a toast and the `submit` event fires. On the first
+attempt, errors that won't fix themselves (a `400` or `403`) are shown in the dialog instead of being queued.
+
+## What the server receives
+
+`POST /w/feedback` with the project key header, for example:
+
+```json title="POST /w/feedback (abridged)"
+{
+  "clientId": "3f0c…",
+  "kind": "bug",
+  "title": "Checkout button does nothing",
+  "body": "Clicking Pay shows a spinner forever.",
+  "priority": "high",
+  "page": { "url": "https://example.com/checkout", "title": "Checkout" },
+  "environment": {
+    "userAgent": "…",
+    "browser": "Chrome 141",
+    "os": "macOS",
+    "viewport": { "w": 1440, "h": 900 },
+    "dpr": 2
+  },
+  "diagnostics": {
+    "console": [{ "level": "error", "message": "TypeError: …", "at": 1761091200000 }],
+    "network": [
+      { "method": "POST", "url": "/api/pay", "status": 500, "durationMs": 412, "at": 1761091200000 }
+    ]
+  },
+  "metadata": { "performance": { "ttfbMs": 120, "lcpMs": 1450 } },
+  "screenshot": "data:image/webp;base64,…"
+}
+```
+
+The response is `201 { "feedback": { "id", "number", "reporterToken" } }`.

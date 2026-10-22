@@ -1,0 +1,83 @@
+---
+title: GitLab
+description: Open a GitLab issue for each feedback item on gitlab.com or self-managed GitLab, with two-way open and closed state.
+---
+
+The GitLab integration works like [GitHub](/docs/integrations/github): one issue per feedback item, created
+automatically or with a button, and closing either side closes the other. It uses an access token, so it works with
+gitlab.com and with self-managed GitLab, including instances with no public address.
+
+## Connect a project
+
+<Steps>
+<Step>
+
+**Create a token** with the **`api`** scope: a **project access token** (Settings › Access tokens in the GitLab
+project, role Reporter or higher so it can manage issues) or a personal access token. Issues are opened by the token's
+user.
+
+</Step>
+<Step>
+
+**Connect.** As a workspace admin, open the Pinwren project's **Issue trackers** tab and connect GitLab:
+
+| Field                       | Notes                                                                                                                   |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Access token**            | Stored encrypted; only its last four characters are ever shown                                                          |
+| **Project path**            | `group/project` or `group/subgroup/project`                                                                             |
+| **Self-managed GitLab URL** | Optional, e.g. `https://gitlab.example.com`. Empty uses `GITLAB_URL` (`https://gitlab.com`). `/api/v4` is added for you |
+| **Labels**                  | Up to 10, comma-separated; added to every issue (default `feedback`)                                                    |
+| **Open issues for**         | **Manually**, **Bugs** or **Everything**                                                                                |
+
+Use **Test connection** to check that the token can see the project.
+
+</Step>
+<Step>
+
+**Add the webhook** so closing an issue updates Pinwren. Under **Two-way status** the tab shows a **URL**
+(`https://feedback.example.com/api/integrations/gitlab/webhook`) and a **secret**. In the GitLab project, open
+**Settings › Webhooks › Add new webhook**, paste the URL, put the secret in **Secret token** and tick **Issues
+events**.
+
+</Step>
+</Steps>
+
+## Creating issues
+
+| Open issues for | What happens                                                         |
+| --------------- | -------------------------------------------------------------------- |
+| **Manually**    | Only when someone presses **Send to GitLab** on an item in the inbox |
+| **Bugs**        | Every new bug report opens an issue                                  |
+| **Everything**  | Every new item opens an issue                                        |
+
+Issues have the same title (`#142 Checkout button does nothing`), quoted and escaped body, environment table and
+dashboard link as on GitHub. Screenshots, logs and reporter emails are never put in an issue.
+
+## Two-way state
+
+| You do                                           | Pinwren does                         |
+| ------------------------------------------------ | ------------------------------------ |
+| Move an item to Resolved, Won't fix or Duplicate | Closes the issue                     |
+| Reopen the item                                  | Reopens the issue                    |
+| Close the issue in GitLab                        | Moves an open item to **Resolved**   |
+| Reopen the issue in GitLab                       | Moves a closed item back to **Open** |
+
+Changes from GitLab appear in the timeline as the integration and are never pushed back, so nothing loops.
+
+## Reliability and security
+
+- Issue creation and state changes are retried background jobs; a GitLab outage never blocks a report. The last error
+  shows on the integration until the next success.
+- The webhook is verified by comparing `X-Gitlab-Token` with the integration's secret in constant time. Only issue
+  events with the `close` or `reopen` action change anything; others are acknowledged and ignored. Requests over
+  1 MB are refused.
+- When several Pinwren projects sync one GitLab project, only the integration whose secret matches acts.
+- Rotate the webhook secret from the tab if it leaks, and paste the new one into GitLab.
+
+## Self-managed GitLab
+
+Set **Self-managed GitLab URL** per integration, or `GITLAB_URL` for the whole instance. Your Pinwren server must
+reach GitLab's API, and GitLab must reach Pinwren's webhook URL — on self-managed GitLab, allow requests to your
+Pinwren host under **Admin › Settings › Network › Outbound requests** if it is on a private network.
+
+<EnvTable group="Issue trackers" />

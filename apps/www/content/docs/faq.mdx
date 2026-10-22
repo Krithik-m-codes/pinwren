@@ -1,0 +1,137 @@
+---
+title: FAQ
+description: Short answers to the questions people ask before installing Pinwren.
+---
+
+<Accordions>
+<Accordion title="Which databases are supported?">
+
+Postgres only — version 17 is what the compose file runs and what Pinwren is tested against. Postgres holds
+everything: data, sessions, rate-limit counters and the background-job queue, so there is no Redis or message
+broker to run. SQLite and MySQL are not supported. You can point `DATABASE_URL` at a managed Postgres instead of
+the bundled container.
+
+</Accordion>
+<Accordion title="Does it work with my framework?">
+
+Yes. The widget is one script tag that works on any website — static HTML, WordPress, Webflow, Next.js, Nuxt,
+SvelteKit, Astro, Rails, Laravel — and can also be loaded through Google Tag Manager. To bundle it, install
+`@pinwren/widget` from npm, or use the `@pinwren/react` component in React and Next.js apps. See [Install the
+widget](/docs/widget).
+
+</Accordion>
+<Accordion title="Does it handle single-page apps and client-side routing?">
+
+Yes. The widget watches the page: when the URL changes without a reload (pushState, router navigation) it
+closes any open thread and loads the pins of the new page; when content changes on the same URL it re-places
+the pins. Nothing needs to be called on route change.
+
+</Accordion>
+<Accordion title="What happens to pins when the page layout changes?">
+
+Each pin stores several independent ways to find its element again: explicit attributes
+(`data-pinwren-anchor`, `data-testid`, `id`), a CSS selector, an XPath, the element's text with its neighbours'
+text, and its position. On load the widget tries them from the most to the least reliable and checks the text
+still matches. A pin found by a weaker strategy is marked **Moved?**; one that can't be found at all stays in
+the side panel instead of disappearing. Add `data-pinwren-anchor="…"` to key elements for anchors that survive
+any redesign. See [Anchoring](/docs/widget/anchoring).
+
+</Accordion>
+<Accordion title="How big is the widget?">
+
+The script tag loads `widget.js`: about **26 KB gzip** (76 KB minified). Everything else loads only when
+someone uses it: the side panel (~7 KB gzip), the bug-report form (~11 KB), the screenshot capture and editor
+(~95 KB, only when a screenshot is taken) and one ~3 KB file per non-English language. The core renders the
+launcher and pins and nothing more.
+
+</Accordion>
+<Accordion title="Will it break my site's styles or scripts?">
+
+No. The widget renders inside a closed Shadow DOM, adds no global CSS or JavaScript, and protects itself from
+hostile page styles. Every entry point is wrapped, so an error inside the widget is logged with a `[pinwren]`
+prefix and never thrown into your code. If the server can't be reached, the widget quietly disables itself.
+
+</Accordion>
+<Accordion title="Is it GDPR-friendly?">
+
+Pinwren is designed to make compliance straightforward, but whether your use complies depends on how you use
+it — this is not legal advice.
+
+- **Self-hosted**, the data stays on your infrastructure; there is no telemetry.
+- Reporters don't need an account; name and email are optional.
+- Password and payment-card fields and anything marked `data-pinwren-mask` are always blocked out of
+  screenshots.
+- **Privacy mode** masks every text field, drops timing data, coarsens the user agent, truncates stored IP
+  addresses and shows a consent notice. See [Privacy & masking](/docs/widget/privacy).
+- **Retention** policies delete old feedback automatically, per project.
+
+</Accordion>
+<Accordion title="Is it accessible?">
+
+The widget and dashboard are built to be used with a keyboard and a screen reader: every control is a real
+button or link with a label, dialogs trap focus and give it back when they close, `Esc` closes things, motion
+respects `prefers-reduced-motion`, and the inbox has keyboard shortcuts for every action. On touch screens you comment with a
+long-press or a drag. There has been no
+external accessibility audit yet; please [report problems](https://github.com/Krithik-m-codes/pinwren/issues).
+
+</Accordion>
+<Accordion title="Does it work on phones and tablets?">
+
+Yes, in mobile browsers. On narrow screens the comment cards become bottom sheets and the side panel goes
+full-screen; you comment with a long-press or a drag. There are no native iOS or Android SDKs.
+
+</Accordion>
+<Accordion title="What do I need to allow in my Content Security Policy?">
+
+If your site sends a CSP header, allow your Pinwren server (here `https://feedback.example.com`):
+
+```text
+script-src  'self' https://feedback.example.com;
+connect-src 'self' https://feedback.example.com;
+img-src     'self' https://feedback.example.com data: blob:;
+style-src   'self' 'unsafe-inline';
+```
+
+- `script-src` loads `widget.js` and its on-demand chunks from the server.
+- `connect-src` covers the widget's API calls (`/w/*`).
+- `img-src` covers screenshot previews (`data:`/`blob:` URLs) and a branding logo served by Pinwren; add the
+  logo's host if it lives elsewhere.
+- `style-src 'unsafe-inline'` is needed because the widget puts its stylesheet in a `<style>` element inside its
+  shadow root.
+
+Screenshots are rendered from the page itself, so images and fonts on the page must be readable by the page
+(same origin or CORS-enabled) to appear in a capture; cross-origin iframes show as placeholders.
+
+</Accordion>
+<Accordion title="Is there a hosted version?">
+
+Not yet. Pinwren Cloud is planned; until then, self-hosting is the way to run it and it is free with no feature
+limits for a team. The planned Cloud plans are on the [pricing page](/pricing).
+
+</Accordion>
+<Accordion title="Do I have to publish my code because of the AGPL?">
+
+No — not for using Pinwren. Embedding the widget in your site creates no obligations (the widget and the other
+client packages are MIT). Self-hosting the server, even commercially, creates none either. Only if you
+**modify the server** and let other people use that modified version over a network must you offer them its
+source. See [Editions & licensing](/docs/licensing).
+
+</Accordion>
+<Accordion title="Can I move over from Marker.io, BugHerd or another tool?">
+
+There is no importer for other tools' data yet. Most teams start fresh: install the widget on the sites you are
+reviewing and keep the old tool read-only until its open items are closed. Your data in Pinwren is never locked
+in — export it as CSV or JSON from the dashboard, or read it through the [REST API](/docs/api).
+
+</Accordion>
+<Accordion title="Do my clients need an account?">
+
+No. Visitors comment and report straight from the page, identified only by the name and email they choose to
+give — or by your app, with [`Pinwren.identify()`](/docs/widget/identity). Only your team signs in to the
+dashboard. Guests are always unlimited.
+
+</Accordion>
+</Accordions>
+
+Didn't find your answer? Ask in [GitHub Discussions](https://github.com/Krithik-m-codes/pinwren/discussions)
+or try the [live demo](/demo).

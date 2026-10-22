@@ -1,0 +1,132 @@
+---
+title: Quickstart
+description: Run Pinwren with Docker, create a project and see your first pinned comment in about five minutes.
+---
+
+You need Docker with Compose. The stack is two containers: Pinwren and Postgres 17.
+
+<Steps>
+<Step>
+
+### Get the compose file and set three values
+
+```bash
+git clone https://github.com/Krithik-m-codes/pinwren.git && cd pinwren
+cp docker/.env.example docker/.env
+```
+
+Open `docker/.env` and fill in the three required values:
+
+```bash title="docker/.env"
+# The URL people open and the widget calls. No trailing slash.
+PINWREN_URL=http://localhost:3000
+# openssl rand -base64 48
+PINWREN_SECRET=<a long random string, at least 32 characters>
+# openssl rand -hex 24
+POSTGRES_PASSWORD=<another random string>
+```
+
+`http://localhost:3000` is fine for a first try on your own machine. For a real install use your public HTTPS
+URL, e.g. `https://feedback.example.com`, behind a [reverse proxy](/docs/self-hosting/reverse-proxy).
+
+</Step>
+<Step>
+
+### Start it
+
+<Tabs items={["Published image", "Build from source"]}>
+<Tab value="Published image">
+
+Each release publishes a multi-arch image (amd64, arm64). Pin a version in `docker/.env` and start without
+`--build`:
+
+```bash title="docker/.env"
+PINWREN_IMAGE=ghcr.io/krithik-m-codes/pinwren:0.1.0
+```
+
+```bash
+docker compose -f docker/compose.yml --env-file docker/.env up -d
+```
+
+</Tab>
+<Tab value="Build from source">
+
+```bash
+docker compose -f docker/compose.yml --env-file docker/.env up -d --build
+```
+
+</Tab>
+</Tabs>
+
+Database migrations run automatically when the app starts. Check it is up:
+
+```bash
+curl http://localhost:3000/api/health
+# {"ok":true}
+```
+
+</Step>
+<Step>
+
+### Create your account and first project
+
+Open `PINWREN_URL` and sign up. The first account becomes the instance admin (unless you set
+`PINWREN_ADMIN_EMAILS`). The setup screen asks for a **workspace name**, a **first project** and your
+**website domain** — the domain becomes the project's first allowed site.
+
+<Callout type="warn" title="Close sign-up afterwards">
+  Sign-up is open by default. Once your team has accounts, set `PINWREN_DISABLE_SIGNUP=true` in `docker/.env`
+  and restart; invite everyone else from **Settings › Members**.
+</Callout>
+
+</Step>
+<Step>
+
+### Allow your site
+
+In the project's **Install** tab, under **Allowed sites**, list every hostname that will load the widget, for
+example `www.example.com`, `*.staging.example.com` or `localhost:5173`. Requests from any other origin are
+refused with `403 ORIGIN_NOT_ALLOWED`. The tab has a tester that tells you whether a URL is allowed.
+
+</Step>
+<Step>
+
+### Paste the snippet
+
+Copy the snippet from the **Install** tab and add it before `</body>` on every page:
+
+```html title="index.html"
+<script src="https://feedback.example.com/widget.js" data-project="pk_…" async></script>
+```
+
+The project key is public by design — it only works from your allowed sites. The Install tab also has
+Next.js and Google Tag Manager versions; for npm and React see [Install the widget](/docs/widget).
+
+</Step>
+<Step>
+
+### Leave a pin
+
+Reload your site. The launcher appears in the bottom-right corner, and the Install tab switches from
+**Waiting for your site** to **Connected**. Press <kbd>C</kbd> (or open the launcher and choose comment),
+click an element, write a comment and send it. It appears in the dashboard inbox straight away.
+
+</Step>
+</Steps>
+
+## What next
+
+<Cards>
+  <Card title="Configure the widget" href="/docs/widget/configuration">
+    Launcher, modes, shortcuts, consent and read-only mode.
+  </Card>
+  <Card title="Send email" href="/docs/integrations/email">
+    Connect SMTP so people hear about new feedback and replies.
+  </Card>
+  <Card title="Go to production" href="/docs/self-hosting">
+    HTTPS, storage, backups and sizing.
+  </Card>
+  <Card title="Connect GitHub or GitLab" href="/docs/integrations/github">
+    Turn bug reports into issues that stay in sync.
+  </Card>
+</Cards>

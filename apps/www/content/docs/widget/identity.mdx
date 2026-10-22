@@ -1,0 +1,124 @@
+---
+title: Identity
+description: Tell the widget who is signed in, so feedback carries their name — and optionally prove it with a signed identity.
+---
+
+Visitors can leave a name and email by hand. If your app already knows who is signed in, pass it to the
+widget so people don't have to type it and the team sees who said what.
+
+## Identify the visitor
+
+```ts
+Pinwren.identify({ name: "Ada Lovelace", email: "ada@example.com" });
+```
+
+- The name and email prefill the composer, replies and the bug report form; with a name known, the form shows a
+  single “commenting as” line with a way to change it.
+- Call it any time — before the widget is ready (it is kept) or after a sign-in.
+- Values are trimmed to 120 characters (name) and 254 (email); anything that isn't a string is ignored.
+- `Pinwren.identify(null)` forgets the identity, for example on sign-out.
+
+The visitor's own entries are remembered in their browser (`localStorage`) for next time.
+
+<Callout type="warn" title="identify() is a convenience, not proof">
+  Anyone can call `Pinwren.identify()` from the browser console with any name. Treat unsigned names and emails
+  as self-reported. To show the team that a reporter really is a signed-in user of your app, use a signed
+  identity.
+</Callout>
+
+## Signed identity
+
+<NewIn>
+  Signed identities are new in this release. The server verifies them and stores the result; the dashboard
+  screens that reveal the secret and show the verified badge are still being finished, so for now use the API
+  endpoints below.
+</NewIn>
+
+Pass your user's stable id and a signature your **server** computes with the project's identity secret:
+
+```ts
+Pinwren.identify(
+  { id: "user_8812", name: "Ada Lovelace", email: "ada@example.com" },
+  { signature: "<hex HMAC-SHA256 of the id>" },
+);
+```
+
+The widget sends the id (as `externalId`) and the signature with every comment, reply and bug report. The
+server recomputes the HMAC; when it matches, the reporter is stored as **verified** (`verified: true` on the
+reporter), and the widget's pins and threads carry `reporterVerified` / `authorVerified`. The signature itself is
+never stored. The id may be a string or a number (up to 200 characters); a signature that isn't 64 hex characters
+is dropped with a console warning.
+
+<Steps>
+<Step>
+
+### Get the identity secret
+
+Each project has its own identity secret (it starts with `idsec_`), created the first time it is read. Workspace
+owners and admins read it with `GET /api/projects/:id/identity-secret` and replace it with
+`POST /api/projects/:id/identity-secret/rotate` (both answer `{ secret }`, with a dashboard session). Store it like
+any other server secret — never ship it to the browser. After a rotation, signatures made with the old secret no
+longer verify.
+
+</Step>
+<Step>
+
+### Sign the user id on your server
+
+The signature is the lowercase hex HMAC-SHA256 of the user id, keyed with the identity secret.
+
+<Tabs items={["Node.js", "Python"]}>
+<Tab value="Node.js">
+
+```ts title="pinwren-identity.ts"
+import { createHmac } from "node:crypto";
+
+export function pinwrenSignature(userId: string): string {
+  return createHmac("sha256", process.env.PINWREN_IDENTITY_SECRET!).update(userId).digest("hex");
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python title="pinwren_identity.py"
+import hashlib
+import hmac
+import os
+
+
+def pinwren_signature(user_id: str) -> str:
+    secret = os.environ["PINWREN_IDENTITY_SECRET"].encode()
+    return hmac.new(secret, user_id.encode(), hashlib.sha256).hexdigest()
+```
+
+</Tab>
+</Tabs>
+
+`PINWREN_IDENTITY_SECRET` here is an environment variable of _your_ app, holding the secret you copied.
+
+</Step>
+<Step>
+
+### Pass it to the page
+
+Render the signature into the page with the user, then identify:
+
+```tsx title="app/layout.tsx (Next.js)"
+const user = await currentUser();
+const signature = user ? pinwrenSignature(user.id) : null;
+
+// in the client:
+// Pinwren.identify({ id: user.id, name: user.name, email: user.email }, { signature });
+```
+
+</Step>
+</Steps>
+
+Sign the **id**, not the name or email: those can change, and the id is what the server checks. Use an id that
+never gets reused for a different person.
+
+## What the reporter sees
+
+Nothing changes for them except fewer fields to fill in. Their name appears on the pins and threads they
+create, as it would if they had typed it.

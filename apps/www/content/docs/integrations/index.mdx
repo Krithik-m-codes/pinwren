@@ -1,0 +1,62 @@
+---
+title: Integrations
+description: Route feedback to email, chat, your own services and issue trackers — as background jobs that never block a report.
+---
+
+Pinwren sends what happens in your workspace to the tools you already use:
+
+<Cards>
+  <Card title="Email" href="/docs/integrations/email">
+    SMTP for team notifications, invitations and replies to reporters.
+  </Card>
+  <Card title="Webhooks" href="/docs/integrations/webhooks">
+    Signed JSON to any HTTPS endpoint, with retries and a delivery log.
+  </Card>
+  <Card title="Slack" href="/docs/integrations/slack">
+    Messages in a channel through an incoming webhook.
+  </Card>
+  <Card title="Discord" href="/docs/integrations/discord">
+    Embeds in a channel through a Discord webhook.
+  </Card>
+  <Card title="GitHub" href="/docs/integrations/github">
+    One issue per item, closed and reopened in both directions.
+  </Card>
+  <Card title="GitLab" href="/docs/integrations/gitlab">
+    The same, for gitlab.com and self-managed GitLab.
+  </Card>
+</Cards>
+
+For everything else — Jira, Linear, an AI agent, your own dashboard — use [webhooks](/docs/integrations/webhooks),
+the [REST API](/docs/api), [panel actions](/docs/widget/panel-actions) or the [MCP server](/docs/api/mcp).
+
+## How delivery works
+
+Every change — a new report, a status change, an assignment, a comment — becomes an event in a queue (pg-boss on
+your Postgres; no Redis or broker). A background job fans it out to webhooks, issue trackers, in-app notifications
+and email, in that order, so a broken mail server never holds back a webhook.
+
+- **Nothing blocks ingest.** The widget's request returns as soon as the report is stored; integrations run
+  afterwards. A tracker or chat outage never loses or delays a report.
+- **Everything retries.** Webhooks retry six times over about 21 hours; issue sync and email retry with backoff.
+- **Failures are visible.** Each webhook has a delivery log with every attempt, its status code, response and
+  duration; a GitHub or GitLab integration shows its last error.
+- **Jobs run where you want.** By default every server process also runs jobs. With several instances, run the
+  web servers with `PINWREN_ROLE=web` and one `PINWREN_ROLE=worker` — see [scaling](/docs/self-hosting/scaling).
+
+## Events
+
+| Event                     | When                                                     |
+| ------------------------- | -------------------------------------------------------- |
+| `feedback.created`        | A comment or bug report arrives                          |
+| `feedback.updated`        | Status, priority, title, assignees or round change       |
+| `feedback.status_changed` | The status changes (sent alongside `feedback.updated`)   |
+| `feedback.assigned`       | The assignees change (sent alongside `feedback.updated`) |
+| `comment.created`         | Someone comments — a visitor, a teammate or the API      |
+
+Webhooks (generic, Slack and Discord) subscribe to any of these, for every project or for one.
+
+## Who can set them up
+
+Webhooks and issue trackers are configured by workspace **owners and admins** (**Settings › Integrations** and the
+project's **Issue trackers** tab). Any member can then send an item to a connected tracker from the inbox. SMTP is set
+by the **instance admin** or by environment variables.

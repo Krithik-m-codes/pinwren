@@ -1,0 +1,53 @@
+---
+title: Languages
+description: The widget speaks 11 languages, picks the visitor's automatically and downloads only that one.
+---
+
+## Supported languages
+
+| Code    | Language             |
+| ------- | -------------------- |
+| `en`    | English (built in)   |
+| `es`    | Spanish              |
+| `fr`    | French               |
+| `de`    | German               |
+| `pt-BR` | Portuguese (Brazil)  |
+| `it`    | Italian              |
+| `ja`    | Japanese             |
+| `hi`    | Hindi                |
+| `nl`    | Dutch                |
+| `zh`    | Chinese (Simplified) |
+| `ru`    | Russian              |
+
+English ships inside `widget.js`. Every other language is a small separate file (`widget-i18n-<code>.js`)
+served by your Pinwren server next to the widget, downloaded only for visitors who need it.
+
+## How the language is chosen
+
+1. `data-locale` on the script tag, or the `locale` option of `Pinwren.init()`;
+2. otherwise the visitor's browser languages (`navigator.languages`), in order of preference;
+3. otherwise English.
+
+Matching is forgiving: `pt` and `pt-PT` use `pt-BR`, `zh-TW` uses `zh`, `fr-CA` uses `fr` — the base language
+is better than falling back to English. `_` and `-` are treated alike, and case doesn't matter.
+
+```html
+<script src="https://feedback.example.com/widget.js" data-project="pk_…" data-locale="de" async></script>
+```
+
+If a language file can't be loaded within 3 seconds, the widget carries on in English. A string missing from a
+translation falls back to its English text, and plurals follow each language's rules (Russian has separate
+forms for 2–4 and 5–20).
+
+## Your own text
+
+Text you configure for the project — a custom launcher label or tooltip, a consent notice, panel action
+labels — is shown exactly as written, in every language. The default launcher label (“Feedback”) and tooltip
+(“Give feedback”) are translated automatically.
+
+<Callout type="idea" title="Missing your language?">
+  Catalogues live in
+  [`packages/widget/src/locales`](https://github.com/Krithik-m-codes/pinwren/tree/main/packages/widget/src/locales):
+  copy `en.ts`, `en-panel.ts` and `en-report.ts` keys into a new file, keep the keys and `{placeholders}`
+  identical, and open a pull request.
+</Callout>

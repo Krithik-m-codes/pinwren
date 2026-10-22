@@ -1,0 +1,93 @@
+---
+title: Upgrades
+description: Move to a new Pinwren release — pull the image, restart, and let the migrations run.
+---
+
+Pinwren follows [semantic versioning](https://semver.org). Before 1.0, a **minor** release (`0.1` → `0.2`) may
+contain breaking changes; patch releases (`0.1.0` → `0.1.1`) never do. Read the [changelog](/changelog) or the
+[GitHub releases](https://github.com/Krithik-m-codes/pinwren/releases) before you upgrade.
+
+Security fixes land on the latest minor release only, so stay on it.
+
+## Upgrade
+
+<Steps>
+<Step>
+
+### Back up
+
+Take a database dump and a copy of the files first — see [Backups](/docs/self-hosting/backups). It is your only
+way back.
+
+</Step>
+<Step>
+
+### Point at the new version
+
+```bash title="docker/.env"
+PINWREN_IMAGE=ghcr.io/krithik-m-codes/pinwren:0.2.0
+```
+
+If you build from source instead, `git pull` the release tag.
+
+</Step>
+<Step>
+
+### Pull and restart
+
+<Tabs items={["Published image", "Build from source"]}>
+<Tab value="Published image">
+
+```bash
+docker compose -f docker/compose.yml --env-file docker/.env pull pinwren
+docker compose -f docker/compose.yml --env-file docker/.env up -d
+```
+
+</Tab>
+<Tab value="Build from source">
+
+```bash
+git fetch --tags && git checkout v0.2.0
+docker compose -f docker/compose.yml --env-file docker/.env up -d --build
+```
+
+</Tab>
+</Tabs>
+
+</Step>
+<Step>
+
+### Check the logs
+
+```bash
+docker compose -f docker/compose.yml logs -f pinwren
+# [pinwren] database migrations applied
+```
+
+</Step>
+</Steps>
+
+## How migrations run
+
+On every start, before the first request, the server applies any pending database migrations
+(`apps/web/src/instrumentation-node.ts`). They run under a Postgres advisory lock, so several replicas or
+cluster workers starting at once never race — one applies them, the others wait. The configuration is
+validated at the same moment, so a bad variable stops the start with a clear message.
+
+Set `PINWREN_SKIP_MIGRATIONS=true` to skip this step, for example when you run migrations from a separate
+release job. You are then responsible for running them before the new version serves traffic.
+
+<Callout type="warn" title="No downgrades">
+  Migrations only move forward, and the server does not check whether the database was migrated by a newer
+  version. Running an older image against a newer schema is not supported. To roll back, restore the backup
+  you took before the upgrade.
+</Callout>
+
+## Knowing when to upgrade
+
+Instance admins see **Update available** in the dashboard when a newer release exists. A daily job compares
+`PINWREN_VERSION` with the latest release of `PINWREN_UPDATE_REPO` on GitHub. Turn it off in **Settings ›
+Security** or with `PINWREN_UPDATE_CHECK=false` (which also locks the switch); it is off on its own while any
+project uses privacy mode, and it makes no other outbound call.
+
+You can also watch the repository's releases on GitHub (**Watch › Custom › Releases**).

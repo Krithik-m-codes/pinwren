@@ -1,0 +1,43 @@
+---
+title: Page review
+description: See every page that has feedback, with its pins and regions drawn over a captured screenshot.
+---
+
+Page review answers "what's wrong with _this_ page?" rather than "what's in my queue?". Open a project and choose
+**Pages** (`/projects/<id>/pages`).
+
+## All pages
+
+The overview lists every page of the project that has feedback, newest activity first, each with a thumbnail of its
+latest screenshot and its open and closed counts. Pages are grouped by URL — the hash is dropped and query parameters
+are sorted, so `?b=2&a=1` and `?a=1&b=2` are the same page.
+
+The view reads up to 500 of the project's most recent items: enough for a review, not an archive. Use the
+[inbox](/docs/dashboard) search for anything older.
+
+## One page
+
+Pick a page to see:
+
+- **The capture** — a screenshot of the page with every pin and region drawn where it was left. Pins are placed using
+  the geometry stored in each item's [anchor](/docs/widget/anchoring), so they line up with the capture they were
+  made on.
+- **Other captures** — when several items carry a screenshot, choose which one to use as the base. By default it is
+  the capture on which the most threads can be placed (newest wins a tie).
+- **Threads on this page** — every item with its kind, status and number. Items whose anchor doesn't fit the chosen
+  capture are listed as "not on this capture" instead of being drawn in the wrong place.
+- **Open / All** — show only open threads, or resolved ones too.
+- **Open page** — the live page, where the widget shows the same pins.
+
+Click a thread to open it in the [detail panel](/docs/dashboard#list-and-detail).
+
+<Callout title="No capture yet?">
+  Comments don't carry a screenshot by default — bug reports do. Turn on **Screenshot with every comment** in
+  the project's **Capture** settings (`capture.screenshotOnComment`) to get a capture for every comment and
+  see pins in place. See [bug reports & capture](/docs/widget/bug-reports).
+</Callout>
+
+## On the live page
+
+Every item also has **Open on page** in the inbox. It opens the page with `?pinwren=<id>`, and the widget scrolls to
+the pin and opens its thread — the quickest way to check a fix in context.

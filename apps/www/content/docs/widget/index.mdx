@@ -1,0 +1,172 @@
+---
+title: Install the widget
+description: Add Pinwren to any website with one script tag, from npm, or as a React component.
+---
+
+The widget is a single script, `widget.js`, served by your Pinwren server. It renders inside a closed Shadow
+DOM attached to its own `<pinwren-root>` element, so it can't be styled or broken by your page's CSS, and it
+never throws into your code. The core is about 26 KB gzip; the side panel, bug report form, screenshot engine,
+annotation editor and each language load only when a visitor needs them.
+
+<Callout title="Before you start">
+  Create a project in the dashboard and add your site to its **allowed origins** (for example `example.com`,
+  `*.example.com` or `localhost:5173`). The widget identifies itself with the project's public key (`pk_…`)
+  and the server only answers requests from those origins — no secret ever reaches the browser.
+</Callout>
+
+<Tabs items={["Script tag", "npm", "React"]}>
+<Tab value="Script tag">
+
+Paste the snippet from the project's **Install** tab before `</body>`:
+
+```html title="index.html"
+<script src="https://feedback.example.com/widget.js" data-project="pk_…" async></script>
+```
+
+That's all: the widget starts once the page has loaded, fetches the project's configuration and shows the
+launcher.
+
+</Tab>
+<Tab value="npm">
+
+Install the package and start the widget from your client code:
+
+```npm
+npm install @pinwren/widget
+```
+
+```ts title="feedback.ts"
+import { identify, init, on } from "@pinwren/widget";
+
+init({ projectKey: "pk_…", endpoint: "https://feedback.example.com" });
+identify({ name: "Ada Lovelace", email: "ada@example.com" });
+on("submit", ({ number }) => console.log(`Feedback #${number} sent`));
+```
+
+<NewIn>
+  The npm entry is a tiny, typed loader: `init()` adds `<endpoint>/widget.js` — the build your Pinwren server
+  ships, so it always matches the server's API and chunks — and calls made before it has loaded are queued.
+  Importing it during server-side rendering is safe; nothing touches `window` until a function runs in the
+  browser.
+</NewIn>
+
+The package is MIT-licensed and exports `init`, `open`, `close`, `on`, `identify`, `setPageScope`, `destroy` and
+`load`, plus TypeScript types for every option and event payload. Pass `nonce` to `init()` if your page uses
+a CSP nonce.
+
+</Tab>
+<Tab value="React">
+
+<NewIn>The React package is new in this release.</NewIn>
+
+```npm
+npm install @pinwren/react
+```
+
+```tsx title="app/layout.tsx"
+import { Pinwren } from "@pinwren/react";
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        {children}
+        <Pinwren projectKey="pk_…" endpoint="https://feedback.example.com" />
+      </body>
+    </html>
+  );
+}
+```
+
+The `Pinwren` component renders nothing. In an effect it loads `widget.js` from your server and starts the widget, and on
+unmount it removes it again. It is already a client component (`"use client"`) and never touches `window` while
+rendering, so it works in a Next.js App Router layout, the Pages router, Vite, Remix and any React 18+ app. MIT.
+
+It takes the same options as `init()` — `projectKey`, `endpoint`, `accent`, `locale`, `forceShow`, `urlPattern`,
+`allowReplayInPrivacyMode`, `nonce` — plus:
+
+| Prop                                                  | What it does                                                                                                   |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `user`                                                | `{ id?, name?, email? }` of your signed-in user; pre-fills the reporter ([Identity](/docs/widget/identity))    |
+| `userSignature`                                       | Hex HMAC-SHA256 of `user.id` with the project's identity secret, computed on your server — marks them verified |
+| `onReady`, `onOpen`, `onClose`, `onSubmit`, `onError` | [Event](/docs/widget/api#events) callbacks                                                                     |
+
+Changing `projectKey`, `endpoint`, `accent`, `locale`, `forceShow`, `nonce` or `allowReplayInPrivacyMode`
+re-creates the widget; `user`, `userSignature` and `urlPattern` update it in place.
+
+Control the widget from any component with the `usePinwren()` hook — calls made before it has loaded are queued:
+
+```tsx title="report-button.tsx"
+"use client";
+import { usePinwren } from "@pinwren/react";
+
+export function ReportButton() {
+  const pinwren = usePinwren();
+  return (
+    <button type="button" disabled={!pinwren.ready} onClick={() => pinwren.open("bug")}>
+      Report a problem
+    </button>
+  );
+}
+```
+
+The hook returns `{ ready, open, close, identify, setPageScope, on }`.
+
+</Tab>
+</Tabs>
+
+## Script attributes
+
+| Attribute                           | Required | What it does                                                                                                                                                                    |
+| ----------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `data-project`                      | Yes      | The project's public key (`pk_…`). Without it the script loads but does nothing, so you can start the widget yourself with `Pinwren.init()`.                                    |
+| `data-endpoint`                     | No       | Your Pinwren server's origin, e.g. `https://feedback.example.com`. Defaults to the origin the script was loaded from.                                                           |
+| `data-accent`                       | No       | Launcher colour as a hex value (`#5b5bd6`). Overrides the project's accent on this page only; anything that isn't a plain hex colour is ignored.                                |
+| `data-locale`                       | No       | UI language, e.g. `fr` or `pt-BR`. Otherwise the visitor's browser languages decide — see [Languages](/docs/widget/i18n).                                                       |
+| `data-force-show`                   | No       | Show the widget even where the project's [visibility rules](/docs/widget/visibility) would hide it. <sup>New in 0.1</sup>                                                       |
+| `data-url-pattern`                  | No       | Group this page's pins with every page that matches a pattern such as `/product/:id` — see [Visibility & page scope](/docs/widget/visibility#page-scope). <sup>New in 0.1</sup> |
+| `data-nonce`                        | No       | A CSP nonce the widget copies onto the chunk and locale scripts it adds (the script's own `nonce` works too). <sup>New in 0.1</sup>                                             |
+| `data-allow-replay-in-privacy-mode` | No       | Keep [session replay](/docs/widget/bug-reports#session-replay) on for a project in privacy mode; you take care of consent. <sup>New in 0.1</sup>                                |
+
+## Content Security Policy
+
+If your site sends a `Content-Security-Policy`, allow your Pinwren server's origin for scripts (the widget
+loads its chunks and languages from the folder `widget.js` came from), for `connect-src` (the API calls) and
+for `img-src` (a logo in the report dialog, when the project has one). The widget uses no `eval` and no
+inline scripts; with a nonce-based policy, put the nonce on the script tag and the widget copies it onto
+every script it adds.
+
+```http
+Content-Security-Policy: script-src 'self' https://feedback.example.com; connect-src 'self' https://feedback.example.com; img-src 'self' data: https://feedback.example.com
+```
+
+## What happens on load
+
+1. The script reads its attributes and waits for `DOMContentLoaded` if the page is still loading.
+2. It fetches `GET /w/config` with the project key: the project's launcher, modes, capture and privacy
+   settings ([Configuration](/docs/widget/configuration)). If the key is unknown or the origin isn't allowed,
+   the widget logs `[pinwren] widget disabled: …` to the console and removes itself.
+3. It loads the visitor's language, places the pins of the current page and fires the `ready` event
+   ([JavaScript API](/docs/widget/api)).
+4. Single-page apps work without extra code: when the URL changes, the widget reloads the pins of the new
+   page; when the DOM changes, it re-places them.
+
+Only one widget runs per page — a second `init()` is ignored. Call `Pinwren.destroy()` to remove it
+completely (listeners, console and network wrappers, DOM).
+
+## Next steps
+
+<Cards>
+  <Card title="Configuration" href="/docs/widget/configuration">
+    Launcher, modes, capture and branding options.
+  </Card>
+  <Card title="Comments" href="/docs/widget/comments">
+    Pins, regions, text selections and threads.
+  </Card>
+  <Card title="Bug reports" href="/docs/widget/bug-reports">
+    Screenshots, annotation, console and network capture.
+  </Card>
+  <Card title="JavaScript API" href="/docs/widget/api">
+    Open the widget from your own UI and listen for events.
+  </Card>
+</Cards>

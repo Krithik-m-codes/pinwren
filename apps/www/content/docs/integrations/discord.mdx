@@ -1,0 +1,55 @@
+---
+title: Discord
+description: Post new feedback, status changes and comments to a Discord channel as rich embeds.
+---
+
+Pinwren posts to Discord through a channel **webhook** — no bot to run.
+
+## Set it up
+
+<Steps>
+<Step>
+
+In Discord, open the channel's **Edit Channel › Integrations › Webhooks › New Webhook**, name it and **Copy Webhook
+URL** (`https://discord.com/api/webhooks/…`).
+
+</Step>
+<Step>
+
+In Pinwren, open **Settings › Integrations › Add webhook**, choose the type **Discord**, paste the URL and pick the
+events and projects.
+
+</Step>
+<Step>
+
+Press **Send test event**. A "Test delivery" message appears in the channel.
+
+</Step>
+</Steps>
+
+## What a message looks like
+
+Each event is one message with a short headline — `New feedback: Marketing site #142 Checkout button does nothing`
+— and an embed in Pinwren's accent colour:
+
+- **Title**: project, number and title (`Marketing site #142 — Checkout button does nothing`), linking to the item in
+  the dashboard.
+- **Description**: the feedback, or for `comment.created` the comment.
+- **Fields**: Kind, Status and Priority, plus Reporter and Page when known.
+- **Timestamp**: when the event happened.
+
+## Safe with untrusted text
+
+- Mentions are disabled for every message (`allowed_mentions: { parse: [] }`), and `@` is broken with a zero-width
+  space, so `@everyone` in a report neither pings nor even looks like a mention.
+- Markdown characters (`*`, `_`, `~`, `` ` ``, `|`, `>`, `#`, `-`, brackets, `<`, `:`) are backslash-escaped, so text
+  can't format the message or fake a link.
+- Long text is cut to Discord's limits (about 3,900 characters for the description).
+
+## Good to know
+
+- The webhook URL is a credential: Pinwren shows it masked after you save. Anyone with it can post to the channel —
+  delete the webhook in Discord if it leaks.
+- Deliveries retry and are logged like [webhooks](/docs/integrations/webhooks#retries), and switch off after three days
+  of continuous failure.
+- `comment.created` includes **internal notes**; leave it out for channels outside your team.

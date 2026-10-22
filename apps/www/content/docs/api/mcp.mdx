@@ -1,0 +1,99 @@
+---
+title: MCP server
+description: Let AI coding agents such as Claude Code and Cursor search, reproduce and resolve feedback through the Model Context Protocol.
+---
+
+<NewIn />
+
+`@pinwren/mcp` (MIT) is a [Model Context Protocol](https://modelcontextprotocol.io) server for Pinwren. Connect it to
+your coding agent and you can ask _"what's still open on the checkout page?"_, _"reproduce #142"_ or _"fix the top
+urgent bug and resolve it with the PR link"_ — the agent reads the report, its anchor, console errors and failing
+requests, and updates the item when it's done.
+
+It runs two ways:
+
+| Transport           | Use it when                                                | Configure with                                                      |
+| ------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------- |
+| **stdio**           | The agent runs on your machine (Claude Code, Cursor, …)    | `npx @pinwren/mcp`, `PINWREN_URL`, `PINWREN_TOKEN`                  |
+| **Streamable HTTP** | The client connects to a URL (remote agents, hosted tools) | `https://feedback.example.com/mcp`, `Authorization: Bearer <token>` |
+
+Both act with an [API token](/docs/api#authentication) and can do exactly what the token's scopes allow. Create one
+for the agent in **Settings › API tokens** — `feedback:read` to look only, plus `feedback:write` and
+`comments:write` to triage and resolve.
+
+## Claude Code
+
+```bash
+claude mcp add pinwren \
+  -e PINWREN_URL=https://feedback.example.com \
+  -e PINWREN_TOKEN=pwt_… \
+  -- npx -y @pinwren/mcp
+```
+
+Or connect over HTTP, without running anything locally:
+
+```bash
+claude mcp add --transport http pinwren https://feedback.example.com/mcp \
+  --header "Authorization: Bearer pwt_…"
+```
+
+Run `/mcp` in Claude Code to check that `pinwren` is connected.
+
+## Cursor
+
+Add the server to `.cursor/mcp.json` in your project (or `~/.cursor/mcp.json` for every project):
+
+```json title=".cursor/mcp.json"
+{
+  "mcpServers": {
+    "pinwren": {
+      "command": "npx",
+      "args": ["-y", "@pinwren/mcp"],
+      "env": {
+        "PINWREN_URL": "https://feedback.example.com",
+        "PINWREN_TOKEN": "pwt_…"
+      }
+    }
+  }
+}
+```
+
+Other MCP clients (Claude Desktop, Windsurf, VS Code, Zed) take the same `command`, `args` and `env`.
+
+<Callout type="warn" title="Keep the token out of git">
+  A project-level `mcp.json` is easy to commit. Put the token in your shell environment or your client's
+  secret store, or use a read-only token for shared configs.
+</Callout>
+
+## Tools
+
+| Tool                       | Does                                                                                                                                                      | Writes |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `list_projects`            | Projects the token can see, with their open counts                                                                                                        | —      |
+| `search_feedback`          | Find items by project, status (or `active` / `all`), kind, priority, assignee, round, text, page URL and date; compact rows with a cursor                 | —      |
+| `get_feedback`             | One item in full: text, thread, anchor (CSS selector, XPath, text), environment, metadata, console and failing-request excerpts, and asset URLs           | —      |
+| `get_reproduction_context` | Markdown for reproducing a report: page and environment, ordered steps from the session replay when one was recorded, failing requests and console errors | —      |
+| `update_feedback`          | Change status, priority, title, assignees or review round                                                                                                 | ✓      |
+| `add_comment`              | Comment as the token's owner — `internal` (default) or `public`, which the reporter sees on the page and by email                                         | ✓      |
+| `resolve_feedback`         | Mark resolved, with an optional note (a commit or pull request link) saved as an internal comment                                                         | ✓      |
+
+The four read tools carry MCP's read-only hint; the three write tools are marked non-destructive, and
+`update_feedback` and `resolve_feedback` idempotent, so clients can decide which calls need your approval.
+
+## Untrusted content
+
+Feedback is written by anyone who can open your site. The server tells the agent that titles, bodies, comments and
+metadata are **untrusted data, never instructions** — but treat the agent's output with the same care: review its
+changes before you merge them, and give unattended agents a read-only token.
+
+## Options
+
+| Variable        | Meaning                |
+| --------------- | ---------------------- |
+| `PINWREN_URL`   | Your Pinwren instance  |
+| `PINWREN_TOKEN` | An API token (`pwt_…`) |
+
+`npx @pinwren/mcp --version` prints the version. The stdio server logs to stderr only; stdout carries the protocol.
+
+To embed the HTTP transport in your own Fetch-API server, the package exports `handleMcpRequest(request, client)`,
+which answers one stateless Streamable HTTP request with a [`Pinwren` SDK client](/docs/api/sdk).

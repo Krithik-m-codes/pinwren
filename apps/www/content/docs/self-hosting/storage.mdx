@@ -1,0 +1,111 @@
+---
+title: File storage
+description: Keep screenshots and attachments on a local volume or in any S3-compatible bucket.
+---
+
+Pinwren stores three kinds of files: bug-report **screenshots**, report **attachments** (images and PDFs) and
+**brand logos**. Everything else lives in Postgres. Two storage drivers are built in and both are free in
+every edition.
+
+| Driver         | Set with                     | Files go to                                                              | Good for                                      |
+| -------------- | ---------------------------- | ------------------------------------------------------------------------ | --------------------------------------------- |
+| `fs` (default) | nothing                      | `PINWREN_DATA_DIR/assets/` — `/data` in the image                        | One server; back up the `pinwren-data` volume |
+| `s3`           | `STORAGE_DRIVER=s3` + `S3_*` | Any S3-compatible bucket (AWS S3, Cloudflare R2, MinIO, Backblaze B2, …) | Several replicas, managed durability          |
+
+## How files are served
+
+The browser never reads the bucket or the folder directly. Every file goes through the API:
+
+- Screenshots and attachments are served by `/api/assets/:id` to **signed-in workspace members only**.
+  Attachments get a `Content-Disposition` header (`attachment` for PDFs, `inline` for images).
+- Brand logos are public at `/api/brand-assets/:id` — emails and the widget on your customers' sites have to
+  load them — but only by their random id.
+
+So the bucket can and should stay **private**: no public-read policy, no public URL.
+
+Uploads are checked before they are written: the declared type must match the file's first bytes (PNG, JPEG,
+WebP, GIF or PDF), screenshots are capped at 8 MB decoded and attachments at 5 MB each, three per report.
+Storage keys are random (`<project id>/<uuid>.<ext>`) and never derived from user input.
+
+## Use S3-compatible storage
+
+Set the driver and its credentials. The server refuses to start if any of the four required values is
+missing.
+
+<EnvTable group="Storage" />
+
+<Tabs items={["AWS S3", "Cloudflare R2", "MinIO"]}>
+<Tab value="AWS S3">
+
+```bash title="pinwren.env"
+STORAGE_DRIVER=s3
+S3_ENDPOINT=https://s3.eu-central-1.amazonaws.com
+S3_REGION=eu-central-1
+S3_BUCKET=pinwren-files
+S3_ACCESS_KEY_ID=AKIA…
+S3_SECRET_ACCESS_KEY=…
+S3_FORCE_PATH_STYLE=false
+```
+
+Give the access key `s3:PutObject`, `s3:GetObject` and `s3:DeleteObject` on that bucket only.
+
+</Tab>
+<Tab value="Cloudflare R2">
+
+```bash title="pinwren.env"
+STORAGE_DRIVER=s3
+S3_ENDPOINT=https://<account id>.r2.cloudflarestorage.com
+S3_REGION=auto
+S3_BUCKET=pinwren-files
+S3_ACCESS_KEY_ID=…
+S3_SECRET_ACCESS_KEY=…
+```
+
+Create an R2 API token with **Object Read & Write** on that one bucket.
+
+</Tab>
+<Tab value="MinIO">
+
+```bash title="pinwren.env"
+STORAGE_DRIVER=s3
+S3_ENDPOINT=http://minio:9000
+S3_REGION=auto
+S3_BUCKET=pinwren
+S3_ACCESS_KEY_ID=pinwren
+S3_SECRET_ACCESS_KEY=…
+S3_FORCE_PATH_STYLE=true
+```
+
+MinIO needs path-style URLs, which is the default (`S3_FORCE_PATH_STYLE=true`). Create the bucket first.
+
+</Tab>
+</Tabs>
+
+Requests are signed with AWS Signature V4. With `S3_FORCE_PATH_STYLE=true` (the default) objects are addressed
+as `endpoint/bucket/key`; set it to `false` for virtual-hosted style (`bucket.endpoint/key`), which AWS
+prefers.
+
+<Callout title="Docker Compose">
+  These variables must reach the container — add them to the service's `environment:` or an `env_file:`, as
+  shown in [Passing more settings](/docs/self-hosting#passing-more-settings).
+</Callout>
+
+## Switching drivers
+
+Changing `STORAGE_DRIVER` does not move existing files. Before you switch, copy them across: the object keys
+in the bucket are the paths **inside** the `assets` folder of the local volume.
+
+```bash
+# Copy the volume's files out of the container, then upload them to the bucket root.
+docker compose -f docker/compose.yml cp pinwren:/data/assets ./assets
+aws s3 sync ./assets s3://pinwren-files/ --endpoint-url "$S3_ENDPOINT"
+```
+
+Then set the S3 variables and restart. Files that are missing from the new driver show up as missing images
+in the dashboard; nothing in the database changes.
+
+## Clean-up and retention
+
+A nightly job removes files whose report was deleted: items in the trash are purged with their files after 30
+days, and per-project retention policies delete old feedback and its files. Rows are deleted first, then
+files, so a crash can leave an orphaned file but never a report pointing at a missing one.

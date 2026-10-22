@@ -1,0 +1,51 @@
+---
+title: Saved views
+description: Save a set of inbox filters and a layout under a name, for yourself or the whole workspace.
+---
+
+<NewIn>
+  Saved views are new in 0.1. The [API](#api) is in place; the inbox controls to create and open views are
+  still being built.
+</NewIn>
+
+A **saved view** is a named inbox: a set of filters plus the layout to show them in. Make "Urgent bugs", "Assigned
+to me" or "Client review 1" once and open it again instead of rebuilding the filter every morning.
+
+## What a view stores
+
+| Field     | Values                                                                              |
+| --------- | ----------------------------------------------------------------------------------- |
+| `name`    | Up to 80 characters                                                                 |
+| `filters` | Any of the inbox filters below — only the ones you set; the inbox fills in the rest |
+| `layout`  | `"list"` (default) or `"board"`                                                     |
+| `shared`  | `false` (default): only you see it. `true`: everyone in the workspace sees it       |
+
+Filters a view can hold:
+
+| Filter       | Meaning                                                        |
+| ------------ | -------------------------------------------------------------- |
+| `projectId`  | One project                                                    |
+| `status`     | A status, `"active"` (open, in progress, in review) or `"all"` |
+| `kind`       | `comment`, `bug`, `idea` or `question`                         |
+| `priority`   | `none`, `low`, `medium`, `high` or `urgent`                    |
+| `assigneeId` | Items assigned to one member                                   |
+| `roundId`    | Items in one [review round](/docs/dashboard/review-rounds)     |
+| `page`       | Items whose page URL contains this text                        |
+| `since`      | Items created at or after this time (ISO 8601)                 |
+| `q`          | Full-text search                                               |
+
+## Personal and shared views
+
+Personal views belong to you. Shared views appear for every member of the workspace — use them for the queues the
+whole team works from. A shared view can be changed or deleted by its owner and by workspace owners and admins;
+viewers can keep personal views but not share them.
+
+## API
+
+All under `/api`, with a dashboard session:
+
+| Endpoint                          | Does                                          |
+| --------------------------------- | --------------------------------------------- |
+| `GET /api/views`                  | Your views and the workspace's shared views   |
+| `POST /api/views`                 | Create `{ name, filters?, layout?, shared? }` |
+| `PATCH` / `DELETE /api/views/:id` | Update any of those fields, or delete         |

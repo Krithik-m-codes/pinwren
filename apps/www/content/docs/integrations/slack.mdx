@@ -1,0 +1,63 @@
+---
+title: Slack
+description: Post new feedback, status changes and comments to a Slack channel through an incoming webhook.
+---
+
+Pinwren posts to Slack with an **incoming webhook** — no Slack app to install on the server and nothing to expose to
+the internet.
+
+## Set it up
+
+<Steps>
+<Step>
+
+In Slack, create an app for your workspace (**api.slack.com › Your apps › Create New App**), turn on **Incoming
+Webhooks**, and **Add New Webhook to Workspace** for the channel you want. Copy the URL
+(`https://hooks.slack.com/services/…`).
+
+</Step>
+<Step>
+
+In Pinwren, open **Settings › Integrations › Add webhook**, choose the type **Slack**, paste the URL and pick the
+events — `feedback.created` and `comment.created` are a good start — and the projects.
+
+</Step>
+<Step>
+
+Press **Send test event**. A "Test delivery" message appears in the channel.
+
+</Step>
+</Steps>
+
+## What a message looks like
+
+Each event becomes one message:
+
+- **A header line** — the event ("New feedback", "Status changed", "New comment", …) and a link to the item in the
+  dashboard, e.g. **New feedback** · _Marketing site #142_.
+- **The title**, when the item has one.
+- **The text** — the feedback, or for `comment.created` the comment.
+- **A context line** — kind · status · priority, who sent it, and the page URL.
+
+The notification preview text reads like `Status changed → resolved: Marketing site #142 Checkout button does
+nothing`. Link unfurling is off, so a page URL never expands into a preview card.
+
+## Safe with untrusted text
+
+Feedback comes from anyone who can open your site, so Pinwren never lets it format a Slack message:
+
+- `&`, `<` and `>` are always entity-escaped, so text can't form a link or a mention such as `<!channel>` or
+  `<@U123>`.
+- The feedback and comment text go in `plain_text` blocks, which Slack never formats; in the header line, `*`, `_`,
+  `~`, `` ` `` and `|` are broken with a zero-width space.
+- Long text is cut to fit Slack's block limits (about 2,900 characters for the body).
+
+## Good to know
+
+- The webhook URL is a credential: Pinwren shows it masked after you save (`https://hooks.slack.com/…abcd`).
+  Anyone with the URL can post to the channel — rotate it in Slack if it leaks.
+- Slack deliveries retry and are logged exactly like [webhooks](/docs/integrations/webhooks#retries), and are
+  switched off after three days of continuous failure (for example, when the channel's webhook was deleted).
+- `comment.created` includes **internal notes**. If the channel is wider than your team, subscribe to
+  `feedback.created` and status events only.
+- Messages link to the dashboard, which needs a sign-in; screenshots are not posted to Slack.

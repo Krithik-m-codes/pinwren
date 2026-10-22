@@ -1,0 +1,92 @@
+---
+title: Security
+description: How Pinwren protects your site, your visitors and your feedback — and how to report a vulnerability.
+---
+
+Pinwren runs on other people's websites (the widget) and holds their feedback, screenshots and console output
+(the server). This page summarises the threat model, what is implemented today and how to harden your
+instance.
+
+## Threat model
+
+| Threat                                       | Surface                           | Mitigation in Pinwren                                                                                                                                                                                                                                                     |
+| -------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Spam and abuse of the public widget API      | `/w/*`                            | Origin allowlist per project; per-IP, per-project rate limits stored in Postgres (`429 RATE_LIMITED`); schema-validated, size-capped payloads; a read-only mode that refuses new feedback.                                                                                |
+| A project key used from another site         | `/w/*`                            | The key is public by design. Every request must carry an `Origin` on the project's allowlist; hostnames match exactly (`example.com` never matches `evil-example.com`), with explicit `*.` wildcards.                                                                     |
+| Someone else resolving your report           | `PATCH /w/feedback/:id`           | Visitors can resolve only when the project allows it; otherwise only the original reporter, proven by a random 32-byte token returned once at submission and stored as a SHA-256 hash.                                                                                    |
+| The widget breaking or reading the host page | Widget                            | A closed Shadow DOM, no global CSS or JavaScript, every entry point wrapped so nothing throws into host code, focus traps that return focus, and lazy chunks loaded only on demand.                                                                                       |
+| Stored XSS through feedback content          | Dashboard, emails, chat, issues   | The dashboard renders untrusted text as text. Email templates are HTML-escaped before Markdown is parsed and variables are inserted escaped. Slack and Discord payloads escape markup and disable mentions; issue bodies entity-encode text and break `@`/`#` references. |
+| Malicious uploads                            | Screenshots, attachments          | The first bytes must match the declared type (PNG, JPEG, WebP, GIF, PDF); size caps; SVG refused; random storage keys; served only to members with `Content-Security-Policy: default-src 'none'; sandbox` and `nosniff`, PDFs as downloads.                               |
+| Cross-workspace access                       | `/api`                            | Every query on workspace data is scoped to its organisation; assets are looked up by id **and** organisation.                                                                                                                                                             |
+| Session theft and CSRF                       | `/api`                            | Better Auth sessions with a trusted-origin check against `PINWREN_URL`; an instance-wide session lifetime that is a hard limit from sign-in; optional HTTPS enforcement with HSTS.                                                                                        |
+| Leaked credentials                           | SMTP, webhook and tracker secrets | AES-256-GCM at rest with a key derived from `PINWREN_SECRET` (HKDF); write-only in the API. API tokens are stored as scrypt hashes and shown once.                                                                                                                        |
+| Secrets in captured diagnostics              | Network capture                   | Request URLs are recorded with sensitive query parameters (`token`, `key`, `secret`, `password`, `auth`, `session`, `code`, `sig`) replaced by `[redacted]`; request and response bodies are never captured.                                                              |
+| Spoofed webhooks                             | Inbound tracker webhooks          | GitHub `X-Hub-Signature-256` HMAC and GitLab `X-Gitlab-Token` verified in constant time against a per-integration secret; inbound bodies capped at 1 MB.                                                                                                                  |
+
+## Privacy by design
+
+- **Masking.** Password fields, payment-card fields (`autocomplete="cc-…"`) and anything marked `data-pinwren-mask` are always blocked
+  out of captures as solid boxes; `data-pinwren-ignore` removes an element from the capture entirely.
+- **Privacy mode** (per project) masks every text field, drops page-timing data, reduces the user agent to
+  the browser and OS family, keeps only errors in console capture, truncates stored IP addresses (/24 for
+  IPv4, /48 for IPv6), asks for consent and turns off the instance's outbound update check. The server
+  enforces the same rules for old or modified widgets. See [Privacy & masking](/docs/widget/privacy).
+- **Retention.** Each project can delete feedback older than a number of days; the trash is purged after 30
+  days.
+- **No phone-home.** Telemetry does not exist; the only outbound call the server makes on its own is the
+  optional daily update check.
+
+## Hardening checklist
+
+- **Use a long random `PINWREN_SECRET`** (`openssl rand -base64 48`) and keep it out of version control.
+- **Serve over HTTPS** behind a [reverse proxy](/docs/self-hosting/reverse-proxy). Set `PINWREN_TRUST_PROXY=true`
+  only when that proxy sets `X-Forwarded-*`, and consider `PINWREN_ENFORCE_HTTPS=true`.
+- **Limit each project's allowed sites** to the origins that really embed the widget. The origin allowlist and
+  the rate limits are what protect ingest, not the key.
+- **Close sign-up** with `PINWREN_DISABLE_SIGNUP=true` once your team has accounts, and invite everyone else.
+  Without `PINWREN_ADMIN_EMAILS`, the first person to sign up becomes instance admin — sign up before the
+  server is public.
+- **Keep uploads private.** With `STORAGE_DRIVER=s3`, keep the bucket private; Pinwren streams every file
+  itself.
+- **Turn on privacy mode** for projects whose pages show personal data, and mark sensitive elements with
+  `data-pinwren-mask`.
+- **Mind where integrations send data.** Issue sync and webhooks copy feedback text and links into other
+  systems; use private repositories and tokens scoped to one repository.
+- **Upgrade promptly** — instance admins see **Update available** — and [back up](/docs/self-hosting/backups)
+  the database and files.
+
+## Reporting a vulnerability
+
+<Callout type="error" title="Please don't open a public issue">
+  Report vulnerabilities privately through GitHub:{" "}
+  <a href="https://github.com/Krithik-m-codes/pinwren/security/advisories/new">
+    open a private vulnerability report
+  </a>
+  . Only the maintainers can see it.
+</Callout>
+
+Include what an attacker can do and who is affected (site visitors, workspace members, instance admins), the
+component and version (widget, dashboard, API, Docker image) and how Pinwren was deployed, steps or a proof of
+concept against **your own** instance, and any suggested fix.
+
+| Step                          | Target                                                  |
+| ----------------------------- | ------------------------------------------------------- |
+| Acknowledgement               | within 3 working days                                   |
+| Assessment and severity       | within 7 days                                           |
+| Fix released                  | critical and high within 30 days; others within 90 days |
+| Public advisory (GitHub, CVE) | when the fix is released, or as agreed with you         |
+
+We follow coordinated disclosure and credit reporters in the advisory and release notes unless they prefer to
+stay anonymous. Good-faith research that follows the policy, avoids privacy violations and service
+disruption, and only touches your own instance is welcome.
+
+**In scope:** the server and dashboard, the widget (including the published `@pinwren/widget`), and the Docker
+image and compose files — especially anything that breaks out of the widget's Shadow DOM, crosses workspaces,
+bypasses authentication or API tokens, stores XSS, enables SSRF through webhooks, tracker URLs or the update
+check, or exposes secrets or personal data that should be masked.
+
+**Out of scope:** findings that need an already compromised admin account or server, missing hardening headers
+without demonstrated impact, denial of service by sheer volume, and dependency vulnerabilities with no path to
+exploit them through Pinwren.
+
+The full policy is in [`SECURITY.md`](https://github.com/Krithik-m-codes/pinwren/blob/main/SECURITY.md).

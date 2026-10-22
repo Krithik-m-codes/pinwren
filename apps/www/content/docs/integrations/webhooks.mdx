@@ -1,0 +1,262 @@
+---
+title: Webhooks
+description: Signed JSON for every new report, change and comment, with retries, a delivery log and redelivery.
+---
+
+A webhook POSTs a JSON event to your URL whenever something happens in the workspace. Use it to feed Jira or Linear,
+trigger an AI agent, page someone, or sync a data warehouse.
+
+## Create a webhook
+
+As a workspace owner or admin, open **Settings › Integrations** and add a webhook:
+
+| Field        | Notes                                                                                                                                                     |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Type**     | **Webhook (JSON)** — the signed payload below — or **Slack** or **Discord**; see [Slack](/docs/integrations/slack), [Discord](/docs/integrations/discord) |
+| **URL**      | `https://` (or `http://`) endpoint that receives the POST                                                                                                 |
+| **Name**     | Optional, up to 80 characters                                                                                                                             |
+| **Events**   | One or more of the events below                                                                                                                           |
+| **Projects** | All projects in the workspace, or just one                                                                                                                |
+| **Active**   | Paused webhooks receive nothing                                                                                                                           |
+
+A JSON webhook gets a **signing secret** (`whsec_…`). It is shown **once**, when you create the webhook — store it
+in your receiver's secrets. **Rotate secret** issues a new one (shown once again); the old one stops signing at once.
+
+## Events
+
+| Event                     | Sent when                                                                              | `data` carries                    |
+| ------------------------- | -------------------------------------------------------------------------------------- | --------------------------------- |
+| `feedback.created`        | A comment or bug report arrives                                                        | `feedback`, `actor`               |
+| `feedback.updated`        | Any field changes: status, priority, title, assignees, round                           | `feedback`, `changes`, `actor`    |
+| `feedback.status_changed` | The status changes                                                                     | `feedback`, `changes.status`      |
+| `feedback.assigned`       | The assignees change                                                                   | `feedback`, `changes.assigneeIds` |
+| `comment.created`         | A comment is added — by a visitor, a teammate or the API, **including internal notes** | `feedback`, `comment`, `actor`    |
+| `ping`                    | You press **Send test event**                                                          | a sample `feedback`               |
+
+A status change sends both `feedback.updated` and `feedback.status_changed`; subscribe to the one you need. Check
+`comment.visibility` before forwarding a comment anywhere public — internal notes are delivered too.
+
+## Payload
+
+Every generic delivery has the same envelope:
+
+```json title="feedback.status_changed"
+{
+  "id": "7c0d7e8f-3b1a-4e6e-9a51-2f0c6f1d9b42",
+  "event": "feedback.status_changed",
+  "apiVersion": "2026-11-01",
+  "createdAt": "2026-11-03T09:41:12.000Z",
+  "data": {
+    "feedback": {
+      "id": "0f9e2a4c-8d1b-4c3a-b6e5-1a2b3c4d5e6f",
+      "number": 142,
+      "projectId": "5b8c1d2e-3f4a-4b5c-8d9e-0f1a2b3c4d5e",
+      "projectName": "Marketing site",
+      "kind": "bug",
+      "status": "resolved",
+      "priority": "high",
+      "title": "Checkout button does nothing",
+      "body": "Clicked Pay now twice, nothing happened.",
+      "pageUrl": "https://example.com/checkout",
+      "reporterName": "Dana Reviewer",
+      "assigneeIds": ["user_8f2k1"],
+      "createdAt": "2026-11-02T16:05:44.000Z",
+      "updatedAt": "2026-11-03T09:41:12.000Z",
+      "url": "https://feedback.example.com/inbox?status=all&item=0f9e2a4c-8d1b-4c3a-b6e5-1a2b3c4d5e6f"
+    },
+    "changes": { "status": { "from": "in_review", "to": "resolved" } },
+    "actor": { "kind": "user", "id": "user_8f2k1" }
+  }
+}
+```
+
+| Field                | Notes                                                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `id`                 | Unique per delivery target; stays the same across retries and redeliveries — use it to de-duplicate              |
+| `apiVersion`         | `2026-11-01`. A breaking change to the payload gets a new version                                                |
+| `data.feedback.body` | Cut at 4,000 characters; fetch the item from the [API](/docs/api) for the full text                              |
+| `data.feedback.url`  | The item in the dashboard (sign-in required)                                                                     |
+| `data.comment`       | `comment.created` only: `{ id, body, visibility: "public" \| "internal", authorName, team, createdAt }`          |
+| `data.changes`       | Field → `{ from, to }` for update events                                                                         |
+| `data.actor`         | `{ kind: "user" \| "guest" \| "api" \| "integration", id }` — `guest` is a site visitor, `integration` a tracker |
+
+Screenshots, attachments and diagnostics are not in the payload; they stay behind the dashboard's sign-in. Use
+`data.feedback.id` with the [REST API](/docs/api) to read them.
+
+## Headers
+
+| Header              | Value                                                  |
+| ------------------- | ------------------------------------------------------ |
+| `Content-Type`      | `application/json`                                     |
+| `User-Agent`        | `Pinwren-Webhooks/1`                                   |
+| `Pinwren-Event`     | The event name, e.g. `feedback.created`                |
+| `Pinwren-Delivery`  | The payload `id`, stable across retries                |
+| `Pinwren-Timestamp` | Unix time in seconds when this attempt was signed      |
+| `Pinwren-Signature` | `v1=<hex HMAC-SHA256(secret, timestamp + "." + body)>` |
+
+## Verify the signature
+
+The signature is an HMAC-SHA256 of the **timestamp, a dot and the raw request body**, keyed with the whole signing
+secret (including `whsec_`), as lowercase hex, prefixed with `v1=`. To verify a delivery:
+
+<Steps>
+<Step>
+
+Read the **raw body** exactly as received — before any JSON parsing — and the `Pinwren-Timestamp` and
+`Pinwren-Signature` headers.
+
+</Step>
+<Step>
+
+Compute `v1=` + hex(HMAC-SHA256(secret, `${timestamp}.${rawBody}`)) and compare it with the header in **constant
+time**.
+
+</Step>
+<Step>
+
+Reject the request if the timestamp is more than a few minutes old (five is a good default). Each retry is signed
+afresh with the current time, so a tolerance window never rejects a legitimate retry — but it stops replays of an
+old, captured request.
+
+</Step>
+</Steps>
+
+<Tabs items={["Node.js", "Python"]}>
+<Tab value="Node.js">
+
+```js title="verify.mjs"
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+const TOLERANCE_S = 5 * 60;
+
+/** True when `rawBody` (a string or Buffer, exactly as received) was signed with `secret`. */
+export function verifyPinwren(rawBody, headers, secret) {
+  const timestamp = headers["pinwren-timestamp"];
+  const signature = headers["pinwren-signature"];
+  if (!timestamp || !signature) return false;
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > TOLERANCE_S) return false;
+
+  const expected = "v1=" + createHmac("sha256", secret).update(`${timestamp}.`).update(rawBody).digest("hex");
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signature);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+```
+
+```js title="server.mjs (Express)"
+import express from "express";
+import { verifyPinwren } from "./verify.mjs";
+
+const app = express();
+
+// express.raw keeps the exact bytes Pinwren signed; express.json() would re-serialise them.
+app.post("/hooks/pinwren", express.raw({ type: "application/json" }), (req, res) => {
+  if (!verifyPinwren(req.body, req.headers, process.env.PINWREN_WEBHOOK_SECRET)) {
+    return res.status(401).send("bad signature");
+  }
+  const event = JSON.parse(req.body.toString("utf8"));
+  // De-duplicate on event.id, then hand off to a queue and answer quickly.
+  console.log(event.event, event.data.feedback.number);
+  res.sendStatus(204);
+});
+
+app.listen(8080);
+```
+
+</Tab>
+<Tab value="Python">
+
+```python title="verify.py"
+import hashlib
+import hmac
+import time
+
+TOLERANCE_S = 5 * 60
+
+
+def verify_pinwren(raw_body: bytes, headers, secret: str) -> bool:
+    """True when raw_body (exactly as received) was signed with secret."""
+    timestamp = headers.get("Pinwren-Timestamp")
+    signature = headers.get("Pinwren-Signature")
+    if not timestamp or not signature:
+        return False
+    if abs(time.time() - int(timestamp)) > TOLERANCE_S:
+        return False
+
+    mac = hmac.new(secret.encode(), f"{timestamp}.".encode() + raw_body, hashlib.sha256)
+    return hmac.compare_digest("v1=" + mac.hexdigest(), signature)
+```
+
+```python title="app.py (Flask)"
+import json
+import os
+
+from flask import Flask, request
+
+from verify import verify_pinwren
+
+app = Flask(__name__)
+
+
+@app.post("/hooks/pinwren")
+def pinwren_hook():
+    raw = request.get_data()  # the exact bytes Pinwren signed
+    if not verify_pinwren(raw, request.headers, os.environ["PINWREN_WEBHOOK_SECRET"]):
+        return "bad signature", 401
+    event = json.loads(raw)
+    # De-duplicate on event["id"], then hand off to a queue and answer quickly.
+    print(event["event"], event["data"]["feedback"]["number"])
+    return "", 204
+```
+
+</Tab>
+</Tabs>
+
+Slack and Discord webhooks are not signed — their URL is the credential.
+
+## Retries
+
+A delivery succeeds when your endpoint answers with a `2xx` status within **10 seconds**. Redirects are not followed.
+Anything else — another status, a timeout, a connection error — is retried on this schedule:
+
+| Attempt | After the previous one |
+| ------- | ---------------------- |
+| 2       | 1 minute               |
+| 3       | 5 minutes              |
+| 4       | 30 minutes             |
+| 5       | 2 hours                |
+| 6       | 6 hours                |
+| 7       | 12 hours               |
+
+That is seven attempts over about 21 hours. Answer fast and do the work in the background; the first 1 KB of your
+response body is kept in the log to help you debug.
+
+**Auto-disable.** When an endpoint has failed continuously for **3 days**, it is switched off (`active: false`) and
+receives nothing until an admin turns it on again. The webhook shows when it started failing (`failingSince`), and the
+first success clears it. Re-enabling starts a fresh three-day window.
+
+## Delivery log, test and redeliver
+
+Each webhook has a log of the last 30 days, one row per attempt: event, attempt number, status (`pending`,
+`success`, `retrying`, `failed`), response code and body, error, duration and when the next retry is due.
+
+- **Send test event** sends a `ping` event now and shows the result, even while the webhook is switched off.
+- **Redeliver** re-sends any logged delivery immediately with the same `id`, so your de-duplication still works. The
+  webhook must be active.
+
+## API
+
+Webhooks are managed under `/api` with an owner or admin session:
+
+| Endpoint                                     | Does                                                                               |
+| -------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `GET /api/webhooks`                          | List                                                                               |
+| `POST /api/webhooks`                         | Create `{ name?, url, kind, events, projectId?, active? }` → `{ webhook, secret }` |
+| `GET` / `PATCH` / `DELETE /api/webhooks/:id` | Read, update, delete                                                               |
+| `POST /api/webhooks/:id/rotate-secret`       | `{ secret }`, generic webhooks only                                                |
+| `POST /api/webhooks/:id/test`                | Send a `ping` → `{ delivery }`                                                     |
+| `GET /api/webhooks/:id/deliveries?limit=`    | The log, newest first (up to 100)                                                  |
+| `POST /api/webhook-deliveries/:id/redeliver` | Re-send now → `{ delivery }`                                                       |
+
+`kind` is `generic` (default), `slack` or `discord`. Slack and Discord URLs come back masked
+(`https://hooks.slack.com/…abcd`), because the URL itself is the credential.

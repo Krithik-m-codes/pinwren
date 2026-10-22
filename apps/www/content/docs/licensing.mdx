@@ -1,0 +1,125 @@
+---
+title: Editions & licensing
+description: What the AGPL and MIT licences mean for you, how Community, Enterprise and Cloud differ, and how licence files work.
+---
+
+Pinwren is open source under two licences, chosen so that self-hosting is free and embedding Pinwren in your
+own product carries no obligations.
+
+## Two licences
+
+| Code                                                                                                   | Licence                                                                  |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| The server and dashboard: `apps/web`, `packages/api`, `packages/core`, `packages/db`, the Docker files | [AGPL-3.0](https://github.com/Krithik-m-codes/pinwren/blob/main/LICENSE) |
+| `@pinwren/widget`, `@pinwren/react`, `@pinwren/sdk`, `@pinwren/mcp`, `@pinwren/cli`                    | MIT                                                                      |
+
+### What the MIT packages mean for you
+
+Everything you put into **your** site, app or tooling — the widget, the React component, the API client, the
+MCP server and the CLI — is MIT. Bundle it, modify it, ship it in closed-source products: keep the copyright
+notice and you're done. Your own code is never affected.
+
+### What the AGPL means for you
+
+You may use, modify and self-host the server freely, **including commercially**, for any number of users and
+projects. The AGPL asks one thing in return, and only in one situation:
+
+- **Running Pinwren unmodified** — for your team, your clients, or as part of your agency's service — creates
+  no obligations.
+- **Modifying the server** and letting other people use your modified version over a network means you must
+  offer those users the source code of your modified version, under the AGPL.
+
+Feedback data, your website and the code of the sites the widget runs on are never covered by the AGPL.
+
+## Editions
+
+<Callout title="Self-hosting is the main way to run Pinwren today">
+  Community is complete and free. Pinwren Cloud is not available yet: the Cloud plans and prices below are
+  proposals and may change before launch.
+</Callout>
+
+|                                                            | **Community** (self-host) | **Cloud Free**                | **Cloud Pro**     | **Cloud Business**  | **Enterprise**                 |
+| ---------------------------------------------------------- | ------------------------- | ----------------------------- | ----------------- | ------------------- | ------------------------------ |
+| Availability                                               | Available now             | Coming soon                   | Coming soon       | Coming soon         | Self-host licence; Cloud later |
+| Price                                                      | $0                        | $0                            | $29/mo (proposed) | $99/mo (proposed)   | From $4,000/yr (proposed)      |
+| Team seats                                                 | Unlimited                 | 3                             | 10                | 30                  | Per contract                   |
+| Guests (clients)                                           | Unlimited                 | Unlimited                     | Unlimited         | Unlimited           | Unlimited                      |
+| Projects                                                   | Unlimited                 | 1                             | 10                | Unlimited           | Unlimited                      |
+| Reports per month                                          | Unlimited                 | 100                           | 2,000             | 20,000              | Per contract                   |
+| Pins, bug reports, annotation, console and network capture | ✓                         | ✓                             | ✓                 | ✓                   | ✓                              |
+| Integrations, webhooks, issue sync, API                    | ✓                         | Email + 1 chat, read-only API | ✓                 | ✓                   | ✓                              |
+| Storage                                                    | Disk or any S3 bucket     | Included                      | Included          | Included            | Customer bucket option         |
+| White-label                                                | —                         | —                             | Remove badge      | Full white-label    | ✓                              |
+| SSO, SCIM, audit log, custom roles                         | —                         | —                             | —                 | Audit log (30 days) | ✓                              |
+| Support                                                    | Community (GitHub)        | Community                     | Email             | Priority email      | SLA                            |
+
+The full proposal is on the [pricing page](/pricing).
+
+### The principle
+
+> **Free:** everything a single team needs to collect, triage and route feedback, at any scale, on its own
+> infrastructure. **Paid:** what an organisation needs to govern many teams — identity, compliance,
+> branding, support — and, in Cloud, the cost of running it.
+
+Storage on S3, integrations and issue sync are free in Community — features some competitors keep for paid
+plans.
+
+### The trust rule
+
+A feature that ships in Community **never moves** to a paid edition later. Movement only goes the other way.
+Nothing in Community calls into the commercial code to nag or degrade.
+
+## Enterprise licence files
+
+<NewIn>
+  Licence files are new in 0.1. In this release the only feature they unlock is **white-label**: hiding
+  "Powered by Pinwren" in the widget and in emails (your own name, logo and colour stay free in every
+  edition). SSO, SCIM, audit log and the rest are planned. The **Settings › Licence** screen is still being
+  built; until it lands, use `PINWREN_LICENSE_FILE` or the admin API below.
+</NewIn>
+
+An Enterprise licence is a single `.lic` text file: a JSON payload and an Ed25519 signature, each
+base64url-encoded and joined with a dot.
+
+```json title="payload (decoded)"
+{
+  "v": 1,
+  "kid": "2026-1",
+  "lid": "lic_01J…",
+  "customer": "Acme GmbH",
+  "email": "it@acme.example",
+  "edition": "enterprise",
+  "features": ["white_label"],
+  "limits": { "seats": 250 },
+  "instance": null,
+  "issuedAt": "2026-11-01T00:00:00Z",
+  "expiresAt": "2027-11-01T00:00:00Z",
+  "graceDays": 30
+}
+```
+
+Install it either way:
+
+- set `PINWREN_LICENSE_FILE` to the path of the file inside the container (mount it read-only), or
+- upload it as an instance admin: `POST /api/admin/license` with `{ "license": "<the file's text>" }`
+  (`GET` shows the current state, `DELETE` removes it). An invalid file answers `400 INVALID_LICENSE`; while
+  `PINWREN_LICENSE_FILE` is set, uploads answer `409 LICENSE_LOCKED`.
+
+A licence with an `instance` binding only verifies on the server whose `PINWREN_INSTANCE_ID` matches it.
+
+How it behaves:
+
+- **Verified offline.** The signature is checked against public keys built into the server, chosen by `kid`
+  so keys can rotate. Nothing phones home, so licences work on air-gapped installs.
+- **Expiry is gentle.** After `expiresAt`, everything keeps working for `graceDays` (30 unless the licence says
+  otherwise).
+  After the grace period, Enterprise settings become read-only: what you configured keeps working, you just
+  can't change it. Data is never hidden or deleted, and nobody is locked out.
+- **Seats** above `limits.seats` are reported in the licence status (`seats: { limit, used }`); they never block
+  sign-in.
+- **Invalid files** — a bad signature, an unknown key, a file bound to another instance — are treated as no
+  licence, and the reason is returned in the licence status.
+- Signed-in members can read their instance's entitlements from `GET /api/me/entitlements`.
+
+A contribution is licensed under the licence of the files it changes; see
+[CONTRIBUTING.md](https://github.com/Krithik-m-codes/pinwren/blob/main/CONTRIBUTING.md).

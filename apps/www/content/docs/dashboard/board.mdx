@@ -1,0 +1,36 @@
+---
+title: Board
+description: A kanban of every item by status — drag cards between columns, or move them from the keyboard.
+---
+
+Switch the inbox to **Board** with the toggle in the header (`/inbox?view=board`). The board shows every item of the
+selected project — active and closed — in one column per status:
+
+| Open | In progress | In review | Resolved | Won't fix | Duplicate |
+| ---- | ----------- | --------- | -------- | --------- | --------- |
+
+Each card shows the screenshot thumbnail when the item has one, the title or first line, the page path, and the
+assignee and comment count.
+
+## Moving cards
+
+- **Drag** a card into another column to change its status.
+- **From the keyboard**: focus a card with `Tab` and press `m` (or use the card's menu) to pick the column it moves
+  to.
+
+A move is a normal status change: it writes a timeline entry, sends notifications and webhooks, closes or reopens a
+linked GitHub or GitLab issue, and shows a toast with **Undo** (`u`).
+
+Click a card (or press `Enter` on it) to open the item in a side sheet with the full
+[detail panel](/docs/dashboard#list-and-detail).
+
+## Board or list
+
+The board is for seeing the shape of a review — how much is still open, what waits for review. Use the list for
+triage: it has keyboard navigation (`j`/`k`), search, status tabs and bulk edits. Both read the same data, and the
+URL remembers which one you used.
+
+<NewIn>
+  A [saved view](/docs/dashboard/saved-views) can store `layout: "board"` with its filters, so a shared "This
+  round" view opens straight on the board.
+</NewIn>

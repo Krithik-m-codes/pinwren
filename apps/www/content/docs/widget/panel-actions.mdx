@@ -1,0 +1,119 @@
+---
+title: Panel actions
+description: Add your own buttons to feedback threads — links that open your tools, or signed webhooks that run from the dashboard.
+---
+
+Panel actions are up to **five** custom buttons a project adds to every feedback item: “Open in Linear”,
+“Send to agent”, “View in admin”. You define them in the dashboard (project › Widget › Panel actions).
+
+| Kind        | Where it shows                                                      | What happens                                                             |
+| ----------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **Link**    | The widget's thread card (if visible to everyone) and the dashboard | Opens the URL in a new tab, with placeholders filled in.                 |
+| **Webhook** | The dashboard only                                                  | The server POSTs the feedback to your URL, signed, and shows the result. |
+
+## Fields
+
+<TypeTable
+  type={{
+    id: {
+      type: "string",
+      description: "Stable slug, 1–32 lowercase letters, digits or dashes. Unique within the project.",
+      required: true,
+    },
+    label: { type: "string", description: "Button text, up to 40 characters.", required: true },
+    kind: { type: '"link" | "webhook"', description: "What the button does.", required: true },
+    url: {
+      type: "string",
+      description: "An http(s) URL. Links may contain placeholders; webhook URLs are fixed.",
+      required: true,
+    },
+    icon: {
+      type: '"link" | "ticket" | "bot" | "external" | null',
+      description: "Icon on the button.",
+      default: "null",
+    },
+    visibleTo: {
+      type: '"everyone" | "team"',
+      description: "team keeps a link in the dashboard only. Webhook actions are always team.",
+      default: '"everyone"',
+    },
+  }}
+/>
+
+## Link placeholders
+
+| Placeholder     | Replaced with                                             |
+| --------------- | --------------------------------------------------------- |
+| `{id}`          | The feedback's id                                         |
+| `{number}`      | Its number in the project (`142`)                         |
+| `{url}`         | The page URL, without the `?pinwren=` deep-link parameter |
+| `{projectSlug}` | The project's slug                                        |
+
+Every value is URL-encoded, so a page URL can never break out of the query parameter or path segment it sits
+in, and the result must still be an `http(s)` URL — anything else isn't rendered. Unknown placeholders are
+rejected when you save.
+
+```text
+https://linear.app/acme/new?title=Feedback%20%23{number}&description={url}
+https://admin.example.com/feedback/{projectSlug}/{id}
+```
+
+Links open with `rel="noopener noreferrer"`. Only `link` actions visible to `everyone` are ever sent to the
+page: team links and webhook URLs never leave the server.
+
+## Webhook actions
+
+Running a webhook action from the dashboard makes the server `POST` this JSON to your URL, with a 10-second
+timeout and without following redirects:
+
+```json title="action.run payload"
+{
+  "id": "5d1f0c9e-…",
+  "event": "action.run",
+  "apiVersion": "2026-11-01",
+  "createdAt": "2026-10-22T09:30:00.000Z",
+  "data": {
+    "feedback": {
+      "id": "…",
+      "number": 142,
+      "projectId": "…",
+      "projectName": "Marketing site",
+      "kind": "bug",
+      "status": "open",
+      "priority": "high",
+      "title": "Checkout button does nothing",
+      "body": "Clicking Pay shows a spinner forever.",
+      "pageUrl": "https://example.com/checkout",
+      "reporterName": "Sam",
+      "assigneeIds": [],
+      "createdAt": "2026-10-22T09:12:00.000Z",
+      "updatedAt": "2026-10-22T09:12:00.000Z",
+      "url": "https://feedback.example.com/…"
+    },
+    "action": { "id": "send-to-agent", "label": "Send to agent" },
+    "actor": { "kind": "user", "id": "…" }
+  }
+}
+```
+
+It carries the same headers as [generic webhooks](/docs/integrations/webhooks) — `Pinwren-Event`,
+`Pinwren-Delivery`, `Pinwren-Timestamp` and `Pinwren-Signature: v1=<hex HMAC-SHA256(secret, timestamp + "." + body)>`
+— signed with the project's **action secret** (`whsec_…`), which organisation owners and admins can reveal and rotate in
+the dashboard.
+
+Answer with any `2xx` to mark the run as successful. A JSON body like `{ "message": "Queued for the agent" }`
+is shown to the team member as a toast (up to 200 characters). Every run is logged in the item's activity
+timeline.
+
+```ts title="Verify the signature (Node)"
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+export function verify(secret: string, timestamp: string, body: string, header: string) {
+  const expected = `v1=${createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex")}`;
+  const a = Buffer.from(expected);
+  const b = Buffer.from(header);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+```
+
+Verify against the raw request body, and reject timestamps that are more than a few minutes old.

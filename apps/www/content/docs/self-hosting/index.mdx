@@ -1,0 +1,154 @@
+---
+title: Self-hosting
+description: Run Pinwren on your own server — one container plus Postgres, with your data on your infrastructure.
+---
+
+Pinwren is built to be self-hosted. The whole product — dashboard, API, widget bundles, background jobs and
+database migrations — ships as one Docker image. Postgres is the only other service it needs: it holds the
+data, the sessions, the rate-limit counters and the job queue. There is no Redis, message broker or object
+store to run.
+
+## Requirements
+
+| Resource | Minimum                                                                                                             |
+| -------- | ------------------------------------------------------------------------------------------------------------------- |
+| Docker   | Docker Engine with the Compose plugin (or any container runtime that runs Compose files)                            |
+| CPU, RAM | 1–2 vCPU and 1 GB RAM handle about 70 requests/s — see [Scaling](/docs/self-hosting/scaling)                        |
+| Database | Postgres 17 (included in the compose file), or your own Postgres                                                    |
+| Domain   | A hostname with HTTPS in front, e.g. `feedback.example.com` — see [Reverse proxy](/docs/self-hosting/reverse-proxy) |
+
+## The image
+
+Releases are published to `ghcr.io/krithik-m-codes/pinwren` for `linux/amd64` and `linux/arm64`, with an SBOM
+and build provenance attached. Each release is tagged three ways:
+
+| Tag      | Example  | Moves when                     |
+| -------- | -------- | ------------------------------ |
+| version  | `0.1.0`  | never — pin this in production |
+| minor    | `0.1`    | a new patch release is out     |
+| `latest` | `latest` | any new release                |
+
+The image is based on `node:22-alpine`, runs as the unprivileged `node` user, listens on port `3000`, keeps
+uploaded files in `/data` and has a `HEALTHCHECK` on `/api/health`. It starts `PINWREN_WORKERS` Node processes
+(default 2) that share the port.
+
+## The compose file
+
+[`docker/compose.yml`](https://github.com/Krithik-m-codes/pinwren/blob/main/docker/compose.yml) runs the app and
+Postgres:
+
+```yaml title="docker/compose.yml"
+services:
+  pinwren:
+    image: ${PINWREN_IMAGE:-pinwren:latest}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${PINWREN_BIND:-127.0.0.1}:${PINWREN_PORT:-3000}:3000"
+    environment:
+      PINWREN_URL: ${PINWREN_URL:?Set PINWREN_URL to the public URL, e.g. https://feedback.example.com}
+      PINWREN_SECRET: ${PINWREN_SECRET:?Set PINWREN_SECRET (openssl rand -base64 48)}
+      DATABASE_URL: postgres://pinwren:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/pinwren
+      PINWREN_TRUST_PROXY: ${PINWREN_TRUST_PROXY:-1}
+      PINWREN_DISABLE_SIGNUP: ${PINWREN_DISABLE_SIGNUP:-false}
+      PINWREN_WORKERS: ${PINWREN_WORKERS:-2}
+    volumes:
+      - pinwren-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:17-alpine
+    # … user, password and database "pinwren", a pg_isready health check
+    volumes:
+      - pinwren-db:/var/lib/postgresql/data
+volumes:
+  pinwren-data:
+  pinwren-db:
+```
+
+- **Port.** The app is published on `127.0.0.1:3000` only, so it is reachable through a reverse proxy on the
+  same host but not from the internet. Change `PINWREN_BIND` (e.g. `0.0.0.0`) and `PINWREN_PORT` in
+  `docker/.env` if you need to.
+- **Volumes.** `pinwren-db` holds Postgres; `pinwren-data` holds uploaded screenshots and attachments. Back up
+  both — see [Backups](/docs/self-hosting/backups).
+- **Image or build.** Without `PINWREN_IMAGE` the file builds the image from your checkout (`--build`). Set
+  `PINWREN_IMAGE=ghcr.io/krithik-m-codes/pinwren:<version>` to use a published release instead.
+
+### Passing more settings
+
+The compose file forwards **only the variables listed under `environment:`** to the container. Putting
+`SMTP_HOST` or `STORAGE_DRIVER` in `docker/.env` alone does nothing. Add them with an override file next to it,
+which Compose merges with the main one:
+
+```yaml title="docker/compose.override.yml"
+services:
+  pinwren:
+    environment:
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      EMAIL_FROM: ${EMAIL_FROM}
+```
+
+```bash
+docker compose -f docker/compose.yml -f docker/compose.override.yml --env-file docker/.env up -d
+```
+
+Or point the service at a file of its own with `env_file:`:
+
+```yaml title="docker/compose.override.yml"
+services:
+  pinwren:
+    env_file: pinwren.env # SMTP_*, STORAGE_DRIVER, S3_*, … one per line
+```
+
+Every variable is listed in the [environment reference](/docs/self-hosting/environment). Email can also be set
+up in the dashboard instead (**Settings › Email**).
+
+## First run
+
+1. Start the stack: `docker compose -f docker/compose.yml --env-file docker/.env up -d`. Migrations run on
+   start.
+2. Open `PINWREN_URL` and sign up. Without `PINWREN_ADMIN_EMAILS`, the first person to sign up becomes the
+   instance admin — so sign up before you expose the server publicly.
+3. Name your workspace, create the first project and enter your site's domain.
+4. Copy the snippet from the project's **Install** tab into your site. The tab shows **Connected** once the
+   widget has loaded.
+5. Set `PINWREN_DISABLE_SIGNUP=true` once your team has accounts, and invite everyone else.
+
+## Before you go live
+
+<Cards>
+  <Card title="Reverse proxy and HTTPS" href="/docs/self-hosting/reverse-proxy">
+    Caddy, nginx and Traefik, forwarded headers and upload sizes.
+  </Card>
+  <Card title="Storage" href="/docs/self-hosting/storage">
+    Keep files on the volume or move them to S3, R2 or MinIO.
+  </Card>
+  <Card title="Backups" href="/docs/self-hosting/backups">
+    Dump Postgres and copy the files volume — and test a restore.
+  </Card>
+  <Card title="Security checklist" href="/docs/security">
+    Secrets, allowed sites, sign-up and privacy mode.
+  </Card>
+</Cards>
+
+## Running without Docker
+
+You can run the app straight from a checkout with Node 22.12+ and pnpm 12, against any Postgres:
+
+```bash
+corepack enable && pnpm install
+cp apps/web/.env.example apps/web/.env.local   # set DATABASE_URL, PINWREN_URL, PINWREN_SECRET
+pnpm --filter @pinwren/widget build           # widget.js and its chunks into apps/web/public
+pnpm --filter @pinwren/web build
+pnpm --filter @pinwren/web start -- -p 3000   # migrations run on start
+```
+
+This runs a single Node process. The Docker image adds the multi-process cluster (`docker/cluster.cjs`) and
+sets `PINWREN_DATA_DIR=/data`; run the cluster entry yourself or put a process manager in front if you need
+more than one core.

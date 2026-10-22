@@ -1,0 +1,131 @@
+---
+title: Reverse proxy and HTTPS
+description: Put Caddy, nginx or Traefik in front of Pinwren for TLS, with the forwarded headers and body sizes it needs.
+---
+
+In production, run Pinwren behind a TLS-terminating reverse proxy. The compose file publishes the app on
+`127.0.0.1:3000` for exactly this: the proxy on the same host reaches it, the internet does not.
+
+## What the proxy must do
+
+| Requirement                         | Why                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Terminate TLS                       | Widgets on HTTPS sites can only call an HTTPS server, and sessions should never travel in clear text.                                                                                                                                                                                               |
+| Set `X-Forwarded-For/-Proto/-Host`  | With `PINWREN_TRUST_PROXY=true`, Pinwren uses them for the client IP (rate limits) and the request's scheme and host (HTTPS enforcement).                                                                                                                                                           |
+| Allow large request bodies on `/w/` | A bug report is one JSON request: the screenshot (a data URL of up to 11 MB) plus up to three attachments of 5 MB each (about 7 MB each once base64-encoded). Session replay (new in 0.1) adds up to 10 MB more. Allow **at least 12 MB**, and **50 MB** if reporters attach files or replay is on. |
+| Don't buffer `/api/stream`          | The dashboard's live updates are a long-lived Server-Sent Events response.                                                                                                                                                                                                                          |
+
+<Callout type="warn" title="Trust the proxy only when there is one">
+  `PINWREN_TRUST_PROXY` makes Pinwren believe `X-Forwarded-*`. The compose file turns it on by default because
+  it expects a proxy. If clients can reach the container directly, set it to `false` — otherwise anyone can
+  pick their own IP address and step around the per-IP rate limits.
+</Callout>
+
+## Caddy
+
+Caddy gets a certificate automatically, sets the forwarded headers, has no body-size limit by default and
+streams event-stream responses without buffering.
+
+```text title="Caddyfile"
+feedback.example.com {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3000
+}
+```
+
+## nginx
+
+```nginx title="/etc/nginx/conf.d/pinwren.conf"
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name feedback.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/feedback.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/feedback.example.com/privkey.pem;
+
+    # Screenshots and attachments arrive as one JSON body.
+    client_max_body_size 50m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+    }
+
+    # Live updates (Server-Sent Events): no buffering, long read timeout.
+    location /api/stream {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_set_header Connection        "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 1h;
+    }
+}
+
+server {
+    listen 80;
+    server_name feedback.example.com;
+    return 301 https://$host$request_uri;
+}
+```
+
+<NewIn>
+  The live-update stream at `/api/stream` is new in 0.1. Older versions don't need the second `location`
+  block, but it does no harm.
+</NewIn>
+
+## Traefik
+
+If Traefik already runs on the host, attach the app to its network with labels, in an override file next to
+the main compose file:
+
+```yaml title="docker/compose.override.yml"
+services:
+  pinwren:
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.pinwren.rule=Host(`feedback.example.com`)
+      - traefik.http.routers.pinwren.entrypoints=websecure
+      - traefik.http.routers.pinwren.tls.certresolver=letsencrypt
+      - traefik.http.services.pinwren.loadbalancer.server.port=3000
+    networks: [default, traefik]
+networks:
+  traefik:
+    external: true
+```
+
+Traefik sets the forwarded headers, imposes no body-size limit unless you add a buffering middleware, and
+passes event streams through unbuffered. The `entrypoints` and `certresolver` names are whatever your Traefik
+configuration defines.
+
+## Enforce HTTPS
+
+Once the proxy serves HTTPS, set `PINWREN_ENFORCE_HTTPS=true` (with `PINWREN_TRUST_PROXY=true`):
+
+- plain-HTTP `GET` and `HEAD` requests are redirected to `https://` with a `308`;
+- any other plain-HTTP request is refused with `403 HTTPS_REQUIRED`, so a form post never silently loses its
+  body;
+- HTTPS responses carry `Strict-Transport-Security: max-age=31536000; includeSubDomains`;
+- requests to `localhost`, `127.0.0.1` and `::1` are exempt, so health checks and local tools keep working.
+
+The rule covers every route — dashboard pages, `/api` and the widget's `/w`. It is environment-only on
+purpose: a dashboard switch could lock admins out.
+
+## Check it
+
+```bash
+curl -sI https://feedback.example.com/api/health
+curl -s  https://feedback.example.com/api/health   # {"ok":true}
+```
+
+Then load your site and open the project's **Install** tab: it shows **Connected** once a widget has called
+the server through the proxy.

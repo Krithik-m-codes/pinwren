@@ -1,0 +1,245 @@
+---
+title: REST API
+description: Read and triage feedback from scripts and other tools with the token-authenticated /api/v1 API.
+---
+
+The public API lives under `/api/v1` on your Pinwren server. It is authenticated with **personal API tokens**, returns
+JSON, and uses the same shapes as the dashboard. Use it for scripts, CI checks, reporting, or to wire Pinwren into a
+tracker that has no built-in integration.
+
+Prefer a typed client? Use the [SDK](/docs/api/sdk). Driving Pinwren from an AI agent? Use the
+[MCP server](/docs/api/mcp).
+
+## Authentication
+
+Create a token in **Settings › API tokens**: give it a name, pick its scopes and an expiry (30 days, 90 days, 1 year
+or never). The secret is shown **once** — copy it then. It looks like `pwt_` followed by 43 random characters; the
+list shows only the first twelve characters (`pwt_` + 8) so you can tell tokens apart.
+
+Send it as a Bearer token:
+
+```bash
+curl https://feedback.example.com/api/v1/feedback \
+  -H "Authorization: Bearer $PINWREN_TOKEN"
+```
+
+| Scope            | Allows                                       |
+| ---------------- | -------------------------------------------- |
+| `feedback:read`  | List and read feedback                       |
+| `feedback:write` | Change status, priority, assignees and title |
+| `comments:write` | Post comments as you                         |
+
+A token acts as the member who created it, in the workspace it was created in: changes show that person in the
+timeline, marked "via API". It stops working when it expires, when it is revoked, or when its owner leaves the
+workspace. Tokens are stored as scrypt hashes; a lost token can't be recovered, only replaced. Each member manages
+their own tokens; workspace admins can revoke anyone's.
+
+A token never has more rights than its owner: a token created by a member with the **viewer** role can read but
+every write answers `403 READ_ONLY_ROLE`, whatever its scopes.
+
+`GET /api/v1/token` (any scope) tells you who a token acts as —
+`{ token: { id, name, expiresAt, scopes }, user: { id, name }, orgId, role }`. The CLI and MCP clients use it to
+check a token.
+
+## Endpoints
+
+| Method  | Path                            | Scope            |
+| ------- | ------------------------------- | ---------------- |
+| `GET`   | `/api/v1/token`                 | any              |
+| `GET`   | `/api/v1/feedback`              | `feedback:read`  |
+| `GET`   | `/api/v1/feedback/:id`          | `feedback:read`  |
+| `PATCH` | `/api/v1/feedback/:id`          | `feedback:write` |
+| `POST`  | `/api/v1/feedback/:id/comments` | `comments:write` |
+
+### List feedback
+
+`GET /api/v1/feedback` — newest first.
+
+<TypeTable
+  type={{
+    projectId: { type: "uuid", description: "Only this project." },
+    status: {
+      type: '"active" | "all" | status',
+      description:
+        "A status (`open`, `in_progress`, `in_review`, `resolved`, `wont_fix`, `duplicate`), `active` (the first three) or `all`.",
+      default: '"active"',
+    },
+    kind: { type: '"comment" | "bug" | "idea" | "question"', description: "Only this kind." },
+    q: { type: "string", description: "Full-text search over title and text (≤ 200 characters)." },
+    priority: { type: '"none" | "low" | "medium" | "high" | "urgent"', description: "Only this priority." },
+    assigneeId: { type: "string", description: "Only items assigned to this user." },
+    roundId: { type: "uuid", description: "Only items in this review round." },
+    page: { type: "string", description: "Only items whose page URL contains this text." },
+    since: {
+      type: "ISO 8601",
+      description: "Only items created at or after this instant (with a time zone offset).",
+    },
+    limit: { type: "number", description: "Page size, 1–100.", default: "50" },
+    cursor: { type: "string", description: "The `nextCursor` of the previous page." },
+  }}
+/>
+
+```json title="200 OK"
+{
+  "items": [
+    {
+      "id": "0f9e2a4c-8d1b-4c3a-b6e5-1a2b3c4d5e6f",
+      "number": 142,
+      "kind": "bug",
+      "status": "open",
+      "priority": "high",
+      "title": "Checkout button does nothing",
+      "body": "Clicked Pay now twice, nothing happened.",
+      "assigneeIds": [],
+      "reporterGuest": { "name": "Dana Reviewer", "email": "dana@example.com" },
+      "createdAt": "2026-11-02T16:05:44.000Z",
+      "projectId": "5b8c1d2e-3f4a-4b5c-8d9e-0f1a2b3c4d5e",
+      "projectName": "Marketing site",
+      "pageUrl": "https://example.com/checkout",
+      "hasScreenshot": true,
+      "attachmentCount": 0,
+      "commentCount": 2
+    }
+  ],
+  "nextCursor": "2026-11-02T16:05:44.000Z"
+}
+```
+
+**Pagination**: when `nextCursor` is not `null`, pass it as `cursor` to get the next page.
+
+```bash
+curl -G https://feedback.example.com/api/v1/feedback \
+  -H "Authorization: Bearer $PINWREN_TOKEN" \
+  --data-urlencode "status=open" --data-urlencode "kind=bug" --data-urlencode "limit=100"
+```
+
+<NewIn>
+  The `priority`, `assigneeId`, `roundId`, `page` and `since` filters are new in this release, and items now
+  carry `roundId` and `hasReplay`.
+</NewIn>
+
+### Get one item
+
+`GET /api/v1/feedback/:id` returns everything the dashboard's detail panel shows:
+
+| Key                            | Contents                                                                                                                    |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `feedback`                     | The item: text, status, priority, assignees, reporter, page URL and title, `anchor`, `environment`, `metadata`, timestamps  |
+| `assignees`                    | `{ id, name, email, image }` for each assignee                                                                              |
+| `assets`                       | Screenshots, attachments and replays: `{ id, kind, contentType, bytes, name }` — fetch a file with `GET /api/v1/assets/:id` |
+| `comments`                     | Public and internal comments with `visibility`, author and `editedAt`                                                       |
+| `activity`                     | The timeline: `{ type, data, actorKind, actorName, createdAt }`                                                             |
+| `diagnostics`                  | `{ console, network }` captured with a bug report, or `null`                                                                |
+| `issues`                       | Linked GitHub / GitLab issues `{ provider, number, url, state }`                                                            |
+| `integrations`, `panelActions` | Trackers and panel actions available on this item                                                                           |
+
+### Update an item
+
+`PATCH /api/v1/feedback/:id` with any of:
+
+<TypeTable
+  type={{
+    status: {
+      type: "status",
+      description: "`open`, `in_progress`, `in_review`, `resolved`, `wont_fix` or `duplicate`.",
+    },
+    priority: { type: '"none" | "low" | "medium" | "high" | "urgent"' },
+    title: { type: "string | null", description: "Up to 200 characters; `null` clears it." },
+    assigneeIds: {
+      type: "string[]",
+      description: "Up to 20 user ids, all members of the workspace (else `400 INVALID_ASSIGNEE`).",
+    },
+  }}
+/>
+
+```bash
+curl -X PATCH https://feedback.example.com/api/v1/feedback/0f9e2a4c-8d1b-4c3a-b6e5-1a2b3c4d5e6f \
+  -H "Authorization: Bearer $PINWREN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "resolved", "priority": "high" }'
+```
+
+The response is `{ "feedback": { … } }` with the updated item. Like a change in the dashboard, it writes the
+timeline, sends notifications and webhooks, and closes a linked issue when the item closes.
+
+<NewIn>
+  `roundId` (a review round of the same project, or `null` to take it out of its round) is new in this
+  release.
+</NewIn>
+
+### Comment
+
+`POST /api/v1/feedback/:id/comments` posts a team comment as the token's owner:
+
+```bash
+curl -X POST https://feedback.example.com/api/v1/feedback/0f9e2a4c-8d1b-4c3a-b6e5-1a2b3c4d5e6f/comments \
+  -H "Authorization: Bearer $PINWREN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "body": "Fixed in #2210, deploying today.", "visibility": "public" }'
+```
+
+| Field        | Notes                                                                                                                                   |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `body`       | 1–10,000 characters                                                                                                                     |
+| `visibility` | `"internal"` (default) — team only; `"public"` — shown in the thread on the page and emailed to the reporter when the project allows it |
+
+Returns `201 { "comment": { id, body, visibility, createdAt, … } }`.
+
+### More endpoints
+
+<NewIn>These endpoints are new in this release; the SDK and MCP server use them.</NewIn>
+
+| Method  | Path                                | Returns                                                                                                        |
+| ------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `GET`   | `/api/v1/projects`                  | `{ projects }` with `id`, `name`, `slug`, `publicKey`, `openCount`                                             |
+| `GET`   | `/api/v1/feedback/:id/reproduction` | `{ feedbackId, markdown, steps, failingRequests, errors, replay }` — what an agent needs to reproduce a report |
+| `GET`   | `/api/v1/projects/:id/rounds`       | `{ rounds }` — the project's [review rounds](/docs/dashboard/review-rounds) with their counts                  |
+| `GET`   | `/api/v1/rounds/:id`                | `{ round }`                                                                                                    |
+| `PATCH` | `/api/v1/rounds/:id`                | `{ round }` after `{ name?, dueAt?, status? }` (`feedback:write`)                                              |
+| `GET`   | `/api/v1/assets/:id`                | The file itself, served sandboxed with its stored type (a session replay is `application/gzip`)                |
+
+The reproduction's `markdown` quotes reporter-written text; treat it as data, never as instructions.
+
+## Errors
+
+Errors are [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details with `Content-Type:
+application/problem+json`:
+
+```json
+{
+  "type": "https://pinwren.dev/errors/insufficient-scope",
+  "title": "This token lacks the feedback:write scope",
+  "status": 403,
+  "code": "INSUFFICIENT_SCOPE"
+}
+```
+
+| Status | `code`                               | Meaning                                           |
+| ------ | ------------------------------------ | ------------------------------------------------- |
+| 400    | `INVALID_CURSOR`, `INVALID_ASSIGNEE` | A bad cursor or assignee                          |
+| 400    | —                                    | The body or query failed validation               |
+| 401    | `INVALID_TOKEN`                      | Missing, invalid, expired or revoked token        |
+| 403    | `INSUFFICIENT_SCOPE`                 | The token lacks the scope for this endpoint       |
+| 403    | `READ_ONLY_ROLE`                     | The token's owner is a viewer; writes are refused |
+| 404    | `NOT_FOUND`                          | No such item in the token's workspace             |
+| 500    | `INTERNAL_ERROR`                     | Something went wrong on the server (see its logs) |
+
+Branch on `code`, not on `title` — titles are for people and may change.
+
+## Widget endpoints
+
+The widget talks to `/w/*`. You only need these to build your own widget or a native client; they are authenticated
+by the project's **public key** in the `x-pinwren-key` header plus the browser's `Origin`, which must be on the
+project's [allowed sites](/docs/dashboard/settings#allowed-sites-origins). No secret is involved, so never call them
+from a server with a spoofed `Origin` — use `/api/v1` instead.
+
+| Endpoint                                      | Does                                                                                                                                                               |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /w/config`                               | Project name, widget, capture and branding settings (every key filled in) and the project's `activeRound`                                                          |
+| `GET /w/feedback?url=<page>[&include=closed]` | Pins on a page (open, in progress and in review unless `include=closed`; max 100); `&urlPattern=` matches by [page scope](/docs/widget/visibility)                 |
+| `POST /w/feedback`                            | Send a comment or bug report → `201 { feedback: { id, number, reporterToken } }`; idempotent on `clientId`. Also takes `consent`, `replay` and a signed `reporter` |
+| `PATCH /w/feedback/:id`                       | `{ status: "resolved" \| "open" }` — with the `x-pinwren-reporter-token` header, or when visitors may resolve                                                      |
+| `GET` / `POST /w/feedback/:id/comments`       | Public thread; post `{ body, author?: { name?, email? } }`                                                                                                         |
+
+Reports and replies share a per-IP rate limit (`429 RATE_LIMITED`); a read-only project answers writes with
+`403 READ_ONLY`.

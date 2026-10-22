@@ -1,0 +1,65 @@
+---
+title: Notifications
+description: In-app and email notifications for your team, per-project preferences, and emails to the people who reported.
+---
+
+Pinwren tells the right people when something happens — in the dashboard's bell, by email, or both. Notifications
+are sent by background jobs, so a slow or broken mail server never delays a report.
+
+## What your team is told
+
+| Notification       | Who gets it                                                                                                                                                                                    |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **New feedback**   | Members who follow new feedback on the project                                                                                                                                                 |
+| **Assigned**       | The member something was just assigned to                                                                                                                                                      |
+| **Reply**          | People involved in the item — its assignees and team members who already commented. A visitor's reply on an item nobody is involved in yet goes to everyone who follows replies on the project |
+| **Status changed** | The item's assignees                                                                                                                                                                           |
+
+Nobody is notified about their own action. The bell in the sidebar shows unread notifications with the project,
+number and title, links to the item, and has **Mark all read**. Read notifications are cleared after 90 days.
+
+## Preferences
+
+Each member chooses, per project, in **Settings › Notifications**:
+
+| Column           | Meaning                             |
+| ---------------- | ----------------------------------- |
+| **New feedback** | Every new comment or bug report     |
+| **Assigned**     | Something is assigned to you        |
+| **Replies**      | Replies on items you're involved in |
+| **Status**       | Status changes on your items        |
+| **Email**        | Also send these by email            |
+
+Everything is on by default. In-app notifications are always written for what you follow; **Email** decides whether
+they are also mailed. Emails need SMTP — see [email](/docs/integrations/email). Without it, emails are skipped and
+the bell still works.
+
+## Emails to reporters
+
+When a reporter leaves an email address in the widget and the project has **Email the reporter** on (project
+settings › **Privacy & data**, `notifyReporter`), they get an email when:
+
+- the team posts a **public** reply on their feedback (internal notes never leave the dashboard), or
+- the team changes its **status** — not when they resolved it themselves from the page.
+
+Both emails use the "Reply to the reporter" and "Status update to the reporter" templates, which you can edit — see
+[settings](/docs/dashboard/settings#email-templates).
+
+<NewIn>
+  Reporter emails carry a signed one-click unsubscribe link (`/api/unsubscribe?token=…`) and
+  `List-Unsubscribe` headers. An address that unsubscribes goes on the workspace's suppression list, which
+  every reporter email checks before it is sent.
+</NewIn>
+
+## API
+
+Under `/api`, with a dashboard session:
+
+| Endpoint                            | Does                                                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `GET /api/notifications`            | `{ items, unreadCount }`; `?unread=1` for unread only, `?limit=` up to 100 (default 50)                 |
+| `POST /api/notifications/read`      | `{ "ids": [...] }` or `{ "all": true }` → `{ updated }`                                                 |
+| `GET /api/notification-preferences` | One row per project: `{ projectId, projectName, newFeedback, assigned, replies, statusChanges, email }` |
+| `PUT /api/notification-preferences` | `{ projectId, ...any of the five booleans }`                                                            |
+
+Notification types are `feedback.created`, `feedback.assigned`, `feedback.status_changed` and `comment.created`.

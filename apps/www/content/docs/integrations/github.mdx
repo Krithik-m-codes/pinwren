@@ -1,0 +1,107 @@
+---
+title: GitHub
+description: Open a GitHub issue for each feedback item and keep both sides in sync — closing either one closes the other.
+---
+
+Connect a project to a GitHub repository and Pinwren opens one issue per feedback item — automatically or with a
+button — and keeps their state in step: resolve an item and its issue closes; close the issue and the item resolves.
+It works with github.com and GitHub Enterprise Server, with a token instead of a GitHub App, so a private or
+air-gapped instance needs no OAuth callback.
+
+## Connect a repository
+
+<Steps>
+<Step>
+
+**Create a token.** In GitHub, create a **fine-grained personal access token** with access to the repository and the
+permission **Issues: read and write**. (A classic token with the `repo` scope also works.) The token acts as you: issues
+are opened under your name.
+
+</Step>
+<Step>
+
+**Connect.** As a workspace admin, open the project's **Issue trackers** tab and connect GitHub:
+
+| Field                         | Notes                                                                                                      |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Access token**              | Stored encrypted; only its last four characters are ever shown                                             |
+| **Repository**                | `owner/name`                                                                                               |
+| **GitHub Enterprise API URL** | Optional, e.g. `https://github.example.com/api/v3`. Empty uses `GITHUB_API_URL` (`https://api.github.com`) |
+| **Labels**                    | Up to 10, comma-separated; added to every issue (default `feedback`)                                       |
+| **Open issues for**           | **Manually**, **Bugs** or **Everything** — see below                                                       |
+
+Use **Test connection** to check that the token can see the repository.
+
+</Step>
+<Step>
+
+**Add the webhook** so closing an issue updates Pinwren. Under **Two-way status** the tab shows a **URL**
+(`https://feedback.example.com/api/integrations/github/webhook`) and a **secret** (`whsec_…`). In the repository, open
+**Settings › Webhooks › Add webhook**, paste both, set the content type to `application/json` and choose **Let me
+select individual events › Issues**.
+
+</Step>
+</Steps>
+
+A project can have one GitHub integration (and one GitLab integration).
+
+## Creating issues
+
+| Open issues for | What happens                                                         |
+| --------------- | -------------------------------------------------------------------- |
+| **Manually**    | Only when someone presses **Send to GitHub** on an item in the inbox |
+| **Bugs**        | Every new bug report opens an issue; other items can be sent by hand |
+| **Everything**  | Every new comment, bug, idea and question opens an issue             |
+
+**Send to GitHub** works for any member, creates the issue right away and links it on the item. Sending the same item
+again returns the existing issue. If the item is already closed, the new issue is closed too.
+
+Each issue has:
+
+- **Title**: `#142 Checkout button does nothing` — the item's number and title (or its first line).
+- **Body**: the reporter's text as a quote, a table with project, kind, page, browser, viewport and reporter name, and
+  a link to the item in the dashboard ("screenshot, console and network details are there").
+- **Labels**: the integration's labels.
+
+<Callout title="What never goes into an issue">
+  Screenshots, attachments, console and network logs stay behind the dashboard's sign-in — no public or signed
+  file URL is put in an issue, so it is safe to use with public repositories too. Reporter email addresses are
+  never included. The reporter's text is escaped and its `@` and `#` broken, so it can't mention people or
+  link other issues.
+</Callout>
+
+## Two-way state
+
+| You do                                           | Pinwren does                         |
+| ------------------------------------------------ | ------------------------------------ |
+| Move an item to Resolved, Won't fix or Duplicate | Closes the linked issue              |
+| Reopen a closed item                             | Reopens the issue                    |
+| Close the issue in GitHub                        | Moves an open item to **Resolved**   |
+| Reopen the issue in GitHub                       | Moves a closed item back to **Open** |
+
+Changes that come from GitHub are recorded in the item's timeline as the integration (with the issue number), notify
+assignees, and are not pushed back to GitHub, so nothing loops. Title, comments and labels are not synced.
+
+## Reliability
+
+Creating issues and pushing state changes are background jobs: they retry with backoff (six retries), and a GitHub
+outage never blocks a report or a triage change. The last error is shown on the integration — for example
+`401 Bad credentials (check the token)` or `404 Not Found (check the repository and the token's access)` — until the
+next success.
+
+The webhook is verified with `X-Hub-Signature-256` (HMAC-SHA256 of the raw body with the integration's secret). When
+several projects sync the same repository, only the integration whose secret verifies acts on it. Requests over 1 MB
+are refused. Rotate the secret from the tab if it leaks and paste the new one into GitHub.
+
+## Tokens and people
+
+The token belongs to whoever created it. When they leave, an admin pastes a new one into **Access token**;
+nothing else changes. The **Sync** switch pauses issue creation and state sync. **Disconnect** removes the integration:
+existing issues stay in GitHub but stop syncing, and the links on items are removed.
+
+## GitHub Enterprise Server
+
+Set **GitHub Enterprise API URL** per integration, or `GITHUB_API_URL` for the whole instance. Your Pinwren server
+must reach the GHES API, and GHES must reach Pinwren's webhook URL.
+
+<EnvTable group="Issue trackers" />

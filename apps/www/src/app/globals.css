@@ -1,0 +1,201 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/* Fumadocs (docs layout, search dialog, MDX components) reads the shadcn tokens below, so the docs and the
+   marketing pages share one palette. */
+@import "@fumadocs/base-ui/css/shadcn.css";
+@import "@fumadocs/base-ui/css/preset.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-sans);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-soft: var(--brand-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+}
+
+/* Brand: the widget's default accent, #5b5bd6. */
+:root {
+  --background: oklch(0.995 0.002 286);
+  --foreground: oklch(0.18 0.012 286);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.012 286);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.012 286);
+  --primary: oklch(0.2 0.015 286);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.965 0.004 286);
+  --secondary-foreground: oklch(0.22 0.012 286);
+  --muted: oklch(0.965 0.004 286);
+  --muted-foreground: oklch(0.47 0.014 286);
+  --accent: oklch(0.955 0.012 280);
+  --accent-foreground: oklch(0.22 0.012 286);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.915 0.006 286);
+  --input: oklch(0.9 0.006 286);
+  --ring: oklch(0.55 0.19 277);
+  --brand: oklch(0.52 0.19 277);
+  --brand-foreground: oklch(0.99 0 0);
+  --brand-soft: oklch(0.95 0.03 277);
+  --success: oklch(0.55 0.14 155);
+  --warning: oklch(0.7 0.15 70);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0.003 286);
+  --sidebar-foreground: oklch(0.2 0.012 286);
+  --sidebar-accent: oklch(0.95 0.015 280);
+  --sidebar-accent-foreground: oklch(0.2 0.012 286);
+  --sidebar-border: oklch(0.92 0.006 286);
+  --sidebar-ring: oklch(0.55 0.19 277);
+}
+
+.dark {
+  --background: oklch(0.155 0.008 286);
+  --foreground: oklch(0.97 0.003 286);
+  --card: oklch(0.19 0.01 286);
+  --card-foreground: oklch(0.97 0.003 286);
+  --popover: oklch(0.2 0.01 286);
+  --popover-foreground: oklch(0.97 0.003 286);
+  --primary: oklch(0.96 0.004 286);
+  --primary-foreground: oklch(0.18 0.012 286);
+  --secondary: oklch(0.24 0.01 286);
+  --secondary-foreground: oklch(0.97 0.003 286);
+  --muted: oklch(0.23 0.01 286);
+  --muted-foreground: oklch(0.72 0.012 286);
+  --accent: oklch(0.26 0.025 280);
+  --accent-foreground: oklch(0.97 0.003 286);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.68 0.16 277);
+  --brand: oklch(0.7 0.15 277);
+  --brand-foreground: oklch(0.16 0.02 280);
+  --brand-soft: oklch(0.27 0.06 277);
+  --success: oklch(0.72 0.15 155);
+  --warning: oklch(0.8 0.14 75);
+  --sidebar: oklch(0.17 0.009 286);
+  --sidebar-foreground: oklch(0.95 0.003 286);
+  --sidebar-accent: oklch(0.25 0.02 280);
+  --sidebar-accent-foreground: oklch(0.97 0.003 286);
+  --sidebar-border: oklch(1 0 0 / 9%);
+  --sidebar-ring: oklch(0.68 0.16 277);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply scroll-smooth font-sans;
+    scroll-padding-top: 5rem;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--brand) 25%, transparent);
+  }
+}
+
+@utility container-page {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 76rem;
+  padding-inline: 1rem;
+  @media (width >= 40rem) {
+    padding-inline: 1.5rem;
+  }
+}
+
+/* Faint dotted canvas behind hero mockups and the demo page. */
+@utility bg-dots {
+  background-image: radial-gradient(
+    color-mix(in oklch, var(--foreground) 14%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 18px 18px;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes pin-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.8);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(2px) scale(1.04);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes region-draw {
+  from {
+    clip-path: inset(0 100% 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 40s linear infinite;
+}
+.animate-pin-drop {
+  animation: pin-drop 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+.animate-region-draw {
+  animation: region-draw 0.9s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-pin-drop,
+  .animate-region-draw {
+    animation: none !important;
+  }
+}

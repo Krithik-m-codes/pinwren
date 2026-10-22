@@ -1,0 +1,84 @@
+---
+title: Scaling
+description: Size a Pinwren server from measured load-test numbers, and scale out with workers and replicas.
+---
+
+One small server goes a long way. A widget visitor costs about two requests per page view (the config and the
+page's pins); a report adds one. Screenshots are the heaviest request.
+
+## Sizing guide
+
+Measured with the [k6 load test](https://github.com/Krithik-m-codes/pinwren/blob/main/loadtest/README.md)
+against the self-host compose stack (app + Postgres 17), with widget reads, report submissions (40 % bug
+reports, half with a screenshot), dashboard use and a single-IP flood running at once.
+
+| Server         | Settings            | Comfortable load                                           |
+| -------------- | ------------------- | ---------------------------------------------------------- |
+| 1–2 vCPU, 1 GB | `PINWREN_WORKERS=2` | ~70 requests/s — thousands of daily active widget visitors |
+| 4 vCPU, 2 GB   | `PINWREN_WORKERS=4` | 130+ requests/s with p95 under 100 ms                      |
+
+The two passing runs:
+
+| App limits       | Offered load | p95 widget read / dashboard / submit | Errors |
+| ---------------- | ------------ | ------------------------------------ | ------ |
+| 2 CPU, 2 workers | ~74 req/s    | 20 ms / 41 ms / 50 ms                | 0      |
+| 4 CPU, 4 workers | ~130 req/s   | 38 ms / 65 ms / 70 ms                | 0      |
+
+Results from 2026-10-21 on Windows 11 with Docker Desktop, 2-minute runs. The first build saturated at 64
+req/s with multi-second p95s; three row-lock hot spots were fixed (one SQL statement per report, no
+page-row updates, throttled "last seen" writes) and the app was put on several cores — the details are in the
+load-test notes and ADR 0013. Run the test against your own hardware before you rely on these numbers.
+
+## Use more cores: `PINWREN_WORKERS`
+
+One Node process uses one CPU core. The Docker image runs `PINWREN_WORKERS` processes (default 2) that share
+port 3000 through `node:cluster`, restarting any that exit. Set it to roughly the number of cores you give the
+container:
+
+```bash title="docker/.env"
+PINWREN_WORKERS=4
+```
+
+`PINWREN_WORKERS=1` runs a single process with no cluster.
+
+## Database connections
+
+Each worker process has its own connection pools: `DATABASE_POOL_MAX` (default 10) for requests and
+`PINWREN_JOBS_POOL_MAX` (default 3) for the job queue. Make sure Postgres allows enough:
+
+```text
+max_connections ≥ processes × (DATABASE_POOL_MAX + PINWREN_JOBS_POOL_MAX) + headroom
+```
+
+With the defaults and two workers that is 26 connections plus headroom — well inside Postgres's default of 100.
+Count every replica's workers if you run more than one container.
+
+## Separate web and jobs: `PINWREN_ROLE`
+
+Background work — notification emails, webhook deliveries, issue sync, retention and clean-up — runs as jobs in
+a queue stored in Postgres (pg-boss). By default every process serves requests **and** works the queue; each
+job goes to exactly one of them, and scheduled jobs fire once.
+
+| `PINWREN_ROLE`  | Serves HTTP | Runs jobs           |
+| --------------- | ----------- | ------------------- |
+| `all` (default) | yes         | yes                 |
+| `web`           | yes         | no (still enqueues) |
+| `worker`        | no          | yes                 |
+
+For a larger install, run several `web` replicas behind a load balancer and one `worker`, all pointing at the
+same Postgres. Use [S3 storage](/docs/self-hosting/storage) so every replica sees the same files, and the same
+`PINWREN_SECRET` everywhere. Migrations are safe to run from all of them at once — they take an advisory lock.
+
+A failing integration never slows ingest: a report is written in one statement and its notifications are queued
+after it.
+
+## Rate limits
+
+The public widget endpoints are rate-limited per IP and per project in a fixed one-minute window, counted in
+Postgres (no Redis): `WIDGET_RATE_LIMIT_PER_MIN` (default 10) reports per minute, and as many replies, counted separately.
+Each project can override the limit in its settings (1–1000). Over the limit, the widget gets
+`429 RATE_LIMITED` and shows the message. In the load test, the single-IP flood got exactly its 10 per minute
+through and everything else was answered `429`.
+
+Behind a proxy, rate limits key on `X-Forwarded-For` only with `PINWREN_TRUST_PROXY=true` — see [Reverse
+proxy](/docs/self-hosting/reverse-proxy).

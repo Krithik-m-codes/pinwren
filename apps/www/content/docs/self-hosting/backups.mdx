@@ -1,0 +1,101 @@
+---
+title: Backups
+description: Back up the Postgres database, the uploaded files and your secrets, and restore them.
+---
+
+A complete Pinwren backup has three parts:
+
+| Part           | Where it lives                                                    | How to back it up                     |
+| -------------- | ----------------------------------------------------------------- | ------------------------------------- |
+| Database       | `pinwren-db` volume (or your own Postgres)                        | `pg_dump`                             |
+| Uploaded files | `pinwren-data` volume, or your S3 bucket with `STORAGE_DRIVER=s3` | Copy the folder, or bucket versioning |
+| Configuration  | `docker/.env` and any override files                              | Keep a copy in your secrets manager   |
+
+<Callout type="warn" title="Keep PINWREN_SECRET with the backup">
+  Stored credentials — the SMTP password, webhook signing secrets, issue-tracker tokens — are encrypted with a
+  key derived from `PINWREN_SECRET`. A database restored with a different secret works, but those credentials
+  must be entered again and everyone has to sign in again.
+</Callout>
+
+Pinwren does not run backups for you yet: a built-in scheduled backup job is on the roadmap. Use your host's
+scheduler (cron, a systemd timer, your platform's backup tool) with the commands below.
+
+## Back up
+
+Run these from the repository folder while the stack is up.
+
+```bash
+# 1. Database: a compressed custom-format dump.
+docker compose -f docker/compose.yml exec -T db \
+  pg_dump -U pinwren -d pinwren -Fc > "pinwren-$(date +%F).dump"
+
+# 2. Files (STORAGE_DRIVER=fs): copy the data folder out of the container.
+docker compose -f docker/compose.yml cp pinwren:/data "./pinwren-data-$(date +%F)"
+```
+
+`pg_dump` takes a consistent snapshot without stopping the app. Take the file copy right after it: a report
+written in between leaves a file without a row (harmless — it is ignored) rather than the other way round.
+
+With S3 storage, turn on **bucket versioning** (or your provider's equivalent) instead of copying files, and
+keep the bucket in a different account or region from the server if you can.
+
+Copy both outside the server — to another host or an off-site bucket — and keep several days.
+
+## Restore
+
+<Steps>
+<Step>
+
+### Stop the app, keep the database running
+
+```bash
+docker compose -f docker/compose.yml stop pinwren
+```
+
+</Step>
+<Step>
+
+### Restore the database
+
+```bash
+docker compose -f docker/compose.yml exec -T db \
+  pg_restore -U pinwren -d pinwren --clean --if-exists --no-owner < pinwren-2026-10-21.dump
+```
+
+</Step>
+<Step>
+
+### Restore the files
+
+```bash
+docker compose -f docker/compose.yml cp ./pinwren-data-2026-10-21/. pinwren:/data
+# Files copied in belong to root; hand them back to the app's user.
+docker compose -f docker/compose.yml run --rm --no-deps --user root --entrypoint chown \
+  pinwren -R node:node /data
+```
+
+</Step>
+<Step>
+
+### Start the app
+
+```bash
+docker compose -f docker/compose.yml --env-file docker/.env up -d
+```
+
+Use the same `PINWREN_SECRET` as the backup. On start, migrations bring the restored database up to the
+running version.
+
+</Step>
+</Steps>
+
+## Test your restore
+
+A backup you have never restored is a hope, not a backup. Every few months, restore the latest dump and files
+into a throwaway stack — a second checkout with its own `docker/.env` and `-p pinwren-restore` as the compose
+project name — and open a few reports with screenshots.
+
+## Retention is not a backup
+
+Per-project retention policies and the trash permanently delete old feedback and its files (the trash after 30
+days). Anything they delete is gone from the live system; only your backups still have it.

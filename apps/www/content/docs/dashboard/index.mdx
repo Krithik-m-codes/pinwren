@@ -1,0 +1,109 @@
+---
+title: Inbox & keyboard
+description: Triage every comment and bug report in one keyboard-first inbox — list, detail, filters, bulk edits and undo.
+---
+
+Everything the widget collects lands in **Inbox**. It shows all projects of your workspace, or one project when you
+pick it in the sidebar (`/inbox?project=<id>`). The inbox has two layouts — the list described here and the
+[board](/docs/dashboard/board) — and every filter lives in the URL, so a link to a filtered inbox opens the same view
+for a teammate.
+
+## List and detail
+
+The list shows each item's status, kind (comment, bug, idea, question), number, title or first line, project, page
+path, assignee, comment count and whether it has a screenshot or attachments. Click a row (or press `Enter`) to open
+it in the detail panel beside the list; on narrow screens and in the board it opens as a sheet.
+
+The detail panel holds:
+
+- **Status, priority and assignee** pickers.
+- **Copy link** (a dashboard link to the item) and **Open on page** — the page URL with `?pinwren=<id>`, which opens
+  the live page with the thread showing.
+- The screenshot (annotated, if the reporter drew on it) and up to three attachments.
+- Tabs for **Details** (page, browser, viewport, locale, reporter email), **Anchor** (element, selector, XPath, text
+  and position the pin is attached to), **Console** and **Network**.
+- Panel actions and **Send to GitHub / GitLab** when the project has them — see
+  [panel actions](/docs/widget/panel-actions) and [GitHub](/docs/integrations/github).
+- Comments and the activity timeline.
+- **More actions**: copy the number or the page URL, and delete.
+
+Deleted items go to the trash and are purged, with their files, after 30 days.
+
+## Statuses, priorities, kinds
+
+| Field    | Values                                                           |
+| -------- | ---------------------------------------------------------------- |
+| Status   | Open, In progress, In review, Resolved, Won't fix, Duplicate     |
+| Priority | No priority, Low, Medium, High, Urgent                           |
+| Kind     | Comment, Bug, Idea, Question (set by the reporter in the widget) |
+
+Open, In progress and In review are the **active** statuses; Resolved, Won't fix and Duplicate are **closed**. Closed
+items leave the page in the widget (visitors can still show resolved pins) and close a linked GitHub or GitLab issue.
+
+## Filters and search
+
+- **Active / Resolved / All** tabs filter by status.
+- **Search** (`/`) matches the title and text of every item (Postgres full-text search). Press `Enter` to apply.
+- **Project** — choose a project in the sidebar.
+
+<NewIn>
+  The list API also filters by priority, assignee, review round, page URL and creation date (`priority`,
+  `assigneeId`, `roundId`, `page`, `since`), which [saved views](/docs/dashboard/saved-views) store.
+</NewIn>
+
+## Bulk edits and undo
+
+Tick rows with their checkbox or `x` (Shift-click or `Shift` + `x` selects a range). A bar appears at the bottom to
+set the status, assign or unassign, or delete the selection. Every change shows a toast with **Undo**, and `u` undoes
+the last change from anywhere in the inbox.
+
+## Comments: internal or public
+
+The comment box has two modes:
+
+| Mode         | Who sees it                                                                                                                                             |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Internal** | Only your team, in the dashboard. Highlighted in amber. The default.                                                                                    |
+| **Public**   | Also the reporter and visitors, in the pin's thread on the page, with a team badge. Emails the reporter when the project has **Email the reporter** on. |
+
+Visitors' replies from the page show up here as public comments. You can edit your own comments; authors and
+workspace admins can delete them, and the timeline keeps a note that a comment was deleted.
+
+## Activity timeline
+
+Every item records who did what: created (from the widget), status, priority, title and assignee changes (with the
+before and after values), comments, deleted comments, issue links and panel-action runs. Changes made through the
+[API](/docs/api) show the token's owner with "via API"; changes from GitHub or GitLab show the tracker.
+
+## Keyboard shortcuts
+
+Press `?` in the inbox for this list. Shortcuts are ignored while you type in a field.
+
+| Key       | Action                                     |
+| --------- | ------------------------------------------ |
+| `j` / `k` | Next / previous item (also `↓` / `↑`)      |
+| `Enter`   | Open the focused item                      |
+| `Esc`     | Close the item, then clear the selection   |
+| `x`       | Select the open item (`Shift` for a range) |
+| `e`       | Resolve / reopen                           |
+| `s`       | Status menu                                |
+| `p`       | Priority menu                              |
+| `a`       | Assign menu                                |
+| `c`       | Comment                                    |
+| `u`       | Undo the last change                       |
+| `/`       | Search                                     |
+| `m`       | Move a board card to another column        |
+| `?`       | Show the shortcuts                         |
+
+## Live updates
+
+The list refreshes itself every 20 seconds.
+
+<NewIn>
+  The server streams changes over Server-Sent Events from `GET /api/stream` (`feedback.created`,
+  `feedback.updated`, `feedback.deleted`, `comment.created`, `presence`, and a `ping` every 25 s; optional
+  `projectIds=` query). Presence is a heartbeat every 20 s (`POST /api/presence {feedbackId}`) that expires 45
+  s after the last one. The dashboard is being updated to use the stream — live updates and "who else is
+  looking" arrive with it. Behind a reverse proxy, turn response buffering off for `/api/stream` — see
+  [reverse proxy](/docs/self-hosting/reverse-proxy).
+</NewIn>

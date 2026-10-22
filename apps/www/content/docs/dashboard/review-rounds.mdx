@@ -1,0 +1,58 @@
+---
+title: Review rounds
+description: Group a client review into a named round with a due date, track its progress and export it as CSV or PDF.
+---
+
+<NewIn>
+  Review rounds are new in 0.1. The server side — rounds, the widget's active round, exports and the
+  [API](#api) — is in place; the dashboard screens for them are still being built. Until they land, manage
+  rounds through the API at the end of this page.
+</NewIn>
+
+A **round** is one pass of review on a project — "Homepage v2 — client review 1" — with an optional due date.
+Feedback sent while a round is active joins it, so you can tell what this review produced, chase what's still open
+before the deadline, and hand the client a report at the end.
+
+## Create a round
+
+Open the project and create a round with a **name** (up to 120 characters) and, optionally, a **due date**. A round is
+`active` when created and `closed` when you close it; closing records when it ended. You can rename it, move the due
+date, reopen or delete it later. Deleting a round keeps its feedback — the items simply leave the round.
+
+Each round carries its counts — `counts: { total, open, closed }` — and `closedAt` once closed.
+
+## How feedback joins a round
+
+- **From the widget**: when a project has **exactly one** active round, the widget is told about it (`activeRound` in
+  `GET /w/config`) and new comments and bug reports are filed into it. The server also defaults new feedback to that
+  round, so older widgets join it too. With no active round, or several, feedback joins none.
+- **By hand**: set or change an item's round in the inbox (`PATCH /api/feedback/:id { "roundId": "…" }`), or remove it
+  with `null`. An item can only join a round of its own project.
+
+List a round's items with the `roundId` filter of `GET /api/feedback` (or `/api/v1/feedback`), or save that filter
+as a [view](/docs/dashboard/saved-views).
+
+## Export
+
+Export a round to share with a client or attach to an invoice:
+
+| Format  | Contents                                                                |
+| ------- | ----------------------------------------------------------------------- |
+| **CSV** | One row per item, for spreadsheets                                      |
+| **PDF** | A printable report, rendered on the server (no headless browser needed) |
+
+The export is `GET /api/rounds/:id/export?format=csv` or `?format=pdf` (CSV is the default).
+
+## API
+
+All under `/api`, with a dashboard session:
+
+| Endpoint                                     | Does                                              |
+| -------------------------------------------- | ------------------------------------------------- |
+| `GET /api/projects/:id/rounds`               | List a project's rounds                           |
+| `POST /api/projects/:id/rounds`              | Create `{ name, dueAt? }`                         |
+| `GET` / `PATCH` / `DELETE /api/rounds/:id`   | Read, update `{ name?, dueAt?, status? }`, delete |
+| `GET /api/rounds/:id/export?format=csv\|pdf` | Export                                            |
+
+`dueAt` is an ISO 8601 timestamp with offset, or `null` for no due date; `status` is `"active"` or `"closed"`. Rounds
+are also available to scripts through the [REST API and SDK](/docs/api/sdk).

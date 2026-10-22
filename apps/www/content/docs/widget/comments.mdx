@@ -1,0 +1,122 @@
+---
+title: Comments
+description: How visitors pin comments on elements, regions and text, and how threads, resolving and deep links work.
+---
+
+Comment mode is the Figma-style half of the widget: point at something on the live page and say what's wrong.
+Every comment is anchored to the element it was left on ([Anchoring](/docs/widget/anchoring)), so it stays in
+place across scrolling, breakpoints and redesigns.
+
+## Leave a comment
+
+Open the launcher and choose **Add a comment**, or press <kbd>C</kbd>. The page is covered by a transparent
+layer, so clicks and drags never trigger your own handlers or select text, and a hint bar shows the controls.
+
+| Gesture                           | Result                                                                                                                                      |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Click                             | A **pin** on the element under the cursor, at the exact point clicked.                                                                      |
+| Drag (more than 5 px)             | A **region**: a rectangle anchored to the smallest element that contains all of it. Regions under 8 × 8 px count as a click.                |
+| Hold <kbd>Shift</kbd>             | Target the parent of the hovered element.                                                                                                   |
+| Arrow keys, then <kbd>Enter</kbd> | Walk the DOM without a mouse: ↑ parent, ↓ first child, ← → siblings; Enter picks the outlined element.                                      |
+| <kbd>Esc</kbd>                    | Leave comment mode.                                                                                                                         |
+| Touch: long-press, then drag      | Long-press (≈ 0.5 s) to pin; keep the finger down and drag to select a region. Before the long-press fires, a swipe still scrolls the page. |
+
+The composer opens next to the pin (as a bottom sheet below 640 px). Visitors choose a type — **Comment**,
+**Bug**, **Idea** or **Question** — write their message (up to 10,000 characters) and, unless you identified
+them, can leave a name and email. The name and email are remembered in the browser for next time.
+
+<kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> sends. Pressing <kbd>Esc</kbd> on a composer with text asks
+for a second
+<kbd>Esc</kbd> before discarding it, and clicking the page outside only closes an empty composer.
+
+The pin appears immediately and gets its number (`#142`) when the server confirms. If sending fails, the
+composer reopens with the text, so nothing is lost.
+
+<Callout type="idea" title="Regions follow the layout">
+  A region is stored as percentages of its element's box, not as pixels, so it stretches with the element at
+  every breakpoint.
+</Callout>
+
+### Comment on selected text
+
+Select text on the page, then enter comment mode — or, with [right-click commenting](#right-click) on,
+right-click the selection — and the widget offers **Comment on selection**. The quote is stored with the
+comment and highlighted on the page whenever that text is still there; the thread shows it as a blockquote.
+
+### Right-click
+
+With `rightClickComment` enabled in the project settings, a plain right-click on the page opens the composer
+at the cursor. Right-clicks with a modifier key, on form fields, or from the keyboard context-menu key keep the
+browser menu. On a text selection the browser menu stays too (people usually want **Copy**) and the widget
+offers **Comment on selection** next to it.
+
+## Pins on the page
+
+When public read is on for the project, the widget places every open item of the current page: point pins
+as numbered avatars, regions as outlined areas, text comments as highlights. Hovering a pin previews it;
+clicking opens its thread. The launcher shows a badge with the number of open items, and the menu has
+**View comments** and **Hide comments / Show comments**.
+
+A pin whose element was found with lower confidence (the page changed) is marked **Moved?**. Items whose
+element is gone entirely are listed in the side panel as **Not on page** instead of being dropped — see
+[Anchoring](/docs/widget/anchoring#moved-and-orphaned-pins).
+
+## Threads
+
+A thread card shows the original comment, its public replies (team members get a **Team** badge; internal
+notes from the dashboard never reach the page) and, if the project defines them, [panel
+actions](/docs/widget/panel-actions).
+
+- **Reply** — type in the box at the bottom; <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> sends. Replies share the
+  report rate limit.
+- **Resolve / Reopen** — allowed when the project lets visitors resolve (`visitorsCanResolve`, on by default),
+  or always for the browser that created the item: the server hands that browser a one-time reporter token,
+  kept in `localStorage`. Resolved items leave the page until someone turns on **Show resolved**.
+- **Copy link** — copies a deep link to the thread.
+
+In read-only mode, threads are visible but replying and resolving are hidden.
+
+## Deep links
+
+Any page URL with `?pinwren=<feedback id>` opens with that thread showing: the widget scrolls to the pin,
+pulses it and opens the card. If the item is resolved, the widget looks it up among closed items; if its
+element is gone, it opens the side panel with the thread. The page's own query string and hash are kept.
+
+```text
+https://example.com/pricing?plan=pro&pinwren=7b0c5c1e-…
+```
+
+The dashboard's **Open on page** button uses the same links.
+
+## Side panel
+
+**View comments** opens a panel listing every item of the current page, including those not placed on it.
+
+- Filters: **Open**, **Resolved**, **Mine** (items sent from this browser), plus search and a **Show resolved**
+  switch for the pins on the page.
+- Selecting a row scrolls to its pin and opens the thread.
+- **Export** downloads the rows currently listed as **CSV** or **JSON**, built in the browser from data the
+  widget already has. Columns: number, kind, status, title, body, author, created, page URL and deep link. The
+  CSV opens cleanly in Excel (UTF-8 with BOM) and neutralises cells that a spreadsheet would run as a formula.
+
+Below 640 px the panel goes full screen.
+
+## Keyboard shortcuts
+
+| Key                                             | Where           | Action                               |
+| ----------------------------------------------- | --------------- | ------------------------------------ |
+| <kbd>C</kbd>                                    | Page            | Start (or stop) comment mode         |
+| <kbd>B</kbd>                                    | Page            | Report a bug                         |
+| <kbd>Esc</kbd>                                  | Anywhere        | Close the card, menu, offer or panel |
+| <kbd>↑</kbd> <kbd>↓</kbd>                       | Launcher menu   | Move between items                   |
+| <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> | Composer, reply | Send                                 |
+
+Shortcuts never fire while focus is in a text field — yours or the widget's — or with
+
+<kbd>Ctrl</kbd>/<kbd>⌘</kbd>/<kbd>Alt</kbd> held. Turn them off with the project's `shortcuts` setting.
+
+## Accessibility
+
+Every control is a real button reachable by keyboard. Cards and dialogs trap focus and give it back to
+whatever opened them; pins carry labels such as “Comment 3 by Maria: Logo too small”; toasts are announced
+through a live region; motion is reduced when the visitor asks for it.

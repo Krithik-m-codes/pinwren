@@ -1,0 +1,98 @@
+---
+title: Anchoring
+description: How pins find their element again after re-renders, layout changes and redesigns — and how to make that bulletproof.
+---
+
+A pin isn't stored as a pixel position. When someone comments, the widget records several independent ways to
+find that element again — an **anchor bundle** — plus where on the element the pin or region sits, as
+percentages of its box. On every page load each pin is resolved against the live DOM, so pins survive
+scrolling, responsive breakpoints, re-renders and most redesigns.
+
+## What is recorded
+
+| Part         | Contents                                                                                                                                            |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Attributes   | `data-pinwren-anchor`, `data-testid`, a stable `id`, `aria-label` and `name`, when present.                                                         |
+| CSS selector | A short unique selector that skips generated class names (CSS-in-JS, CSS modules, hashes) and generated ids (React `:r1:`, UUIDs, long digit runs). |
+| XPath        | The element's position in the document tree.                                                                                                        |
+| Text         | The element's normalised text (up to 120 characters) and the text of its previous and next siblings.                                                |
+| Structure    | Tag, role, depth, index among its siblings and a hash of its children's tags.                                                                       |
+| Geometry     | The element's box, the viewport size and the scroll position at the time.                                                                           |
+| Pin          | `xPct`/`yPct` (the click point, or a region's top-left corner) and, for regions, `wPct`/`hPct` — all relative to the element.                       |
+| Text range   | For comments on a selection: offsets and the quoted text (up to 500 characters).                                                                    |
+
+## How a pin is found again
+
+Strategies run from most to least reliable; the first that succeeds wins:
+
+<Steps>
+<Step>
+
+**Explicit attributes** — `[data-pinwren-anchor="…"]`, then `[data-testid="…"]`, then `#id`. Used only when
+exactly one element matches. Confidence 1.0.
+
+</Step>
+<Step>
+
+**CSS selector** — if it matches exactly one element _and_ that element's text is still at least 60 % similar
+to the recorded text. Confidence 0.9.
+
+</Step>
+<Step>
+
+**XPath** — if it points at an element with the same tag and similar text. Confidence 0.8.
+
+</Step>
+<Step>
+
+**Fuzzy match** — every element with the same tag is scored on text similarity (60 %), the previous and next
+siblings' text (15 % each) and distance from the recorded position (10 %). The best score above 0.65 wins.
+
+</Step>
+</Steps>
+
+Text similarity is a bigram (Dice) comparison, so small copy edits, reordered words and changed numbers still
+match, while a selector that now points at a different element is rejected.
+
+## Moved and orphaned pins
+
+- **Moved?** — a pin resolved with confidence below 0.8 (XPath or fuzzy match) is drawn with a dashed amber outline and
+  a **Moved?** chip on its preview and thread: it is probably right, but the page changed. Its label also says “may have moved”.
+- **Not on page** — when no strategy finds the element (removed, renamed beyond recognition, or behind a
+  closed tab), the pin is not drawn. It stays in the side panel marked **Not on page**, where its thread can
+  still be read and replied to. Nothing is silently lost.
+
+Pins re-resolve whenever the URL changes (SPA navigation) and re-position on scroll, resize and DOM changes. A
+pin whose element is hidden (`display: none`, zero size) hides with it and comes back when the element does.
+
+## Make anchors bulletproof
+
+Add `data-pinwren-anchor` to the elements reviewers comment on most — sections, cards, navigation, key
+components. It is the first thing the widget looks for, so those pins survive any redesign that keeps the
+attribute:
+
+```html
+<section data-pinwren-anchor="pricing-table">…</section>
+<button data-pinwren-anchor="checkout-pay">Pay now</button>
+```
+
+Values must be unique on the page (up to 200 characters). If you already use `data-testid` for tests, the
+widget uses those too.
+
+<Callout type="warn" title="Ids that change on every render">
+  Generated ids are ignored on purpose, but other unstable markup can still mislead the CSS selector — for
+  example list items rendered in a random order. A `data-pinwren-anchor` on the item fixes it.
+</Callout>
+
+## Regions and text
+
+- A **region** is anchored to the smallest element that fully contains the dragged rectangle and stored as
+  percentages of that element, so it scales with it.
+- A **text comment** stores the quote and its offsets inside the element. The highlight is drawn only while the
+  quoted text is still found on the page; otherwise the pin falls back to the element.
+
+## Page scope
+
+Pins belong to the page URL they were left on (without the hash, with the query string sorted). To share pins
+across pages built from one template — every `/product/:id` — set a URL pattern; see
+[Visibility & page scope](/docs/widget/visibility#page-scope).

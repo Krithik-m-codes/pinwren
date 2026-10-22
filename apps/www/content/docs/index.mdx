@@ -1,0 +1,87 @@
+---
+title: Introduction
+description: Pinned feedback and annotated bug reports for any website, with a triage inbox you run yourself.
+---
+
+Pinwren adds a feedback widget to any website with one script tag. Clients and teammates point at the exact
+element that is wrong and say why — as a pinned comment or as a bug report with an annotated screenshot and
+the technical context a developer needs. Everything lands in a keyboard-first inbox on your own server.
+
+## Two modes, one widget
+
+| Mode           | What the visitor does                                                                                                     | What your team gets                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Comment**    | Clicks an element, drags a region or selects text, then writes a comment, Figma-style. Replies in a thread on the page.   | A pin anchored to the DOM element — not to pixels — so it finds its place again after layout changes and redesigns.     |
+| **Bug report** | Captures the viewport, the full page, one element or a shared screen, then draws, boxes, adds arrows and text, pixelates. | The annotated screenshot plus console messages, failed or slow requests, browser, OS, viewport, locale and page timing. |
+
+Pins are anchored with several independent strategies — CSS selector, XPath, test id, text and geometry — so a
+comment left on staging still points at the right button after the next deploy. Read more in
+[Anchoring](/docs/widget/anchoring).
+
+## The inbox
+
+Reports from every project arrive in one triage inbox: list, detail and board views, filters and search, bulk
+edits with undo, and keyboard shortcuts for everything (`j`/`k`, `e`, `s`, `p`, `a`, `x`, `u`, `/`). **Page
+review** lays each page's pins over the captured screenshot. Statuses, priorities, assignees, internal and
+public comments and an activity timeline make it a workflow, not a mailbox. See [Dashboard](/docs/dashboard).
+
+## Routing
+
+Feedback does not have to stay in Pinwren. Email and in-app notifications tell the right people; signed
+[webhooks](/docs/integrations/webhooks) post to your own services, [Slack](/docs/integrations/slack) and
+[Discord](/docs/integrations/discord); [GitHub](/docs/integrations/github) and
+[GitLab](/docs/integrations/gitlab) issues stay in sync both ways. Scoped tokens open the
+[REST API](/docs/api), and the [MCP server](/docs/api/mcp) lets AI coding agents such as Claude Code and Cursor
+read and resolve feedback.
+
+## How the pieces fit
+
+```text
+ your website                          your server (one container)               storage
+ widget.js   ── /w/* (public key ──▶  Next.js dashboard + Hono API  ──────────▶  Postgres
+ closed         + allowed origin)      at /api and /w, background               disk or S3
+ Shadow DOM                            jobs on Postgres (pg-boss)
+```
+
+- The **widget** talks only to your Pinwren server. It identifies itself with the project's public key and is
+  accepted only from the origins you allow — no secret ever reaches the browser.
+- The **server** is one container: the dashboard, the API and the widget bundles. Postgres is the only service
+  it needs; uploaded files go to a volume or any S3-compatible bucket.
+- **Your team** signs in to the dashboard on the same server.
+
+| Package                                           | What it is                                                   | Licence  |
+| ------------------------------------------------- | ------------------------------------------------------------ | -------- |
+| Server and dashboard (`apps/web`, `packages/api`) | The app you self-host: dashboard, API, jobs, email, webhooks | AGPL-3.0 |
+| `@pinwren/widget`                                 | The embeddable widget, as a script tag or from npm           | MIT      |
+| `@pinwren/react`                                  | React component and hook around the widget                   | MIT      |
+| `@pinwren/sdk`                                    | Typed client for the REST API (`/api/v1`)                    | MIT      |
+| `@pinwren/mcp`                                    | MCP server for AI coding agents                              | MIT      |
+| `@pinwren/cli`                                    | `pinwren init`, `doctor` and `status` from your terminal     | MIT      |
+
+<NewIn>
+  The React component, SDK, MCP server and CLI are new in this release. Everything you embed in your own site
+  or tools is MIT-licensed, so it places no obligations on your code — see [Editions &
+  licensing](/docs/licensing).
+</NewIn>
+
+<Callout title="Status: v0.1">
+  The core loop — pin, report, triage, sync to your tracker — works and is covered by unit, Playwright and
+  end-to-end tests. Expect rough edges and breaking changes before 1.0.
+</Callout>
+
+## Next steps
+
+<Cards>
+  <Card title="Quickstart" href="/docs/quickstart">
+    Run Pinwren with Docker and see your first pin in five minutes.
+  </Card>
+  <Card title="Install the widget" href="/docs/widget">
+    Script tag, npm or React — and every option it takes.
+  </Card>
+  <Card title="Self-hosting" href="/docs/self-hosting">
+    Compose, environment, reverse proxy, storage, backups and scaling.
+  </Card>
+  <Card title="Try the demo" href="/demo">
+    The real widget on a sample page — no sign-up.
+  </Card>
+</Cards>

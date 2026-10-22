@@ -1,0 +1,267 @@
+---
+title: Configuration
+description: Every widget, capture and branding option, its default, and where it is set.
+---
+
+Widget settings live **per project on the server**, not in your snippet. You change them in the dashboard
+(project › Widget), they are stored in the database, and the widget fetches them on every page load from
+`GET /w/config`. A change reaches every page that embeds the project at the next load — no redeploy.
+
+The server always sends every key with its default filled in, and the widget validates each value again
+before using it: an unknown or malformed value falls back to its default instead of breaking the page.
+
+```json title="GET /w/config (abridged)"
+{
+  "project": { "name": "Marketing site", "slug": "marketing-site", "publicRead": true },
+  "widget": {
+    "launcher": { "position": "bottom-right", "accent": "#5b5bd6" },
+    "modes": { "comment": true, "bug": true }
+  },
+  "capture": { "console": "warnings", "network": "failures" },
+  "branding": { "hidePoweredBy": false, "dialogAccent": null, "logoUrl": null }
+}
+```
+
+On the page itself you can only override the launcher colour (`data-accent` or the `accent` init option) and
+the language (`data-locale` / `locale`) — see [Install](/docs/widget#script-attributes).
+
+## Launcher
+
+<TypeTable
+  type={{
+    "launcher.position": {
+      type: '"bottom-right" | "bottom-left" | "top-right" | "top-left"',
+      description: "Corner of the viewport the launcher sits in. The menu opens from the same corner.",
+      default: '"bottom-right"',
+    },
+    "launcher.offset": {
+      type: "{ x: number; y: number }",
+      description: "Distance from the corner in pixels, 0–400 each.",
+      default: "{ x: 20, y: 20 }",
+    },
+    "launcher.shape": {
+      type: '"round" | "pill"',
+      description: "A round icon button, or a pill with a text label.",
+      default: '"round"',
+    },
+    "launcher.label": {
+      type: "string | null",
+      description:
+        "Pill text, up to 40 characters. The default text follows the visitor's language; a custom label is shown as written.",
+      default: '"Feedback"',
+    },
+    "launcher.icon": {
+      type: '"pin" | "comment" | "bug"',
+      description: "Icon on the launcher.",
+      default: '"pin"',
+    },
+    "launcher.accent": {
+      type: "string",
+      description: "Hex colour (#rgb or #rrggbb) for the launcher, pins and highlights.",
+      default: '"#5b5bd6"',
+    },
+    "launcher.tooltip": {
+      type: "string | null",
+      description: "Tooltip of the round launcher and its accessible name, up to 80 characters.",
+      default: '"Give feedback"',
+    },
+    "launcher.hidden": {
+      type: "boolean",
+      description:
+        "Hide the launcher. The widget still runs: open it with the keyboard shortcuts or Pinwren.open().",
+      default: "false",
+    },
+  }}
+/>
+
+## Behaviour
+
+<TypeTable
+  type={{
+    "modes.comment": {
+      type: "boolean",
+      description: "Offer “Add a comment” (pins, regions, text selections).",
+      default: "true",
+    },
+    "modes.bug": {
+      type: "boolean",
+      description: "Offer “Report a bug” (screenshot, annotation, diagnostics).",
+      default: "true",
+    },
+    shortcuts: {
+      type: "boolean",
+      description:
+        "C starts a comment, B starts a bug report, Esc closes. Never fires while typing in a field.",
+      default: "true",
+    },
+    rightClickComment: {
+      type: "boolean",
+      description:
+        "Right-clicking the page opens a comment composer at the cursor instead of the browser menu.",
+      default: "false",
+    },
+    readOnly: {
+      type: "boolean",
+      description:
+        "Visitors can see pins and threads but not comment, reply, report or resolve. The API also refuses writes (403 READ_ONLY).",
+      default: "false",
+    },
+    visitorsCanResolve: {
+      type: "boolean",
+      description:
+        "Any visitor may resolve and reopen pins. When off, only the browser that created a pin can.",
+      default: "true",
+    },
+    "consent.enabled": {
+      type: "boolean",
+      description: "Show a one-time notice the visitor accepts before their first submission.",
+      default: "false",
+    },
+    "consent.text": {
+      type: "string | null",
+      description: "Custom notice text, up to 1,000 characters. null uses the built-in, translated text.",
+      default: "null",
+    },
+    "consent.privacyUrl": {
+      type: "string | null",
+      description: "http(s) link to your privacy policy, shown under the notice.",
+      default: "null",
+    },
+    panelActions: {
+      type: "PanelAction[]",
+      description: "Up to 5 custom buttons on a thread — see Panel actions.",
+      default: "[]",
+    },
+    privacyMode: {
+      type: "boolean",
+      description:
+        "Mask every text field in screenshots, drop timing data, coarsen the user agent and force the consent notice on — see Privacy & masking.",
+      default: "false",
+    },
+  }}
+/>
+
+The project's **public read** switch (`publicRead`, on by default) decides whether visitors see existing
+feedback at all. When it is off, the widget shows no pins, no “View comments” entry and no side panel —
+people can still send feedback.
+
+See [Panel actions](/docs/widget/panel-actions) and [Privacy & masking](/docs/widget/privacy) for those two
+settings in detail.
+
+## Visibility
+
+<NewIn>
+  New in 0.1, like `capture.replay` below. The dashboard's project settings don't have controls for these two
+  yet; set them with `PATCH /api/projects/:id` and a partial `widgetConfig` (`{ "visibility": { … } }`) or
+  `captureConfig` (`{ "replay": { … } }`), which is merged into the stored settings.
+</NewIn>
+
+<TypeTable
+  type={{
+    "visibility.environments": {
+      type: '"all" | "non-production"',
+      description:
+        "With non-production, the widget hides itself on production hosts and shows on localhost, LAN addresses, .local/.test hosts and staging/preview/dev subdomains.",
+      default: '"all"',
+    },
+    "visibility.minViewportWidth": {
+      type: "number",
+      description: "Below this viewport width (px) the widget stays hidden. 0 = always.",
+      default: "0",
+    },
+  }}
+/>
+
+The rules run in the browser only; `data-force-show` overrides them. Details in
+[Visibility & page scope](/docs/widget/visibility).
+
+## Capture
+
+<TypeTable
+  type={{
+    console: {
+      type: '"off" | "errors" | "warnings" | "all"',
+      description:
+        "Console levels kept for bug reports. errors also records uncaught errors and unhandled rejections.",
+      default: '"warnings"',
+    },
+    network: {
+      type: '"off" | "failures"',
+      description: "Record failed (status ≥ 400 or no response) and slow (> 3 s) fetch and XHR requests.",
+      default: '"failures"',
+    },
+    maskSelectors: {
+      type: "string[]",
+      description:
+        "Extra CSS selectors blocked out of every screenshot (and replay), up to 50. Invalid selectors are skipped.",
+      default: "[]",
+    },
+    screenshotOnComment: {
+      type: "boolean",
+      description:
+        "Reserved: stored with the project, not used by the widget yet. Bug reports always offer a screenshot.",
+      default: "false",
+    },
+    "replay.enabled": {
+      type: "boolean",
+      description: "Keep a rolling session-replay buffer that a bug report can include. New in 0.1.",
+      default: "false",
+    },
+    "replay.seconds": {
+      type: "number",
+      description: "Length of the buffer, 30–120 seconds. New in 0.1.",
+      default: "60",
+    },
+  }}
+/>
+
+What each level records, and how URLs are redacted, is described in
+[Bug reports](/docs/widget/bug-reports#diagnostics).
+
+## Branding
+
+<TypeTable
+  type={{
+    hidePoweredBy: {
+      type: "boolean",
+      description: "Remove “Powered by Pinwren” from the widget menu.",
+      default: "false",
+    },
+    dialogAccent: {
+      type: "string | null",
+      description:
+        "Hex colour for primary buttons in the widget's cards and dialogs. null = the launcher accent. Text on it switches between black and white for contrast.",
+      default: "null",
+    },
+    logoUrl: {
+      type: "string | null",
+      description:
+        "Logo in the bug report header: an https URL, or a logo uploaded to this Pinwren instance.",
+      default: "null",
+    },
+  }}
+/>
+
+<NewIn>
+  `hidePoweredBy` only takes effect with an Enterprise licence that has the `white_label` entitlement; without
+  one, the setting is kept but `/w/config` sends `false`. It is the only gated setting — see [Editions &
+  licensing](/docs/licensing).
+</NewIn>
+
+<Callout type="info" title="Privacy mode changes what the server sends">
+  With `privacyMode` on, `/w/config` always returns `consent.enabled: true` and caps `capture.console` at
+  `"errors"`, whatever is stored. Team-only and webhook panel actions are never sent to the page.
+</Callout>
+
+## Limits enforced by the server
+
+| Limit                      | Value                                                                                          |
+| -------------------------- | ---------------------------------------------------------------------------------------------- |
+| Reports and replies per IP | 10 per minute per project by default (`WIDGET_RATE_LIMIT_PER_MIN`, or the project's own limit) |
+| Comment body               | 10,000 characters                                                                              |
+| Screenshot                 | PNG, JPEG or WebP data URL                                                                     |
+| Attachments                | 3 files, 5 MB each, PNG, JPEG, WebP, GIF or PDF                                                |
+| Pins returned for a page   | 100 most recent open items                                                                     |
+
+Over the rate limit the API answers `429 RATE_LIMITED`; the widget shows the message and keeps bug reports in
+its [offline outbox](/docs/widget/bug-reports#offline-outbox).

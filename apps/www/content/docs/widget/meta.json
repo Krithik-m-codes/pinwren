@@ -1,0 +1,16 @@
+{
+  "title": "Widget",
+  "pages": [
+    "index",
+    "configuration",
+    "comments",
+    "bug-reports",
+    "anchoring",
+    "privacy",
+    "i18n",
+    "panel-actions",
+    "api",
+    "identity",
+    "visibility"
+  ]
+}

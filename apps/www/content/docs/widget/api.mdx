@@ -1,0 +1,126 @@
+---
+title: JavaScript API
+description: Start, open and close the widget from your own code, identify visitors and react to events.
+---
+
+Once `widget.js` has loaded, the widget is controlled through `window.Pinwren`. With the npm package, import
+the same functions instead — `import { init, open, on } from "@pinwren/widget"` — they queue calls until the
+widget has loaded. Every method is wrapped: a
+bad argument or an internal error is logged as `[pinwren] …` and never thrown into your code.
+
+## Methods
+
+| Method                             | What it does                                                                                                                                                                                         |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Pinwren.init(options)`            | Start the widget. Needed when the script tag has no `data-project`, or with the npm package. A second call is ignored — one widget per page.                                                         |
+| `Pinwren.open(mode?)`              | `"comment"` starts comment mode, `"bug"` opens a bug report, `"panel"` opens the side panel; no argument opens the launcher menu. Calls made before the widget is ready are kept and run once it is. |
+| `Pinwren.close()`                  | Close whatever is open: menu, comment mode, card, panel or bug report.                                                                                                                               |
+| `Pinwren.on(event, handler)`       | Subscribe to an event. Returns a function that unsubscribes.                                                                                                                                         |
+| `Pinwren.identify(user, options?)` | Prefill the reporter's name and email; `{ id }` plus `{ signature }` makes a verified reporter — see [Identity](/docs/widget/identity).                                                              |
+| `Pinwren.destroy()`                | Full teardown: removes the DOM, every listener, the console/network wrappers and timers. `init()` can start it again.                                                                                |
+| `Pinwren.setPageScope(scope)`      | Group pins by a URL pattern — see [page scope](/docs/widget/visibility#page-scope). <sup>New in 0.1</sup>                                                                                            |
+
+`open("comment")` and `open("bug")` do nothing when that mode is turned off for the project or the project is
+read-only.
+
+### `init` options
+
+<TypeTable
+  type={{
+    projectKey: { type: "string", description: "The project's public key (pk_…).", required: true },
+    endpoint: {
+      type: "string",
+      description:
+        "Origin of your Pinwren server, e.g. https://feedback.example.com, without a trailing slash.",
+      required: true,
+    },
+    accent: { type: "string", description: "Launcher colour override (hex)." },
+    locale: { type: "string", description: "UI language, e.g. fr. Defaults to the browser's." },
+    forceShow: {
+      type: "boolean",
+      description: "Show the widget even where the project's visibility rules would hide it. New in 0.1.",
+    },
+    urlPattern: {
+      type: "string",
+      description: "Page scope for pins and new feedback, e.g. /product/:id. New in 0.1.",
+    },
+    nonce: {
+      type: "string",
+      description:
+        "npm package only: CSP nonce for the widget.js script it adds (and its chunks). New in 0.1.",
+    },
+    allowReplayInPrivacyMode: {
+      type: "boolean",
+      description:
+        "Keep session replay on in privacy mode (all text is then masked; consent is up to you). New in 0.1.",
+    },
+  }}
+/>
+
+```ts
+Pinwren.init({ projectKey: "pk_…", endpoint: "https://feedback.example.com", locale: "de" });
+```
+
+## Events
+
+| Event    | Handler receives       | Fires when                                                                                                                             |
+| -------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `ready`  | nothing                | The configuration is loaded and the pins are placed. A handler added later still runs once.                                            |
+| `open`   | `{ mode }`             | The widget goes from idle to open. `mode` is what opened first: `"menu"`, `"comment"`, `"bug"`, `"panel"`, `"composer"` or `"thread"`. |
+| `close`  | nothing                | Nothing is open any more.                                                                                                              |
+| `submit` | `{ id, number, kind }` | The server stored a comment or bug report — including a queued report sent later.                                                      |
+| `error`  | `{ message }`          | Sending, replying, resolving or loading a part of the widget failed. `message` is the text shown to the visitor.                       |
+
+```ts
+const off = Pinwren.on("submit", ({ id, number, kind }) => {
+  analytics.track("feedback_sent", { id, number, kind });
+});
+
+Pinwren.on("error", ({ message }) => console.warn("Pinwren:", message));
+
+// later
+off();
+```
+
+Handlers run inside a `try`/`catch`: an exception in your handler is logged and doesn't affect the widget or
+other handlers. `open` and `close` fire once per session of use — moving from the menu to comment mode doesn't
+emit a `close` in between.
+
+## Calling the API before the script loads
+
+With `async`, `widget.js` may load after your own code. Queue calls on a stub and the widget replays them, in
+order, as soon as it loads:
+
+```html title="index.html"
+<script>
+  window.Pinwren = window.Pinwren || { q: [] };
+  window.Pinwren.q.push(["identify", { name: "Ada Lovelace", email: "ada@example.com" }]);
+  window.Pinwren.q.push(["on", "submit", (e) => console.log("Feedback #" + e.number)]);
+</script>
+<script src="https://feedback.example.com/widget.js" data-project="pk_…" async></script>
+```
+
+Each entry is `[method, ...arguments]`. Unknown methods are skipped.
+
+## Your own launcher
+
+Hide the built-in launcher (`launcher.hidden` in the project's widget settings) and open the widget from your
+UI:
+
+```html
+<button type="button" onclick="Pinwren.open('comment')">Comment on this page</button>
+<button type="button" onclick="Pinwren.open('bug')">Report a problem</button>
+```
+
+The keyboard shortcuts (<kbd>C</kbd>, <kbd>B</kbd>) keep working unless you turn them off too.
+
+## Single-page apps
+
+Nothing to wire up: the widget watches the URL and reloads the pins of the new page on navigation. If your
+framework replaces the whole document body, the widget survives — it is attached to `<html>`, not `<body>`.
+Call `Pinwren.destroy()` when you want it gone, for example on a route where feedback makes no sense.
+
+<NewIn>
+  The npm package ships TypeScript types for this API (`PinwrenApi`, `PinwrenOptions`, `PinwrenUser`, the
+  event payloads), and the React component wraps it — see [Install](/docs/widget).
+</NewIn>

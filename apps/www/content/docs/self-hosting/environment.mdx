@@ -1,0 +1,70 @@
+---
+title: Environment variables
+description: Every environment variable the Pinwren server reads, with its type, default and effect.
+---
+
+Pinwren validates its configuration when it starts. A missing or invalid value stops the server with one
+message that lists every problem, for example:
+
+```text
+Invalid Pinwren configuration:
+  - PINWREN_URL: PINWREN_URL must be the public URL, e.g. https://feedback.example.com
+  - PINWREN_SECRET: PINWREN_SECRET must be at least 32 characters
+```
+
+Only three variables are required: `DATABASE_URL`, `PINWREN_URL` and `PINWREN_SECRET`. Everything else has a
+default.
+
+## Environment beats the dashboard
+
+Some settings can be edited by an admin in the dashboard **and** set in the environment — SMTP, the session
+lifetime and the update check. The rule is the same for all of them:
+
+- The value an admin saves lives in the database.
+- A variable set in the environment **overrides** that value and **locks** the field: the dashboard shows it
+  as read-only, and saving it is refused with `409 SETTING_LOCKED`.
+- Remove the variable and restart to hand the setting back to the dashboard.
+
+Use the environment for anything you manage as code; use the dashboard for anything you want admins to change
+without a redeploy.
+
+<Callout type="warn" title="With Docker Compose">
+  `docker/compose.yml` forwards only the variables listed under its `environment:` key. To set anything else,
+  add it there or in an override file — see [Passing more settings](/docs/self-hosting#passing-more-settings).
+</Callout>
+
+## Reference
+
+<EnvTable />
+
+The table is generated on every build from the Zod schema the server validates its configuration with,
+[`packages/api/src/env.ts`](https://github.com/Krithik-m-codes/pinwren/blob/main/packages/api/src/env.ts),
+plus the few variables read elsewhere (the cluster entry, the database pools and migrations). Boolean
+variables accept `true`, `false`, `1` or `0`, except `PINWREN_DISABLE_SIGNUP`, which takes `true` or `false`.
+
+## Compose-only variables
+
+`docker/compose.yml` reads a few more values from `docker/.env` to wire the containers together. They are not
+passed to Pinwren itself.
+
+| Variable            | Default          | What it does                                                                                                  |
+| ------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_PASSWORD` | — (required)     | Password of the `pinwren` database user; compose builds `DATABASE_URL` from it.                               |
+| `PINWREN_IMAGE`     | `pinwren:latest` | The image to run. Set `ghcr.io/krithik-m-codes/pinwren:<version>` to use a release instead of building.       |
+| `PINWREN_PORT`      | `3000`           | Host port the app is published on.                                                                            |
+| `PINWREN_BIND`      | `127.0.0.1`      | Host address the port is bound to. `0.0.0.0` exposes it on every interface (not recommended without a proxy). |
+
+The compose file also sets `PINWREN_TRUST_PROXY=1` by default, because it expects a reverse proxy in front.
+Set `PINWREN_TRUST_PROXY=false` if clients reach the container directly — otherwise they could forge the
+`X-Forwarded-For` address the rate limits use.
+
+## Generating secrets
+
+```bash
+openssl rand -base64 48   # PINWREN_SECRET
+openssl rand -hex 24      # POSTGRES_PASSWORD
+```
+
+`PINWREN_SECRET` signs sessions and derives the AES-256-GCM key that encrypts stored credentials (the SMTP
+password, webhook signing secrets, tracker tokens). Changing it signs everyone out, and those stored secrets
+must be entered again.
