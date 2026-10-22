@@ -16,6 +16,9 @@ next-env.d.ts
 # Generated
 packages/db/drizzle/meta
 apps/web/public/widget*.js
+apps/www/public/demo-api
+apps/www/.source
+apps/www/src/generated
 **/e2e/__screenshots__
 **/e2e/.auth
 **/test-results

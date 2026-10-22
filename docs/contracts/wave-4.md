@@ -88,3 +88,82 @@ minViewportWidth: number (default 0) }` — widget-side only; `forceShow` via `d
 (rrweb record), `widget-i18n-<locale>.js`. All chunk URLs are content-hashed (`widget-panel.<hash>.js`) with a small
 manifest inlined into `widget.js` so CDNs can cache them immutably; `widget.js` itself stays un-hashed with
 `Cache-Control: max-age=300`.
+
+## 8. Widget implementation notes (widget agent, built)
+
+- **Files** (§7): `widget.js` + `widget-<chunk>.<10-hex>.js` / `widget-i18n-<code>.<10-hex>.js`, written to
+  `packages/widget/dist/` and `apps/web/public/` (stale hashed files are deleted on every build);
+  `dist/manifest.json` lists names and sizes. Chunks load from the directory `widget.js` was served from (so a
+  CDN copy works with `data-endpoint` pointing at the API). **Headers for the web app**: `/widget.js` →
+  `Cache-Control: public, max-age=300`; `/widget-*.<hash>.js` (regex `^/widget-[\w-]+\.[0-9a-f]{10}\.js$`) →
+  `Cache-Control: public, max-age=31536000, immutable`; both `Content-Type: text/javascript; charset=utf-8`
+  and `Access-Control-Allow-Origin: *` (scripts are loaded cross-origin by customer sites); serve brotli/gzip.
+- **Identity** (§4): `POST /w/feedback` sends `reporter: { name?, email?, externalId: <id>, signature? }`
+  (signature only with an id, lower-case hex). Replies (`POST /w/feedback/:id/comments`) send the same fields
+  in `author`; the server may ignore them there.
+- **Consent** (§6): `version` is computed by the widget as `1-<8 hex>` (FNV-1a of the notice text — `(built-in
+text)` when null — and the privacy URL), so a changed notice is asked for again; `acceptedAt` is the ISO time
+  of acceptance. Sent on every submission after acceptance, never when the notice is disabled.
+- **Replay** (§3): rrweb **2.1.7** events (`@rrweb/record`), so the dashboard needs rrweb-player / rrweb 2.x.
+  Checkout every 10 s; the buffer keeps whole segments covering at least `seconds`. Frozen when the bug report
+  opens, gzipped on send; the reporter can switch it off. Off in privacy mode unless the host page sets
+  `allowReplayInPrivacyMode` (init option / `data-allow-replay-in-privacy-mode`); then all text is masked too.
+- **Visibility** (§4): see `packages/widget/src/visibility.ts` for the production-host definition.
+
+## 9. Backend implementation notes (backend agent, built)
+
+Clarifications and the few additions made while building §1–§6. Request/response schemas are in `@pinwren/core`
+(`realtime.ts`, `rounds.ts`, `license.ts`, `api-types.ts`, `url-pattern.ts`).
+
+- **Stream (§1)**: on connect the server sends `retry: 3000` and an immediate `ping`, then the `Last-Event-ID` backlog
+  and a `presence` snapshot. Event ids are `<worker>.<seq>`; ids from another worker replay nothing. `presence` data
+  also carries `projectId`; `feedback.updated` `changes` is field → `{ from, to }` (values dropped with
+  `truncated: true` above the 7 KB cap). Streams close after 15 min so the session is re-checked; EventSource
+  reconnects with `Last-Event-ID`. Presence is one location per user (the latest heartbeat wins); `POST /api/presence`
+  → `{ ok: true }`, `404` for an unknown item. `?projectIds=` with a project of another org → `404`.
+- **Rounds (§2)**: round = `{ id, projectId, name, dueAt, status, closedAt, createdBy, createdAt, updatedAt, counts:
+{ total, open, closed } }` (`{ round }` / `{ rounds }`, active first). Closing sets `closedAt`; deleting a round keeps
+  its items (`roundId` → null). `PATCH /api/feedback/:id { roundId }` to a round of another project → `400
+INVALID_ROUND`. Ingest: an explicit `roundId` is used only if it is an _active_ round of the project; otherwise the
+  single active round (if exactly one), else none (never an error). Exports: `attachment` downloads; CSV is RFC 4180
+  with a BOM, formula-looking cells prefixed with `'`; PDF is a text-only A4 document (own writer, Helvetica, no
+  fonts to bundle). Views = `{ id, name, filters, layout, shared, ownerId, owner: { id, name }, mine, createdAt,
+updatedAt }` (`{ view }` / `{ views }`); `filters` is `viewFilters` (the list query without paging, no defaults).
+  Shared views can be edited/deleted by their owner or org admins (`403` otherwise); others' personal views are `404`.
+- **List filters (new)**: `GET /api/feedback` and `/api/v1/feedback` also take `priority`, `roundId`, `assigneeId`,
+  `page` (substring of the page URL) and `since` (ISO); list items add `roundId` and `hasReplay`.
+- **Replay (§3)**: stored only when the project's `capture.replay.enabled` is on (otherwise silently dropped); bad
+  bytes or > 10 MB → `400 INVALID_REPLAY`. Assets carry `meta: { durationMs, events }`. **Open:** Next.js's proxy
+  truncates request bodies at 10 MB (`middlewareClientMaxBodySize`), so a 10 MB replay (≈ 13.4 MB as base64 JSON)
+  needs `apps/web/next.config.ts` to raise that limit (e.g. `"32mb"`); until then requests over 10 MB fail as `400`.
+- **Identity (§4)**: the widget sends `reporter: { name?, email?, externalId, signature? }` on `POST /w/feedback` and the
+  same in `author` on `POST /w/feedback/:id/comments`; the server stores `{ name, email, externalId, verified }`
+  (never the signature). Pins add `reporterVerified` and `pageUrl`; widget comments add `authorVerified`.
+  `GET /api/projects/:id/identity-secret` → `{ secret }` (`idsec_…`, org admins, created on first read),
+  `POST …/identity-secret/rotate` → `{ secret }`; projects add `hasIdentitySecret`.
+- **URL patterns (§4)**: `GET /w/feedback?urlPattern=` matches pages reported with that exact pattern **or** whose path
+  matches it: `:name` = one segment, `*` = anything; origin, query and hash are ignored; trailing slash optional
+  (`urlPatternMatches()` / `urlPatternRegexSource()` in core). `url` is ignored when `urlPattern` is given.
+- **Viewer (§4)**: Better Auth knows the `viewer` role (invite with `role: "viewer"`). Writes a viewer may still make:
+  notifications read, notification preferences, presence, own API tokens, personal (non-shared) views, and
+  `/api/admin/*` (instance admin is a separate permission). A viewer's API token is read-only on `/api/v1` and `/mcp`.
+- **Public API additions (§5)**: `GET /api/v1/token` (who the token acts as: `{ token, user, orgId, role }`),
+  `GET /api/v1/projects` (with `openCount`; `feedback:read` covers it), `GET /api/v1/feedback/:id/reproduction`
+  (`{ feedbackId, markdown, steps, failingRequests, errors, replay }`), `GET /api/v1/assets/:id`,
+  `GET /api/v1/projects/:id/rounds`, `GET|PATCH /api/v1/rounds/:id`. `GET /api/health` adds `version`.
+  `/mcp` is stateless Streamable HTTP with JSON responses (no sessions, works across workers); no or bad token →
+  `401` with `WWW-Authenticate: Bearer`.
+- **Consent (§6)**: stored as given on `feedback.consent` and returned in the item detail.
+- **Unsubscribe (§6)**: `GET /api/unsubscribe?token=` shows a confirmation page (link scanners must not unsubscribe
+  anyone); `POST` to the same URL (the page's button, or RFC 8058 one-click from the mail client) unsubscribes.
+  Suppression is per organisation and checked when each reporter email is _sent_, so queued mail is stopped too.
+  Reporter emails carry an "Unsubscribe" footer link plus `List-Unsubscribe` / `List-Unsubscribe-Post`.
+- **Licence (§6)**: `GET /api/me/entitlements` → `entitlementsResponse` (`edition`, `status: none|valid|grace|expired|
+invalid`, `features`, `readOnly`, `license`, `error`, `seats`). Instance admins: `GET|POST|DELETE /api/admin/license`
+  (`POST { license: "<.lic text>" }`; invalid/tampered/unknown key → `400 INVALID_LICENSE`; `PINWREN_LICENSE_FILE` set →
+  `409 LICENSE_LOCKED`), answering `{ license: { …entitlements, source: "file"|"upload"|null, details } }`.
+  **White-label**: `widgetBranding.hidePoweredBy` is still saved without the entitlement but `/w/config` reports it
+  `false` (existing projects keep their setting; it takes effect once a licence with `white_label` is installed). After
+  the grace period the configured value keeps applying but changing it → `403 LICENSE_READ_ONLY`. Emails: without
+  `white_label` a custom product name gets "· Powered by Pinwren" in the footer; with it, the footer is only "Sent by
+  <name>". Nothing else is gated.

@@ -127,7 +127,7 @@ All under `/api`, session cookie, problem-details errors. Request schemas are in
 | `GET/POST /api/tokens`, `DELETE /api/tokens/:id`                             | Own tokens. Create `{ name, scopes: (feedback:read                                                                                                                                                                                                                                                                                                                                                                                                                                      | feedback:write | comments:write)[], expiresInDays? }`→`201 { token: { id, name, prefix, scopes, lastUsedAt, expiresAt, createdAt }, secret }` (**shown once**).                                                                                 |
 | `GET/PATCH /api/admin/settings/email`, `POST /api/admin/settings/email/test` | Instance admins only (`PINWREN_ADMIN_EMAILS`, else the first user): `{ email: { host, port, user, secure, from, passwordSet, locked: {field: bool}, configured } }`. PATCH fields (`password` write-only; null clears); env-locked fields → `409 SETTING_LOCKED`. Test → `{ sent: true, to }` or `{ sent: false, skipped, reason }` (never an HTTP error).                                                                                                                              |
 
-Public API (`Authorization: Bearer ann_…`): `GET /api/v1/feedback`, `GET/PATCH /api/v1/feedback/:id`,
+Public API (`Authorization: Bearer pwt_…`): `GET /api/v1/feedback`, `GET/PATCH /api/v1/feedback/:id`,
 `POST /api/v1/feedback/:id/comments` — same shapes as the dashboard routes; `401 INVALID_TOKEN`,
 `403 INSUFFICIENT_SCOPE`.
 

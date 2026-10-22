@@ -23,7 +23,7 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "test:e2e": "pnpm --filter @pinwren/widget build && pnpm --filter @pinwren/widget test:e2e && pnpm --filter @pinwren/web test:e2e",
+    "test:e2e": "pnpm --filter @pinwren/widget build && pnpm --filter @pinwren/widget test:e2e && pnpm --filter @pinwren/react test:e2e && pnpm --filter @pinwren/web test:e2e",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

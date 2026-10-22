@@ -165,6 +165,7 @@ Decisions are recorded in [`docs/adr/`](docs/adr) and the
 | Path              | Package           | Licence  | What it is                                                                            |
 | ----------------- | ----------------- | -------- | ------------------------------------------------------------------------------------- |
 | `apps/web`        | `@pinwren/web`    | AGPL-3.0 | Next.js 16 dashboard; mounts the API at `/api` and `/w`                               |
+| `apps/www`        | `@pinwren/www`    | AGPL-3.0 | The website: landing page, docs (Fumadocs) and the live demo with an in-memory API    |
 | `packages/api`    | `@pinwren/api`    | AGPL-3.0 | Hono API: auth, dashboard and widget routes, jobs, email, webhooks, trackers, storage |
 | `packages/core`   | `@pinwren/core`   | AGPL-3.0 | Zod schemas and wire types, origin matching, security helpers                         |
 | `packages/db`     | `@pinwren/db`     | AGPL-3.0 | Drizzle schema and SQL migrations (Postgres)                                          |
@@ -196,6 +197,21 @@ pnpm --filter @pinwren/web dev -- -p 3100    # dashboard + API; migrations run o
 
 Try the widget on the demo page: allow `localhost:5173` in a project, run `node scripts/demo-server.mjs`,
 then open `http://localhost:5173/?key=<project key>&host=http://localhost:3100`.
+
+### The website (`apps/www`)
+
+The public site — landing page, documentation and the live demo — is its own Next.js app. It needs no
+database: the demo talks to an in-memory API in the app's route handlers, and the docs live as MDX in
+`apps/www/content/docs`. Before every dev, build and typecheck, `scripts/prepare.mjs` generates the environment
+reference from `packages/api/src/env.ts`, the changelog page from `CHANGELOG.md`, and copies the built widget
+from `packages/widget/dist` for the demo.
+
+```bash
+pnpm --filter @pinwren/widget build    # once, for the demo
+pnpm --filter @pinwren/www dev         # http://localhost:3200
+pnpm --filter @pinwren/www test:e2e    # Playwright on :3200 (builds and starts the site if it isn't running)
+docker build -f apps/www/Dockerfile -t pinwren-www . && docker run --rm -p 3200:3000 pinwren-www
+```
 
 ## Contributing
 

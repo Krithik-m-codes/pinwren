@@ -28,7 +28,7 @@ Next.js standalone server under `node:cluster` (ADR 0013), possibly with several
 5. **Secrets at rest** (SMTP password, webhook signing secrets): AES-256-GCM, key = HKDF-SHA256 of
    `PINWREN_SECRET`. The blueprint's separate `PINWREN_ENCRYPTION_KEY` with rotation is deferred; rotating
    `PINWREN_SECRET` today means re-entering those secrets.
-6. **API tokens:** `ann_` + 32 random bytes, scrypt-hashed (N=2^14, r=8, p=1; Node built-in, no native argon2
+6. **API tokens:** `pwt_` + 32 random bytes, scrypt-hashed (N=2^14, r=8, p=1; Node built-in, no native argon2
    dependency). The first 12 characters are stored as a unique lookup prefix. Verified secrets are remembered in
    memory for 5 min by SHA-256 so busy integrations don't pay scrypt per request; the row is re-read every time, so
    revocation is immediate.

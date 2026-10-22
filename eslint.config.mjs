@@ -10,6 +10,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 const WEB = "apps/web/**/*.{js,jsx,mjs,ts,tsx,mts}";
+const WWW = "apps/www/**/*.{js,jsx,mjs,ts,tsx,mts}";
 
 export default defineConfig(
   {
@@ -25,6 +26,9 @@ export default defineConfig(
       "**/playwright-report/**",
       "**/next-env.d.ts",
       "apps/web/public/**",
+      "apps/www/public/**",
+      "apps/www/.source/**",
+      "apps/www/src/generated/**",
       "packages/db/drizzle/**",
       "data/**",
     ],
@@ -40,11 +44,11 @@ export default defineConfig(
 
   // Dashboard: Next's recommended set (React, hooks, a11y, @next/next, Core Web Vitals). Scoped to the app so
   // React rules never run against the widget or the API.
-  ...nextVitals.map((config) => ({ ...config, files: [WEB] })),
+  ...nextVitals.map((config) => ({ ...config, files: [WEB, WWW] })),
   {
     name: "pinwren/web",
-    files: [WEB],
-    settings: { next: { rootDir: "apps/web" }, react: { version: "19.3" } },
+    files: [WEB, WWW],
+    settings: { next: { rootDir: ["apps/web", "apps/www"] }, react: { version: "19.3" } },
     rules: {
       // The full React Compiler rule set (purity, refs, set-state-in-effect, immutability, …) — the
       // dashboard is compiled with `reactCompiler: true`, so code the compiler would bail out of is an error.
@@ -53,6 +57,18 @@ export default defineConfig(
       // eslint-config-next only enables a handful of jsx-a11y rules as warnings; use the plugin's whole
       // recommended set as errors.
       ...jsxA11y.flatConfigs.recommended.rules,
+    },
+  },
+
+  // @pinwren/react: the same hook and React Compiler rules as the dashboard, so the published component is
+  // safe in apps that compile with the React Compiler.
+  {
+    name: "pinwren/react-package",
+    files: ["packages/react/**/*.{ts,tsx}"],
+    plugins: { "react-hooks": reactHooks },
+    rules: {
+      ...reactHooks.configs["recommended-latest"].rules,
+      "react-hooks/exhaustive-deps": "error",
     },
   },
 
