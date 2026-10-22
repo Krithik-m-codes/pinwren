@@ -8,6 +8,9 @@ const IGNORED = [
   // The email preview is an iframe with `sandbox=""` (no scripts, by design). Playwright instruments
   // every frame it sees, and Chrome reports that blocked attempt; the page itself runs nothing there.
   /^Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed/,
+  // The session replay plays in rrweb's sandboxed iframe (no scripts, by design); Chrome reports every
+  // script element of the recorded page it refuses to run.
+  /^Blocked script execution in '[^']*' because the document's frame is sandboxed and the 'allow-scripts' permission is not set/,
 ];
 
 /** Every test fails on a browser console error or uncaught exception (e.g. Base UI misuse warnings). */

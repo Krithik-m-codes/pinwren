@@ -1,14 +1,16 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { controlProps, Field, FormError, useZodForm } from "@/components/form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
-import { formText } from "@/lib/form";
+import { onboardingForm } from "@/lib/form-schemas";
+import { errorMessage, useCreateProjectMutation } from "@/lib/store/api";
+
+/** A unique-enough slug for the new workspace (Better Auth needs one; people never see it). */
+const workspaceSlug = (name: string) =>
+  `${slugify(name) || "workspace"}-${Math.random().toString(36).slice(2, 6)}`;
 
 const slugify = (s: string) =>
   s
@@ -19,38 +21,28 @@ const slugify = (s: string) =>
 
 /** First run: name the workspace (organisation), then the first project and its site. */
 export function OnboardingForm() {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const [createProject] = useCreateProjectMutation();
+  const form = useZodForm(onboardingForm, { defaultValues: { org: "", project: "", site: "" } });
+  const { errors, isSubmitting } = form.formState;
 
-  async function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    const orgName = formText(form, "org").trim();
-    const site = formText(form, "site").trim();
-    setPending(true);
-    setError(null);
+  const submit = form.handleSubmit(async ({ org, project, site }) => {
     try {
-      const { data: org, error } = await authClient.organization.create({
-        name: orgName,
-        slug: `${slugify(orgName) || "workspace"}-${Math.random().toString(36).slice(2, 6)}`,
+      const { data, error } = await authClient.organization.create({
+        name: org,
+        slug: workspaceSlug(org),
       });
       if (error) throw new Error(error.message ?? "Could not create the workspace");
-      await authClient.organization.setActive({ organizationId: org.id });
-      const host = site.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-      const { project } = await api<{ project: { id: string } }>("/projects", {
-        method: "POST",
-        json: {
-          name: formText(form, "project").trim() || host || "My site",
-          allowedOrigins: host ? [host] : [],
-        },
-      });
-      router.replace(`/projects/${project.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-      setPending(false);
+      await authClient.organization.setActive({ organizationId: data.id });
+      const created = await createProject({
+        name: project || site || "My site",
+        allowedOrigins: site ? [site] : [],
+      }).unwrap();
+      // A full load: the app's server components read the new active workspace from the session.
+      window.location.assign(new URL(`/projects/${created.project.id}`, window.location.href).href);
+    } catch (e) {
+      form.setError("root", { message: errorMessage(e) });
     }
-  }
+  });
 
   return (
     <Card>
@@ -61,30 +53,38 @@ export function OnboardingForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="grid gap-5">
-          <div className="grid gap-2">
-            <Label htmlFor="org">Workspace name</Label>
-            {/* eslint-disable-next-line jsx-a11y/no-autofocus -- onboarding is a single form; start in its first field */}
-            <Input id="org" name="org" placeholder="Acme Studio" required autoFocus />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="project">First project</Label>
-            <Input id="project" name="project" placeholder="Marketing site" />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="site">Website domain</Label>
-            <Input id="site" name="site" placeholder="www.example.com" />
-            <p className="text-xs text-muted-foreground">
-              Only this domain will be allowed to send feedback. You can add more later.
-            </p>
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <Button type="submit" disabled={pending}>
-            {pending ? "Setting up…" : "Continue"}
+        <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-5">
+          <Field id="org" label="Workspace name" error={errors.org?.message}>
+            <Input
+              {...controlProps("org", errors.org?.message)}
+              {...form.register("org")}
+              placeholder="Acme Studio"
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- onboarding is a single form; start in its first field
+              autoFocus
+            />
+          </Field>
+          <Field id="project" label="First project" error={errors.project?.message}>
+            <Input
+              {...controlProps("project", errors.project?.message)}
+              {...form.register("project")}
+              placeholder="Marketing site"
+            />
+          </Field>
+          <Field
+            id="site"
+            label="Website domain"
+            error={errors.site?.message}
+            help="Only this domain will be allowed to send feedback. You can add more later."
+          >
+            <Input
+              {...controlProps("site", errors.site?.message, true)}
+              {...form.register("site")}
+              placeholder="www.example.com"
+            />
+          </Field>
+          <FormError message={errors.root?.message} />
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Setting up…" : "Continue"}
           </Button>
         </form>
       </CardContent>

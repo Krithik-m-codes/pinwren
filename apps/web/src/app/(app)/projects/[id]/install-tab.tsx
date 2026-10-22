@@ -4,27 +4,36 @@ import { originMatches } from "@pinwren/core";
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { CopyButton } from "@/components/copy-button";
-import { timeAgo } from "@/components/feedback-meta";
+import { RelativeTime } from "@/components/feedback-meta";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SecretCard } from "@/components/secret-card";
 import type { ProjectDetail } from "@/lib/api";
+import { useLazyIdentitySecretQuery, useRotateIdentitySecretMutation } from "@/lib/store/api";
+import { useViewer } from "@/lib/viewer";
+import { useWatch } from "react-hook-form";
+import { controlProps, FieldError, useZodForm } from "@/components/form";
+import { originForm } from "@/lib/form-schemas";
+import { useOrigin } from "@/lib/use-synced-state";
 import { useProjectPatch } from "./use-project";
 
 export function InstallTab({ project }: { project: ProjectDetail }) {
+  const { isAdmin } = useViewer();
   return (
     <div className="grid gap-4">
       <InstallCard project={project} />
       <OriginsCard project={project} />
+      {isAdmin && <IdentityCard project={project} />}
     </div>
   );
 }
 
 function InstallCard({ project }: { project: ProjectDetail }) {
-  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  const origin = useOrigin();
   const snippets = {
     html: `<script src="${origin}/widget.js" data-project="${project.publicKey}" async></script>`,
     next: `// app/layout.tsx\nimport Script from "next/script";\n\n<Script src="${origin}/widget.js" data-project="${project.publicKey}" strategy="afterInteractive" />`,
@@ -38,7 +47,7 @@ function InstallCard({ project }: { project: ProjectDetail }) {
           {project.lastSeenAt ? (
             <Badge variant="secondary" className="ml-auto gap-1.5 font-normal">
               <span className="size-1.5 rounded-full bg-emerald-500" /> Connected · seen{" "}
-              {timeAgo(project.lastSeenAt)}
+              <RelativeTime iso={project.lastSeenAt} />
             </Badge>
           ) : (
             <Badge variant="outline" className="ml-auto gap-1.5 font-normal">
@@ -81,26 +90,16 @@ function InstallCard({ project }: { project: ProjectDetail }) {
 
 function OriginsCard({ project }: { project: ProjectDetail }) {
   const save = useProjectPatch(project.id);
-  const [draft, setDraft] = useState("");
   const [testUrl, setTestUrl] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const origins = project.allowedOrigins;
-  const add = () => {
-    const host = draft
-      .trim()
-      .toLowerCase()
-      .replace(/^https?:\/\//, "")
-      .replace(/\/.*$/, "");
-    if (!host) return;
-    if (!/^(\*\.)?[a-z0-9.-]+(:\d{1,5})?$/.test(host)) {
-      setError("Enter a domain like www.example.com, *.example.com or localhost:3000");
-      return;
-    }
-    setError(null);
-    setDraft("");
+  const form = useZodForm(originForm, { defaultValues: { host: "" } });
+  const { errors } = form.formState;
+  const draft = useWatch({ control: form.control, name: "host" });
+  const add = form.handleSubmit(({ host }) => {
+    form.reset({ host: "" });
     if (origins.includes(host)) return;
     save.mutate({ patch: { allowedOrigins: [...origins, host] }, message: `Added ${host}` });
-  };
+  });
   const testResult = testUrl.trim()
     ? origins.some((o) => {
         try {
@@ -146,26 +145,19 @@ function OriginsCard({ project }: { project: ProjectDetail }) {
             </li>
           ))}
         </ul>
-        <form
-          className="grid gap-1.5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            add();
-          }}
-        >
+        <form className="grid gap-1.5" noValidate onSubmit={(e) => void add(e)}>
           <div className="flex gap-2">
             <Input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              {...controlProps("add-site", errors.host?.message)}
+              {...form.register("host")}
               placeholder="www.example.com"
               aria-label="Add a site"
-              aria-invalid={!!error || undefined}
             />
             <Button type="submit" variant="outline" disabled={!draft.trim()}>
               <Plus /> Add
             </Button>
           </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          <FieldError id="add-site" message={errors.host?.message} />
         </form>
         <div className="grid gap-2">
           <Label htmlFor="test-url" className="text-muted-foreground">
@@ -187,5 +179,49 @@ function OriginsCard({ project }: { project: ProjectDetail }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+const SIGN_SNIPPET = `// On your server — never in the browser:
+import { createHmac } from "node:crypto";
+const signature = createHmac("sha256", process.env.PINWREN_IDENTITY_SECRET)
+  .update(user.id)
+  .digest("hex");
+
+// In the page:
+Pinwren.identify({ id: user.id, name: user.name, email: user.email }, { signature });`;
+
+/**
+ * Signed identity (wave-4 §4): the host app signs the user id with this secret, and reports from that
+ * user show as verified. Org admins only (the API refuses others).
+ */
+function IdentityCard({ project }: { project: ProjectDetail }) {
+  const [reveal] = useLazyIdentitySecretQuery();
+  const [rotate] = useRotateIdentitySecretMutation();
+  return (
+    <SecretCard
+      title="Verified identity"
+      testId="identity-secret"
+      hasSecret={project.hasIdentitySecret}
+      reveal={() => reveal(project.id).unwrap()}
+      rotate={() => rotate(project.id).unwrap()}
+      rotateTitle="Rotate the identity secret?"
+      rotateDescription="Signatures made with the old secret stop verifying at once; reports show as unverified until your server signs with the new one."
+      rotatedMessage="New identity secret — update your server"
+      description={
+        <>
+          Sign your users&apos; ids on your server with this secret (HMAC-SHA256, hex) and pass the signature
+          to <code className="font-mono text-xs">Pinwren.identify</code>. Their reports get a verified badge,
+          so you know who really sent them.
+        </>
+      }
+    >
+      <div className="relative">
+        <pre className="overflow-x-auto rounded-lg border bg-muted/50 p-3 pr-12 font-mono text-xs leading-relaxed">
+          {SIGN_SNIPPET}
+        </pre>
+        <CopyButton value={SIGN_SNIPPET} label="Copy example" className="absolute top-2 right-2" />
+      </div>
+    </SecretCard>
   );
 }

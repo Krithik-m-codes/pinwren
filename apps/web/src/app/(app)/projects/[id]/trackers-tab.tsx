@@ -1,7 +1,6 @@
 "use client";
 
 import type { ISSUE_AUTO_CREATE, IssueProvider } from "@pinwren/core";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleAlert, CircleCheck, Eye, PlugZap, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -17,7 +16,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { api, type IssueIntegration, isForbidden, type ProjectDetail, qk } from "@/lib/api";
+import { issueIntegrationUpdate } from "@pinwren/core";
+import { Controller, useWatch } from "react-hook-form";
+import { z } from "zod";
+import { controlProps, Field, FormError, useZodForm } from "@/components/form";
+import type { IssueIntegration, ProjectDetail } from "@/lib/api";
+import { trackerForm } from "@/lib/form-schemas";
+import {
+  errorMessage,
+  isForbidden,
+  useCreateTrackerMutation,
+  useDeleteTrackerMutation,
+  useLazyTrackerWebhookSecretQuery,
+  useTestTrackerMutation,
+  useTrackersQuery,
+  useUpdateTrackerMutation,
+} from "@/lib/store/api";
 
 type AutoCreate = (typeof ISSUE_AUTO_CREATE)[number];
 
@@ -84,12 +98,8 @@ const parseLabels = (s: string) =>
  * GitHub App (ADR 0015). Closing or reopening on either side updates the other.
  */
 export function TrackersTab({ project }: { project: ProjectDetail }) {
-  const query = useQuery({
-    queryKey: qk.integrations(project.id),
-    queryFn: () => api<{ integrations: IssueIntegration[] }>(`/projects/${project.id}/integrations`),
-    retry: (n, e) => !isForbidden(e) && n < 1,
-  });
-  if (query.isPending) return <Skeleton className="h-80 max-w-3xl rounded-xl" />;
+  const query = useTrackersQuery(project.id);
+  if (query.isLoading) return <Skeleton className="h-80 max-w-3xl rounded-xl" />;
   if (isForbidden(query.error)) {
     return (
       <Card className="max-w-3xl">
@@ -103,11 +113,12 @@ export function TrackersTab({ project }: { project: ProjectDetail }) {
       </Card>
     );
   }
-  if (query.isError) return <ErrorState error={query.error} retry={() => query.refetch()} />;
+  const data = query.data;
+  if (!data) return <ErrorState error={query.error} retry={() => void query.refetch()} />;
   return (
     <div className="grid max-w-3xl gap-4">
       {(["github", "gitlab"] as const).map((provider) => {
-        const i = query.data.integrations.find((x) => x.provider === provider);
+        const i = data.integrations.find((x) => x.provider === provider);
         return i ? (
           <ConnectedCard key={provider} project={project} integration={i} />
         ) : (
@@ -119,37 +130,32 @@ export function TrackersTab({ project }: { project: ProjectDetail }) {
 }
 
 function ConnectCard({ project, provider }: { project: ProjectDetail; provider: IssueProvider }) {
-  const qc = useQueryClient();
   const m = META[provider];
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({
-    token: "",
-    repo: "",
-    apiUrl: "",
-    labels: "feedback",
-    autoCreate: "bugs" as AutoCreate,
+  const [create] = useCreateTrackerMutation();
+  const form = useZodForm(trackerForm, {
+    defaultValues: { token: "", repo: "", apiUrl: "", labels: "feedback", autoCreate: "bugs" },
   });
-  const [error, setError] = useState<string | null>(null);
-  const create = useMutation({
-    mutationFn: () =>
-      api<{ integration: IssueIntegration; webhookSecret: string }>(`/projects/${project.id}/integrations`, {
-        method: "POST",
-        json: {
+  const { errors, isSubmitting } = form.formState;
+  const submit = form.handleSubmit(async (v) => {
+    try {
+      await create({
+        projectId: project.id,
+        body: {
           provider,
-          token: f.token.trim(),
-          repo: f.repo.trim(),
-          apiUrl: f.apiUrl.trim() || null,
-          labels: parseLabels(f.labels),
-          autoCreate: f.autoCreate,
+          token: v.token,
+          repo: v.repo,
+          apiUrl: v.apiUrl || null,
+          labels: parseLabels(v.labels),
+          autoCreate: v.autoCreate,
         },
-      }),
-    onSuccess: () => {
+      }).unwrap();
       toast.success(`${m.name} connected`);
-      void qc.invalidateQueries({ queryKey: qk.integrations(project.id) });
-    },
-    onError: (e) => setError(e.message),
+    } catch (err) {
+      form.setError("root", { message: errorMessage(err) });
+    }
   });
-  const set = (k: keyof typeof f, v: string) => setF((x) => ({ ...x, [k]: v }));
+  const id = (k: string) => `${provider}-${k}`;
 
   return (
     <Card data-testid={`tracker-${provider}`}>
@@ -169,116 +175,78 @@ function ConnectCard({ project, provider }: { project: ProjectDetail; provider: 
       </CardHeader>
       {open && (
         <CardContent>
-          <form
-            noValidate
-            className="grid gap-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setError(null);
-              if (f.token.trim().length < 8) {
-                setError("Paste an access token");
-                return;
-              }
-              if (!/^[\w.-]+(\/[\w.-]+)+$/.test(f.repo.trim())) {
-                setError(`Enter the ${m.repoLabel.toLowerCase()} as ${m.repoPlaceholder}`);
-                return;
-              }
-              if (f.apiUrl.trim() && !/^https?:\/\/\S+$/.test(f.apiUrl.trim())) {
-                setError("Enter a full URL, like https://…");
-                return;
-              }
-              create.mutate();
-            }}
-          >
-            <Field id={`${provider}-token`} label="Access token" help={m.tokenHelp}>
+          <form noValidate className="grid gap-4" onSubmit={(e) => void submit(e)}>
+            <Field id={id("token")} label="Access token" help={m.tokenHelp} error={errors.token?.message}>
               <Input
-                id={`${provider}-token`}
+                {...controlProps(id("token"), errors.token?.message, true)}
                 type="password"
                 autoComplete="off"
-                value={f.token}
-                onChange={(e) => set("token", e.target.value)}
+                {...form.register("token")}
               />
             </Field>
-            <Field id={`${provider}-repo`} label={m.repoLabel}>
+            <Field id={id("repo")} label={m.repoLabel} error={errors.repo?.message}>
               <Input
-                id={`${provider}-repo`}
-                value={f.repo}
+                {...controlProps(id("repo"), errors.repo?.message)}
                 spellCheck={false}
                 placeholder={m.repoPlaceholder}
                 className="font-mono text-[13px]"
-                onChange={(e) => set("repo", e.target.value)}
+                {...form.register("repo")}
               />
             </Field>
             <Field
-              id={`${provider}-url`}
+              id={id("url")}
               label={m.urlLabel}
               help="Optional. Leave empty for the public service."
+              error={errors.apiUrl?.message}
             >
               <Input
-                id={`${provider}-url`}
-                value={f.apiUrl}
+                {...controlProps(id("url"), errors.apiUrl?.message, true)}
                 inputMode="url"
                 spellCheck={false}
                 placeholder={m.urlPlaceholder}
                 className="font-mono text-[13px]"
-                onChange={(e) => set("apiUrl", e.target.value)}
+                {...form.register("apiUrl")}
               />
             </Field>
-            <Field id={`${provider}-labels`} label="Labels" help="Comma-separated, added to every issue.">
+            <Field
+              id={id("labels")}
+              label="Labels"
+              help="Comma-separated, added to every issue."
+              error={errors.labels?.message}
+            >
               <Input
-                id={`${provider}-labels`}
-                value={f.labels}
-                onChange={(e) => set("labels", e.target.value)}
+                {...controlProps(id("labels"), errors.labels?.message, true)}
+                {...form.register("labels")}
               />
             </Field>
             <div className="grid gap-1.5">
               <p className="text-sm font-medium">Open issues for</p>
-              <Segmented
-                label={`Open ${m.name} issues for`}
-                value={f.autoCreate}
-                onChange={(v) => set("autoCreate", v)}
-                options={AUTO_OPTIONS}
+              <Controller
+                control={form.control}
+                name="autoCreate"
+                render={({ field }) => (
+                  <Segmented
+                    label={`Open ${m.name} issues for`}
+                    value={field.value}
+                    onChange={field.onChange}
+                    options={AUTO_OPTIONS}
+                  />
+                )}
               />
             </div>
-            {error && (
-              <p className="flex items-start gap-2 text-sm text-destructive" role="alert">
-                <CircleAlert className="mt-0.5 size-4 shrink-0" /> {error}
-              </p>
-            )}
+            <FormError message={errors.root?.message} />
             <div className="flex justify-end gap-2 border-t pt-4">
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={create.isPending}>
-                {create.isPending ? "Connecting…" : `Connect ${m.name}`}
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Connecting…" : `Connect ${m.name}`}
               </Button>
             </div>
           </form>
         </CardContent>
       )}
     </Card>
-  );
-}
-
-function Field({
-  id,
-  label,
-  help,
-  children,
-}: {
-  id: string;
-  label: string;
-  help?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="grid gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium">
-        {label}
-      </label>
-      {children}
-      {help && <p className="text-xs text-muted-foreground">{help}</p>}
-    </div>
   );
 }
 
@@ -289,51 +257,46 @@ function ConnectedCard({
   project: ProjectDetail;
   integration: IssueIntegration;
 }) {
-  const qc = useQueryClient();
   const m = META[i.provider];
-  const [token, setToken] = useState("");
   const [labels, setLabels] = useState(i.labels.join(", "));
   const [hook, setHook] = useState<{ secret: string; url: string } | null>(null);
   const [testResult, setTestResult] = useState<
     { ok: true; name: string } | { ok: false; message: string } | null
   >(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const refresh = () => qc.invalidateQueries({ queryKey: qk.integrations(project.id) });
-
-  const update = useMutation({
-    mutationFn: ({ patch }: { patch: Record<string, unknown>; message: string }) =>
-      api<{ integration: IssueIntegration }>(`/integrations/${i.id}`, { method: "PATCH", json: patch }),
-    onSuccess: (_r, { message }) => {
-      toast.success(message);
-      void refresh();
+  const [updateTracker] = useUpdateTrackerMutation();
+  const [testTracker, test] = useTestTrackerMutation();
+  const [revealSecret, reveal] = useLazyTrackerWebhookSecretQuery();
+  const [deleteTracker, remove] = useDeleteTrackerMutation();
+  const update = {
+    mutate: ({ patch, message }: { patch: Record<string, unknown>; message: string }) => {
+      updateTracker({ id: i.id, projectId: project.id, patch })
+        .unwrap()
+        .then(() => toast.success(message))
+        .catch((e: unknown) => toast.error("Not saved", { description: errorMessage(e) }));
     },
-    onError: (e) => toast.error("Not saved", { description: e.message }),
-  });
-  const test = useMutation({
-    mutationFn: () =>
-      api<{ ok: true; name: string } | { ok: false; message: string }>(`/integrations/${i.id}/test`, {
-        method: "POST",
-      }),
-    onSuccess: (r) => {
-      setTestResult(r);
-      void refresh();
-    },
-    onError: (e) => setTestResult({ ok: false, message: e.message }),
-  });
-  const reveal = useMutation({
-    mutationFn: () => api<{ secret: string; url: string }>(`/integrations/${i.id}/webhook-secret`),
-    onSuccess: setHook,
-    onError: (e) => toast.error(e.message),
-  });
-  const remove = useMutation({
-    mutationFn: () => api(`/integrations/${i.id}`, { method: "DELETE" }),
-    onSuccess: () => {
-      toast.success(`${m.name} disconnected`);
-      setConfirmRemove(false);
-      void refresh();
-    },
-    onError: (e) => toast.error(e.message),
-  });
+  };
+  const runTest = () => {
+    testTracker({ id: i.id, projectId: project.id })
+      .unwrap()
+      .then(setTestResult)
+      .catch((e: unknown) => setTestResult({ ok: false, message: errorMessage(e) }));
+  };
+  const showSecret = () => {
+    revealSecret(i.id)
+      .unwrap()
+      .then(setHook)
+      .catch((e: unknown) => toast.error(errorMessage(e)));
+  };
+  const disconnect = () => {
+    deleteTracker({ id: i.id, projectId: project.id })
+      .unwrap()
+      .then(() => {
+        toast.success(`${m.name} disconnected`);
+        setConfirmRemove(false);
+      })
+      .catch((e: unknown) => toast.error(errorMessage(e)));
+  };
 
   return (
     <Card data-testid={`tracker-${i.provider}`}>
@@ -393,28 +356,10 @@ function ConnectedCard({
             htmlFor={`${i.provider}-token-edit`}
             description={`Saved (ends ${i.tokenHint.replace("…", "")}). Paste a new one to replace it.`}
           >
-            <form
-              className="flex gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (token.trim().length < 8) return;
-                update.mutate({ patch: { token: token.trim() }, message: "Token replaced" });
-                setToken("");
-              }}
-            >
-              <Input
-                id={`${i.provider}-token-edit`}
-                type="password"
-                autoComplete="off"
-                className="w-full sm:w-48"
-                placeholder="New token"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-              />
-              <Button type="submit" variant="outline" size="default" disabled={token.trim().length < 8}>
-                Replace
-              </Button>
-            </form>
+            <ReplaceToken
+              id={`${i.provider}-token-edit`}
+              onReplace={(token) => update.mutate({ patch: { token }, message: "Token replaced" })}
+            />
           </SettingRow>
           <SettingRow
             label="Sync"
@@ -452,8 +397,8 @@ function ConnectedCard({
                   variant="outline"
                   size="sm"
                   className="justify-self-start"
-                  disabled={reveal.isPending}
-                  onClick={() => reveal.mutate()}
+                  disabled={reveal.isFetching}
+                  onClick={showSecret}
                 >
                   <Eye /> Reveal webhook secret
                 </Button>
@@ -462,8 +407,8 @@ function ConnectedCard({
           </SettingRow>
         </SettingGroup>
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4">
-          <Button variant="outline" size="sm" disabled={test.isPending} onClick={() => test.mutate()}>
-            <PlugZap /> {test.isPending ? "Testing…" : "Test connection"}
+          <Button variant="outline" size="sm" disabled={test.isLoading} onClick={runTest}>
+            <PlugZap /> {test.isLoading ? "Testing…" : "Test connection"}
           </Button>
           {testResult && (
             <span
@@ -490,9 +435,39 @@ function ConnectedCard({
         title={`Disconnect ${m.name}?`}
         description="Existing issues stay where they are, but stop syncing. The links on items are removed."
         confirmLabel="Disconnect"
-        pending={remove.isPending}
-        onConfirm={() => remove.mutate()}
+        pending={remove.isLoading}
+        onConfirm={disconnect}
       />
     </Card>
+  );
+}
+
+/** Replace a tracker's access token (core's issueIntegrationUpdate.token rule). */
+const replaceTokenForm = z.object({
+  token: z.string().trim().min(8, "Paste the new token").pipe(issueIntegrationUpdate.shape.token.unwrap()),
+});
+
+function ReplaceToken({ id, onReplace }: { id: string; onReplace: (token: string) => void }) {
+  const form = useZodForm(replaceTokenForm, { defaultValues: { token: "" } });
+  const token = useWatch({ control: form.control, name: "token" });
+  const submit = form.handleSubmit((v) => {
+    onReplace(v.token);
+    form.reset({ token: "" });
+  });
+  return (
+    <form className="flex gap-2" noValidate onSubmit={(e) => void submit(e)}>
+      <Input
+        id={id}
+        type="password"
+        autoComplete="off"
+        className="w-full sm:w-48"
+        placeholder="New token"
+        aria-invalid={form.formState.errors.token ? true : undefined}
+        {...form.register("token")}
+      />
+      <Button type="submit" variant="outline" size="default" disabled={token.trim().length < 8}>
+        Replace
+      </Button>
+    </form>
   );
 }

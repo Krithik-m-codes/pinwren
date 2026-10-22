@@ -1,6 +1,5 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, KeyRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -9,25 +8,26 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SettingGroup, SettingRow } from "@/components/setting-row";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { api, type ProjectDetail, qk } from "@/lib/api";
+import type { ProjectDetail } from "@/lib/api";
+import { errorMessage, useRotateProjectKeyMutation } from "@/lib/store/api";
 import { useProjectPatch } from "./use-project";
 
 export function DangerTab({ project: p }: { project: ProjectDetail }) {
-  const qc = useQueryClient();
   const router = useRouter();
   const save = useProjectPatch(p.id);
   const [confirm, setConfirm] = useState<"rotate" | "archive" | null>(null);
-  const rotate = useMutation({
-    mutationFn: () => api<{ project: ProjectDetail }>(`/projects/${p.id}/rotate-key`, { method: "POST" }),
-    onSuccess: ({ project }) => {
-      qc.setQueryData(qk.project(p.id), { project });
-      setConfirm(null);
-      toast.success("New key generated", {
-        description: "Update the snippet on your site — the old key stopped working.",
-      });
-    },
-    onError: (e) => toast.error(e.message),
-  });
+  const [rotateKey, rotation] = useRotateProjectKeyMutation();
+  const rotate = () => {
+    rotateKey(p.id)
+      .unwrap()
+      .then(() => {
+        setConfirm(null);
+        toast.success("New key generated", {
+          description: "Update the snippet on your site — the old key stopped working.",
+        });
+      })
+      .catch((e: unknown) => toast.error(errorMessage(e)));
+  };
   const archived = !!p.archivedAt;
 
   return (
@@ -80,8 +80,8 @@ export function DangerTab({ project: p }: { project: ProjectDetail }) {
         title="Rotate the project key?"
         description="The widget on your site stops working until you replace the key in the snippet."
         confirmLabel="Rotate key"
-        pending={rotate.isPending}
-        onConfirm={() => rotate.mutate()}
+        pending={rotation.isLoading}
+        onConfirm={rotate}
       />
       <ConfirmDialog
         open={confirm === "archive"}

@@ -9,20 +9,25 @@ The full specification lives in `blueprint/` (files 00–14). `blueprint/14-feat
 - `pnpm i` — install (also installs the git hooks: lint-staged on pre-commit, commitlint on commit-msg)
 - `pnpm db:up` — local Postgres on 127.0.0.1:5433 (`docker/compose.dev.yml`)
 - `pnpm --filter @pinwren/widget build` then `pnpm --filter @pinwren/web dev -- -p 3100` — dashboard + API (port 3000 is taken on the owner's machine)
-- `node scripts/smoke.mjs http://localhost:3100` — end-to-end API checks (165); start the server with `PINWREN_TRUST_PROXY=true GITHUB_API_URL=http://127.0.0.1:4790 PINWREN_ADMIN_EMAILS=smoke-admin@example.com`
+- `node scripts/smoke.mjs http://localhost:3100` — end-to-end API checks (292); start the server with `PINWREN_TRUST_PROXY=true GITHUB_API_URL=http://127.0.0.1:4790 PINWREN_ADMIN_EMAILS=smoke-admin@example.com,e2e-admin@example.com`
 - `docker compose -f docker/compose.yml --env-file docker/.env up -d --build` — self-host stack
 - `pnpm verify` — format:check + lint + typecheck + test + build (run before pushing)
 - `pnpm format` / `pnpm format:check` — Prettier (Tailwind class sorting via prettier-plugin-tailwindcss)
 - `pnpm lint` / `pnpm lint:fix` — ESLint 9 flat config (`eslint.config.mjs`): typescript-eslint strict type-checked, eslint-config-next, React Compiler rules, jsx-a11y. Disable a rule only per line with a reason: `// eslint-disable-next-line rule -- why`
 - `pnpm typecheck` — `tsc` per package (the dashboard runs `next typegen` first for typed routes)
-- `pnpm test` — Vitest unit tests (core, api, widget)
+- `pnpm test` — Vitest unit tests (core, api, widget, sdk, mcp, cli, react, and the dashboard store in `apps/web/src/lib`)
 - `pnpm test:e2e` — Playwright: widget (port 5180, mocked API) then dashboard (port 3100, dev Postgres)
 - `pnpm build` — all packages (Turborepo, cached)
 - `pnpm db:generate` / `pnpm db:migrate` — Drizzle migrations
 
 ## Architecture rules
 
-- Dashboard is Next.js 16 (App Router, Cache Components) with the Hono API from `packages/api` mounted at `/api` and `/w` (ADR 0012). Dashboard screens are client components calling `/api`; no server component reads cookies.
+- Dashboard is Next.js 16 (App Router, Cache Components, React Compiler) with the Hono API from `packages/api` mounted at `/api`, `/w` and `/mcp` (ADR 0012). Rendering and state follow ADR 0020:
+  - **Server/client split.** Layouts and page frames are server components prerendered into the static shell; everything that needs the session streams in behind `<Suspense>`. The session is read only through `lib/server/session.ts` (`getSession()` is `use cache: private`; `requireViewer()` redirects to sign-in / onboarding). Server components read the API **in process** with `serverApi()` (`lib/server/api.ts`, same Hono app, same authorisation). The one exception is org-level data that is the same for every member: `lib/server/org-data.ts` reads it from the database by the member's own org id, as `use cache` + `cacheTag`, refreshed by a server action with `updateTag` (`lib/server/actions.ts`). Keep `export const instant = false` out unless a comment says why.
+  - **Client state is Redux Toolkit.** All dashboard data goes through RTK Query (`lib/store/api/*`, one injected API per domain, tag invalidation, optimistic `updateQueryData` with undo). Server-fetched data is handed to it with `<HydrateQueries>` (`upsertQueryEntries`) so nothing is fetched twice. UI state lives in slices (`inbox`, `ui`, `realtime`); side effects (the `/api/stream` SSE → cache updates, presence heartbeats, preferences) live in the listener middleware (`lib/store/listeners.ts`). Filters and the open item stay in the URL, changed with the History API (`useUrlParams`). No TanStack Query, no `fetch` in components.
+  - **Forms are react-hook-form + Zod** (`useZodForm`, `components/form.tsx`), with the request schemas from `@pinwren/core` (or picks/pipes of them in `lib/form-schemas.ts`).
+  - **Hydration:** anything a client component renders on its first pass must come from the server (seeded queries) or be identical on both sides; live-only state (presence, "new" items) is shown after `useMounted()`; times and dates go through `<RelativeTime>` / `<LocalDate>`.
+  - Viewers (`role: viewer`) get read-only screens: `useViewer().canWrite`, and `<ReadOnly>` disables every design-system control inside it.
 
 - `packages/*` never import `ee/` or `apps/`. `ee/*` imports only `packages/*`. `apps/server` reaches `ee/` only through `ee/index.ts` behind `requireEntitlement()`.
 - Wire types come from Zod schemas in `packages/core` — never hand-write a request/response type.

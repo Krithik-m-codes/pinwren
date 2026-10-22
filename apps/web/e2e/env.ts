@@ -35,7 +35,13 @@ export async function shoot(page: Page, name: string, opts: { fullPage?: boolean
       scheme === "dark",
     );
     await page.waitForTimeout(150);
-    await page.screenshot({ path: join(SHOTS, `${name}-${scheme}.png`), fullPage: opts.fullPage ?? false });
+    await page.screenshot({
+      path: join(SHOTS, `${name}-${scheme}.png`),
+      fullPage: opts.fullPage ?? false,
+      // The default hides the caret by styling inputs, which React reports as a hydration mismatch when a
+      // server-rendered screen is shot before hydration finishes.
+      caret: "initial",
+    });
   }
   await page.emulateMedia({ colorScheme: "light" });
 }

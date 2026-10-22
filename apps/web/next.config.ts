@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   experimental: {
     turbopackRustReactCompiler: true,
+    // The proxy (src/proxy.ts) buffers request bodies, by default only the first 10 MB — a 10 MB session
+    // replay is ~13.4 MB as base64 JSON, plus screenshot and attachments. The API enforces its own limits
+    // per field (replay ≤ 10 MB decoded, attachments ≤ 5 MB each); this only has to let them through.
+    proxyClientMaxBodySize: "40mb",
   },
   // `<Link href>` and `router.push()` are checked against the app's real routes.
   typedRoutes: true,
@@ -31,9 +35,26 @@ const nextConfig: NextConfig = {
     },
   },
   headers() {
+    // The widget is loaded cross-origin by customers' sites (wave-4 contract §8): widget.js keeps a stable
+    // name and a short cache; its chunks are content-hashed and cached for a year. Compression (brotli /
+    // gzip) is the reverse proxy's job — see docs/self-hosting/reverse-proxy.md.
+    const script = [
+      { key: "Content-Type", value: "text/javascript; charset=utf-8" },
+      { key: "Access-Control-Allow-Origin", value: "*" },
+      { key: "X-Content-Type-Options", value: "nosniff" },
+    ];
     return Promise.resolve([
       {
-        source: "/((?!w/|widget\\.js).*)",
+        source: "/widget.js",
+        headers: [...script, { key: "Cache-Control", value: "public, max-age=300" }],
+      },
+      {
+        // ^/widget-[\w-]+\.[0-9a-f]{10}\.js$ — widget-panel.<hash>.js, widget-i18n-pt-BR.<hash>.js, …
+        source: "/:chunk(widget-[\\w-]+\\.[0-9a-f]{10}\\.js)",
+        headers: [...script, { key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+      {
+        source: "/((?!w/|widget[.-]).*)",
         headers: [
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },

@@ -1,11 +1,12 @@
 "use client";
 
 import type { EmailTemplateKey } from "@pinwren/core";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleCheck, CircleX, RotateCcw, Send } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { controlProps, FieldError, useZodForm } from "@/components/form";
 import { ErrorState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,15 +15,17 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import type { EmailTemplate, EmailTestResult } from "@/lib/api";
+import { emailTemplateForm } from "@/lib/form-schemas";
 import {
-  ApiRequestError,
-  api,
-  type EmailTemplate,
-  type EmailTestResult,
-  qk,
-  type RenderedEmail,
-} from "@/lib/api";
-import { useSyncedState } from "@/lib/use-synced-state";
+  errorMessage,
+  isApiError,
+  useEmailTemplatesQuery,
+  usePreviewEmailTemplateQuery,
+  useResetEmailTemplateMutation,
+  useSaveEmailTemplateMutation,
+  useTestEmailTemplateMutation,
+} from "@/lib/store/api";
 
 type Draft = { subject: string; body: string };
 
@@ -36,96 +39,83 @@ function useDebounced<T>(value: T, ms: number): T {
 }
 
 /**
- * Email templates (F-020): subject + Markdown body per notification, with `{{variables}}`. The
- * preview is rendered by the server exactly as it will be sent (variables escaped, Markdown
- * sanitised), inside a sandboxed frame.
+ * Email templates (F-020): subject + Markdown body per notification, with `{{variables}}`. The preview is
+ * rendered by the server exactly as it will be sent (variables escaped, Markdown sanitised), inside a
+ * sandboxed frame.
  */
 export function EmailTemplates() {
-  const qc = useQueryClient();
-  const list = useQuery({
-    queryKey: qk.emailTemplates,
-    queryFn: () => api<{ templates: EmailTemplate[] }>("/email-templates"),
-  });
+  const list = useEmailTemplatesQuery(undefined);
   const [key, setKey] = useState<EmailTemplateKey>("feedback_created");
   const current = list.data?.templates.find((t) => t.key === key);
-  // A new template (or a save/reset) replaces the draft and clears the last test result.
-  const savedKey = current ? `${current.key}:${current.subject}:${current.body}` : "";
-  const [draft, setDraft] = useSyncedState<Draft | null>(
-    current ? { subject: current.subject, body: current.body } : null,
-    savedKey,
+
+  if (list.isLoading) return <Skeleton className="h-[32rem] rounded-xl" />;
+  if (!list.data) return <ErrorState error={list.error} retry={() => void list.refetch()} />;
+  if (!current) return null;
+  return (
+    <TemplateEditor
+      // A new template (or a save / reset) starts a fresh form and clears the last test result.
+      key={`${current.key}:${current.subject}:${current.body}`}
+      templates={list.data.templates}
+      current={current}
+      onKey={setKey}
+    />
   );
-  const [testResult, setTestResult] = useSyncedState<EmailTestResult | null>(null, savedKey);
+}
+
+function TemplateEditor({
+  templates,
+  current,
+  onKey,
+}: {
+  templates: EmailTemplate[];
+  current: EmailTemplate;
+  onKey: (k: EmailTemplateKey) => void;
+}) {
+  const key = current.key;
+  const form = useZodForm(emailTemplateForm, {
+    defaultValues: { subject: current.subject, body: current.body },
+  });
+  const { errors, isDirty } = form.formState;
+  const subject = useWatch({ control: form.control, name: "subject" });
+  const body = useWatch({ control: form.control, name: "body" });
+  const draft: Draft = { subject, body };
+  // Debounced as one string, so an unchanged draft is the same value (no new request, no re-render loop).
+  const settled = JSON.parse(useDebounced(JSON.stringify(draft), 350)) as Draft;
+  const preview = usePreviewEmailTemplateQuery({ key, draft: settled });
+  const [saveTemplate, saving] = useSaveEmailTemplateMutation();
+  const [resetTemplate, resetting] = useResetEmailTemplateMutation();
+  const [testTemplate, testing] = useTestEmailTemplateMutation();
+  const [testResult, setTestResult] = useState<EmailTestResult | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
-  const body = useRef<HTMLTextAreaElement>(null);
+  const bodyField = form.register("body");
 
-  const debounced = useDebounced(draft, 350);
-  const preview = useQuery({
-    queryKey: ["email-template-preview", key, debounced],
-    queryFn: () =>
-      api<{ preview: RenderedEmail }>(`/email-templates/${key}/preview`, {
-        method: "POST",
-        json: debounced ?? {},
-      }),
-    enabled: !!debounced,
-    placeholderData: (prev) => prev,
-    retry: false,
-  });
-
-  const replace = (t: EmailTemplate) =>
-    qc.setQueryData<{ templates: EmailTemplate[] }>(qk.emailTemplates, (old) =>
-      old ? { templates: old.templates.map((x) => (x.key === t.key ? t : x)) } : old,
-    );
-  const save = useMutation({
-    mutationFn: (d: Draft) =>
-      api<{ template: EmailTemplate }>(`/email-templates/${key}`, { method: "PUT", json: d }),
-    onSuccess: ({ template }) => {
-      replace(template);
-      toast.success(`“${template.name}” saved`);
-    },
-    onError: (e) => toast.error("Not saved", { description: e.message }),
-  });
-  const reset = useMutation({
-    mutationFn: () => api<{ template: EmailTemplate }>(`/email-templates/${key}`, { method: "DELETE" }),
-    onSuccess: ({ template }) => {
-      replace(template);
-      setConfirmReset(false);
-      toast.success("Back to the default wording");
-    },
-    onError: (e) => toast.error(e.message),
-  });
-  const test = useMutation({
-    mutationFn: (d: Draft) =>
-      api<EmailTestResult>(`/email-templates/${key}/test`, { method: "POST", json: d }),
-    onSuccess: setTestResult,
-    onError: (e) => setTestResult({ sent: false, skipped: false, reason: e.message }),
-  });
-
-  const items = useMemo(
-    () => (list.data?.templates ?? []).map((t) => ({ value: t.key, label: t.name })),
-    [list.data],
-  );
-
-  if (list.isPending) return <Skeleton className="h-[32rem] rounded-xl" />;
-  if (list.isError) return <ErrorState error={list.error} retry={() => list.refetch()} />;
-  if (!current || !draft) return null;
-
-  const dirty = draft.subject !== current.subject || draft.body !== current.body;
-  const previewError =
-    preview.error instanceof ApiRequestError
+  const items = templates.map((t) => ({ value: t.key, label: t.name }));
+  const previewError = preview.error
+    ? isApiError(preview.error)
       ? preview.error.message
-      : preview.error
-        ? "Preview failed"
-        : null;
-  const invalid = !draft.subject.trim() || !draft.body.trim() || !!previewError;
+      : "Preview failed"
+    : null;
+  const invalid = !subject.trim() || !body.trim() || !!previewError;
+
+  const save = form.handleSubmit(async (d) => {
+    try {
+      const { template } = await saveTemplate({ key, draft: d }).unwrap();
+      toast.success(`“${template.name}” saved`);
+    } catch (e) {
+      toast.error("Not saved", { description: errorMessage(e) });
+    }
+  });
 
   function insert(name: string) {
-    const el = body.current;
+    const el = document.getElementById("template-body") as HTMLTextAreaElement | null;
     const token = `{{${name}}}`;
-    if (!el || !draft) return;
+    if (!el) return;
     const start = el.selectionStart;
     const end = el.selectionEnd;
-    const next = draft.body.slice(0, start) + token + draft.body.slice(end);
-    setDraft({ ...draft, body: next });
+    form.setValue("body", body.slice(0, start) + token + body.slice(end), {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
     requestAnimationFrame(() => {
       el.focus();
       el.setSelectionRange(start + token.length, start + token.length);
@@ -142,115 +132,125 @@ export function EmailTemplates() {
           escaped — when the email is sent.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Select items={items} value={key} onValueChange={(v) => v && setKey(v)}>
-            <SelectTrigger className="w-64" aria-label="Template">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {list.data.templates.map((t) => (
-                <SelectItem key={t.key} value={t.key}>
-                  {t.name}
-                  {t.customized && <span className="ml-auto text-xs text-muted-foreground">edited</span>}
-                </SelectItem>
+      <CardContent>
+        <form className="grid gap-4" noValidate onSubmit={(e) => void save(e)}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select items={items} value={key} onValueChange={(v) => v && onKey(v)}>
+              <SelectTrigger className="w-64" aria-label="Template">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {templates.map((t) => (
+                  <SelectItem key={t.key} value={t.key}>
+                    {t.name}
+                    {t.customized && <span className="ml-auto text-xs text-muted-foreground">edited</span>}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {current.customized ? (
+              <Badge variant="secondary" className="font-normal">
+                Customised
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="font-normal text-muted-foreground">
+                Default
+              </Badge>
+            )}
+            <p className="w-full text-sm text-muted-foreground">{current.description}</p>
+          </div>
+
+          <div className="grid gap-1.5">
+            <label htmlFor="template-subject" className="text-sm font-medium">
+              Subject
+            </label>
+            <Input
+              {...controlProps("template-subject", errors.subject?.message)}
+              {...form.register("subject")}
+              maxLength={200}
+            />
+            <FieldError id="template-subject" message={errors.subject?.message} />
+          </div>
+          <div className="grid gap-1.5">
+            <label htmlFor="template-body" className="text-sm font-medium">
+              Body
+            </label>
+            <Textarea
+              {...controlProps("template-body", errors.body?.message ?? previewError ?? undefined)}
+              {...bodyField}
+              rows={8}
+              maxLength={10_000}
+              className="font-mono text-[13px] leading-relaxed"
+            />
+            <FieldError id="template-body" message={errors.body?.message} />
+            {previewError && (
+              <p className="text-xs text-destructive" role="alert">
+                {previewError}
+              </p>
+            )}
+          </div>
+
+          <div className="grid gap-1.5">
+            <p className="text-sm font-medium">Variables</p>
+            <ul className="flex flex-wrap gap-1.5" aria-label="Variables">
+              {current.variables.map((v) => (
+                <li key={v.name}>
+                  <button
+                    type="button"
+                    title={`${v.description} — e.g. ${v.sample}`}
+                    onClick={() => insert(v.name)}
+                    className="rounded-md border bg-muted/50 px-1.5 py-0.5 font-mono text-xs transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+                  >
+                    {`{{${v.name}}}`}
+                  </button>
+                </li>
               ))}
-            </SelectContent>
-          </Select>
-          {current.customized ? (
-            <Badge variant="secondary" className="font-normal">
-              Customised
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="font-normal text-muted-foreground">
-              Default
-            </Badge>
-          )}
-          <p className="w-full text-sm text-muted-foreground">{current.description}</p>
-        </div>
-
-        <div className="grid gap-1.5">
-          <label htmlFor="template-subject" className="text-sm font-medium">
-            Subject
-          </label>
-          <Input
-            id="template-subject"
-            value={draft.subject}
-            maxLength={200}
-            onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
-          />
-        </div>
-        <div className="grid gap-1.5">
-          <label htmlFor="template-body" className="text-sm font-medium">
-            Body
-          </label>
-          <Textarea
-            id="template-body"
-            ref={body}
-            rows={8}
-            maxLength={10_000}
-            className="font-mono text-[13px] leading-relaxed"
-            value={draft.body}
-            onChange={(e) => setDraft({ ...draft, body: e.target.value })}
-          />
-          {previewError && (
-            <p className="text-xs text-destructive" role="alert">
-              {previewError}
+            </ul>
+            <p className="text-xs text-muted-foreground">
+              Click one to insert it at the cursor. Hover for what it holds.
             </p>
-          )}
-        </div>
+          </div>
 
-        <div className="grid gap-1.5">
-          <p className="text-sm font-medium">Variables</p>
-          <ul className="flex flex-wrap gap-1.5" aria-label="Variables">
-            {current.variables.map((v) => (
-              <li key={v.name}>
-                <button
-                  type="button"
-                  title={`${v.description} — e.g. ${v.sample}`}
-                  onClick={() => insert(v.name)}
-                  className="rounded-md border bg-muted/50 px-1.5 py-0.5 font-mono text-xs transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
-                >
-                  {`{{${v.name}}}`}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <p className="text-xs text-muted-foreground">
-            Click one to insert it at the cursor. Hover for what it holds.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-          <Button disabled={!dirty || invalid || save.isPending} onClick={() => save.mutate(draft)}>
-            {save.isPending ? "Saving…" : "Save template"}
-          </Button>
-          {dirty && (
-            <Button
-              variant="ghost"
-              onClick={() => setDraft({ subject: current.subject, body: current.body })}
-            >
-              Discard changes
+          <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+            <Button type="submit" disabled={!isDirty || invalid || saving.isLoading}>
+              {saving.isLoading ? "Saving…" : "Save template"}
             </Button>
-          )}
-          <div className="ml-auto flex flex-wrap gap-2">
-            {current.customized && (
-              <Button variant="outline" onClick={() => setConfirmReset(true)}>
-                <RotateCcw /> Reset to default
+            {isDirty && (
+              <Button type="button" variant="ghost" onClick={() => form.reset()}>
+                Discard changes
               </Button>
             )}
-            <Button variant="outline" disabled={invalid || test.isPending} onClick={() => test.mutate(draft)}>
-              <Send /> {test.isPending ? "Sending…" : "Send me this email"}
-            </Button>
+            <div className="ml-auto flex flex-wrap gap-2">
+              {current.customized && (
+                <Button type="button" variant="outline" onClick={() => setConfirmReset(true)}>
+                  <RotateCcw /> Reset to default
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                disabled={invalid || testing.isLoading}
+                onClick={() => {
+                  testTemplate({ key, draft })
+                    .unwrap()
+                    .then(setTestResult)
+                    .catch((e: unknown) =>
+                      setTestResult({ sent: false, skipped: false, reason: errorMessage(e) }),
+                    );
+                }}
+              >
+                <Send /> {testing.isLoading ? "Sending…" : "Send me this email"}
+              </Button>
+            </div>
           </div>
-        </div>
+        </form>
         {testResult && (
           <p
             role="status"
             className={
               testResult.sent
-                ? "flex items-start gap-2 text-sm text-emerald-700 dark:text-emerald-400"
-                : "flex items-start gap-2 text-sm text-destructive"
+                ? "mt-4 flex items-start gap-2 text-sm text-emerald-700 dark:text-emerald-400"
+                : "mt-4 flex items-start gap-2 text-sm text-destructive"
             }
           >
             {testResult.sent ? (
@@ -266,7 +266,7 @@ export function EmailTemplates() {
           </p>
         )}
 
-        <section aria-label="Preview" className="grid gap-2">
+        <section aria-label="Preview" className="mt-4 grid gap-2">
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium">Preview</p>
             <span className="text-xs text-muted-foreground">with sample values</span>
@@ -275,7 +275,7 @@ export function EmailTemplates() {
           <div className="overflow-hidden rounded-lg border">
             <p className="truncate border-b bg-muted/40 px-3 py-2 text-sm" data-testid="preview-subject">
               <span className="text-muted-foreground">Subject: </span>
-              {preview.data?.preview.subject ?? "…"}
+              {preview.currentData?.preview.subject ?? preview.data?.preview.subject ?? "…"}
             </p>
             {preview.data ? (
               <iframe
@@ -297,8 +297,16 @@ export function EmailTemplates() {
         title={`Reset “${current.name}”?`}
         description="Your wording is replaced by the built-in template. This can't be undone."
         confirmLabel="Reset"
-        pending={reset.isPending}
-        onConfirm={() => reset.mutate()}
+        pending={resetting.isLoading}
+        onConfirm={() => {
+          resetTemplate(key)
+            .unwrap()
+            .then(() => {
+              setConfirmReset(false);
+              toast.success("Back to the default wording");
+            })
+            .catch((e: unknown) => toast.error(errorMessage(e)));
+        }}
       />
     </Card>
   );

@@ -1,8 +1,7 @@
 "use client";
 
-import { Archive, FileStack, Inbox } from "lucide-react";
+import { Archive, Eye, FileStack, Inbox, Target } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { use } from "react";
 import { ButtonLink } from "@/components/button-link";
 import { PageHeader } from "@/components/page-header";
 import { ErrorState } from "@/components/states";
@@ -17,6 +16,8 @@ import { TrackersTab } from "./trackers-tab";
 import { useProject } from "./use-project";
 import { WidgetTab } from "./widget-tab";
 import { here } from "@/lib/routes";
+import { useViewer } from "@/lib/viewer";
+import { ReadOnly } from "@/components/read-only";
 
 const TABS = [
   { value: "install", label: "Install" },
@@ -29,15 +30,15 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number]["value"];
 
-export function ProjectSettings({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export function ProjectSettings({ id }: { id: string }) {
+  const { canWrite } = useViewer();
   const search = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const query = useProject(id);
   const tab: Tab = TABS.some((t) => t.value === search.get("tab")) ? (search.get("tab") as Tab) : "install";
 
-  if (query.isPending) {
+  if (query.isLoading) {
     return (
       <>
         <PageHeader title={<Skeleton className="h-4 w-32" />} />
@@ -49,11 +50,11 @@ export function ProjectSettings({ params }: { params: Promise<{ id: string }> })
       </>
     );
   }
-  if (query.isError) {
+  if (!query.data) {
     return (
       <>
         <PageHeader title="Project" />
-        <ErrorState error={query.error} retry={() => query.refetch()} />
+        <ErrorState error={query.error} retry={() => void query.refetch()} />
       </>
     );
   }
@@ -62,6 +63,9 @@ export function ProjectSettings({ params }: { params: Promise<{ id: string }> })
   return (
     <>
       <PageHeader title={p.name}>
+        <ButtonLink href={`/projects/${p.id}/rounds`} size="sm" variant="ghost">
+          <Target /> <span className="hidden sm:inline">Rounds</span>
+        </ButtonLink>
         <ButtonLink href={`/projects/${p.id}/pages`} size="sm" variant="ghost">
           <FileStack /> <span className="hidden sm:inline">Pages</span>
         </ButtonLink>
@@ -70,6 +74,15 @@ export function ProjectSettings({ params }: { params: Promise<{ id: string }> })
         </ButtonLink>
       </PageHeader>
       <div className="mx-auto w-full max-w-5xl p-4 pb-16">
+        {!canWrite && (
+          <p
+            className="mb-4 flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-sm text-muted-foreground"
+            data-testid="read-only-notice"
+          >
+            <Eye className="size-4 shrink-0" /> You have read-only access: settings are shown but can&apos;t
+            be changed.
+          </p>
+        )}
         {p.archivedAt && (
           <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
             <Archive className="size-4 shrink-0" />
@@ -85,34 +98,38 @@ export function ProjectSettings({ params }: { params: Promise<{ id: string }> })
         >
           <div className="-mx-4 overflow-x-auto px-4 pb-1">
             <TabsList variant="line" className="w-full justify-start border-b">
-              {TABS.map((t) => (
+              {TABS.filter((t) => canWrite || t.value !== "danger").map((t) => (
                 <TabsTrigger key={t.value} value={t.value} className="flex-none px-2.5">
                   {t.label}
                 </TabsTrigger>
               ))}
             </TabsList>
           </div>
-          <TabsContent value="install" className="pt-3">
-            <InstallTab project={p} />
-          </TabsContent>
-          <TabsContent value="widget" className="pt-3">
-            <WidgetTab project={p} />
-          </TabsContent>
-          <TabsContent value="capture" className="pt-3">
-            <CaptureTab project={p} />
-          </TabsContent>
-          <TabsContent value="actions" className="pt-3">
-            <ActionsTab project={p} />
-          </TabsContent>
-          <TabsContent value="trackers" className="pt-3">
-            <TrackersTab project={p} />
-          </TabsContent>
-          <TabsContent value="privacy" className="pt-3">
-            <PrivacyTab project={p} />
-          </TabsContent>
-          <TabsContent value="danger" className="pt-3">
-            <DangerTab project={p} />
-          </TabsContent>
+          <ReadOnly when={!canWrite}>
+            <TabsContent value="install" className="pt-3">
+              <InstallTab project={p} />
+            </TabsContent>
+            <TabsContent value="widget" className="pt-3">
+              <WidgetTab project={p} />
+            </TabsContent>
+            <TabsContent value="capture" className="pt-3">
+              <CaptureTab project={p} />
+            </TabsContent>
+            <TabsContent value="actions" className="pt-3">
+              <ActionsTab project={p} />
+            </TabsContent>
+            <TabsContent value="trackers" className="pt-3">
+              <TrackersTab project={p} />
+            </TabsContent>
+            <TabsContent value="privacy" className="pt-3">
+              <PrivacyTab project={p} />
+            </TabsContent>
+            {canWrite && (
+              <TabsContent value="danger" className="pt-3">
+                <DangerTab project={p} />
+              </TabsContent>
+            )}
+          </ReadOnly>
         </Tabs>
       </div>
     </>

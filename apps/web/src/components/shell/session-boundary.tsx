@@ -1,0 +1,49 @@
+import type { Entitlements } from "@pinwren/core";
+import { BrandTheme } from "@/components/brand";
+import type { Project, SavedView } from "@/lib/api";
+import { serverApi } from "@/lib/server/api";
+import { getOrgBranding } from "@/lib/server/org-data";
+import { requireViewer } from "@/lib/server/session";
+import { HydrateQueries } from "@/lib/store/hydrate";
+import { ActivateWorkspace } from "./activate-workspace";
+import { CommandPalette } from "./command-palette";
+import { LicenseBanner } from "./license-banner";
+import { RealtimeConnection } from "./realtime-connection";
+
+/**
+ * The signed-in part of every app screen, streamed behind the layout's <Suspense>: checks the session on
+ * the server (redirecting to sign-in or onboarding), applies the workspace theme, seeds RTK Query with
+ * `me`, branding and entitlements, and opens the real-time stream.
+ */
+export async function SessionBoundary({ children }: { children: React.ReactNode }) {
+  const viewer = await requireViewer();
+  if (viewer.kind === "activate") return <ActivateWorkspace orgId={viewer.orgId} />;
+  const { me } = viewer;
+  // Everything a screen below reads on its first render is seeded here (not only in the sidebar, which
+  // streams in its own boundary): server HTML and client hydration then see the same data.
+  const [branding, entitlements, projects, views] = await Promise.all([
+    getOrgBranding(me.orgId),
+    serverApi<Entitlements>("/me/entitlements"),
+    serverApi<{ projects: Project[] }>("/projects"),
+    serverApi<{ views: SavedView[] }>("/views"),
+  ]);
+  return (
+    <HydrateQueries
+      entries={[
+        { endpointName: "me", arg: undefined, value: me },
+        { endpointName: "branding", arg: undefined, value: { branding } },
+        ...(entitlements.ok
+          ? [{ endpointName: "entitlements" as const, arg: undefined, value: entitlements.data }]
+          : []),
+        ...(projects.ok ? [{ endpointName: "projects" as const, arg: undefined, value: projects.data }] : []),
+        ...(views.ok ? [{ endpointName: "views" as const, arg: undefined, value: views.data }] : []),
+      ]}
+    >
+      <BrandTheme accent={branding.accent} />
+      <RealtimeConnection />
+      <LicenseBanner />
+      <CommandPalette />
+      {children}
+    </HydrateQueries>
+  );
+}

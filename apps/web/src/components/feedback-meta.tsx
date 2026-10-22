@@ -103,3 +103,35 @@ export function pathOf(url: string | null): string {
     return url;
   }
 }
+
+/**
+ * "3 minutes ago" for a server-rendered screen. The text depends on the clock, so it may differ by a tick
+ * between the server's HTML and hydration; React is told that is expected for this one element.
+ */
+export function RelativeTime({ iso, className }: { iso: string; className?: string }) {
+  return (
+    <time dateTime={iso} className={className} suppressHydrationWarning>
+      {timeAgo(iso)}
+    </time>
+  );
+}
+
+/** A date (optionally with the time) in the reader's locale; the server may format it differently. */
+export function LocalDate({
+  iso,
+  time = false,
+  className,
+}: {
+  iso: string;
+  time?: boolean;
+  className?: string;
+}) {
+  const d = new Date(iso);
+  return (
+    <time dateTime={iso} className={className} suppressHydrationWarning>
+      {time
+        ? d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+        : d.toLocaleDateString(undefined, { dateStyle: "medium" })}
+    </time>
+  );
+}

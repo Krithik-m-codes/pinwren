@@ -1,66 +1,19 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { CircleAlert, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { use, useState } from "react";
+import { useState } from "react";
+import { controlProps, Field, FormError, useZodForm } from "@/components/form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { authClient, signIn, signOut, signUp, useSession } from "@/lib/auth-client";
-import { formText } from "@/lib/form";
+import { authClient, signIn, signOut, signUp } from "@/lib/auth-client";
+import { signInForm, signUpForm } from "@/lib/form-schemas";
 
-/**
- * Invitation emails link here (wave-1 §8). Signed out: sign in or create an account with the invited
- * address. Signed in: show the workspace, accept → make it active → inbox.
- */
-export function AcceptInvitation({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  const { data: session, isPending } = useSession();
-
-  if (isPending) {
-    return (
-      <Card>
-        <CardContent className="space-y-3 py-6">
-          <Skeleton className="h-6 w-2/3" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-9 w-full" />
-        </CardContent>
-      </Card>
-    );
-  }
-  if (!session) return <AuthFirst />;
-  return <Accept id={id} email={session.user.email} />;
-}
-
-function AuthFirst() {
+/** Signed out: sign in or create an account with the invited address; the server then renders the next step. */
+export function AuthFirst() {
   const [tab, setTab] = useState<"sign-up" | "sign-in">("sign-up");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-
-  async function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    const email = formText(form, "email");
-    const password = formText(form, "password");
-    setPending(true);
-    setError(null);
-    const { error } =
-      tab === "sign-in"
-        ? await signIn.email({ email, password })
-        : await signUp.email({
-            email,
-            password,
-            name: formText(form, "name") || email.split("@")[0] || email,
-          });
-    setPending(false);
-    // On success the session store updates and this page re-renders into the accept step.
-    if (error) setError(error.message ?? "That didn't work");
-  }
-
   return (
     <Card>
       <CardHeader>
@@ -77,79 +30,139 @@ function AuthFirst() {
             <TabsTrigger value="sign-up">Create account</TabsTrigger>
             <TabsTrigger value="sign-in">Sign in</TabsTrigger>
           </TabsList>
-          {(["sign-up", "sign-in"] as const).map((t) => (
-            <TabsContent key={t} value={t}>
-              <form onSubmit={onSubmit} className="grid gap-4">
-                {t === "sign-up" && (
-                  <div className="grid gap-2">
-                    <Label htmlFor={`${t}-name`}>Name</Label>
-                    <Input id={`${t}-name`} name="name" autoComplete="name" required />
-                  </div>
-                )}
-                <div className="grid gap-2">
-                  <Label htmlFor={`${t}-email`}>Email</Label>
-                  <Input id={`${t}-email`} name="email" type="email" autoComplete="email" required />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor={`${t}-password`}>Password</Label>
-                  <Input
-                    id={`${t}-password`}
-                    name="password"
-                    type="password"
-                    autoComplete={t === "sign-in" ? "current-password" : "new-password"}
-                    minLength={8}
-                    required
-                  />
-                  {t === "sign-up" && <p className="text-xs text-muted-foreground">At least 8 characters.</p>}
-                </div>
-                {error && (
-                  <p role="alert" className="text-sm text-destructive">
-                    {error}
-                  </p>
-                )}
-                <Button type="submit" disabled={pending}>
-                  {pending
-                    ? "One moment…"
-                    : t === "sign-in"
-                      ? "Sign in and continue"
-                      : "Create account and continue"}
-                </Button>
-              </form>
-            </TabsContent>
-          ))}
+          <TabsContent value="sign-up">
+            <SignUpStep />
+          </TabsContent>
+          <TabsContent value="sign-in">
+            <SignInStep />
+          </TabsContent>
         </Tabs>
       </CardContent>
     </Card>
   );
 }
 
-function Accept({ id, email }: { id: string; email: string }) {
+function SignUpStep() {
+  const router = useRouter();
+  const form = useZodForm(signUpForm, { defaultValues: { name: "", email: "", password: "" } });
+  const { errors, isSubmitting } = form.formState;
+  const submit = form.handleSubmit(async (v) => {
+    const { error } = await signUp.email(v);
+    if (error) {
+      form.setError("root", { message: error.message ?? "That didn't work" });
+      return;
+    }
+    // Signed in now: the server renders the invitation.
+    router.refresh();
+  });
+  return (
+    <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
+      <Field id="sign-up-name" label="Name" error={errors.name?.message}>
+        <Input
+          {...controlProps("sign-up-name", errors.name?.message)}
+          {...form.register("name")}
+          autoComplete="name"
+        />
+      </Field>
+      <Field id="sign-up-email" label="Email" error={errors.email?.message}>
+        <Input
+          {...controlProps("sign-up-email", errors.email?.message)}
+          {...form.register("email")}
+          type="email"
+          autoComplete="email"
+        />
+      </Field>
+      <Field
+        id="sign-up-password"
+        label="Password"
+        help="At least 8 characters."
+        error={errors.password?.message}
+      >
+        <Input
+          {...controlProps("sign-up-password", errors.password?.message, true)}
+          {...form.register("password")}
+          type="password"
+          autoComplete="new-password"
+        />
+      </Field>
+      <FormError message={errors.root?.message} />
+      <Button type="submit" disabled={isSubmitting}>
+        {isSubmitting ? "One moment…" : "Create account and continue"}
+      </Button>
+    </form>
+  );
+}
+
+function SignInStep() {
+  const router = useRouter();
+  const form = useZodForm(signInForm, { defaultValues: { email: "", password: "" } });
+  const { errors, isSubmitting } = form.formState;
+  const submit = form.handleSubmit(async (v) => {
+    const { error } = await signIn.email(v);
+    if (error) {
+      form.setError("root", { message: error.message ?? "That didn't work" });
+      return;
+    }
+    router.refresh();
+  });
+  return (
+    <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
+      <Field id="sign-in-email" label="Email" error={errors.email?.message}>
+        <Input
+          {...controlProps("sign-in-email", errors.email?.message)}
+          {...form.register("email")}
+          type="email"
+          autoComplete="email"
+        />
+      </Field>
+      <Field id="sign-in-password" label="Password" error={errors.password?.message}>
+        <Input
+          {...controlProps("sign-in-password", errors.password?.message)}
+          {...form.register("password")}
+          type="password"
+          autoComplete="current-password"
+        />
+      </Field>
+      <FormError message={errors.root?.message} />
+      <Button type="submit" disabled={isSubmitting}>
+        {isSubmitting ? "One moment…" : "Sign in and continue"}
+      </Button>
+    </form>
+  );
+}
+
+export type InvitationSummary = {
+  organizationId: string;
+  organizationName: string;
+  inviterEmail: string;
+  email: string;
+  role: string;
+};
+
+/** Signed in with the invited address: join (accept + make the workspace active) or decline. */
+export function Accept({
+  id,
+  email,
+  invitation: inv,
+}: {
+  id: string;
+  email: string;
+  invitation: InvitationSummary;
+}) {
   const router = useRouter();
   const [pending, setPending] = useState<"accept" | "decline" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const invitation = useQuery({
-    queryKey: ["invitation", id],
-    queryFn: async () => {
-      const { data, error } = await authClient.organization.getInvitation({ query: { id } });
-      if (error) throw new Error(error.message ?? "Invitation not found");
-      return data;
-    },
-    retry: false,
-  });
 
   async function accept() {
     setPending("accept");
     setError(null);
-    const { data, error } = await authClient.organization.acceptInvitation({ invitationId: id });
+    const { error } = await authClient.organization.acceptInvitation({ invitationId: id });
     if (error) {
       setPending(null);
       setError(error.message ?? "Couldn't accept the invitation");
       return;
     }
-    const orgId =
-      invitation.data?.organizationId ??
-      (data as { invitation?: { organizationId?: string } }).invitation?.organizationId;
-    if (orgId) await authClient.organization.setActive({ organizationId: orgId });
+    await authClient.organization.setActive({ organizationId: inv.organizationId });
     router.replace("/inbox");
   }
 
@@ -159,46 +172,6 @@ function Accept({ id, email }: { id: string; email: string }) {
     router.replace("/inbox");
   }
 
-  if (invitation.isPending) {
-    return (
-      <Card>
-        <CardContent className="space-y-3 py-6">
-          <Skeleton className="h-6 w-2/3" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-9 w-full" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (invitation.isError) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <CircleAlert className="size-5 text-destructive" /> This invitation can&apos;t be used
-          </CardTitle>
-          <CardDescription>
-            It may have expired or been revoked, or it was sent to a different address than{" "}
-            <span className="font-medium text-foreground">{email}</span>.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-2">
-          <p className="text-sm text-muted-foreground">{invitation.error.message}</p>
-          <div className="flex flex-wrap gap-2 pt-2">
-            <Button variant="outline" onClick={() => void signOut()}>
-              Use another account
-            </Button>
-            <Button variant="ghost" onClick={() => router.replace("/inbox")}>
-              Go to my inbox
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const inv = invitation.data;
   return (
     <Card>
       <CardHeader>
@@ -214,13 +187,47 @@ function Accept({ id, email }: { id: string; email: string }) {
             {error}
           </p>
         )}
-        <Button onClick={accept} disabled={!!pending}>
+        <Button onClick={() => void accept()} disabled={!!pending}>
           {pending === "accept" ? "Joining…" : `Join ${inv.organizationName}`}
         </Button>
-        <Button variant="ghost" onClick={decline} disabled={!!pending}>
+        <Button variant="ghost" onClick={() => void decline()} disabled={!!pending}>
           {pending === "decline" ? "Declining…" : "Decline"}
         </Button>
         <p className="text-center text-xs text-muted-foreground">Signed in as {email}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function InvitationProblem({ email, message }: { email: string; message: string }) {
+  const router = useRouter();
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-xl">
+          <CircleAlert className="size-5 text-destructive" /> This invitation can&apos;t be used
+        </CardTitle>
+        <CardDescription>
+          It may have expired or been revoked, or it was sent to a different address than{" "}
+          <span className="font-medium text-foreground">{email}</span>.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-2">
+        <p className="text-sm text-muted-foreground">{message}</p>
+        <div className="flex flex-wrap gap-2 pt-2">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              await signOut();
+              router.refresh();
+            }}
+          >
+            Use another account
+          </Button>
+          <Button variant="ghost" onClick={() => router.replace("/inbox")}>
+            Go to my inbox
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

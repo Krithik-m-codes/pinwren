@@ -1,9 +1,10 @@
 "use client";
 
 import { Monitor, Moon, Sun } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useState } from "react";
 import { toast } from "sonner";
+import { controlProps, Field, FieldError, FormError, useZodForm } from "@/components/form";
 import { Segmented } from "@/components/segmented";
 import { SettingGroup, SettingRow } from "@/components/setting-row";
 import { Button } from "@/components/ui/button";
@@ -12,29 +13,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
-import { authClient, useSession } from "@/lib/auth-client";
-import { formText } from "@/lib/form";
-import { useMounted, useSyncedState } from "@/lib/use-synced-state";
+import { authClient } from "@/lib/auth-client";
+import { changePasswordForm, profileForm } from "@/lib/form-schemas";
+import { errorMessage, useUpdateProfileMutation } from "@/lib/store/api";
+import { useMounted } from "@/lib/use-synced-state";
+import { useViewer } from "@/lib/viewer";
 
 export function ProfileSettings() {
-  const { data: session, isPending, refetch } = useSession();
+  const { me } = useViewer();
   const { theme, setTheme } = useTheme();
   // The theme is only known on the client; render its control after hydration.
   const mounted = useMounted();
-  const [name, setName] = useSyncedState(session?.user.name ?? "");
-  const [saving, setSaving] = useState(false);
-
-  async function saveName(e: React.SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const v = name.trim();
-    if (!v || v === session?.user.name) return;
-    setSaving(true);
-    const { error } = await authClient.updateUser({ name: v });
-    setSaving(false);
-    if (error) return toast.error(error.message ?? "Couldn't save your name");
-    toast.success("Name updated");
-    void refetch();
-  }
 
   return (
     <div className="grid gap-4">
@@ -44,43 +33,7 @@ export function ProfileSettings() {
           <CardDescription>How you appear to your team in comments and assignments.</CardDescription>
         </CardHeader>
         <CardContent>
-          {isPending ? (
-            <Skeleton className="h-24" />
-          ) : (
-            <form onSubmit={saveName} className="grid gap-4">
-              <div className="flex items-center gap-3">
-                <UserAvatar name={session?.user.name} image={session?.user.image} className="size-11" />
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{session?.user.name}</p>
-                  <p className="truncate text-sm text-muted-foreground">{session?.user.email}</p>
-                </div>
-              </div>
-              <div className="grid gap-2 sm:max-w-sm">
-                <Label htmlFor="profile-name">Name</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="profile-name"
-                    value={name}
-                    maxLength={120}
-                    autoComplete="name"
-                    onChange={(e) => setName(e.target.value)}
-                    aria-invalid={!name.trim() || undefined}
-                  />
-                  <Button
-                    type="submit"
-                    disabled={saving || !name.trim() || name.trim() === session?.user.name}
-                  >
-                    {saving ? "Saving…" : "Save"}
-                  </Button>
-                </div>
-                {!name.trim() && <p className="text-xs text-destructive">Your name can&apos;t be empty</p>}
-              </div>
-              <div className="grid gap-2 sm:max-w-sm">
-                <Label htmlFor="profile-email">Email</Label>
-                <Input id="profile-email" value={session?.user.email ?? ""} readOnly disabled />
-              </div>
-            </form>
-          )}
+          {!me ? <Skeleton className="h-24" /> : <NameForm key={me.user.name} user={me.user} />}
         </CardContent>
       </Card>
 
@@ -137,37 +90,70 @@ export function ProfileSettings() {
   );
 }
 
+function NameForm({ user }: { user: { name: string; email: string; image: string | null } }) {
+  const router = useRouter();
+  const [updateProfile] = useUpdateProfileMutation();
+  const form = useZodForm(profileForm, { defaultValues: { name: user.name }, mode: "onChange" });
+  const { errors, isSubmitting, isDirty } = form.formState;
+  const submit = form.handleSubmit(async ({ name }) => {
+    if (name === user.name) return;
+    try {
+      await updateProfile({ name }).unwrap();
+      toast.success("Name updated");
+      // The sidebar's account menu is rendered on the server from the session.
+      router.refresh();
+    } catch (e) {
+      toast.error(errorMessage(e, "Couldn't save your name"));
+    }
+  });
+  return (
+    <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
+      <div className="flex items-center gap-3">
+        <UserAvatar name={user.name} image={user.image} className="size-11" />
+        <div className="min-w-0">
+          <p className="truncate font-medium">{user.name}</p>
+          <p className="truncate text-sm text-muted-foreground">{user.email}</p>
+        </div>
+      </div>
+      <div className="grid gap-2 sm:max-w-sm">
+        <Label htmlFor="profile-name">Name</Label>
+        <div className="flex gap-2">
+          <Input
+            {...controlProps("profile-name", errors.name?.message)}
+            {...form.register("name")}
+            maxLength={120}
+            autoComplete="name"
+          />
+          <Button type="submit" disabled={isSubmitting || !isDirty || !!errors.name}>
+            {isSubmitting ? "Saving…" : "Save"}
+          </Button>
+        </div>
+        <FieldError id="profile-name" message={errors.name?.message} />
+      </div>
+      <div className="grid gap-2 sm:max-w-sm">
+        <Label htmlFor="profile-email">Email</Label>
+        <Input id="profile-email" value={user.email} readOnly disabled />
+      </div>
+    </form>
+  );
+}
+
 function PasswordCard() {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  async function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const data = new FormData(form);
-    const next = formText(data, "new");
-    if (next.length < 8) {
-      setError("Use at least 8 characters");
-      return;
-    }
-    if (next !== formText(data, "confirm")) {
-      setError("The new passwords don't match");
-      return;
-    }
-    setPending(true);
-    setError(null);
+  const form = useZodForm(changePasswordForm, { defaultValues: { current: "", next: "", confirm: "" } });
+  const { errors, isSubmitting } = form.formState;
+  const submit = form.handleSubmit(async ({ current, next }) => {
     const { error } = await authClient.changePassword({
-      currentPassword: formText(data, "current"),
+      currentPassword: current,
       newPassword: next,
       revokeOtherSessions: true,
     });
-    setPending(false);
     if (error) {
-      setError(error.message ?? "Couldn't change your password");
+      form.setError("root", { message: error.message ?? "Couldn't change your password" });
       return;
     }
     form.reset();
     toast.success("Password changed", { description: "Other devices were signed out." });
-  }
+  });
   return (
     <Card>
       <CardHeader>
@@ -175,33 +161,34 @@ function PasswordCard() {
         <CardDescription>Changing it signs you out everywhere else.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="grid gap-3 sm:max-w-sm">
-          <div className="grid gap-2">
-            <Label htmlFor="pw-current">Current password</Label>
-            <Input id="pw-current" name="current" type="password" autoComplete="current-password" required />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="pw-new">New password</Label>
+        <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-3 sm:max-w-sm">
+          <Field id="pw-current" label="Current password" error={errors.current?.message}>
             <Input
-              id="pw-new"
-              name="new"
+              {...controlProps("pw-current", errors.current?.message)}
+              {...form.register("current")}
+              type="password"
+              autoComplete="current-password"
+            />
+          </Field>
+          <Field id="pw-new" label="New password" error={errors.next?.message}>
+            <Input
+              {...controlProps("pw-new", errors.next?.message)}
+              {...form.register("next")}
               type="password"
               autoComplete="new-password"
-              minLength={8}
-              required
             />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="pw-confirm">Confirm new password</Label>
-            <Input id="pw-confirm" name="confirm" type="password" autoComplete="new-password" required />
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <Button type="submit" variant="outline" className="justify-self-start" disabled={pending}>
-            {pending ? "Changing…" : "Change password"}
+          </Field>
+          <Field id="pw-confirm" label="Confirm new password" error={errors.confirm?.message}>
+            <Input
+              {...controlProps("pw-confirm", errors.confirm?.message)}
+              {...form.register("confirm")}
+              type="password"
+              autoComplete="new-password"
+            />
+          </Field>
+          <FormError message={errors.root?.message} />
+          <Button type="submit" variant="outline" className="justify-self-start" disabled={isSubmitting}>
+            {isSubmitting ? "Changing…" : "Change password"}
           </Button>
         </form>
       </CardContent>

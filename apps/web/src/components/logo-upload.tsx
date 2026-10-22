@@ -4,7 +4,7 @@ import { ImageUp } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api";
+import { errorMessage, useUploadBrandAssetMutation } from "@/lib/store/api";
 import { cn } from "@/lib/utils";
 
 const TYPES = ["image/png", "image/jpeg", "image/webp"];
@@ -39,6 +39,7 @@ export function LogoUpload({
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [over, setOver] = useState(false);
+  const [uploadAsset] = useUploadBrandAssetMutation();
 
   async function upload(file: File | undefined) {
     if (!file) return;
@@ -53,13 +54,10 @@ export function LogoUpload({
     setBusy(true);
     try {
       const dataUrl = await readAsDataUrl(file);
-      const { asset } = await api<{ asset: UploadedLogo }>("/branding/assets", {
-        method: "POST",
-        json: { dataUrl },
-      });
+      const { asset } = await uploadAsset({ dataUrl }).unwrap();
       onUploaded(asset);
     } catch (e) {
-      toast.error("Upload failed", { description: e instanceof Error ? e.message : undefined });
+      toast.error("Upload failed", { description: errorMessage(e) });
     } finally {
       setBusy(false);
       if (input.current) input.current.value = "";

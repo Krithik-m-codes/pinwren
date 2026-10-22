@@ -1,8 +1,15 @@
 "use client";
 
-import type { CaptureConfigInput } from "@pinwren/core";
+import {
+  type CaptureConfigInput,
+  captureConfig,
+  MAX_REPLAY_SECONDS,
+  MIN_REPLAY_SECONDS,
+} from "@pinwren/core";
+import { useWatch } from "react-hook-form";
+import { z } from "zod";
+import { controlProps, FieldError, useZodForm } from "@/components/form";
 import { Plus, X } from "lucide-react";
-import { useState } from "react";
 import { Segmented } from "@/components/segmented";
 import { SettingGroup, SettingRow } from "@/components/setting-row";
 import { Badge } from "@/components/ui/badge";
@@ -10,22 +17,30 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import type { ProjectDetail } from "@/lib/api";
+import { sliderValue } from "@/lib/form";
+import { useSyncedState } from "@/lib/use-synced-state";
 import { useProjectPatch } from "./use-project";
 
 const ALWAYS_MASKED = ["input[type=password]", "[autocomplete^=cc-]", "[data-pinwren-mask]"];
 
-/** Throws on an invalid CSS selector — the browser is the best validator. */
-function selectorError(s: string): string | null {
-  if (!s) return "Enter a CSS selector";
-  if (s.length > 200) return "200 characters at most";
-  try {
-    document.createDocumentFragment().querySelector(s);
-    return null;
-  } catch {
-    return "That isn't a valid CSS selector";
-  }
-}
+/** A selector to mask: core's rule for one entry, then the browser as the CSS validator. */
+const selectorForm = z.object({
+  selector: z
+    .string()
+    .trim()
+    .min(1, "Enter a CSS selector")
+    .pipe(captureConfig.shape.maskSelectors.unwrap().element.max(200, "200 characters at most"))
+    .refine((s) => {
+      try {
+        document.createDocumentFragment().querySelector(s);
+        return true;
+      } catch {
+        return false;
+      }
+    }, "That isn't a valid CSS selector"),
+});
 
 export function CaptureTab({ project }: { project: ProjectDetail }) {
   const save = useProjectPatch(project.id);
@@ -85,29 +100,33 @@ export function CaptureTab({ project }: { project: ProjectDetail }) {
           </SettingGroup>
         </CardContent>
       </Card>
+      <ReplayCard
+        enabled={c.replay.enabled}
+        seconds={c.replay.seconds}
+        privacyMode={project.widgetConfig.privacyMode}
+        onSave={(replay, message) => save.mutate({ patch: { captureConfig: { replay } }, message })}
+      />
       <MaskCard selectors={c.maskSelectors} onSave={(maskSelectors) => commit({ maskSelectors })} />
     </div>
   );
 }
 
 function MaskCard({ selectors, onSave }: { selectors: string[]; onSave: (s: string[]) => void }) {
-  const [draft, setDraft] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const add = () => {
-    const s = draft.trim();
-    const err = selectorError(s) ?? (selectors.includes(s) ? "Already in the list" : null);
-    if (!err && selectors.length >= 50) {
-      setError("50 selectors at most");
+  const form = useZodForm(selectorForm, { defaultValues: { selector: "" } });
+  const { errors } = form.formState;
+  const draft = useWatch({ control: form.control, name: "selector" });
+  const add = form.handleSubmit(({ selector }) => {
+    if (selectors.includes(selector)) {
+      form.setError("selector", { message: "Already in the list" });
       return;
     }
-    if (err) {
-      setError(err);
+    if (selectors.length >= 50) {
+      form.setError("selector", { message: "50 selectors at most" });
       return;
     }
-    setError(null);
-    setDraft("");
-    onSave([...selectors, s]);
-  };
+    form.reset({ selector: "" });
+    onSave([...selectors, selector]);
+  });
   return (
     <Card>
       <CardHeader>
@@ -151,31 +170,91 @@ function MaskCard({ selectors, onSave }: { selectors: string[]; onSave: (s: stri
             ))}
           </ul>
         </div>
-        <form
-          className="grid gap-1.5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            add();
-          }}
-        >
+        <form className="grid gap-1.5" noValidate onSubmit={(e) => void add(e)}>
           <div className="flex gap-2">
             <Input
-              value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                setError(null);
-              }}
+              {...controlProps("add-selector", errors.selector?.message)}
+              {...form.register("selector")}
               placeholder=".customer-email, #account-balance"
               aria-label="Add a selector"
               className="font-mono"
-              aria-invalid={!!error || undefined}
             />
             <Button type="submit" variant="outline" disabled={!draft.trim()}>
               <Plus /> Add
             </Button>
           </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          <FieldError id="add-selector" message={errors.selector?.message} />
         </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Session replay (F-007, wave-4 §3): the widget keeps a rolling rrweb buffer and attaches it to bug reports. */
+function ReplayCard({
+  enabled,
+  seconds,
+  privacyMode,
+  onSave,
+}: {
+  enabled: boolean;
+  seconds: number;
+  privacyMode: boolean;
+  onSave: (replay: { enabled?: boolean; seconds?: number }, message: string) => void;
+}) {
+  const [draft, setDraft] = useSyncedState(seconds);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Session replay</CardTitle>
+        <CardDescription>
+          Bug reports carry a replay of the last moments before the report — clicks, scrolls and page changes,
+          with every input masked. The reporter can switch it off before sending.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <SettingGroup>
+          <SettingRow
+            label="Record replays"
+            htmlFor="replay-enabled"
+            description={
+              privacyMode
+                ? "Privacy mode is on: the widget records only when the site allows it (allowReplayInPrivacyMode)."
+                : "Off by default. Replays are stored with the report and count towards its size (up to 10 MB)."
+            }
+          >
+            <Switch
+              id="replay-enabled"
+              checked={enabled}
+              onCheckedChange={(on) =>
+                onSave({ enabled: on }, on ? "Session replay on" : "Session replay off")
+              }
+            />
+          </SettingRow>
+          <SettingRow
+            label="Length"
+            description={`How far back a replay reaches: ${MIN_REPLAY_SECONDS}–${MAX_REPLAY_SECONDS} seconds.`}
+          >
+            <div className="flex w-full items-center gap-3 sm:w-64">
+              <Slider
+                aria-label="Replay length in seconds"
+                min={MIN_REPLAY_SECONDS}
+                max={MAX_REPLAY_SECONDS}
+                step={10}
+                disabled={!enabled}
+                value={[draft]}
+                onValueChange={(v) => setDraft(sliderValue(v))}
+                onValueCommitted={(v) => {
+                  const n = sliderValue(v);
+                  if (n !== seconds) onSave({ seconds: n }, `Replays keep the last ${n} seconds`);
+                }}
+              />
+              <span className="w-12 shrink-0 text-right text-sm tabular-nums" data-testid="replay-seconds">
+                {draft} s
+              </span>
+            </div>
+          </SettingRow>
+        </SettingGroup>
       </CardContent>
     </Card>
   );

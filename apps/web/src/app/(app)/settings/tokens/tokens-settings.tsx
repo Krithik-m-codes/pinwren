@@ -1,7 +1,6 @@
 "use client";
 
 import { API_TOKEN_SCOPES } from "@pinwren/core";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -25,39 +24,47 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { type ApiToken, type ApiTokenScope, api } from "@/lib/api";
+import { Controller } from "react-hook-form";
+import { controlProps, Field, FormError, useZodForm } from "@/components/form";
+import type { ApiToken } from "@/lib/api";
+import { createTokenForm } from "@/lib/form-schemas";
+import {
+  errorMessage,
+  useCreateTokenMutation,
+  useRevokeTokenMutation,
+  useTokensQuery,
+} from "@/lib/store/api";
 
-const SCOPE_INFO: Record<ApiTokenScope, string> = {
+const SCOPE_INFO: Record<(typeof API_TOKEN_SCOPES)[number], string> = {
   "feedback:read": "List and read feedback",
   "feedback:write": "Change status, priority, assignee and title",
   "comments:write": "Post comments as you",
 };
-const EXPIRY = [
+const EXPIRY: { value: "30" | "90" | "365" | "never"; label: string }[] = [
   { value: "30", label: "30 days" },
   { value: "90", label: "90 days" },
   { value: "365", label: "1 year" },
   { value: "never", label: "Never" },
 ];
-const tokensKey = ["tokens"] as const;
 
 const dateOnly = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" });
 
 /** Personal API tokens for `/api/v1` (F-081). Secrets are shown once. */
 export function TokensSettings() {
-  const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<ApiToken | null>(null);
-  const tokens = useQuery({ queryKey: tokensKey, queryFn: () => api<{ tokens: ApiToken[] }>("/tokens") });
-  const revoke = useMutation({
-    mutationFn: (id: string) => api(`/tokens/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
-      toast.success(`Token “${revoking?.name ?? ""}” revoked`);
-      setRevoking(null);
-      void qc.invalidateQueries({ queryKey: tokensKey });
-    },
-    onError: (e) => toast.error(e.message),
-  });
+  const tokens = useTokensQuery(undefined);
+  const [revokeToken, revoke] = useRevokeTokenMutation();
+  const revokeNow = (t: ApiToken) => {
+    revokeToken(t.id)
+      .unwrap()
+      .then(() => {
+        toast.success(`Token “${t.name}” revoked`);
+        setRevoking(null);
+      })
+      .catch((e: unknown) => toast.error(errorMessage(e)));
+  };
 
   return (
     <Card>
@@ -74,8 +81,8 @@ export function TokensSettings() {
             <Plus /> Create token
           </Button>
         </div>
-        {tokens.isPending && <Skeleton className="h-24" />}
-        {tokens.isError && <ErrorState error={tokens.error} retry={() => tokens.refetch()} />}
+        {tokens.isLoading && <Skeleton className="h-24" />}
+        {tokens.isError && <ErrorState error={tokens.error} retry={() => void tokens.refetch()} />}
         {tokens.data?.tokens.length === 0 && (
           <EmptyState
             icon={KeyRound}
@@ -132,7 +139,6 @@ export function TokensSettings() {
         onCreated={(s) => {
           setCreating(false);
           setSecret(s);
-          void qc.invalidateQueries({ queryKey: tokensKey });
         }}
       />
       <SecretDialog
@@ -147,8 +153,8 @@ export function TokensSettings() {
         title={`Revoke “${revoking?.name ?? ""}”?`}
         description="Anything using it stops working immediately."
         confirmLabel="Revoke token"
-        pending={revoke.isPending}
-        onConfirm={() => revoking && revoke.mutate(revoking.id)}
+        pending={revoke.isLoading}
+        onConfirm={() => revoking && revokeNow(revoking)}
       />
     </Card>
   );
@@ -163,78 +169,87 @@ function CreateTokenDialog({
   onOpenChange: (o: boolean) => void;
   onCreated: (secret: string) => void;
 }) {
-  const [name, setName] = useState("");
-  const [scopes, setScopes] = useState<ApiTokenScope[]>(["feedback:read"]);
-  const [expiry, setExpiry] = useState("90");
-  const [error, setError] = useState<string | null>(null);
-  const create = useMutation({
-    mutationFn: () =>
-      api<{ token: ApiToken; secret: string }>("/tokens", {
-        method: "POST",
-        json: { name: name.trim(), scopes, ...(expiry !== "never" ? { expiresInDays: Number(expiry) } : {}) },
-      }),
-    onSuccess: ({ secret }) => {
-      setName("");
-      setScopes(["feedback:read"]);
-      onCreated(secret);
-    },
-    onError: (e) => setError(e.message),
-  });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <form
-          className="grid gap-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!name.trim()) {
-              setError("Give the token a name");
-              return;
-            }
-            if (!scopes.length) {
-              setError("Pick at least one scope");
-              return;
-            }
-            setError(null);
-            create.mutate();
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Create an API token</DialogTitle>
-            <DialogDescription>Give it only the scopes it needs.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2">
-            <Label htmlFor="token-name">Name</Label>
-            <Input
-              id="token-name"
-              value={name}
-              maxLength={80}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="CI triage bot"
-              // eslint-disable-next-line jsx-a11y/no-autofocus -- the dialog's first field; focus moves into a dialog on open
-              autoFocus
-            />
-          </div>
+        {open && <CreateTokenForm onCreated={onCreated} onCancel={() => onOpenChange(false)} />}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateTokenForm({
+  onCreated,
+  onCancel,
+}: {
+  onCreated: (secret: string) => void;
+  onCancel: () => void;
+}) {
+  const [create] = useCreateTokenMutation();
+  const form = useZodForm(createTokenForm, {
+    defaultValues: { name: "", scopes: ["feedback:read"], expiry: "90" },
+  });
+  const { errors, isSubmitting } = form.formState;
+  const submit = form.handleSubmit(async ({ name, scopes, expiry }) => {
+    try {
+      const { secret } = await create({
+        name,
+        scopes,
+        ...(expiry !== "never" ? { expiresInDays: Number(expiry) } : {}),
+      }).unwrap();
+      onCreated(secret);
+    } catch (e) {
+      form.setError("root", { message: errorMessage(e) });
+    }
+  });
+  return (
+    <form className="grid gap-4" noValidate onSubmit={(e) => void submit(e)}>
+      <DialogHeader>
+        <DialogTitle>Create an API token</DialogTitle>
+        <DialogDescription>Give it only the scopes it needs.</DialogDescription>
+      </DialogHeader>
+      <Field id="token-name" label="Name" error={errors.name?.message}>
+        <Input
+          {...controlProps("token-name", errors.name?.message)}
+          {...form.register("name")}
+          maxLength={80}
+          placeholder="CI triage bot"
+          // eslint-disable-next-line jsx-a11y/no-autofocus -- the dialog's first field; focus moves into a dialog on open
+          autoFocus
+        />
+      </Field>
+      <Controller
+        control={form.control}
+        name="scopes"
+        render={({ field }) => (
           <fieldset className="grid gap-2">
             <legend className="mb-1 text-sm font-medium">Scopes</legend>
-            {API_TOKEN_SCOPES.map((s) => (
-              <div key={s} className="flex items-start gap-2.5 text-sm">
+            {API_TOKEN_SCOPES.map((sc) => (
+              <div key={sc} className="flex items-start gap-2.5 text-sm">
                 <Checkbox
-                  id={`scope-${s}`}
+                  id={`scope-${sc}`}
                   className="mt-0.5"
-                  checked={scopes.includes(s)}
-                  onCheckedChange={(on) => setScopes(on ? [...scopes, s] : scopes.filter((x) => x !== s))}
+                  checked={field.value.includes(sc)}
+                  onCheckedChange={(on) =>
+                    field.onChange(on ? [...field.value, sc] : field.value.filter((x) => x !== sc))
+                  }
                 />
-                <label htmlFor={`scope-${s}`}>
-                  <code className="font-mono text-xs">{s}</code>
-                  <span className="block text-xs text-muted-foreground">{SCOPE_INFO[s]}</span>
+                <label htmlFor={`scope-${sc}`}>
+                  <code className="font-mono text-xs">{sc}</code>
+                  <span className="block text-xs text-muted-foreground">{SCOPE_INFO[sc]}</span>
                 </label>
               </div>
             ))}
           </fieldset>
-          <div className="grid gap-2">
-            <Label>Expires</Label>
-            <Select items={EXPIRY} value={expiry} onValueChange={(v) => v && setExpiry(v)}>
+        )}
+      />
+      <div className="grid gap-2">
+        <Label>Expires</Label>
+        <Controller
+          control={form.control}
+          name="expiry"
+          render={({ field }) => (
+            <Select items={EXPIRY} value={field.value} onValueChange={(v) => v && field.onChange(v)}>
               <SelectTrigger className="w-40" aria-label="Expires">
                 <SelectValue />
               </SelectTrigger>
@@ -246,22 +261,18 @@ function CreateTokenDialog({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
           )}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? "Creating…" : "Create token"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        />
+      </div>
+      <FormError message={errors.scopes?.message ?? errors.root?.message} />
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "Creating…" : "Create token"}
+        </Button>
+      </DialogFooter>
+    </form>
   );
 }

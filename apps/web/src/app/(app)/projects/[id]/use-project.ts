@@ -1,69 +1,38 @@
 "use client";
 
-import {
-  type CaptureConfigInput,
-  mergeConfig,
-  type WidgetBrandingInput,
-  type WidgetConfigInput,
-} from "@pinwren/core";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api, type ProjectDetail, qk } from "@/lib/api";
+import { errorMessage, useProjectQuery, useUpdateProjectMutation } from "@/lib/store/api";
+import type { ProjectPatch } from "@/lib/store/api/projects";
+import { projectsApi } from "@/lib/store/api/projects";
+import { useAppSelector } from "@/lib/store/hooks";
 
-export type ProjectPatch = Partial<
-  Pick<
-    ProjectDetail,
-    "name" | "allowedOrigins" | "publicRead" | "retentionDays" | "notifyReporter" | "widgetRateLimitPerMin"
-  >
-> & {
-  widgetConfig?: WidgetConfigInput;
-  captureConfig?: CaptureConfigInput;
-  widgetBranding?: WidgetBrandingInput;
-  archived?: boolean;
-};
+export type { ProjectPatch };
 
+/** The project, polled until the widget first pings `/w/config`, so "Waiting for your site" flips live. */
 export function useProject(id: string) {
-  return useQuery({
-    queryKey: qk.project(id),
-    queryFn: () => api<{ project: ProjectDetail }>(`/projects/${id}`),
-    // Poll until the widget pings /w/config, so "Waiting for your site" flips live (blueprint 06 §3.5).
-    refetchInterval: (q) => (q.state.data?.project.lastSeenAt ? false : 4000),
-  });
+  const seen = useAppSelector((s) => !!projectsApi.endpoints.project.select(id)(s).data?.project.lastSeenAt);
+  return useProjectQuery(id, { pollingInterval: seen ? 0 : 4000 });
 }
 
 /**
- * Optimistic project PATCH: the form and preview change at once, roll back on a 4xx, and a toast says
- * which happened. Partial configs are deep-merged the same way the API merges them.
+ * Save a project change: the form and preview change at once (optimistic, in the RTK Query endpoint),
+ * roll back on a 4xx, and a toast says which happened.
  */
 export function useProjectPatch(id: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ patch }: { patch: ProjectPatch; message?: string }) =>
-      api<{ project: ProjectDetail }>(`/projects/${id}`, { method: "PATCH", json: patch }),
-    onMutate: async ({ patch }) => {
-      await qc.cancelQueries({ queryKey: qk.project(id) });
-      const prev = qc.getQueryData<{ project: ProjectDetail }>(qk.project(id));
-      if (prev) {
-        const { widgetConfig, captureConfig, widgetBranding, archived, ...rest } = patch;
-        const next: ProjectDetail = { ...prev.project, ...rest };
-        if (widgetConfig) next.widgetConfig = mergeConfig(prev.project.widgetConfig, widgetConfig) as never;
-        if (captureConfig)
-          next.captureConfig = mergeConfig(prev.project.captureConfig, captureConfig) as never;
-        if (widgetBranding)
-          next.widgetBranding = mergeConfig(prev.project.widgetBranding, widgetBranding) as never;
-        if (archived !== undefined) next.archivedAt = archived ? new Date().toISOString() : null;
-        qc.setQueryData(qk.project(id), { project: next });
-      }
-      return { prev };
+  const [update, state] = useUpdateProjectMutation();
+  return {
+    isPending: state.isLoading,
+    mutate: (
+      { patch, message }: { patch: ProjectPatch; message?: string },
+      opts?: { onSuccess?: () => void },
+    ) => {
+      update({ id, patch })
+        .unwrap()
+        .then(() => {
+          toast.success(message ?? "Saved", { id: `project-save-${id}` });
+          opts?.onSuccess?.();
+        })
+        .catch((e: unknown) => toast.error("Not saved", { description: errorMessage(e) }));
     },
-    onError: (e, _v, ctx) => {
-      if (ctx?.prev) qc.setQueryData(qk.project(id), ctx.prev);
-      toast.error("Not saved", { description: e.message });
-    },
-    onSuccess: ({ project }, { message }) => {
-      qc.setQueryData(qk.project(id), { project });
-      void qc.invalidateQueries({ queryKey: qk.projects });
-      toast.success(message ?? "Saved", { id: `project-save-${id}` });
-    },
-  });
+  };
 }

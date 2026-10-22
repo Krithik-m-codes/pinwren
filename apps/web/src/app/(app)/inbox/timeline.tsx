@@ -1,9 +1,9 @@
 "use client";
 
 import type { FeedbackStatus, Priority } from "@pinwren/core";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
+  BadgeCheck,
   CircleDot,
   ExternalLink,
   Flag,
@@ -15,8 +15,11 @@ import {
   UserRound,
   Zap,
 } from "lucide-react";
-import { forwardRef, useState } from "react";
+import { useState } from "react";
+import { commentCreate, commentUpdate } from "@pinwren/core";
+import { Controller, useWatch } from "react-hook-form";
 import { toast } from "sonner";
+import { useZodForm } from "@/components/form";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PRIORITY_META, PriorityIcon, STATUS_META, StatusIcon, timeAgo } from "@/components/feedback-meta";
 import { Button } from "@/components/ui/button";
@@ -30,8 +33,14 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
-import { type ActivityEvent, api, type Comment, type FeedbackDetail } from "@/lib/api";
-import { useMe } from "@/lib/feedback-hooks";
+import type { ActivityEvent, Comment, FeedbackDetail } from "@/lib/api";
+import {
+  errorMessage,
+  useAddCommentMutation,
+  useDeleteCommentMutation,
+  useEditCommentMutation,
+} from "@/lib/store/api";
+import { useViewer } from "@/lib/viewer";
 import { cn } from "@/lib/utils";
 
 type Entry =
@@ -45,7 +54,9 @@ const absolute = (iso: string) =>
 function Time({ iso }: { iso: string }) {
   return (
     <Tooltip>
-      <TooltipTrigger render={<time dateTime={iso} className="shrink-0 text-muted-foreground" />}>
+      <TooltipTrigger
+        render={<time dateTime={iso} className="shrink-0 text-muted-foreground" suppressHydrationWarning />}
+      >
         {timeAgo(iso)}
       </TooltipTrigger>
       <TooltipContent>{absolute(iso)}</TooltipContent>
@@ -191,35 +202,15 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
 }
 
 function CommentCard({ comment: c, feedbackId }: { comment: Comment; feedbackId: string }) {
-  const qc = useQueryClient();
-  const { userId, isAdmin } = useMe();
+  const { userId, isAdmin, canWrite } = useViewer();
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(c.body);
   const [confirming, setConfirming] = useState(false);
-  const own = !!c.author && c.author.id === userId;
-  const canDelete = own || isAdmin;
+  const own = canWrite && !!c.author && c.author.id === userId;
+  const canDelete = canWrite && (own || isAdmin);
   const name =
     c.author?.name ?? c.authorGuest?.name ?? (c.authorGuest?.email ? c.authorGuest.email : "Visitor");
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["feedback"] });
-  const save = useMutation({
-    mutationFn: () => api(`/comments/${c.id}`, { method: "PATCH", json: { body: draft } }),
-    onSuccess: () => {
-      setEditing(false);
-      toast.success("Comment updated");
-      void refresh();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-  const remove = useMutation({
-    mutationFn: () => api(`/comments/${c.id}`, { method: "DELETE" }),
-    onSuccess: () => {
-      setConfirming(false);
-      toast.success("Comment deleted");
-      void refresh();
-    },
-    onError: (e) => toast.error(e.message),
-  });
+  const [deleteComment, remove] = useDeleteCommentMutation();
 
   return (
     <li
@@ -234,6 +225,9 @@ function CommentCard({ comment: c, feedbackId }: { comment: Comment; feedbackId:
         <UserAvatar name={name} image={c.author?.image} className="size-5" />
         <span className="min-w-0 truncate font-medium">{name}</span>
         {!c.author && <span className="text-muted-foreground">· visitor</span>}
+        {!c.author && c.authorGuest?.verified && (
+          <BadgeCheck className="size-3.5 text-emerald-600" aria-label="Verified reporter" />
+        )}
         {c.visibility === "internal" ? (
           <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
             <Lock className="size-3" /> Internal
@@ -265,12 +259,7 @@ function CommentCard({ comment: c, feedbackId }: { comment: Comment; feedbackId:
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-36">
                 {own && (
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setDraft(c.body);
-                      setEditing(true);
-                    }}
-                  >
+                  <DropdownMenuItem onClick={() => setEditing(true)}>
                     <Pencil /> Edit
                   </DropdownMenuItem>
                 )}
@@ -285,37 +274,7 @@ function CommentCard({ comment: c, feedbackId }: { comment: Comment; feedbackId:
         </span>
       </div>
       {editing ? (
-        <form
-          className="space-y-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (draft.trim()) save.mutate();
-          }}
-        >
-          <Textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={3}
-            // eslint-disable-next-line jsx-a11y/no-autofocus -- opened by the Edit action, which hands focus to the field
-            autoFocus
-            aria-label="Edit comment"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && draft.trim()) save.mutate();
-              if (e.key === "Escape") {
-                e.stopPropagation();
-                setEditing(false);
-              }
-            }}
-          />
-          <div className="flex justify-end gap-2">
-            <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" size="sm" disabled={!draft.trim() || draft === c.body || save.isPending}>
-              {save.isPending ? "Saving…" : "Save"}
-            </Button>
-          </div>
-        </form>
+        <EditComment comment={c} feedbackId={feedbackId} onDone={() => setEditing(false)} />
       ) : (
         <p className="text-sm break-words whitespace-pre-wrap">{c.body}</p>
       )}
@@ -324,10 +283,72 @@ function CommentCard({ comment: c, feedbackId }: { comment: Comment; feedbackId:
         onOpenChange={setConfirming}
         title="Delete this comment?"
         description="It's removed for everyone, including the reporter if it was a public reply. The timeline keeps a note that it was deleted."
-        pending={remove.isPending}
-        onConfirm={() => remove.mutate()}
+        pending={remove.isLoading}
+        onConfirm={() => {
+          deleteComment({ id: c.id, feedbackId })
+            .unwrap()
+            .then(() => {
+              setConfirming(false);
+              toast.success("Comment deleted");
+            })
+            .catch((e: unknown) => toast.error(errorMessage(e)));
+        }}
       />
     </li>
+  );
+}
+
+/** Edit your own comment (core's commentUpdate: 1–10 000 characters). */
+function EditComment({
+  comment: c,
+  feedbackId,
+  onDone,
+}: {
+  comment: Comment;
+  feedbackId: string;
+  onDone: () => void;
+}) {
+  const [saveComment] = useEditCommentMutation();
+  const form = useZodForm(commentUpdate, { defaultValues: { body: c.body } });
+  const { isSubmitting, isDirty } = form.formState;
+  const body = useWatch({ control: form.control, name: "body" });
+  const submit = form.handleSubmit(async (v) => {
+    try {
+      await saveComment({ id: c.id, feedbackId, body: v.body }).unwrap();
+      toast.success("Comment updated");
+      onDone();
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  });
+  return (
+    <form className="space-y-2" noValidate onSubmit={(e) => void submit(e)}>
+      <Textarea
+        {...form.register("body")}
+        // Also as the initial DOM content, so the text is there before react-hook-form fills the field.
+        defaultValue={c.body}
+        rows={3}
+        maxLength={10_000}
+        // eslint-disable-next-line jsx-a11y/no-autofocus -- opened by the Edit action, which hands focus to the field
+        autoFocus
+        aria-label="Edit comment"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit();
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            onDone();
+          }
+        }}
+      />
+      <div className="flex justify-end gap-2">
+        <Button type="button" size="sm" variant="ghost" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button type="submit" size="sm" disabled={!body.trim() || !isDirty || isSubmitting}>
+          {isSubmitting ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -373,66 +394,68 @@ export function Timeline({ data }: { data: FeedbackDetail }) {
   );
 }
 
-export const CommentComposer = forwardRef<HTMLTextAreaElement, { feedbackId: string }>(
-  function CommentComposer({ feedbackId }, ref) {
-    const qc = useQueryClient();
-    const [body, setBody] = useState("");
-    const [visibility, setVisibility] = useState<"internal" | "public">("internal");
-    const send = useMutation({
-      mutationFn: () =>
-        api(`/feedback/${feedbackId}/comments`, { method: "POST", json: { body, visibility } }),
-      onSuccess: () => {
-        setBody("");
-        void qc.invalidateQueries({ queryKey: ["feedback"] });
-      },
-      onError: (e) => toast.error(e.message),
-    });
+/** Reply publicly or leave an internal note (default) — blueprint 06 §3.2. */
+export function CommentComposer({ feedbackId }: { feedbackId: string }) {
+  const [addComment] = useAddCommentMutation();
+  const form = useZodForm(commentCreate, { defaultValues: { body: "", visibility: "internal" } });
+  const { isSubmitting } = form.formState;
+  const body = useWatch({ control: form.control, name: "body" });
+  const visibility = useWatch({ control: form.control, name: "visibility" });
+  const submit = form.handleSubmit(async (v) => {
+    try {
+      await addComment({ feedbackId, body: v.body, visibility: v.visibility }).unwrap();
+      form.reset({ body: "", visibility: v.visibility });
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  });
 
-    return (
-      <form
-        className={cn(
-          "space-y-2 rounded-lg border p-2 transition-colors focus-within:border-ring",
-          visibility === "internal" && "bg-amber-50/40 dark:bg-amber-500/[0.04]",
-        )}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (body.trim()) send.mutate();
+  return (
+    <form
+      className={cn(
+        "space-y-2 rounded-lg border p-2 transition-colors focus-within:border-ring",
+        visibility === "internal" && "bg-amber-50/40 dark:bg-amber-500/[0.04]",
+      )}
+      onSubmit={(e) => void submit(e)}
+    >
+      <Textarea
+        {...form.register("body")}
+        placeholder={
+          visibility === "internal"
+            ? "Leave an internal note…"
+            : "Reply to the reporter (visible on the page)…"
+        }
+        aria-label="Comment"
+        rows={3}
+        maxLength={10_000}
+        className="min-h-16 resize-none border-0 bg-transparent p-1.5 shadow-none focus-visible:ring-0 dark:bg-transparent"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit();
+          if (e.key === "Escape") e.currentTarget.blur();
         }}
-      >
-        <Textarea
-          ref={ref}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder={
-            visibility === "internal"
-              ? "Leave an internal note…"
-              : "Reply to the reporter (visible on the page)…"
-          }
-          aria-label="Comment"
-          rows={3}
-          className="min-h-16 resize-none border-0 bg-transparent p-1.5 shadow-none focus-visible:ring-0 dark:bg-transparent"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && body.trim()) send.mutate();
-            if (e.key === "Escape") e.currentTarget.blur();
-          }}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Controller
+          control={form.control}
+          name="visibility"
+          render={({ field }) => (
+            <Tabs value={field.value} onValueChange={(v) => field.onChange(v)}>
+              <TabsList className="h-7">
+                <TabsTrigger value="internal" className="px-2.5 text-xs">
+                  <Lock /> Internal
+                </TabsTrigger>
+                <TabsTrigger value="public" className="px-2.5 text-xs">
+                  Public reply
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
         />
-        <div className="flex flex-wrap items-center gap-2">
-          <Tabs value={visibility} onValueChange={(v) => setVisibility(v as "internal" | "public")}>
-            <TabsList className="h-7">
-              <TabsTrigger value="internal" className="px-2.5 text-xs">
-                <Lock /> Internal
-              </TabsTrigger>
-              <TabsTrigger value="public" className="px-2.5 text-xs">
-                Public reply
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <span className="ml-auto hidden text-[11px] text-muted-foreground sm:inline">Ctrl ↵ to send</span>
-          <Button type="submit" size="sm" disabled={!body.trim() || send.isPending}>
-            {send.isPending ? "Sending…" : "Send"}
-          </Button>
-        </div>
-      </form>
-    );
-  },
-);
+        <span className="ml-auto hidden text-[11px] text-muted-foreground sm:inline">Ctrl ↵ to send</span>
+        <Button type="submit" size="sm" disabled={!body.trim() || isSubmitting}>
+          {isSubmitting ? "Sending…" : "Send"}
+        </Button>
+      </div>
+    </form>
+  );
+}

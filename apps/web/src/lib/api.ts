@@ -1,4 +1,6 @@
 import type {
+  Entitlements,
+  ViewFilters,
   AnchorBundle,
   API_TOKEN_SCOPES,
   CaptureConfig,
@@ -16,42 +18,7 @@ import type {
   WidgetConfig,
 } from "@pinwren/core";
 
-/** Thrown for any non-2xx answer; carries the problem-details code (blueprint 04 §1). */
-export class ApiRequestError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-export async function api<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
-  const { json, ...rest } = init ?? {};
-  const headers = new Headers(rest.headers);
-  if (json !== undefined && !headers.has("content-type")) headers.set("content-type", "application/json");
-  const res = await fetch(`/api${path}`, {
-    ...rest,
-    credentials: "same-origin",
-    headers,
-    body: json !== undefined ? JSON.stringify(json) : (rest.body ?? null),
-  });
-  if (res.status === 204) return undefined as T;
-  const data: unknown = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const problem = (data ?? {}) as { code?: unknown; title?: unknown };
-    throw new ApiRequestError(
-      res.status,
-      typeof problem.code === "string" ? problem.code : "ERROR",
-      typeof problem.title === "string" ? problem.title : res.statusText,
-    );
-  }
-  return data as T;
-}
-
-/** 403s for admin-only screens render as an explanation instead of an error. */
-export const isForbidden = (e: unknown) => e instanceof ApiRequestError && e.status === 403;
+export { isForbidden } from "@/lib/store/api/base";
 
 export const assetUrl = (id: string) => `/api/assets/${id}`;
 
@@ -78,11 +45,13 @@ export type ProjectDetail = Project & {
   widgetRateLimitPerMin: number | null;
   widgetBranding: WidgetBranding;
   hasActionSecret: boolean;
+  hasIdentitySecret: boolean;
   archivedAt: string | null;
   updatedAt: string;
 };
 
-export type Guest = { name?: string; email?: string; externalId?: string } | null;
+/** A reporter who isn't a member. `verified`: a signed identity checked by the server (wave-4 §4). */
+export type Guest = { name?: string; email?: string; externalId?: string; verified?: boolean } | null;
 
 export type FeedbackRow = {
   id: string;
@@ -98,7 +67,9 @@ export type FeedbackRow = {
   projectId: string;
   projectName: string;
   pageUrl: string | null;
+  roundId: string | null;
   hasScreenshot: boolean;
+  hasReplay: boolean;
   attachmentCount: number;
   commentCount: number;
 };
@@ -113,6 +84,8 @@ export type Asset = {
   contentType: string;
   bytes: number;
   name: string | null;
+  /** Replay: `{ durationMs, events }`. */
+  meta: Record<string, unknown> | null;
 };
 
 export type Comment = {
@@ -135,7 +108,9 @@ export type ActivityEvent = {
 };
 
 export type FeedbackDetail = {
-  feedback: Omit<FeedbackRow, "hasScreenshot" | "attachmentCount" | "commentCount"> & {
+  feedback: Omit<FeedbackRow, "hasScreenshot" | "hasReplay" | "attachmentCount" | "commentCount"> & {
+    /** What the reporter accepted in the consent notice (F-019). */
+    consent: { version: string; acceptedAt: string } | null;
     environment: {
       userAgent?: string;
       browser?: string;
@@ -338,26 +313,6 @@ export type MeResponse = {
   update: { latest: string | null; url: string | null } | null;
 };
 
-// --- Query keys -------------------------------------------------------------------------------------
-// Lists and details live under ["feedback", …] so one invalidation refreshes both; thumbnails use their
-// own key so a mutation doesn't refetch every card's detail.
-
-export const qk = {
-  projects: ["projects"] as const,
-  project: (id: string) => ["project", id] as const,
-  members: ["members"] as const,
-  feedbackLists: ["feedback", "list"] as const,
-  feedbackList: (params: Record<string, string | undefined>) => ["feedback", "list", params] as const,
-  feedback: (id: string) => ["feedback", "detail", id] as const,
-  thumb: (id: string) => ["feedback-thumb", id] as const,
-  notifications: ["notifications"] as const,
-  me: ["me"] as const,
-  branding: ["branding"] as const,
-  integrations: (projectId: string) => ["integrations", projectId] as const,
-  emailTemplates: ["email-templates"] as const,
-  security: ["admin", "security"] as const,
-};
-
 /** First screenshot of an item (annotated preferred), for thumbnails. */
 export function screenshotOf(assets: Asset[]): Asset | undefined {
   return assets.find((a) => a.kind === "screenshot_annotated") ?? assets.find((a) => a.kind === "screenshot");
@@ -371,3 +326,61 @@ export function formatBytes(n: number): string {
 
 export const isAdminRole = (role: string | undefined | null) =>
   !!role && role.split(",").some((r) => r.trim() === "owner" || r.trim() === "admin");
+
+const roles = (role: string | undefined | null) =>
+  (role ?? "")
+    .split(",")
+    .map((r) => r.trim())
+    .filter(Boolean);
+
+/** Viewers read everything and change nothing (wave-4 contract §4); the API answers 403 READ_ONLY_ROLE. */
+export const isViewerRole = (role: string | undefined | null) => {
+  const r = roles(role);
+  return r.length > 0 && r.every((x) => x === "viewer");
+};
+
+// --- Wave 4 ------------------------------------------------------------------------------------------
+
+export type ReviewRound = {
+  id: string;
+  projectId: string;
+  name: string;
+  dueAt: string | null;
+  status: "active" | "closed";
+  closedAt: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  counts: { total: number; open: number; closed: number };
+};
+
+export type SavedView = {
+  id: string;
+  name: string;
+  filters: ViewFilters;
+  layout: "list" | "board";
+  shared: boolean;
+  ownerId: string;
+  owner: { id: string; name: string | null };
+  mine: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** `GET /api/admin/license`: entitlements plus where the licence comes from and what it says. */
+export type LicenseInfo = Entitlements & {
+  source: "file" | "upload" | null;
+  details: {
+    lid: string;
+    customer: string;
+    email: string | null;
+    features: string[];
+    limits: { seats?: number };
+    issuedAt: string;
+    expiresAt: string;
+    graceDays: number;
+    instance: string | null;
+  } | null;
+};
+
+export type PresenceUser = { id: string; name: string; image: string | null };

@@ -1,5 +1,6 @@
 import { AlertCircle, type LucideIcon, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { errorMessage } from "@/lib/store/api/base";
 import { cn } from "@/lib/utils";
 
 /** The one empty state used across screens: icon, a short title, one sentence, optional action. */
@@ -33,7 +34,7 @@ export function ErrorState({
   retry,
   className,
 }: {
-  error: Error | null;
+  error: unknown;
   retry?: () => void;
   className?: string;
 }) {
@@ -46,7 +47,7 @@ export function ErrorState({
         <AlertCircle className="size-4.5 text-destructive" />
       </span>
       <p className="text-sm font-medium">Something went wrong</p>
-      <p className="max-w-sm text-sm text-muted-foreground">{error?.message ?? "Please try again."}</p>
+      <p className="max-w-sm text-sm text-muted-foreground">{errorMessage(error, "Please try again.")}</p>
       {retry && (
         <Button size="sm" variant="outline" className="mt-2" onClick={retry}>
           <RotateCw /> Try again

@@ -1,6 +1,5 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, CheckCheck, CircleDot, MessageSquare, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -8,10 +7,9 @@ import { STATUS_META, timeAgo } from "@/components/feedback-meta";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api, type NotificationItem, qk } from "@/lib/api";
+import type { NotificationItem } from "@/lib/api";
+import { useMarkNotificationsReadMutation, useNotificationsQuery } from "@/lib/store/api";
 import { cn } from "@/lib/utils";
-
-type NotificationsResponse = { items: NotificationItem[]; unreadCount: number };
 
 function describe(n: NotificationItem): { icon: typeof Bell; text: string } {
   const who = n.data.actorName ?? "Someone";
@@ -34,39 +32,11 @@ function describe(n: NotificationItem): { icon: typeof Bell; text: string } {
 
 /** In-app notifications (wave-1 §8): unread badge, recent list, mark read, jump to the item. */
 export function NotificationsBell() {
-  const qc = useQueryClient();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const query = useQuery({
-    queryKey: qk.notifications,
-    queryFn: () => api<NotificationsResponse>("/notifications?limit=30"),
-    refetchInterval: 30_000,
-  });
-  const markRead = useMutation({
-    mutationFn: (body: { ids: string[] } | { all: true }) =>
-      api("/notifications/read", { method: "POST", json: body }),
-    onMutate: async (body) => {
-      await qc.cancelQueries({ queryKey: qk.notifications });
-      const prev = qc.getQueryData<NotificationsResponse>(qk.notifications);
-      if (prev) {
-        const ids = "ids" in body ? new Set(body.ids) : null;
-        const now = new Date().toISOString();
-        let cleared = 0;
-        const items = prev.items.map((n) => {
-          if (n.readAt || (ids && !ids.has(n.id))) return n;
-          cleared++;
-          return { ...n, readAt: now };
-        });
-        qc.setQueryData<NotificationsResponse>(qk.notifications, {
-          items,
-          unreadCount: ids ? Math.max(0, prev.unreadCount - cleared) : 0,
-        });
-      }
-      return { prev };
-    },
-    onError: (_e, _v, ctx) => ctx?.prev && qc.setQueryData(qk.notifications, ctx.prev),
-    onSettled: () => qc.invalidateQueries({ queryKey: qk.notifications }),
-  });
+  // The real-time stream refreshes it on new feedback and replies; polling is only the fallback.
+  const query = useNotificationsQuery(undefined, { pollingInterval: 60_000, skipPollingIfUnfocused: true });
+  const [markRead, marking] = useMarkNotificationsReadMutation();
 
   const unread = query.data?.unreadCount ?? 0;
   const items = query.data?.items ?? [];
@@ -97,14 +67,14 @@ export function NotificationsBell() {
           <Button
             variant="ghost"
             size="xs"
-            disabled={!unread || markRead.isPending}
-            onClick={() => markRead.mutate({ all: true })}
+            disabled={!unread || marking.isLoading}
+            onClick={() => void markRead({ all: true })}
           >
             <CheckCheck /> Mark all read
           </Button>
         </div>
         <div className="max-h-[min(26rem,70svh)] overflow-y-auto">
-          {query.isPending && (
+          {query.isLoading && (
             <div className="space-y-2 p-3">
               <Skeleton className="h-10" />
               <Skeleton className="h-10" />
@@ -132,7 +102,7 @@ export function NotificationsBell() {
                       !n.readAt && "bg-blue-500/[0.04]",
                     )}
                     onClick={() => {
-                      if (!n.readAt) markRead.mutate({ ids: [n.id] });
+                      if (!n.readAt) void markRead({ ids: [n.id] });
                       setOpen(false);
                       if (n.feedbackId) router.push(`/inbox?status=all&item=${n.feedbackId}`);
                     }}

@@ -7,8 +7,9 @@ import { SettingGroup, SettingRow } from "@/components/setting-row";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { useBranding } from "@/lib/account-hooks";
 import type { ProjectDetail } from "@/lib/api";
+import { useBrandingQuery, useEntitlementsQuery } from "@/lib/store/api";
+import { UpgradeNote } from "@/components/upgrade-note";
 import { useSyncedState } from "@/lib/use-synced-state";
 import { useProjectPatch } from "./use-project";
 
@@ -16,7 +17,10 @@ import { useProjectPatch } from "./use-project";
 export function WidgetBrandingCard({ project }: { project: ProjectDetail }) {
   const save = useProjectPatch(project.id);
   const b = project.widgetBranding;
-  const orgLogo = useBranding().data?.branding.logoUrl ?? null;
+  const orgLogo = useBrandingQuery(undefined).data?.branding.logoUrl ?? null;
+  const entitlements = useEntitlementsQuery(undefined).data;
+  const whiteLabel = !!entitlements?.features.includes("white_label");
+  const frozen = whiteLabel && !!entitlements?.readOnly;
   const fallback = project.widgetConfig.launcher.accent;
   const [accent, setAccent] = useSyncedState(b.dialogAccent ?? fallback);
 
@@ -31,10 +35,17 @@ export function WidgetBrandingCard({ project }: { project: ProjectDetail }) {
           <SettingRow
             label="Hide “Powered by Pinwren”"
             htmlFor="hide-powered-by"
-            description="Removes the credit line from the widget's cards and dialogs."
+            description={
+              <>
+                Removes the credit line from the widget&apos;s cards and dialogs.
+                {!whiteLabel && <UpgradeNote feature="white_label" applied={b.hidePoweredBy} />}
+                {frozen && " Read-only until the Enterprise licence is renewed."}
+              </>
+            }
           >
             <Switch
               id="hide-powered-by"
+              disabled={frozen}
               checked={b.hidePoweredBy}
               onCheckedChange={(hidePoweredBy) =>
                 save.mutate({

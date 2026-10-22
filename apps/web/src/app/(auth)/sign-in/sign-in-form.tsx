@@ -2,35 +2,26 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { controlProps, Field, FormError, useZodForm } from "@/components/form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { signIn } from "@/lib/auth-client";
-import { formText } from "@/lib/form";
+import { signInForm } from "@/lib/form-schemas";
 
+/** Prerendered page; only the submit talks to the server. */
 export function SignInForm() {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-
-  async function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    setPending(true);
-    setError(null);
-    const { error } = await signIn.email({
-      email: formText(form, "email"),
-      password: formText(form, "password"),
-    });
-    setPending(false);
+  const form = useZodForm(signInForm, { defaultValues: { email: "", password: "" } });
+  const { errors, isSubmitting } = form.formState;
+  const submit = form.handleSubmit(async (v) => {
+    const { error } = await signIn.email(v);
     if (error) {
-      setError(error.message ?? "Could not sign in");
+      form.setError("root", { message: error.message ?? "Could not sign in" });
       return;
     }
     router.replace("/inbox");
-  }
+  });
 
   return (
     <Card>
@@ -39,23 +30,28 @@ export function SignInForm() {
         <CardDescription>Sign in to triage your feedback.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="email">Email</Label>
-            {/* eslint-disable-next-line jsx-a11y/no-autofocus -- the page exists to sign in; its first field is the only sensible start */}
-            <Input id="email" name="email" type="email" autoComplete="email" required autoFocus />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="password">Password</Label>
-            <Input id="password" name="password" type="password" autoComplete="current-password" required />
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <Button type="submit" disabled={pending} className="w-full">
-            {pending ? "Signing in…" : "Sign in"}
+        <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
+          <Field id="email" label="Email" error={errors.email?.message}>
+            <Input
+              {...controlProps("email", errors.email?.message)}
+              {...form.register("email")}
+              type="email"
+              autoComplete="email"
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- the page exists to sign in; its first field is the only sensible start
+              autoFocus
+            />
+          </Field>
+          <Field id="password" label="Password" error={errors.password?.message}>
+            <Input
+              {...controlProps("password", errors.password?.message)}
+              {...form.register("password")}
+              type="password"
+              autoComplete="current-password"
+            />
+          </Field>
+          <FormError message={errors.root?.message} />
+          <Button type="submit" disabled={isSubmitting} className="w-full">
+            {isSubmitting ? "Signing in…" : "Sign in"}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
             New here?{" "}

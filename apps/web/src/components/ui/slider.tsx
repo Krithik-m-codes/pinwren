@@ -1,5 +1,6 @@
 import { Slider as SliderPrimitive } from "@base-ui/react/slider";
 import { cn } from "cn";
+import { useReadOnly } from "@/components/read-only";
 
 function Slider({
   className,
@@ -7,8 +8,10 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  disabled,
   ...props
 }: SliderPrimitive.Root.Props) {
+  const readOnly = useReadOnly();
   const _values = Array.isArray(value) ? value : Array.isArray(defaultValue) ? defaultValue : [min, max];
 
   return (
@@ -20,6 +23,7 @@ function Slider({
       min={min}
       max={max}
       thumbAlignment="edge"
+      disabled={readOnly || disabled}
       {...props}
     >
       <SliderPrimitive.Control className="relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col">

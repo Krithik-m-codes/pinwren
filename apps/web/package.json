@@ -19,7 +19,9 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "next typegen && tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test": "vitest run",
+    "codegen": "next typegen"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -28,7 +30,6 @@
     "@pinwren/core": "workspace:*",
     "@pinwren/db": "workspace:*",
     "@reduxjs/toolkit": "^2.13.0",
-    "@tanstack/react-query": "^5.104.5",
     "better-auth": "^1.7.12",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",

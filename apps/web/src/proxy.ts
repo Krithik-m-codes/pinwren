@@ -1,10 +1,14 @@
 import { HSTS_HEADER, httpsDecision } from "@pinwren/core";
+import { getSessionCookie } from "better-auth/cookies";
 import { type NextRequest, NextResponse } from "next/server";
 
 // PINWREN_ENFORCE_HTTPS for every route (pages, /api, /w): plain-HTTP requests that don't come from
 // localhost are redirected (GET/HEAD) or refused. Forwarded headers count only with
 // PINWREN_TRUST_PROXY. Read straight from the environment: the proxy must not depend on app modules.
 const flag = (v: string | undefined) => v === "true" || v === "1";
+
+/** Signed-in screens. Without a session cookie there is nothing to render: send people to sign in at once. */
+const APP_PATHS = /^\/(inbox|projects|settings|onboarding)(\/|$)/;
 
 export function proxy(request: NextRequest) {
   const d = httpsDecision(request, {
@@ -22,6 +26,14 @@ export function proxy(request: NextRequest) {
       },
       { status: 403, headers: { "content-type": "application/problem+json" } },
     );
+  }
+  // Optimistic check only (is there a session cookie at all?) — the server components and the API verify
+  // the session itself. It saves rendering the app shell for someone who is signed out.
+  if (APP_PATHS.test(request.nextUrl.pathname) && !getSessionCookie(request)) {
+    const to = request.nextUrl.clone();
+    to.pathname = "/sign-in";
+    to.search = "";
+    return NextResponse.redirect(to);
   }
   const res = NextResponse.next();
   if (d.hsts) res.headers.set("strict-transport-security", HSTS_HEADER);

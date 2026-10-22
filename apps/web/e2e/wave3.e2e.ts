@@ -142,7 +142,7 @@ test.describe("wave 3", () => {
       await card.getByLabel("Access token").fill("ghp_e2e_token_abcd");
       await card.getByLabel("Repository").fill("not a repo");
       await card.getByRole("button", { name: "Connect GitHub" }).click();
-      await expect(card.getByText("Enter the repository as owner/name")).toBeVisible();
+      await expect(card.getByText("Use owner/name (GitLab: group/project)")).toBeVisible();
       await card.getByLabel("Repository").fill("acme/site");
       await card.getByLabel("GitHub Enterprise API URL").fill(gh.base);
       await card

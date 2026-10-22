@@ -128,3 +128,62 @@
     @apply font-sans;
   }
 }
+
+/* Calendar (react-day-picker) on the design system's tokens — components/date-picker.tsx. */
+.pinwren-calendar .rdp-root {
+  --rdp-accent-color: var(--primary);
+  --rdp-accent-background-color: color-mix(in oklch, var(--primary) 12%, transparent);
+  --rdp-day-height: 2.25rem;
+  --rdp-day-width: 2.25rem;
+  --rdp-day_button-height: 2.125rem;
+  --rdp-day_button-width: 2.125rem;
+  --rdp-day_button-border-radius: 0.5rem;
+  --rdp-selected-font: inherit;
+  font-size: 0.875rem;
+}
+.pinwren-calendar .rdp-selected .rdp-day_button {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+/* Session replay (rrweb-player) — the controller follows the dashboard theme (rrweb's own rules are
+   scoped with generated classes, hence !important). */
+.pinwren-replay .rr-player {
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  background: var(--card) !important;
+  float: none !important;
+}
+.pinwren-replay .rr-player__frame {
+  background: var(--muted) !important;
+}
+.pinwren-replay .rr-controller {
+  background: var(--card) !important;
+  color: var(--foreground) !important;
+  border-top: 1px solid var(--border);
+}
+.pinwren-replay .rr-controller * {
+  color: var(--foreground);
+}
+.pinwren-replay .rr-timeline__time {
+  color: var(--muted-foreground) !important;
+}
+.pinwren-replay .rr-progress {
+  background: var(--muted) !important;
+}
+.pinwren-replay .rr-progress__step {
+  background: color-mix(in oklch, var(--primary) 35%, transparent) !important;
+}
+.pinwren-replay .rr-progress__handler {
+  background: var(--primary) !important;
+}
+.pinwren-replay .rr-controller__btns button {
+  color: var(--foreground) !important;
+}
+.pinwren-replay .rr-controller__btns button.active {
+  background: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+.pinwren-replay svg {
+  fill: currentColor;
+}

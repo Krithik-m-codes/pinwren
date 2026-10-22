@@ -4,15 +4,15 @@ import { Mail } from "lucide-react";
 import { EmptyState } from "@/components/states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useMeInfo } from "@/lib/account-hooks";
+import { useMeQuery } from "@/lib/store/api";
 import { isAdminRole } from "@/lib/api";
 import { EmailSettingsForm } from "./email-settings";
 import { EmailTemplates } from "./email-templates";
 
 /** SMTP belongs to the instance admin; the wording of this workspace's emails to its admins. */
 export function EmailPageContent() {
-  const me = useMeInfo();
-  if (me.isPending) return <Skeleton className="h-96 rounded-xl" />;
+  const me = useMeQuery(undefined);
+  if (me.isLoading) return <Skeleton className="h-96 rounded-xl" />;
   const instanceAdmin = !!me.data?.instanceAdmin;
   const orgAdmin = isAdminRole(me.data?.role);
   if (!instanceAdmin && !orgAdmin) {

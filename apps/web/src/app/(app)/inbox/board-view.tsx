@@ -1,7 +1,6 @@
 "use client";
 
 import { FEEDBACK_STATUSES, type FeedbackStatus } from "@pinwren/core";
-import type { UseQueryResult } from "@tanstack/react-query";
 import { ArrowRightLeft, MessageSquare, Paperclip } from "lucide-react";
 import { useState } from "react";
 import { KIND_META, PriorityIcon, pathOf, STATUS_META, StatusIcon } from "@/components/feedback-meta";
@@ -19,7 +18,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { assetUrl, type FeedbackList, type FeedbackRow, type Member } from "@/lib/api";
-import { useThumbnail } from "@/lib/feedback-hooks";
+import { useThumbnailQuery } from "@/lib/store/api";
+import { useMembers } from "@/lib/viewer";
 import { cn } from "@/lib/utils";
 
 const DRAG_TYPE = "application/x-pinwren-feedback";
@@ -30,20 +30,29 @@ const DRAG_TYPE = "application/x-pinwren-feedback";
  */
 export function BoardView({
   list,
-  members,
+  readOnly,
   onOpen,
   onMove,
 }: {
-  list: UseQueryResult<FeedbackList>;
-  members: Member[];
+  list: {
+    data?: FeedbackList | undefined;
+    isLoading: boolean;
+    isSuccess: boolean;
+    isError: boolean;
+    error?: unknown;
+    refetch: () => unknown;
+  };
+  /** Viewers see the board but can't move cards. */
+  readOnly: boolean;
   onOpen: (id: string) => void;
   onMove: (id: string, to: FeedbackStatus) => void;
 }) {
+  const members = useMembers();
   const [over, setOver] = useState<FeedbackStatus | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const items = list.data?.items ?? [];
 
-  if (list.isError) return <ErrorState error={list.error} retry={() => list.refetch()} />;
+  if (list.isError) return <ErrorState error={list.error} retry={() => void list.refetch()} />;
 
   return (
     <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-3" data-testid="board">
@@ -55,7 +64,7 @@ export function BoardView({
             aria-label={STATUS_META[status].label}
             data-column={status}
             onDragOver={(e) => {
-              if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+              if (readOnly || !e.dataTransfer.types.includes(DRAG_TYPE)) return;
               e.preventDefault();
               e.dataTransfer.dropEffect = "move";
               setOver(status);
@@ -79,11 +88,11 @@ export function BoardView({
               <StatusIcon status={status} />
               <h2 className="text-sm font-medium">{STATUS_META[status].label}</h2>
               <span className="text-xs text-muted-foreground tabular-nums">
-                {list.isPending ? "" : column.length}
+                {list.isLoading ? "" : column.length}
               </span>
             </header>
             <ul className="flex min-h-24 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-              {list.isPending && status === "open" && (
+              {list.isLoading && status === "open" && (
                 <>
                   <Skeleton className="h-24 rounded-lg" />
                   <Skeleton className="h-20 rounded-lg" />
@@ -100,6 +109,7 @@ export function BoardView({
                   item={item}
                   assignee={members.find((m) => m.id === item.assigneeIds[0])}
                   onOpen={() => onOpen(item.id)}
+                  readOnly={readOnly}
                   onMove={(to) => onMove(item.id, to)}
                   menuOpen={moving === item.id}
                   onMenuOpenChange={(o) => setMoving(o ? item.id : null)}
@@ -115,6 +125,7 @@ export function BoardView({
 
 function BoardCard({
   item,
+  readOnly,
   assignee,
   onOpen,
   onMove,
@@ -122,6 +133,7 @@ function BoardCard({
   onMenuOpenChange,
 }: {
   item: FeedbackRow;
+  readOnly: boolean;
   assignee: Member | undefined;
   onOpen: () => void;
   onMove: (to: FeedbackStatus) => void;
@@ -129,11 +141,11 @@ function BoardCard({
   onMenuOpenChange: (open: boolean) => void;
 }) {
   const Kind = KIND_META[item.kind].icon;
-  const thumb = useThumbnail(item.id, item.hasScreenshot);
+  const thumb = useThumbnailQuery(item.id, { skip: !item.hasScreenshot });
   const [dragging, setDragging] = useState(false);
   return (
     <li
-      draggable
+      draggable={!readOnly}
       data-card={item.id}
       onDragStart={(e) => {
         e.dataTransfer.setData(DRAG_TYPE, item.id);
@@ -142,7 +154,8 @@ function BoardCard({
       }}
       onDragEnd={() => setDragging(false)}
       className={cn(
-        "group relative cursor-grab rounded-lg border bg-card shadow-xs transition-[box-shadow,opacity] hover:shadow-sm active:cursor-grabbing",
+        "group relative rounded-lg border bg-card shadow-xs transition-[box-shadow,opacity] hover:shadow-sm",
+        !readOnly && "cursor-grab active:cursor-grabbing",
         dragging && "opacity-40",
       )}
     >
@@ -150,13 +163,13 @@ function BoardCard({
         type="button"
         onClick={onOpen}
         onKeyDown={(e) => {
-          if (e.key === "m" && !e.metaKey && !e.ctrlKey) {
+          if (!readOnly && e.key === "m" && !e.metaKey && !e.ctrlKey) {
             e.preventDefault();
             e.stopPropagation();
             onMenuOpenChange(true);
           }
         }}
-        aria-label={`#${item.number} ${item.title || item.body}. Press m to move.`}
+        aria-label={`#${item.number} ${item.title || item.body}${readOnly ? "" : ". Press m to move."}`}
         className="block w-full rounded-lg p-2.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         {item.hasScreenshot && (
@@ -191,30 +204,32 @@ function BoardCard({
           </span>
         </div>
       </button>
-      <DropdownMenu open={menuOpen} onOpenChange={onMenuOpenChange}>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={`Move #${item.number} to…`}
-              className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100"
-            />
-          }
-        >
-          <ArrowRightLeft />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>Move to…</DropdownMenuLabel>
-            {FEEDBACK_STATUSES.filter((s) => s !== item.status).map((s) => (
-              <DropdownMenuItem key={s} onClick={() => onMove(s)}>
-                <StatusIcon status={s} /> {STATUS_META[s].label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {!readOnly && (
+        <DropdownMenu open={menuOpen} onOpenChange={onMenuOpenChange}>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Move #${item.number} to…`}
+                className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100"
+              />
+            }
+          >
+            <ArrowRightLeft />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Move to…</DropdownMenuLabel>
+              {FEEDBACK_STATUSES.filter((s) => s !== item.status).map((s) => (
+                <DropdownMenuItem key={s} onClick={() => onMove(s)}>
+                  <StatusIcon status={s} /> {STATUS_META[s].label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </li>
   );
 }

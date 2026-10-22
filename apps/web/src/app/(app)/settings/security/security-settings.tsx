@@ -1,7 +1,6 @@
 "use client";
 
 import { MAX_SESSION_DAYS, MIN_SESSION_DAYS } from "@pinwren/core";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpCircle, CircleCheck, Lock, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { timeAgo } from "@/components/feedback-meta";
@@ -13,7 +12,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { api, isForbidden, qk, type SecuritySettings } from "@/lib/api";
+import type { SecuritySettings } from "@/lib/api";
+import {
+  errorMessage,
+  isForbidden,
+  useRunUpdateCheckMutation,
+  useSecuritySettingsQuery,
+  useUpdateSecuritySettingsMutation,
+} from "@/lib/store/api";
 import { SectionTitle } from "../settings-shell";
 
 function EnvBadge({ name }: { name: string }) {
@@ -30,45 +36,40 @@ function EnvBadge({ name }: { name: string }) {
 
 /** Settings › Security (instance admins): session lifetime, HTTPS status, update check. */
 export function SecuritySettingsForm() {
-  const qc = useQueryClient();
-  const query = useQuery({
-    queryKey: qk.security,
-    queryFn: () => api<{ security: SecuritySettings }>("/admin/settings/security"),
-    retry: (n, e) => !isForbidden(e) && n < 1,
-  });
-  const save = useMutation({
-    mutationFn: ({
+  const query = useSecuritySettingsQuery(undefined);
+  const [updateSecurity] = useUpdateSecuritySettingsMutation();
+  const [runCheck, checking] = useRunUpdateCheckMutation();
+  const save = {
+    mutate: ({
       patch,
+      message,
     }: {
       patch: Partial<Pick<SecuritySettings, "sessionDays" | "updateCheck">>;
       message: string;
-    }) => api<{ security: SecuritySettings }>("/admin/settings/security", { method: "PATCH", json: patch }),
-    onSuccess: ({ security }, { message }) => {
-      qc.setQueryData(qk.security, { security });
-      toast.success(message);
+    }) => {
+      updateSecurity(patch)
+        .unwrap()
+        .then(() => toast.success(message))
+        .catch((e: unknown) => toast.error("Not saved", { description: errorMessage(e) }));
     },
-    onError: (e) => toast.error("Not saved", { description: e.message }),
-  });
-  const check = useMutation({
-    mutationFn: () =>
-      api<{ checked: boolean; reason?: string; state?: SecuritySettings["update"] }>("/admin/update-check", {
-        method: "POST",
-      }),
-    onSuccess: (r) => {
-      void qc.invalidateQueries({ queryKey: qk.security });
-      void qc.invalidateQueries({ queryKey: qk.me });
-      if (!r.checked)
-        toast(
-          r.reason === "privacy_mode" ? "Skipped: a project uses privacy mode" : "The update check is off",
-        );
-      else if (r.state?.error) toast.error("Couldn't reach the release feed", { description: r.state.error });
-      else if (r.state?.available) toast.success(`Version ${r.state.latest ?? "?"} is available`);
-      else toast.success("You're on the latest version");
-    },
-    onError: (e) => toast.error(e.message),
-  });
+  };
+  const check = () => {
+    runCheck(undefined)
+      .unwrap()
+      .then((r) => {
+        if (!r.checked)
+          toast(
+            r.reason === "privacy_mode" ? "Skipped: a project uses privacy mode" : "The update check is off",
+          );
+        else if (r.state?.error)
+          toast.error("Couldn't reach the release feed", { description: r.state.error });
+        else if (r.state?.available) toast.success(`Version ${r.state.latest ?? "?"} is available`);
+        else toast.success("You're on the latest version");
+      })
+      .catch((e: unknown) => toast.error(errorMessage(e)));
+  };
 
-  if (query.isPending) return <Skeleton className="h-96 rounded-xl" />;
+  if (query.isLoading) return <Skeleton className="h-96 rounded-xl" />;
   if (isForbidden(query.error)) {
     return (
       <Card>
@@ -82,7 +83,7 @@ export function SecuritySettingsForm() {
       </Card>
     );
   }
-  if (query.isError) return <ErrorState error={query.error} retry={() => query.refetch()} />;
+  if (!query.data) return <ErrorState error={query.error} retry={() => void query.refetch()} />;
   const s = query.data.security;
   const blockedByPrivacy = s.privacyModeProjects > 0;
 
@@ -231,10 +232,10 @@ export function SecuritySettingsForm() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={check.isPending || !s.updateCheck}
-                  onClick={() => check.mutate()}
+                  disabled={checking.isLoading || !s.updateCheck}
+                  onClick={check}
                 >
-                  <RefreshCw className={check.isPending ? "animate-spin" : undefined} /> Check now
+                  <RefreshCw className={checking.isLoading ? "animate-spin" : undefined} /> Check now
                 </Button>
               </div>
             </SettingRow>

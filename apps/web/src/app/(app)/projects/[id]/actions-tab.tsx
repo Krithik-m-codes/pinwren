@@ -3,16 +3,19 @@
 import {
   MAX_PANEL_ACTIONS,
   PANEL_ACTION_ICONS,
+  PANEL_ACTION_KINDS,
+  PANEL_ACTION_VISIBILITY,
   type PanelAction,
   panelAction,
   widgetConfig,
 } from "@pinwren/core";
-import { useMutation } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Eye, KeyRound, Pencil, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
+import { Controller, useWatch } from "react-hook-form";
+import { z } from "zod";
+import { controlProps, Field, useZodForm } from "@/components/form";
+import { ArrowDown, ArrowUp, Pencil, Plus, Trash2, Zap } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { CopyButton } from "@/components/copy-button";
 import { PANEL_ACTION_ICON_META, PanelActionIcon } from "@/components/panel-action-icon";
 import { Segmented } from "@/components/segmented";
 import { EmptyState } from "@/components/states";
@@ -28,8 +31,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { api, type ProjectDetail } from "@/lib/api";
-import { useMe } from "@/lib/feedback-hooks";
+import type { ProjectDetail } from "@/lib/api";
+import { SecretCard } from "@/components/secret-card";
+import { useLazyActionSecretQuery, useRotateActionSecretMutation } from "@/lib/store/api";
+import { useViewer } from "@/lib/viewer";
 import { useProjectPatch } from "./use-project";
 
 type Draft = {
@@ -60,7 +65,7 @@ function uniqueId(base: string, taken: string[]) {
  */
 export function ActionsTab({ project }: { project: ProjectDetail }) {
   const save = useProjectPatch(project.id);
-  const { isAdmin } = useMe();
+  const { isAdmin } = useViewer();
   const actions = project.widgetConfig.panelActions;
   const [editing, setEditing] = useState<{ index: number | null; draft: Draft } | null>(null);
   const [removing, setRemoving] = useState<number | null>(null);
@@ -228,6 +233,26 @@ export function ActionsTab({ project }: { project: ProjectDetail }) {
   );
 }
 
+/**
+ * The action form: react-hook-form validated by core's `panelAction` schema itself (the API's rules —
+ * http(s) only, known placeholders, no placeholders in webhook URLs), with the id derived from the label.
+ */
+const actionForm = z
+  .object({
+    label: z.string(),
+    kind: z.enum(PANEL_ACTION_KINDS),
+    url: z.string(),
+    icon: z.enum(PANEL_ACTION_ICONS).nullable(),
+    visibleTo: z.enum(PANEL_ACTION_VISIBILITY),
+  })
+  .superRefine((v, ctx) => {
+    const r = panelAction.safeParse({ ...v, id: "draft" });
+    if (r.success) return;
+    for (const issue of r.error.issues) {
+      ctx.addIssue({ code: "custom", path: [String(issue.path[0] ?? "url")], message: issue.message });
+    }
+  });
+
 function ActionDialog({
   initial,
   isNew,
@@ -241,112 +266,119 @@ function ActionDialog({
   onClose: () => void;
   onSave: (a: PanelAction) => void;
 }) {
-  const [d, setD] = useState<Draft>(initial);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
-
-  function submit(e: React.SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const id = isNew ? uniqueId(slug(d.label), takenIds) : d.id;
-    const parsed = panelAction.safeParse({ ...d, id, label: d.label.trim(), url: d.url.trim() });
-    if (!parsed.success) {
-      const next: Record<string, string> = {};
-      for (const issue of parsed.error.issues) next[String(issue.path[0] ?? "url")] ??= issue.message;
-      setErrors(next);
-      return;
-    }
-    onSave(parsed.data);
-  }
+  const form = useZodForm(actionForm, {
+    defaultValues: {
+      label: initial.label,
+      kind: initial.kind,
+      url: initial.url,
+      icon: initial.icon,
+      visibleTo: initial.visibleTo,
+    },
+  });
+  const { errors } = form.formState;
+  const kind = useWatch({ control: form.control, name: "kind" });
+  const submit = form.handleSubmit((v) => {
+    const id = isNew ? uniqueId(slug(v.label), takenIds) : initial.id;
+    const parsed = panelAction.safeParse({ ...v, id });
+    if (parsed.success) onSave(parsed.data);
+  });
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-lg">
-        <form onSubmit={submit} noValidate className="grid gap-4">
+        <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
           <DialogHeader>
             <DialogTitle>{isNew ? "Add an action" : "Edit action"}</DialogTitle>
             <DialogDescription>Shown as a button on each item of this project.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-1.5">
-            <label htmlFor="action-label" className="text-sm font-medium">
-              Label
-            </label>
+          <Field id="action-label" label="Label" error={errors.label?.message}>
             <Input
-              id="action-label"
-              value={d.label}
+              {...controlProps("action-label", errors.label?.message)}
+              {...form.register("label")}
               maxLength={40}
               placeholder="Create Jira ticket"
-              aria-invalid={!!errors.label || undefined}
-              onChange={(e) => set("label", e.target.value)}
             />
-            {errors.label && <p className="text-xs text-destructive">{errors.label}</p>}
-          </div>
+          </Field>
           <div className="grid gap-1.5">
             <p className="text-sm font-medium">Type</p>
-            <Segmented
-              label="Action type"
-              value={d.kind}
-              onChange={(kind) =>
-                setD((x) => ({ ...x, kind, visibleTo: kind === "webhook" ? "team" : x.visibleTo }))
-              }
-              options={[
-                { value: "link", label: "Open a link" },
-                { value: "webhook", label: "Call a webhook" },
-              ]}
+            <Controller
+              control={form.control}
+              name="kind"
+              render={({ field }) => (
+                <Segmented
+                  label="Action type"
+                  value={field.value}
+                  onChange={(k) => {
+                    field.onChange(k);
+                    if (k === "webhook") form.setValue("visibleTo", "team");
+                  }}
+                  options={[
+                    { value: "link", label: "Open a link" },
+                    { value: "webhook", label: "Call a webhook" },
+                  ]}
+                />
+              )}
             />
             <p className="text-xs text-muted-foreground">
-              {d.kind === "link"
+              {kind === "link"
                 ? "Opens in a new tab with the placeholders filled in."
                 : "Pinwren POSTs the item as JSON, signed with this project's secret, and shows the reply's “message”."}
             </p>
           </div>
-          <div className="grid gap-1.5">
-            <label htmlFor="action-url" className="text-sm font-medium">
-              URL
-            </label>
+          <Field id="action-url" label="URL" error={errors.url?.message}>
             <Input
-              id="action-url"
-              value={d.url}
+              {...controlProps("action-url", errors.url?.message)}
+              {...form.register("url")}
               inputMode="url"
               spellCheck={false}
               className="font-mono text-[13px]"
               placeholder={
-                d.kind === "link"
+                kind === "link"
                   ? "https://jira.example.com/create?summary={number}"
                   : "https://hooks.example.com/pinwren"
               }
-              aria-invalid={!!errors.url || undefined}
-              onChange={(e) => set("url", e.target.value)}
             />
-            {errors.url && <p className="text-xs text-destructive">{errors.url}</p>}
-          </div>
+          </Field>
           <div className="grid gap-1.5">
             <p className="text-sm font-medium">Icon</p>
-            <Segmented
-              label="Icon"
-              value={d.icon ?? "none"}
-              onChange={(v) => set("icon", v === "none" ? null : (v as PanelAction["icon"]))}
-              options={[
-                { value: "none", label: "Auto", title: "Automatic" },
-                ...PANEL_ACTION_ICONS.map((k) => {
-                  const Icon = PANEL_ACTION_ICON_META[k].icon;
-                  return { value: k, title: PANEL_ACTION_ICON_META[k].label, label: <Icon /> };
-                }),
-              ]}
+            <Controller
+              control={form.control}
+              name="icon"
+              render={({ field }) => (
+                <Segmented
+                  label="Icon"
+                  value={field.value ?? "none"}
+                  onChange={(v) => field.onChange(v === "none" ? null : v)}
+                  options={[
+                    { value: "none", label: "Auto", title: "Automatic" },
+                    ...PANEL_ACTION_ICONS.map((k) => {
+                      const Icon = PANEL_ACTION_ICON_META[k].icon;
+                      return { value: k, title: PANEL_ACTION_ICON_META[k].label, label: <Icon /> };
+                    }),
+                  ]}
+                />
+              )}
             />
           </div>
           <div className="grid gap-1.5">
             <p className="text-sm font-medium">Who sees it</p>
-            <Segmented
-              label="Who sees it"
-              value={d.visibleTo}
-              disabled={d.kind === "webhook"}
-              onChange={(visibleTo) => set("visibleTo", visibleTo)}
-              options={[
-                { value: "everyone", label: "Team and widget" },
-                { value: "team", label: "Team only" },
-              ]}
+            <Controller
+              control={form.control}
+              name="visibleTo"
+              render={({ field }) => (
+                <Segmented
+                  label="Who sees it"
+                  value={field.value}
+                  disabled={kind === "webhook"}
+                  onChange={field.onChange}
+                  options={[
+                    { value: "everyone", label: "Team and widget" },
+                    { value: "team", label: "Team only" },
+                  ]}
+                />
+              )}
             />
-            {d.kind === "webhook" && (
+            {kind === "webhook" && (
               <p className="text-xs text-muted-foreground">Webhook actions run from the dashboard only.</p>
             )}
           </div>
@@ -364,73 +396,26 @@ function ActionDialog({
 
 /** Revealable, rotatable secret that signs webhook actions (`Pinwren-Signature: v1=…`). */
 function SigningSecretCard({ project }: { project: ProjectDetail }) {
-  const [secret, setSecret] = useState<string | null>(null);
-  const [confirmRotate, setConfirmRotate] = useState(false);
-  const reveal = useMutation({
-    mutationFn: () => api<{ secret: string }>(`/projects/${project.id}/action-secret`),
-    onSuccess: (r) => setSecret(r.secret),
-    onError: (e) => toast.error(e.message),
-  });
-  const rotate = useMutation({
-    mutationFn: () =>
-      api<{ secret: string }>(`/projects/${project.id}/action-secret/rotate`, { method: "POST" }),
-    onSuccess: (r) => {
-      setSecret(r.secret);
-      setConfirmRotate(false);
-      toast.success("New signing secret — update your receivers");
-    },
-    onError: (e) => toast.error(e.message),
-  });
+  const [reveal] = useLazyActionSecretQuery();
+  const [rotate] = useRotateActionSecretMutation();
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Signing secret</CardTitle>
-        <CardDescription>
+    <SecretCard
+      title="Signing secret"
+      testId="action-secret"
+      hasSecret={project.hasActionSecret}
+      reveal={() => reveal(project.id).unwrap()}
+      rotate={() => rotate(project.id).unwrap()}
+      rotateTitle="Rotate the signing secret?"
+      rotateDescription="Receivers checking the old secret will reject actions until you give them the new one."
+      rotatedMessage="New signing secret — update your receivers"
+      description={
+        <>
           Webhook actions carry{" "}
           <code className="font-mono text-xs">Pinwren-Signature: v1=HMAC-SHA256(secret, timestamp.body)</code>{" "}
           and <code className="font-mono text-xs">Pinwren-Timestamp</code> — the same scheme as outgoing
           webhooks. Verify it before acting.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-3">
-        {secret ? (
-          <div className="flex items-center gap-2 rounded-lg border bg-muted/50 p-2 pl-3">
-            <code
-              className="min-w-0 flex-1 font-mono text-xs break-all select-all"
-              data-testid="action-secret"
-            >
-              {secret}
-            </code>
-            <CopyButton value={secret} label="Copy" size="sm" variant="outline" />
-          </div>
-        ) : (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <KeyRound className="size-4" />
-            {project.hasActionSecret
-              ? "A secret is set."
-              : "Created the first time you reveal it or run a webhook action."}
-          </p>
-        )}
-        <div className="flex flex-wrap gap-2">
-          {!secret && (
-            <Button variant="outline" size="sm" disabled={reveal.isPending} onClick={() => reveal.mutate()}>
-              <Eye /> Reveal secret
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={() => setConfirmRotate(true)}>
-            <RefreshCw /> Rotate
-          </Button>
-        </div>
-      </CardContent>
-      <ConfirmDialog
-        open={confirmRotate}
-        onOpenChange={setConfirmRotate}
-        title="Rotate the signing secret?"
-        description="Receivers checking the old secret will reject actions until you give them the new one."
-        confirmLabel="Rotate"
-        pending={rotate.isPending}
-        onConfirm={() => rotate.mutate()}
-      />
-    </Card>
+        </>
+      }
+    />
   );
 }

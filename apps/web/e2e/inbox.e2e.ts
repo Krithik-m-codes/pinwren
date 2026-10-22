@@ -10,6 +10,7 @@ test.describe("inbox", () => {
     const { projectId, items } = seed();
     await page.goto(`/inbox?project=${projectId}&status=all`);
     await expect(page.locator("[data-row-id]")).toHaveCount(6);
+    await expect(page.locator("ul[aria-label=Feedback][data-ready]")).toBeVisible();
     await shoot(page, "inbox-list");
 
     // j opens the newest item; k/j move.
@@ -104,6 +105,7 @@ test.describe("inbox", () => {
     const { projectId, items } = seed();
     await page.goto(`/inbox?project=${projectId}&status=all`);
     await expect(page.locator("[data-row-id]")).toHaveCount(6);
+    await expect(page.locator("ul[aria-label=Feedback][data-ready]")).toBeVisible();
     await page.keyboard.press("j");
     await page.keyboard.press("x");
     await page.keyboard.press("j");

@@ -1,12 +1,9 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderPlus, Globe } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
-import { toast } from "sonner";
-import { timeAgo } from "@/components/feedback-meta";
+import { RelativeTime } from "@/components/feedback-meta";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,31 +17,33 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api, type Project } from "@/lib/api";
+import { controlProps, Field, FormError, useZodForm } from "@/components/form";
+import { createProjectForm } from "@/lib/form-schemas";
+import { errorMessage, useCreateProjectMutation, useProjectsQuery } from "@/lib/store/api";
+import { useViewer } from "@/lib/viewer";
 import { here } from "@/lib/routes";
 
 export function ProjectsView() {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const projects = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => api<{ projects: Project[] }>("/projects"),
-  });
-  const creating = params.get("new") === "1";
+  const projects = useProjectsQuery(undefined);
+  const { canWrite } = useViewer();
+  const creating = canWrite && params.get("new") === "1";
   const setCreating = (open: boolean) => router.replace(here(pathname, open ? "new=1" : undefined));
 
   return (
     <>
       <PageHeader title="Projects">
-        <Button size="sm" onClick={() => setCreating(true)}>
-          <FolderPlus /> New project
-        </Button>
+        {canWrite && (
+          <Button size="sm" onClick={() => setCreating(true)}>
+            <FolderPlus /> New project
+          </Button>
+        )}
       </PageHeader>
       <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
-        {projects.isPending && [0, 1, 2].map((i) => <Skeleton key={i} className="h-36" />)}
+        {projects.isLoading && [0, 1, 2].map((i) => <Skeleton key={i} className="h-36" />)}
         {projects.data?.projects.map((p) => (
           <Link key={p.id} href={`/projects/${p.id}`} className="group">
             <Card className="h-full transition-colors group-hover:border-foreground/20">
@@ -71,7 +70,8 @@ export function ProjectsView() {
                   <span className="font-medium text-foreground tabular-nums">{p.openCount ?? 0}</span> open
                 </span>
                 <span>
-                  {p.lastSeenAt ? `Seen ${timeAgo(p.lastSeenAt)}` : `Created ${timeAgo(p.createdAt)}`}
+                  {p.lastSeenAt ? "Seen " : "Created "}
+                  <RelativeTime iso={p.lastSeenAt ?? p.createdAt} />
                 </span>
               </CardContent>
             </Card>
@@ -85,9 +85,11 @@ export function ProjectsView() {
               <p className="max-w-sm text-sm text-muted-foreground">
                 A project is one website. You&apos;ll get a script tag to add the feedback widget to it.
               </p>
-              <Button size="sm" onClick={() => setCreating(true)}>
-                New project
-              </Button>
+              {canWrite && (
+                <Button size="sm" onClick={() => setCreating(true)}>
+                  New project
+                </Button>
+              )}
             </CardContent>
           </Card>
         )}
@@ -98,73 +100,58 @@ export function ProjectsView() {
 }
 
 function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const qc = useQueryClient();
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>{open && <CreateProjectForm onCancel={() => onOpenChange(false)} />}</DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateProjectForm({ onCancel }: { onCancel: () => void }) {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [site, setSite] = useState("");
-  const create = useMutation({
-    mutationFn: () => {
-      const host = site
-        .trim()
-        .replace(/^https?:\/\//, "")
-        .replace(/\/.*$/, "");
-      return api<{ project: Project }>("/projects", {
-        method: "POST",
-        json: { name: name.trim(), allowedOrigins: host ? [host] : [] },
-      });
-    },
-    onSuccess: ({ project }) => {
-      void qc.invalidateQueries({ queryKey: ["projects"] });
+  const [create] = useCreateProjectMutation();
+  const form = useZodForm(createProjectForm, { defaultValues: { name: "", site: "" } });
+  const { errors, isSubmitting } = form.formState;
+  const submit = form.handleSubmit(async ({ name, site }) => {
+    try {
+      const { project } = await create({ name, allowedOrigins: site ? [site] : [] }).unwrap();
       router.push(`/projects/${project.id}`);
-    },
-    onError: (e) => toast.error(e.message),
+    } catch (e) {
+      form.setError("root", { message: errorMessage(e) });
+    }
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            create.mutate();
-          }}
-          className="grid gap-4"
-        >
-          <DialogHeader>
-            <DialogTitle>New project</DialogTitle>
-            <DialogDescription>One project per website. You can allow more domains later.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2">
-            <Label htmlFor="p-name">Name</Label>
-            <Input
-              id="p-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Marketing site"
-              required
-              // eslint-disable-next-line jsx-a11y/no-autofocus -- the dialog's only field; focus moves into a dialog on open
-              autoFocus
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="p-site">Website domain</Label>
-            <Input
-              id="p-site"
-              value={site}
-              onChange={(e) => setSite(e.target.value)}
-              placeholder="www.example.com"
-            />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!name.trim() || create.isPending}>
-              {create.isPending ? "Creating…" : "Create project"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
+      <DialogHeader>
+        <DialogTitle>New project</DialogTitle>
+        <DialogDescription>One project per website. You can allow more domains later.</DialogDescription>
+      </DialogHeader>
+      <Field id="p-name" label="Name" error={errors.name?.message}>
+        <Input
+          {...controlProps("p-name", errors.name?.message)}
+          {...form.register("name")}
+          placeholder="Marketing site"
+          // eslint-disable-next-line jsx-a11y/no-autofocus -- the dialog's first field; focus moves into a dialog on open
+          autoFocus
+        />
+      </Field>
+      <Field id="p-site" label="Website domain" error={errors.site?.message}>
+        <Input
+          {...controlProps("p-site", errors.site?.message)}
+          {...form.register("site")}
+          placeholder="www.example.com"
+        />
+      </Field>
+      <FormError message={errors.root?.message} />
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "Creating…" : "Create project"}
+        </Button>
+      </DialogFooter>
+    </form>
   );
 }

@@ -1,12 +1,13 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2, MailPlus, MoreHorizontal, UserMinus, Users } from "lucide-react";
 import { useState } from "react";
+import { Controller, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { copyText } from "@/components/copy-button";
 import { timeAgo } from "@/components/feedback-meta";
+import { controlProps, FieldError, FormError, useZodForm } from "@/components/form";
 import { EmptyState, ErrorState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,59 +22,45 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
-import { api, type Invitation, isAdminRole, qk } from "@/lib/api";
-import { authClient, useSession } from "@/lib/auth-client";
+import { type Invitation, isAdminRole } from "@/lib/api";
+import { inviteForm } from "@/lib/form-schemas";
+import {
+  errorMessage,
+  useCancelInvitationMutation,
+  useFullOrgQuery,
+  useInvitationsQuery,
+  useInviteMemberMutation,
+  useRemoveMemberMutation,
+  useUpdateMemberRoleMutation,
+} from "@/lib/store/api";
+import type { FullOrg, OrgRole } from "@/lib/store/api/account";
+import { useOrigin } from "@/lib/use-synced-state";
+import { useViewer } from "@/lib/viewer";
 
-type Role = "owner" | "admin" | "member";
-const ROLES: { value: Role; label: string; description: string }[] = [
+const ROLES: { value: OrgRole; label: string; description: string }[] = [
+  {
+    value: "viewer",
+    label: "Viewer",
+    description: "Read everything, change nothing (clients, stakeholders)",
+  },
   { value: "member", label: "Member", description: "Triage feedback and comment" },
   { value: "admin", label: "Admin", description: "Also manage members, projects and integrations" },
   { value: "owner", label: "Owner", description: "Full control, including the workspace itself" },
 ];
 const roleLabel = (r: string) => ROLES.find((x) => x.value === r)?.label ?? r;
+const INVITE_ROLES = ROLES.filter((r) => r.value !== "owner");
 
-type FullOrg = {
-  id: string;
-  name: string;
-  members: {
-    id: string;
-    role: string;
-    userId: string;
-    createdAt: string | Date;
-    user: { name: string; email: string; image?: string | null };
-  }[];
-};
-
-const orgKey = ["org-full"] as const;
-const invitationsKey = ["invitations"] as const;
-
-function unwrap<T>(res: { data: T | null; error: { message?: string | undefined } | null }): T {
-  if (res.error || !res.data) throw new Error(res.error?.message ?? "Request failed");
-  return res.data;
-}
-
+/** Members, roles (owner / admin / member / viewer) and pending invitations (wave-1 §8, wave-4 §4). */
 export function MembersSettings() {
-  const qc = useQueryClient();
-  const { data: session } = useSession();
-  const org = useQuery({
-    queryKey: orgKey,
-    queryFn: async () => unwrap(await authClient.organization.getFullOrganization()) as unknown as FullOrg,
-  });
-  const invitations = useQuery({
-    queryKey: invitationsKey,
-    queryFn: () => api<{ invitations: Invitation[] }>("/invitations"),
-  });
-  const me = org.data?.members.find((m) => m.userId === session?.user.id);
+  const { userId } = useViewer();
+  const org = useFullOrgQuery(undefined);
+  const invitations = useInvitationsQuery(undefined);
+  const me = org.data?.members.find((m) => m.userId === userId);
   const canManage = isAdminRole(me?.role);
-  const refresh = () => {
-    void qc.invalidateQueries({ queryKey: orgKey });
-    void qc.invalidateQueries({ queryKey: invitationsKey });
-    void qc.invalidateQueries({ queryKey: qk.members });
-  };
 
   return (
     <div className="grid gap-4">
-      {canManage && <InviteCard onInvited={refresh} />}
+      {canManage && <InviteCard />}
 
       <Card>
         <CardHeader>
@@ -83,23 +70,22 @@ export function MembersSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {org.isPending && (
+          {org.isLoading && (
             <div className="space-y-2">
               <Skeleton className="h-11" />
               <Skeleton className="h-11" />
             </div>
           )}
-          {org.isError && <ErrorState error={org.error} retry={() => org.refetch()} />}
+          {org.isError && <ErrorState error={org.error} retry={() => void org.refetch()} />}
           {org.data && (
             <ul className="-my-1 divide-y" aria-label="Members">
               {org.data.members.map((m) => (
                 <MemberRow
                   key={m.id}
                   member={m}
-                  isMe={m.userId === session?.user.id}
+                  isMe={m.userId === userId}
                   canManage={canManage}
                   myRole={me?.role}
-                  onChanged={refresh}
                 />
               ))}
             </ul>
@@ -115,9 +101,9 @@ export function MembersSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {invitations.isPending && <Skeleton className="h-11" />}
+          {invitations.isLoading && <Skeleton className="h-11" />}
           {invitations.isError && (
-            <ErrorState error={invitations.error} retry={() => invitations.refetch()} />
+            <ErrorState error={invitations.error} retry={() => void invitations.refetch()} />
           )}
           {invitations.data?.invitations.length === 0 && (
             <EmptyState icon={MailPlus} title="No pending invitations" className="py-6" />
@@ -125,7 +111,7 @@ export function MembersSettings() {
           {invitations.data && invitations.data.invitations.length > 0 && (
             <ul className="-my-1 divide-y" aria-label="Pending invitations">
               {invitations.data.invitations.map((inv) => (
-                <InvitationRow key={inv.id} invitation={inv} canManage={canManage} onChanged={refresh} />
+                <InvitationRow key={inv.id} invitation={inv} canManage={canManage} />
               ))}
             </ul>
           )}
@@ -135,19 +121,19 @@ export function MembersSettings() {
   );
 }
 
-function InviteCard({ onInvited }: { onInvited: () => void }) {
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<Role>("member");
-  const [error, setError] = useState<string | null>(null);
-  const invite = useMutation({
-    mutationFn: async () =>
-      unwrap(await authClient.organization.inviteMember({ email: email.trim(), role: role })),
-    onSuccess: () => {
-      toast.success(`Invitation sent to ${email.trim()}`);
-      setEmail("");
-      onInvited();
-    },
-    onError: (e) => setError(e.message),
+function InviteCard() {
+  const [invite] = useInviteMemberMutation();
+  const form = useZodForm(inviteForm, { defaultValues: { email: "", role: "member" } });
+  const { errors, isSubmitting } = form.formState;
+  const role = useWatch({ control: form.control, name: "role" });
+  const submit = form.handleSubmit(async ({ email, role }) => {
+    try {
+      await invite({ email, role }).unwrap();
+      toast.success(`Invitation sent to ${email}`);
+      form.reset({ email: "", role });
+    } catch (e) {
+      form.setError("root", { message: errorMessage(e) });
+    }
   });
   return (
     <Card>
@@ -158,57 +144,44 @@ function InviteCard({ onInvited }: { onInvited: () => void }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form
-          noValidate
-          className="grid gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-              setError("Enter a valid email address");
-              return;
-            }
-            setError(null);
-            invite.mutate();
-          }}
-        >
+        <form noValidate className="grid gap-2" onSubmit={(e) => void submit(e)}>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input
+              {...controlProps("invite-email", errors.email?.message)}
+              {...form.register("email")}
               type="email"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setError(null);
-              }}
               placeholder="teammate@example.com"
               aria-label="Email address"
-              aria-invalid={!!error || undefined}
               className="sm:flex-1"
             />
-            <Select
-              items={ROLES.filter((r) => r.value !== "owner")}
-              value={role}
-              onValueChange={(v) => v && setRole(v)}
-            >
-              <SelectTrigger className="sm:w-32" aria-label="Role">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ROLES.filter((r) => r.value !== "owner").map((r) => (
-                  <SelectItem key={r.value} value={r.value}>
-                    {r.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button type="submit" disabled={!email.trim() || invite.isPending}>
-              <MailPlus /> {invite.isPending ? "Sending…" : "Send invite"}
+            <Controller
+              control={form.control}
+              name="role"
+              render={({ field }) => (
+                <Select
+                  items={INVITE_ROLES}
+                  value={field.value}
+                  onValueChange={(v) => v && field.onChange(v)}
+                >
+                  <SelectTrigger className="sm:w-32" aria-label="Role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INVITE_ROLES.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>
+                        {r.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            <Button type="submit" disabled={isSubmitting}>
+              <MailPlus /> {isSubmitting ? "Sending…" : "Send invite"}
             </Button>
           </div>
-          {error && (
-            <p role="alert" className="text-xs text-destructive">
-              {error}
-            </p>
-          )}
+          <FieldError id="invite-email" message={errors.email?.message} />
+          <FormError message={errors.root?.message} />
           <p className="text-xs text-muted-foreground">{ROLES.find((r) => r.value === role)?.description}.</p>
         </form>
       </CardContent>
@@ -221,36 +194,34 @@ function MemberRow({
   isMe,
   canManage,
   myRole,
-  onChanged,
 }: {
   member: FullOrg["members"][number];
   isMe: boolean;
   canManage: boolean;
   myRole: string | undefined;
-  onChanged: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
-  const changeRole = useMutation({
-    mutationFn: async (role: Role) =>
-      unwrap(await authClient.organization.updateMemberRole({ memberId: m.id, role })),
-    onSuccess: (_d, role) => {
-      toast.success(`${m.user.name} is now ${roleLabel(role).toLowerCase()}`);
-      onChanged();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-  const remove = useMutation({
-    mutationFn: async () => unwrap(await authClient.organization.removeMember({ memberIdOrEmail: m.id })),
-    onSuccess: () => {
-      toast.success(`${m.user.name} was removed`);
-      setConfirm(false);
-      onChanged();
-    },
-    onError: (e) => toast.error(e.message),
-  });
+  const [changeRole] = useUpdateMemberRoleMutation();
+  const [removeMember, removal] = useRemoveMemberMutation();
   // Only owners can hand out or take away ownership.
   const editable = canManage && !isMe && (m.role !== "owner" || myRole === "owner");
   const roleOptions = ROLES.filter((r) => r.value !== "owner" || myRole === "owner");
+
+  const setRole = (role: OrgRole) => {
+    changeRole({ memberId: m.id, role })
+      .unwrap()
+      .then(() => toast.success(`${m.user.name} is now ${roleLabel(role).toLowerCase()}`))
+      .catch((e: unknown) => toast.error(errorMessage(e)));
+  };
+  const remove = () => {
+    removeMember(m.id)
+      .unwrap()
+      .then(() => {
+        toast.success(`${m.user.name} was removed`);
+        setConfirm(false);
+      })
+      .catch((e: unknown) => toast.error(errorMessage(e)));
+  };
 
   return (
     <li className="flex flex-wrap items-center gap-3 py-2.5" data-member={m.user.email}>
@@ -265,7 +236,7 @@ function MemberRow({
         <Select
           items={roleOptions}
           value={m.role}
-          onValueChange={(v) => v && v !== m.role && changeRole.mutate(v as Role)}
+          onValueChange={(v) => v && v !== m.role && setRole(v as OrgRole)}
         >
           <SelectTrigger size="sm" className="w-28" aria-label={`Role of ${m.user.name}`}>
             <SelectValue />
@@ -303,31 +274,16 @@ function MemberRow({
         title={`Remove ${m.user.name}?`}
         description="They lose access to this workspace at once. Their comments stay."
         confirmLabel="Remove"
-        pending={remove.isPending}
-        onConfirm={() => remove.mutate()}
+        pending={removal.isLoading}
+        onConfirm={remove}
       />
     </li>
   );
 }
 
-function InvitationRow({
-  invitation: inv,
-  canManage,
-  onChanged,
-}: {
-  invitation: Invitation;
-  canManage: boolean;
-  onChanged: () => void;
-}) {
-  const revoke = useMutation({
-    mutationFn: async () => unwrap(await authClient.organization.cancelInvitation({ invitationId: inv.id })),
-    onSuccess: () => {
-      toast.success(`Invitation to ${inv.email} revoked`);
-      onChanged();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-  const link = `${typeof window === "undefined" ? "" : window.location.origin}/accept-invitation/${inv.id}`;
+function InvitationRow({ invitation: inv, canManage }: { invitation: Invitation; canManage: boolean }) {
+  const [cancelInvitation, revoke] = useCancelInvitationMutation();
+  const link = `${useOrigin()}/accept-invitation/${inv.id}`;
   return (
     <li className="flex flex-wrap items-center gap-3 py-2.5" data-invitation={inv.email}>
       <span className="grid size-8 place-items-center rounded-full bg-muted">
@@ -344,8 +300,18 @@ function InvitationRow({
         <Link2 /> Copy link
       </Button>
       {canManage && (
-        <Button variant="outline" size="sm" onClick={() => revoke.mutate()} disabled={revoke.isPending}>
-          {revoke.isPending ? "Revoking…" : "Revoke"}
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={revoke.isLoading}
+          onClick={() => {
+            cancelInvitation(inv.id)
+              .unwrap()
+              .then(() => toast.success(`Invitation to ${inv.email} revoked`))
+              .catch((e: unknown) => toast.error(errorMessage(e)));
+          }}
+        >
+          {revoke.isLoading ? "Revoking…" : "Revoke"}
         </Button>
       )}
     </li>

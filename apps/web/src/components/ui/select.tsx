@@ -3,9 +3,16 @@
 import * as React from "react";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { cn } from "cn";
+import { useReadOnly } from "@/components/read-only";
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react";
 
-const Select = SelectPrimitive.Root;
+function Select<Value, Multiple extends boolean | undefined = false>({
+  disabled,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  const readOnly = useReadOnly();
+  return <SelectPrimitive.Root {...props} disabled={readOnly || disabled} />;
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (

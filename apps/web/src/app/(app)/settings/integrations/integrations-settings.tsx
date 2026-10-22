@@ -1,7 +1,6 @@
 "use client";
 
 import { WEBHOOK_EVENTS } from "@pinwren/core";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronRight,
   KeyRound,
@@ -40,16 +39,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { Controller, useWatch } from "react-hook-form";
+import { controlProps, Field, FormError, useZodForm } from "@/components/form";
+import type { Project, Webhook, WebhookDelivery, WebhookEvent, WebhookKind } from "@/lib/api";
+import { webhookForm } from "@/lib/form-schemas";
 import {
-  api,
+  errorMessage,
   isForbidden,
-  type Project,
-  qk,
-  type Webhook,
-  type WebhookDelivery,
-  type WebhookEvent,
-  type WebhookKind,
-} from "@/lib/api";
+  useCreateWebhookMutation,
+  useDeleteWebhookMutation,
+  useDeliveriesQuery,
+  useProjectsQuery,
+  useRedeliverMutation,
+  useRotateWebhookSecretMutation,
+  useTestWebhookMutation,
+  useUpdateWebhookMutation,
+  useWebhookQuery,
+  useWebhooksQuery,
+} from "@/lib/store/api";
+import type { WebhookPatch } from "@/lib/store/api/admin";
 import { cn } from "@/lib/utils";
 import { here } from "@/lib/routes";
 
@@ -67,10 +75,8 @@ const URL_HINT: Record<WebhookKind, string> = {
   discord: "https://discord.com/api/webhooks/…",
 };
 
-const webhooksKey = ["webhooks"] as const;
 const SECRET_HELP =
   "Verify the Pinwren-Signature header with it: v1 = HMAC-SHA256(secret, timestamp + '.' + body).";
-const deliveriesKey = (id: string) => ["webhooks", id, "deliveries"] as const;
 
 export function IntegrationsSettings() {
   const search = useSearchParams();
@@ -79,15 +85,8 @@ export function IntegrationsSettings() {
   const [creating, setCreating] = useState(false);
   // A new endpoint's secret is shown first; its detail sheet opens once the secret is dismissed.
   const [created, setCreated] = useState<{ id: string; secret: string } | null>(null);
-  const hooks = useQuery({
-    queryKey: webhooksKey,
-    queryFn: () => api<{ webhooks: Webhook[] }>("/webhooks"),
-    retry: (n, e) => !isForbidden(e) && n < 1,
-  });
-  const projects = useQuery({
-    queryKey: qk.projects,
-    queryFn: () => api<{ projects: Project[] }>("/projects"),
-  });
+  const hooks = useWebhooksQuery(undefined);
+  const projects = useProjectsQuery(undefined);
   const openId = search.get("webhook");
   const open = (id: string | null) =>
     router.replace(here(pathname, id ? `webhook=${id}` : undefined), { scroll: false });
@@ -123,13 +122,13 @@ export function IntegrationsSettings() {
             <Plus /> Add webhook
           </Button>
         </div>
-        {hooks.isPending && (
+        {hooks.isLoading && (
           <div className="space-y-2">
             <Skeleton className="h-14" />
             <Skeleton className="h-14" />
           </div>
         )}
-        {hooks.isError && <ErrorState error={hooks.error} retry={() => hooks.refetch()} />}
+        {hooks.isError && <ErrorState error={hooks.error} retry={() => void hooks.refetch()} />}
         {hooks.data?.webhooks.length === 0 && (
           <EmptyState
             icon={WebhookIcon}
@@ -278,117 +277,135 @@ function CreateWebhookDialog({
   projects: Project[];
   onCreated: (w: Webhook, secret: string | null) => void;
 }) {
-  const qc = useQueryClient();
-  const [kind, setKind] = useState<WebhookKind>("generic");
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
-  const [events, setEvents] = useState<WebhookEvent[]>(["feedback.created", "comment.created"]);
-  const [projectId, setProjectId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const create = useMutation({
-    mutationFn: () =>
-      api<{ webhook: Webhook; secret: string | null }>("/webhooks", {
-        method: "POST",
-        json: { kind, url: url.trim(), events, projectId, ...(name.trim() ? { name: name.trim() } : {}) },
-      }),
-    onSuccess: ({ webhook, secret }) => {
-      void qc.invalidateQueries({ queryKey: webhooksKey });
-      toast.success("Webhook added");
-      setName("");
-      setUrl("");
-      onCreated(webhook, secret);
-    },
-    onError: (e) => setError(e.message),
-  });
-  const validate = () => {
-    try {
-      const u = new URL(url.trim());
-      if (u.protocol !== "https:" && u.protocol !== "http:") return "Use an http(s) URL";
-    } catch {
-      return "Enter the full URL, starting with https://";
-    }
-    if (!events.length) return "Pick at least one event";
-    return null;
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
-        <form
-          className="grid gap-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const err = validate();
-            setError(err);
-            if (!err) create.mutate();
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Add a webhook</DialogTitle>
-            <DialogDescription>Pinwren posts each selected event to this URL.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2">
-            <Label>Type</Label>
+        {open && (
+          <CreateWebhookForm projects={projects} onCreated={onCreated} onCancel={() => onOpenChange(false)} />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateWebhookForm({
+  projects,
+  onCreated,
+  onCancel,
+}: {
+  projects: Project[];
+  onCreated: (w: Webhook, secret: string | null) => void;
+  onCancel: () => void;
+}) {
+  const [create] = useCreateWebhookMutation();
+  const form = useZodForm(webhookForm, {
+    defaultValues: {
+      kind: "generic",
+      name: "",
+      url: "",
+      events: ["feedback.created", "comment.created"],
+      projectId: "all",
+    },
+  });
+  const { errors, isSubmitting } = form.formState;
+  const kind = useWatch({ control: form.control, name: "kind" });
+  const submit = form.handleSubmit(async (v) => {
+    try {
+      const { webhook, secret } = await create({
+        kind: v.kind,
+        url: v.url,
+        events: v.events,
+        projectId: v.projectId === "all" ? null : v.projectId,
+        ...(v.name ? { name: v.name } : {}),
+      }).unwrap();
+      toast.success("Webhook added");
+      onCreated(webhook, secret);
+    } catch (e) {
+      form.setError("root", { message: errorMessage(e) });
+    }
+  });
+
+  return (
+    <form className="grid gap-4" noValidate onSubmit={(e) => void submit(e)}>
+      <DialogHeader>
+        <DialogTitle>Add a webhook</DialogTitle>
+        <DialogDescription>Pinwren posts each selected event to this URL.</DialogDescription>
+      </DialogHeader>
+      <div className="grid gap-2">
+        <Label>Type</Label>
+        <Controller
+          control={form.control}
+          name="kind"
+          render={({ field }) => (
             <Segmented
               label="Type"
-              value={kind}
-              onChange={setKind}
+              value={field.value}
+              onChange={field.onChange}
               options={[
                 { value: "generic", label: "Webhook (JSON)" },
                 { value: "slack", label: "Slack" },
                 { value: "discord", label: "Discord" },
               ]}
             />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="wh-url">URL</Label>
-            <Input
-              id="wh-url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder={URL_HINT[kind]}
-              className="font-mono text-xs"
-              aria-invalid={!!error || undefined}
-              // eslint-disable-next-line jsx-a11y/no-autofocus -- the dialog's first field; focus moves into a dialog on open
-              autoFocus
-            />
-            {kind !== "generic" && (
-              <p className="text-xs text-muted-foreground">
-                The URL is a credential — it&apos;s stored encrypted and shown masked afterwards.
-              </p>
-            )}
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="wh-name">Name (optional)</Label>
-            <Input
-              id="wh-name"
-              value={name}
-              maxLength={80}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="#design-feedback"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label>Projects</Label>
-            <ProjectScope value={projectId} onChange={setProjectId} projects={projects} />
-          </div>
-          <EventPicker value={events} onChange={setEvents} />
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
           )}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? "Adding…" : "Add webhook"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        />
+      </div>
+      <Field
+        id="wh-url"
+        label="URL"
+        error={errors.url?.message}
+        help={
+          kind !== "generic"
+            ? "The URL is a credential — it's stored encrypted and shown masked afterwards."
+            : undefined
+        }
+      >
+        <Input
+          {...controlProps("wh-url", errors.url?.message, kind !== "generic")}
+          {...form.register("url")}
+          placeholder={URL_HINT[kind]}
+          className="font-mono text-xs"
+          // eslint-disable-next-line jsx-a11y/no-autofocus -- the dialog's first field; focus moves into a dialog on open
+          autoFocus
+        />
+      </Field>
+      <Field id="wh-name" label="Name (optional)" error={errors.name?.message}>
+        <Input
+          {...controlProps("wh-name", errors.name?.message)}
+          {...form.register("name")}
+          maxLength={80}
+          placeholder="#design-feedback"
+        />
+      </Field>
+      <div className="grid gap-2">
+        <Label>Projects</Label>
+        <Controller
+          control={form.control}
+          name="projectId"
+          render={({ field }) => (
+            <ProjectScope
+              value={field.value === "all" ? null : field.value}
+              onChange={(v) => field.onChange(v ?? "all")}
+              projects={projects}
+            />
+          )}
+        />
+      </div>
+      <Controller
+        control={form.control}
+        name="events"
+        render={({ field }) => <EventPicker value={field.value} onChange={field.onChange} />}
+      />
+      <FormError message={errors.events?.message ?? errors.root?.message} />
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "Adding…" : "Add webhook"}
+        </Button>
+      </DialogFooter>
+    </form>
   );
 }
 
@@ -401,64 +418,54 @@ function WebhookDetail({
   projects: Project[];
   onDeleted: () => void;
 }) {
-  const qc = useQueryClient();
   const [confirm, setConfirm] = useState<"delete" | "rotate" | null>(null);
   const [rotated, setRotated] = useState<string | null>(null);
-  const hook = useQuery({
-    queryKey: ["webhooks", id],
-    queryFn: () => api<{ webhook: Webhook }>(`/webhooks/${id}`),
-  });
-  const deliveries = useQuery({
-    queryKey: deliveriesKey(id),
-    queryFn: () => api<{ deliveries: WebhookDelivery[] }>(`/webhooks/${id}/deliveries?limit=50`),
-    refetchInterval: 5000,
-  });
-  const refresh = () => {
-    void qc.invalidateQueries({ queryKey: webhooksKey });
+  const hook = useWebhookQuery(id);
+  const deliveries = useDeliveriesQuery(id, { pollingInterval: 5000, skipPollingIfUnfocused: true });
+  const [updateWebhook] = useUpdateWebhookMutation();
+  const [testWebhook, test] = useTestWebhookMutation();
+  const [rotateSecret, rotate] = useRotateWebhookSecretMutation();
+  const [deleteWebhook, remove] = useDeleteWebhookMutation();
+  const patch = (body: WebhookPatch) => {
+    updateWebhook({ id, patch: body })
+      .unwrap()
+      .then(() => toast.success("Webhook saved", { id: `wh-${id}` }))
+      .catch((e: unknown) => toast.error("Not saved", { description: errorMessage(e) }));
   };
-  const patch = useMutation({
-    mutationFn: (body: Partial<Pick<Webhook, "active" | "events" | "projectId" | "name">>) =>
-      api<{ webhook: Webhook }>(`/webhooks/${id}`, { method: "PATCH", json: body }),
-    onSuccess: ({ webhook }) => {
-      qc.setQueryData(["webhooks", id], { webhook });
-      refresh();
-      toast.success("Webhook saved", { id: `wh-${id}` });
-    },
-    onError: (e) => toast.error("Not saved", { description: e.message }),
-  });
-  const test = useMutation({
-    mutationFn: () => api<{ delivery: WebhookDelivery }>(`/webhooks/${id}/test`, { method: "POST" }),
-    onSuccess: ({ delivery }) => {
-      void qc.invalidateQueries({ queryKey: deliveriesKey(id) });
-      if (delivery.status === "success")
-        toast.success(`Test delivered · ${delivery.responseCode ?? "no status"}`);
-      else
-        toast.error("Test failed", {
-          description: delivery.error ?? `HTTP ${delivery.responseCode ?? "error"}`,
-        });
-    },
-    onError: (e) => toast.error(e.message),
-  });
-  const rotate = useMutation({
-    mutationFn: () => api<{ secret: string }>(`/webhooks/${id}/rotate-secret`, { method: "POST" }),
-    onSuccess: ({ secret }) => {
-      setConfirm(null);
-      setRotated(secret);
-    },
-    onError: (e) => toast.error(e.message),
-  });
-  const remove = useMutation({
-    mutationFn: () => api(`/webhooks/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
-      setConfirm(null);
-      refresh();
-      toast.success("Webhook deleted");
-      onDeleted();
-    },
-    onError: (e) => toast.error(e.message),
-  });
+  const sendTest = () => {
+    testWebhook(id)
+      .unwrap()
+      .then(({ delivery }) => {
+        if (delivery.status === "success")
+          toast.success(`Test delivered · ${delivery.responseCode ?? "no status"}`);
+        else
+          toast.error("Test failed", {
+            description: delivery.error ?? `HTTP ${delivery.responseCode ?? "error"}`,
+          });
+      })
+      .catch((e: unknown) => toast.error(errorMessage(e)));
+  };
+  const rotateNow = () => {
+    rotateSecret(id)
+      .unwrap()
+      .then(({ secret }) => {
+        setConfirm(null);
+        setRotated(secret);
+      })
+      .catch((e: unknown) => toast.error(errorMessage(e)));
+  };
+  const removeNow = () => {
+    deleteWebhook(id)
+      .unwrap()
+      .then(() => {
+        setConfirm(null);
+        toast.success("Webhook deleted");
+        onDeleted();
+      })
+      .catch((e: unknown) => toast.error(errorMessage(e)));
+  };
 
-  if (hook.isPending) {
+  if (hook.isLoading) {
     return (
       <div className="space-y-3 p-5">
         <Skeleton className="h-6 w-1/2" />
@@ -467,7 +474,7 @@ function WebhookDetail({
       </div>
     );
   }
-  if (hook.isError) return <ErrorState error={hook.error} retry={() => hook.refetch()} />;
+  if (!hook.data) return <ErrorState error={hook.error} retry={() => void hook.refetch()} />;
   const w = hook.data.webhook;
 
   return (
@@ -490,29 +497,23 @@ function WebhookDetail({
         )}
         <SettingGroup>
           <SettingRow label="Active" htmlFor="wh-active" description="Paused webhooks receive nothing.">
-            <Switch
-              id="wh-active"
-              checked={w.active}
-              onCheckedChange={(active) => patch.mutate({ active })}
-            />
+            <Switch id="wh-active" checked={w.active} onCheckedChange={(active) => patch({ active })} />
           </SettingRow>
           <SettingRow label="Projects" stack>
             <ProjectScope
               value={w.projectId}
-              onChange={(projectId) => patch.mutate({ projectId })}
+              onChange={(projectId) => patch({ projectId })}
               projects={projects}
             />
           </SettingRow>
         </SettingGroup>
         <EventPicker
           value={w.events}
-          onChange={(events) =>
-            events.length ? patch.mutate({ events }) : toast.error("Keep at least one event")
-          }
+          onChange={(events) => (events.length ? patch({ events }) : toast.error("Keep at least one event"))}
         />
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => test.mutate()} disabled={test.isPending || !w.active}>
-            <Send /> {test.isPending ? "Sending…" : "Send test event"}
+          <Button onClick={sendTest} disabled={test.isLoading || !w.active}>
+            <Send /> {test.isLoading ? "Sending…" : "Send test event"}
           </Button>
           {w.hasSecret && (
             <Button variant="outline" onClick={() => setConfirm("rotate")}>
@@ -532,8 +533,10 @@ function WebhookDetail({
             Recent deliveries
             {deliveries.isFetching && <RotateCw className="size-3 animate-spin text-muted-foreground" />}
           </h3>
-          {deliveries.isPending && <Skeleton className="h-24" />}
-          {deliveries.isError && <ErrorState error={deliveries.error} retry={() => deliveries.refetch()} />}
+          {deliveries.isLoading && <Skeleton className="h-24" />}
+          {deliveries.isError && (
+            <ErrorState error={deliveries.error} retry={() => void deliveries.refetch()} />
+          )}
           {deliveries.data?.deliveries.length === 0 && (
             <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
               Nothing sent yet. Send a test event to check the connection.
@@ -553,8 +556,8 @@ function WebhookDetail({
         onOpenChange={(o) => setConfirm(o ? "delete" : null)}
         title="Delete this webhook?"
         description="Deliveries stop at once and the log is removed."
-        pending={remove.isPending}
-        onConfirm={() => remove.mutate()}
+        pending={remove.isLoading}
+        onConfirm={removeNow}
       />
       <ConfirmDialog
         open={confirm === "rotate"}
@@ -562,8 +565,8 @@ function WebhookDetail({
         title="Rotate the signing secret?"
         description="The old secret stops validating immediately. Update your receiver with the new one."
         confirmLabel="Rotate"
-        pending={rotate.isPending}
-        onConfirm={() => rotate.mutate()}
+        pending={rotate.isLoading}
+        onConfirm={rotateNow}
       />
       <SecretDialog
         secret={rotated}
@@ -591,19 +594,18 @@ function DeliveryRow({
   webhookId: string;
   disabled: boolean;
 }) {
-  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const redeliver = useMutation({
-    mutationFn: () =>
-      api<{ delivery: WebhookDelivery }>(`/webhook-deliveries/${d.id}/redeliver`, { method: "POST" }),
-    onSuccess: ({ delivery }) => {
-      void qc.invalidateQueries({ queryKey: deliveriesKey(webhookId) });
-      toast[delivery.status === "success" ? "success" : "error"](
-        delivery.status === "success" ? "Redelivered" : "Redelivery failed",
-      );
-    },
-    onError: (e) => toast.error(e.message),
-  });
+  const [redeliverNow, redeliver] = useRedeliverMutation();
+  const run = () => {
+    redeliverNow({ deliveryId: d.id, webhookId })
+      .unwrap()
+      .then(({ delivery }) =>
+        toast[delivery.status === "success" ? "success" : "error"](
+          delivery.status === "success" ? "Redelivered" : "Redelivery failed",
+        ),
+      )
+      .catch((e: unknown) => toast.error(errorMessage(e)));
+  };
   return (
     <li data-delivery={d.event}>
       <div className="flex items-center gap-2 px-3 py-2 text-xs">
@@ -630,12 +632,7 @@ function DeliveryRow({
           </span>
           <span className="ml-auto shrink-0 text-muted-foreground">{timeAgo(d.createdAt)}</span>
         </button>
-        <Button
-          size="xs"
-          variant="ghost"
-          onClick={() => redeliver.mutate()}
-          disabled={redeliver.isPending || disabled}
-        >
+        <Button size="xs" variant="ghost" onClick={run} disabled={redeliver.isLoading || disabled}>
           <RotateCw /> Redeliver
         </Button>
       </div>

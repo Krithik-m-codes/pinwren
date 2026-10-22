@@ -1,6 +1,5 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellOff } from "lucide-react";
 import { toast } from "sonner";
 import { ButtonLink } from "@/components/button-link";
@@ -8,7 +7,8 @@ import { EmptyState, ErrorState } from "@/components/states";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api, type NotificationPreference } from "@/lib/api";
+import type { NotificationPreference } from "@/lib/api";
+import { errorMessage, useNotificationPrefsQuery, useUpdateNotificationPrefsMutation } from "@/lib/store/api";
 
 type Key = Exclude<keyof NotificationPreference, "projectId" | "projectName">;
 const COLUMNS: { key: Key; label: string; hint: string }[] = [
@@ -19,32 +19,17 @@ const COLUMNS: { key: Key; label: string; hint: string }[] = [
   { key: "email", label: "Email", hint: "Also send these by email" },
 ];
 
-const prefsKey = ["notification-preferences"] as const;
-type Prefs = { preferences: NotificationPreference[] };
-
 /** Per-project notification matrix (wave-1 §8). In-app notifications are always written; email is opt-out. */
 export function NotificationSettings() {
-  const qc = useQueryClient();
-  const prefs = useQuery({ queryKey: prefsKey, queryFn: () => api<Prefs>("/notification-preferences") });
-  const save = useMutation({
-    mutationFn: (body: Partial<NotificationPreference> & { projectId: string }) =>
-      api("/notification-preferences", { method: "PUT", json: body }),
-    onMutate: async (body) => {
-      await qc.cancelQueries({ queryKey: prefsKey });
-      const prev = qc.getQueryData<Prefs>(prefsKey);
-      if (prev) {
-        qc.setQueryData<Prefs>(prefsKey, {
-          preferences: prev.preferences.map((p) => (p.projectId === body.projectId ? { ...p, ...body } : p)),
-        });
-      }
-      return { prev };
-    },
-    onError: (e, _b, ctx) => {
-      if (ctx?.prev) qc.setQueryData(prefsKey, ctx.prev);
-      toast.error("Not saved", { description: e.message });
-    },
-    onSuccess: () => toast.success("Notification preferences saved", { id: "prefs" }),
-  });
+  const prefs = useNotificationPrefsQuery(undefined);
+  const [updatePrefs] = useUpdateNotificationPrefsMutation();
+  // Optimistic in the endpoint: the box ticks at once and rolls back if the save fails.
+  const save = (body: Partial<NotificationPreference> & { projectId: string }) => {
+    updatePrefs(body)
+      .unwrap()
+      .then(() => toast.success("Notification preferences saved", { id: "prefs" }))
+      .catch((e: unknown) => toast.error("Not saved", { description: errorMessage(e) }));
+  };
 
   return (
     <Card>
@@ -55,13 +40,13 @@ export function NotificationSettings() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {prefs.isPending && (
+        {prefs.isLoading && (
           <div className="space-y-2">
             <Skeleton className="h-9" />
             <Skeleton className="h-9" />
           </div>
         )}
-        {prefs.isError && <ErrorState error={prefs.error} retry={() => prefs.refetch()} />}
+        {prefs.isError && <ErrorState error={prefs.error} retry={() => void prefs.refetch()} />}
         {prefs.data?.preferences.length === 0 && (
           <EmptyState
             icon={BellOff}
@@ -99,7 +84,7 @@ export function NotificationSettings() {
                           className="mx-auto"
                           checked={p[c.key]}
                           aria-label={`${c.label} for ${p.projectName}`}
-                          onCheckedChange={(v) => save.mutate({ projectId: p.projectId, [c.key]: v })}
+                          onCheckedChange={(v) => save({ projectId: p.projectId, [c.key]: v })}
                         />
                       </td>
                     ))}

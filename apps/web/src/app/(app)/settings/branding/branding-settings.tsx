@@ -1,6 +1,5 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Palette, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { ColorPicker } from "@/components/color-picker";
@@ -12,8 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { contrastText, useBranding, useMeInfo } from "@/lib/account-hooks";
-import { api, isAdminRole, type OrgBranding, qk } from "@/lib/api";
+import { isAdminRole, type OrgBranding } from "@/lib/api";
+import { contrastText } from "@/lib/color";
+import { refreshBranding } from "@/lib/server/actions";
+import { errorMessage, useBrandingQuery, useMeQuery, useUpdateBrandingMutation } from "@/lib/store/api";
 import { SectionTitle } from "../settings-shell";
 import { useSyncedState } from "@/lib/use-synced-state";
 
@@ -23,29 +24,31 @@ type Patch = Partial<Pick<OrgBranding, "productName" | "accent" | "logoAssetId">
 
 /** Settings › Branding (F-094): product name, logo and accent for the dashboard and emails. */
 export function BrandingSettings() {
-  const qc = useQueryClient();
-  const query = useBranding();
-  const me = useMeInfo();
+  const query = useBrandingQuery(undefined);
+  const me = useMeQuery(undefined);
   const b = query.data?.branding;
   // Both follow the saved branding whenever it (re)loads.
   const [name, setName] = useSyncedState(b?.productName ?? "", b);
   const [accent, setAccent] = useSyncedState(b?.accent ?? DEFAULT_ACCENT, b);
 
-  const save = useMutation({
-    mutationFn: ({ patch }: { patch: Patch; message: string }) =>
-      api<{ branding: OrgBranding }>("/branding", { method: "PATCH", json: patch }),
-    onSuccess: ({ branding }, { message }) => {
-      qc.setQueryData(qk.branding, { branding });
-      toast.success(message);
+  const [updateBranding] = useUpdateBrandingMutation();
+  const save = {
+    mutate: ({ patch, message }: { patch: Patch; message: string }) => {
+      updateBranding(patch)
+        .unwrap()
+        // The sidebar's brand is rendered on the server from a cached copy: expire it (updateTag), and
+        // the server action's response re-renders it.
+        .then(() => refreshBranding())
+        .then(() => toast.success(message))
+        .catch((e: unknown) => {
+          toast.error("Not saved", { description: errorMessage(e) });
+          if (b) setAccent(b.accent ?? DEFAULT_ACCENT);
+        });
     },
-    onError: (e) => {
-      toast.error("Not saved", { description: e.message });
-      if (b) setAccent(b.accent ?? DEFAULT_ACCENT);
-    },
-  });
+  };
 
-  if (query.isPending || me.isPending) return <Skeleton className="h-96 rounded-xl" />;
-  if (query.isError) return <ErrorState error={query.error} retry={() => query.refetch()} />;
+  if (query.isLoading || me.isLoading) return <Skeleton className="h-96 rounded-xl" />;
+  if (query.isError) return <ErrorState error={query.error} retry={() => void query.refetch()} />;
   if (!isAdminRole(me.data?.role)) {
     return (
       <Card>

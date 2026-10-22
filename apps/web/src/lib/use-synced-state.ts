@@ -28,3 +28,12 @@ export function useMounted(): boolean {
     () => false,
   );
 }
+
+/** This page's origin after hydration ("" during SSR and hydration, so server and client HTML agree). */
+export function useOrigin(): string {
+  return useSyncExternalStore(
+    subscribeNever,
+    () => window.location.origin,
+    () => "",
+  );
+}

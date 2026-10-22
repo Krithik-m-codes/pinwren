@@ -1,11 +1,10 @@
 "use client";
 
 import { isClosedStatus } from "@pinwren/core";
-import { useQueries, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ExternalLink, FileStack, ImageOff, Layers, MessageSquare, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { use, useMemo, useState } from "react";
+import { use, useState } from "react";
 import { ButtonLink } from "@/components/button-link";
 import { CaptureView, type Marker } from "@/components/capture-view";
 import { KIND_META, pathOf, StatusIcon, timeAgo } from "@/components/feedback-meta";
@@ -17,23 +16,18 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { assetUrl, type FeedbackDetail, type FeedbackRow, screenshotOf } from "@/lib/api";
 import {
-  api,
-  assetUrl,
-  type FeedbackDetail,
-  type FeedbackList,
-  type FeedbackRow,
-  type ProjectDetail,
-  qk,
-  screenshotOf,
-} from "@/lib/api";
-import { useThumbnail } from "@/lib/feedback-hooks";
+  useFeedbackDetailsQuery,
+  useProjectFeedbackQuery,
+  useProjectQuery,
+  useThumbnailQuery,
+} from "@/lib/store/api";
 import { type Capture, captureOf, isRegion, placeOn } from "@/lib/geometry";
 import { cn } from "@/lib/utils";
 import { FeedbackDetailPanel } from "../../../inbox/feedback-detail";
 import { here } from "@/lib/routes";
 
-const MAX_PAGES_OF_FEEDBACK = 5;
 const MAX_REVIEW_ITEMS = 60;
 
 type PageGroup = {
@@ -45,40 +39,15 @@ type PageGroup = {
   thumbItem: FeedbackRow | undefined;
 };
 
-/**
- * Every feedback item of the project (newest first). There is no pages endpoint, so pages are
- * derived from the feedback list — capped at 500 items, enough for review but not an archive.
- */
-function useProjectFeedback(projectId: string) {
-  return useQuery({
-    queryKey: qk.feedbackList({ projectId, status: "all", scope: "pages" }),
-    queryFn: async () => {
-      const items: FeedbackRow[] = [];
-      let cursor: string | null = null;
-      for (let i = 0; i < MAX_PAGES_OF_FEEDBACK; i++) {
-        const sp = new URLSearchParams({ projectId, status: "all", limit: "100" });
-        if (cursor) sp.set("cursor", cursor);
-        const res: FeedbackList = await api<FeedbackList>(`/feedback?${sp}`);
-        items.push(...res.items);
-        cursor = res.nextCursor;
-        if (!cursor) break;
-      }
-      return { items, nextCursor: cursor } satisfies FeedbackList;
-    },
-  });
-}
-
 export function PagesView({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const search = useSearchParams();
   const url = search.get("url");
-  const project = useQuery({
-    queryKey: qk.project(id),
-    queryFn: () => api<{ project: ProjectDetail }>(`/projects/${id}`),
-  });
-  const feedback = useProjectFeedback(id);
+  const project = useProjectQuery(id);
+  // Pages are derived from the project's feedback (up to 500 items; there is no pages endpoint).
+  const feedback = useProjectFeedbackQuery(id);
 
-  const groups = useMemo<PageGroup[]>(() => {
+  const groups: PageGroup[] = (() => {
     const map = new Map<string, FeedbackRow[]>();
     for (const f of feedback.data?.items ?? []) {
       if (!f.pageUrl) continue;
@@ -96,7 +65,7 @@ export function PagesView({ params }: { params: Promise<{ id: string }> }) {
         thumbItem: items.find((i) => i.hasScreenshot),
       }))
       .sort((a, b) => b.latest.localeCompare(a.latest));
-  }, [feedback.data]);
+  })();
 
   const name = project.data?.project.name ?? "Project";
   const group = url ? groups.find((g) => g.url === url) : undefined;
@@ -131,9 +100,9 @@ export function PagesView({ params }: { params: Promise<{ id: string }> }) {
         )}
       </PageHeader>
       {feedback.isError ? (
-        <ErrorState error={feedback.error} retry={() => feedback.refetch()} />
+        <ErrorState error={feedback.error} retry={() => void feedback.refetch()} />
       ) : url ? (
-        feedback.isPending ? (
+        feedback.isLoading ? (
           <ReviewSkeleton />
         ) : group ? (
           <PageReview group={group} projectId={id} />
@@ -152,7 +121,7 @@ export function PagesView({ params }: { params: Promise<{ id: string }> }) {
       ) : (
         <PageGrid
           groups={groups}
-          pending={feedback.isPending}
+          pending={feedback.isLoading}
           projectId={id}
           truncated={!!feedback.data?.nextCursor}
         />
@@ -212,7 +181,7 @@ function PageGrid({
 }
 
 function PageCard({ group: g, projectId }: { group: PageGroup; projectId: string }) {
-  const thumb = useThumbnail(g.thumbItem?.id ?? "", !!g.thumbItem);
+  const thumb = useThumbnailQuery(g.thumbItem?.id ?? "", { skip: !g.thumbItem });
   return (
     <li>
       <Link
@@ -223,7 +192,7 @@ function PageCard({ group: g, projectId }: { group: PageGroup; projectId: string
           <div className="relative aspect-[16/10] overflow-hidden border-b bg-muted">
             {g.thumbItem && thumb.data ? (
               <Thumb src={assetUrl(thumb.data)} />
-            ) : g.thumbItem && thumb.isPending ? (
+            ) : g.thumbItem && thumb.isLoading ? (
               <Skeleton className="size-full rounded-none" />
             ) : (
               <div className="grid size-full place-items-center text-muted-foreground">
@@ -277,15 +246,11 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
   const [hover, setHover] = useState<string | null>(null);
   const selected = search.get("item");
   const rows = group.items.slice(0, MAX_REVIEW_ITEMS);
-  const details = useQueries({
-    queries: rows.map((r) => ({
-      queryKey: qk.feedback(r.id),
-      queryFn: () => api<FeedbackDetail>(`/feedback/${r.id}`),
-      staleTime: 60_000,
-    })),
-  });
-  const reviewed: Reviewed[] = rows.map((row, i) => ({ row, detail: details[i]?.data }));
-  const loading = details.some((d) => d.isPending);
+  // One request batch for every thread on the page; each detail also lands in its own cache entry.
+  const details = useFeedbackDetailsQuery(rows.map((r) => r.id));
+  const byId = new Map(details.data?.map((d) => [d.feedback.id, d]));
+  const reviewed: Reviewed[] = rows.map((row) => ({ row, detail: byId.get(row.id) }));
+  const loading = details.isLoading;
 
   // Captures that carry geometry: a screenshot plus the anchor taken with it.
   const captures = reviewed.filter(

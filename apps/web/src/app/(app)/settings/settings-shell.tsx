@@ -1,12 +1,11 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { Bell, KeyRound, Mail, Palette, ShieldCheck, UserRound, Users, Webhook } from "lucide-react";
+import { Award, Bell, KeyRound, Mail, Palette, ShieldCheck, UserRound, Users, Webhook } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
-import { useMeInfo } from "@/lib/account-hooks";
-import { api, type EmailSettings, isAdminRole, isForbidden } from "@/lib/api";
+import { isAdminRole } from "@/lib/api";
+import { useMeQuery } from "@/lib/store/api";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -18,22 +17,13 @@ const NAV = [
   { href: "/settings/branding", label: "Branding", icon: Palette, access: "org" },
   { href: "/settings/email", label: "Email", icon: Mail, access: "email" },
   { href: "/settings/security", label: "Security", icon: ShieldCheck, access: "instance" },
+  { href: "/settings/license", label: "Licence", icon: Award, access: "instance" },
 ] as const;
-
-export const emailSettingsKey = ["admin", "email"] as const;
-
-export function useEmailSettings() {
-  return useQuery({
-    queryKey: emailSettingsKey,
-    queryFn: () => api<{ email: EmailSettings }>("/admin/settings/email"),
-    retry: (n, e) => !isForbidden(e) && n < 1,
-  });
-}
 
 /** Settings: one main column with a section nav — a rail on desktop, a scrolling strip on phones. */
 export function SettingsShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const me = useMeInfo().data;
+  const me = useMeQuery(undefined).data;
   const orgAdmin = isAdminRole(me?.role);
   const instanceAdmin = !!me?.instanceAdmin;
   // Hide what the user can't change: branding and templates are for workspace admins, SMTP and

@@ -15,6 +15,7 @@ import type { ProjectDetail } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { LAUNCHER_ICONS, LauncherPreview } from "./launcher-preview";
 import { useProjectPatch } from "./use-project";
+import { ActiveRoundCard } from "./active-round-card";
 import { WidgetBrandingCard } from "./widget-branding-card";
 import { useSyncedState } from "@/lib/use-synced-state";
 import { sliderValue } from "@/lib/form";
@@ -333,6 +334,64 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
             </SettingGroup>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Where it shows</CardTitle>
+            <CardDescription>
+              Keep the widget to staging sites and big screens. A page can still force it with{" "}
+              <code className="font-mono text-xs">data-force-show</code>.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SettingGroup>
+              <SettingRow
+                label="Environments"
+                description={
+                  draft.visibility.environments === "non-production"
+                    ? "Hidden on production hosts; shown on localhost, LAN addresses, .local/.test/.internal and staging/preview/dev subdomains."
+                    : "Shown on every allowed site."
+                }
+              >
+                <Segmented
+                  label="Environments"
+                  value={draft.visibility.environments}
+                  onChange={(environments) => commit({ visibility: { environments } })}
+                  options={[
+                    { value: "all", label: "Everywhere" },
+                    { value: "non-production", label: "Not in production" },
+                  ]}
+                />
+              </SettingRow>
+              <SettingRow
+                label="Minimum screen width"
+                htmlFor="min-viewport"
+                description="Below this width the launcher is hidden (0 shows it everywhere)."
+              >
+                <div className="grid gap-1">
+                  <NumberInput
+                    id="min-viewport"
+                    className="w-32"
+                    value={draft.visibility.minViewportWidth}
+                    min={0}
+                    max={10000}
+                    suffix="px"
+                    onCommit={(n) =>
+                      n !== null &&
+                      n !== server.visibility.minViewportWidth &&
+                      commit({ visibility: { minViewportWidth: n } })
+                    }
+                  />
+                  {errors["visibility.minViewportWidth"] && (
+                    <p className="text-xs text-destructive">{errors["visibility.minViewportWidth"]}</p>
+                  )}
+                </div>
+              </SettingRow>
+            </SettingGroup>
+          </CardContent>
+        </Card>
+
+        <ActiveRoundCard project={project} />
 
         <ConsentCard draft={draft} server={server} errors={errors} preview={preview} commit={commit} />
         <WidgetBrandingCard project={project} />
