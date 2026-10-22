@@ -3,6 +3,7 @@ import {
   type FeedbackUpdate,
   isClosedStatus,
   parseWidgetConfig,
+  panelActionsFor,
 } from "@pinwren/core";
 import {
   activity,
@@ -79,7 +80,11 @@ export async function listFeedback(orgId: string, q: FeedbackListQuery) {
   return { items, nextCursor: hasMore && last ? last.createdAt.toISOString() : null };
 }
 
-export async function getFeedbackDetail(orgId: string, id: string) {
+export async function getFeedbackDetail(
+  orgId: string,
+  id: string,
+  audience: "admin" | "member" | "viewer" = "member",
+) {
   const db = getDb();
   const [row] = await db
     .select({
@@ -184,8 +189,9 @@ export async function getFeedbackDetail(orgId: string, id: string) {
       pageUrl: row.pageUrl,
       pageTitle: row.pageTitle,
     },
-    // Every panel action, team-only ones included: this is the dashboard (wave-3 contract §1).
-    panelActions: parseWidgetConfig(row.widgetConfig).panelActions,
+    // Team-only actions included (wave-3 contract §1), but no webhook URL, and nothing team-only for
+    // viewers (ADR 0021).
+    panelActions: panelActionsFor(parseWidgetConfig(row.widgetConfig).panelActions, audience, "detail"),
     issues,
     integrations: trackers,
     assignees,

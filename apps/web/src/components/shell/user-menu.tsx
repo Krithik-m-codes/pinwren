@@ -2,6 +2,7 @@
 
 import { ArrowUpCircle, Eye, LogOut, Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+import { safeHref } from "@pinwren/core";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,7 +34,7 @@ export function UserMenu({
     <>
       {update && (
         <a
-          href={update.url ?? "#"}
+          href={safeHref(update.url) ?? "#"}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-ring"

@@ -1,12 +1,16 @@
 import { HSTS_HEADER, httpsDecision } from "@pinwren/core";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
 import { getAuth } from "./auth";
 import { env } from "./env";
 import { ApiError, problem } from "./errors";
+import { csrfGuard } from "./guards";
+import { clientIp, INTERNAL_REQUEST } from "./net";
 import { dashboard } from "./routes/dashboard";
 import { inbound } from "./routes/inbound";
+import { setup } from "./routes/setup";
 import { mcpRoutes } from "./routes/mcp";
 import { unsubscribe } from "./routes/unsubscribe";
 import { v1 } from "./routes/v1";
@@ -15,10 +19,33 @@ import { widget } from "./routes/widget";
 export { getAuth } from "./auth";
 export { env } from "./env";
 export { startJobs, stopJobs } from "./jobs";
+export { installPeerStamp } from "./net";
+export { announceSetupToken, checkReleaseKeys, runStartupFixes } from "./startup";
+
+/** Dashboard JSON and token API bodies; the widget (screenshots, replays) has its own, larger caps. */
+const API_MAX_BODY = 2 * 1024 * 1024;
+
+const tooLarge = () => new ApiError(413, "PAYLOAD_TOO_LARGE", "Request body too large");
+
+/**
+ * Better Auth reads the client address from this header only (its rate limiter); it is always
+ * overwritten with the address derived from PINWREN_TRUST_PROXY, so a client can't choose it.
+ */
+const AUTH_IP_HEADER = "x-pinwren-client-ip";
+
+function authRequest(c: Parameters<typeof clientIp>[0]): Request {
+  const headers = new Headers(c.req.raw.headers);
+  const ip = clientIp(c);
+  if (ip === "unknown") headers.delete(AUTH_IP_HEADER);
+  else headers.set(AUTH_IP_HEADER, ip);
+  return new Request(c.req.raw, { headers });
+}
 
 /** In-process requests (the /mcp tools call /api/v1 without a network hop). */
 function internalFetch(req: Request): Promise<Response> {
-  return Promise.resolve(app.fetch(req));
+  const headers = new Headers(req.headers);
+  headers.set(INTERNAL_REQUEST.name, INTERNAL_REQUEST.value);
+  return Promise.resolve(app.fetch(new Request(req, { headers })));
 }
 
 /**
@@ -32,7 +59,7 @@ export const app = new Hono()
     const e = env();
     const d = httpsDecision(c.req.raw, {
       enforce: e.PINWREN_ENFORCE_HTTPS,
-      trustProxy: e.PINWREN_TRUST_PROXY,
+      trustProxy: e.PINWREN_TRUST_PROXY > 0,
     });
     if (d.action === "redirect") return c.redirect(d.location, 308);
     // Hono types a `use("*")` context's input as `any`; `problem` only uses the response helpers.
@@ -43,7 +70,39 @@ export const app = new Hono()
   })
   // `version` lets `pinwren doctor` and monitors see what runs.
   .get("/api/health", (c) => c.json({ ok: true, version: env().PINWREN_VERSION }))
-  .on(["GET", "POST"], "/api/auth/*", (c) => getAuth().handler(c.req.raw))
+  // Bodies are capped while they stream in (Content-Length is checked first), before anything parses.
+  .use(
+    "/api/*",
+    bodyLimit({
+      maxSize: API_MAX_BODY,
+      onError: () => {
+        throw tooLarge();
+      },
+    }),
+  )
+  .use(
+    "/mcp/*",
+    bodyLimit({
+      maxSize: API_MAX_BODY,
+      onError: () => {
+        throw tooLarge();
+      },
+    }),
+  )
+  .use(
+    "/mcp",
+    bodyLimit({
+      maxSize: API_MAX_BODY,
+      onError: () => {
+        throw tooLarge();
+      },
+    }),
+  )
+  // Cookie-authenticated writes must come from our own pages, as JSON (ADR 0021).
+  .use("/api/*", csrfGuard)
+  .on(["GET", "POST"], "/api/auth/*", (c) => getAuth().handler(authRequest(c)))
+  // First-run instance-admin claim with the one-time setup token.
+  .route("/api", setup)
   // Token-authenticated public API first: the session middleware below covers the rest of /api.
   .route("/api/v1", v1)
   // Logos and tracker webhooks: no session (verified by random id / signature).

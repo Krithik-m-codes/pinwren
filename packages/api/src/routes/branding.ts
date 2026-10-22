@@ -22,7 +22,11 @@ import {
   unknownVariables,
 } from "../email/templates";
 import { ApiError, notFound } from "../errors";
+import { consume } from "../rate-limit";
 import { emailBrand, getOrgBranding, saveBrandAsset, updateOrgBranding } from "../services/branding";
+
+/** Template test sends per user (and three times that per organisation) and hour. */
+const TEST_SENDS_PER_HOUR = 10;
 
 const templateKey = (k: string): EmailTemplateKey => {
   if (!(EMAIL_TEMPLATE_KEYS as readonly string[]).includes(k)) throw notFound("Template");
@@ -129,16 +133,26 @@ export const branding = new Hono<{ Variables: SessionVars }>()
       c.json({ preview: await preview(c.var.orgId, templateKey(c.req.param("key")), c.req.valid("json")) }),
   )
 
-  /** Send the rendered draft with sample values. Unconfigured SMTP → `{ sent: false, skipped }`. */
+  /**
+   * Send the rendered draft with sample values to the caller's own address — never anyone else's, or
+   * the instance's mail server would relay arbitrary content (ADR 0021). Unconfigured SMTP →
+   * `{ sent: false, skipped }`.
+   */
   .post("/email-templates/:key/test", requireOrgAdmin, zValidator("json", emailTemplateTest), async (c) => {
     const { to: given, ...draft } = c.req.valid("json");
-    const rendered = await preview(c.var.orgId, templateKey(c.req.param("key")), draft);
-    let to = given;
-    if (!to) {
-      const [u] = await getDb().select({ email: user.email }).from(user).where(eq(user.id, c.var.userId));
-      to = u?.email;
-    }
+    const [u] = await getDb().select({ email: user.email }).from(user).where(eq(user.id, c.var.userId));
+    const to = u?.email;
     if (!to) throw new ApiError(400, "NO_RECIPIENT", "No recipient address");
+    if (given && given.trim().toLowerCase() !== to.toLowerCase()) {
+      throw new ApiError(400, "RECIPIENT_NOT_ALLOWED", "Test emails go to your own address only");
+    }
+    if (
+      !(await consume(`mailtest:u:${c.var.userId}`, TEST_SENDS_PER_HOUR, 3600)) ||
+      !(await consume(`mailtest:o:${c.var.orgId}`, TEST_SENDS_PER_HOUR * 3, 3600))
+    ) {
+      throw new ApiError(429, "RATE_LIMITED", "Too many test emails — try again later");
+    }
+    const rendered = await preview(c.var.orgId, templateKey(c.req.param("key")), draft);
     try {
       const result = await sendEmail({ to, ...rendered, subject: `[Test] ${rendered.subject}` });
       return c.json(result.sent ? { sent: true, to } : { sent: false, skipped: true, reason: result.reason });

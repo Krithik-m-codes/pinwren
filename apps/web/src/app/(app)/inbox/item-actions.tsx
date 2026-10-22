@@ -1,6 +1,6 @@
 "use client";
 
-import { substituteActionUrl } from "@pinwren/core";
+import { safeHref, substituteActionUrl } from "@pinwren/core";
 import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { PanelActionIcon } from "@/components/panel-action-icon";
@@ -46,7 +46,7 @@ export function ItemActions({ data }: { data: FeedbackDetail }) {
       {data.issues.map((l) => (
         <a
           key={l.id}
-          href={l.url}
+          href={safeHref(l.url) ?? undefined}
           target="_blank"
           rel="noopener noreferrer"
           className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
@@ -77,12 +77,16 @@ export function ItemActions({ data }: { data: FeedbackDetail }) {
         a.kind === "link" ? (
           <a
             key={a.id}
-            href={substituteActionUrl(a.url, {
-              id: f.id,
-              number: f.number,
-              url: f.pageUrl,
-              projectSlug: f.projectSlug,
-            })}
+            href={
+              safeHref(
+                substituteActionUrl(a.url, {
+                  id: f.id,
+                  number: f.number,
+                  url: f.pageUrl,
+                  projectSlug: f.projectSlug,
+                }),
+              ) ?? undefined
+            }
             target="_blank"
             rel="noopener noreferrer"
             className={cn(buttonVariants({ variant: "outline", size: "sm" }))}

@@ -31,7 +31,9 @@ const TABS = [
 type Tab = (typeof TABS)[number]["value"];
 
 export function ProjectSettings({ id }: { id: string }) {
-  const { canWrite } = useViewer();
+  // Project settings are configuration: organisation admins only (ADR 0021). Members and viewers see
+  // them read-only.
+  const { isAdmin: canWrite, isViewer } = useViewer();
   const search = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -79,8 +81,10 @@ export function ProjectSettings({ id }: { id: string }) {
             className="mb-4 flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-sm text-muted-foreground"
             data-testid="read-only-notice"
           >
-            <Eye className="size-4 shrink-0" /> You have read-only access: settings are shown but can&apos;t
-            be changed.
+            <Eye className="size-4 shrink-0" />
+            {isViewer
+              ? "You have read-only access: settings are shown but can't be changed."
+              : "Only organisation admins can change project settings."}
           </p>
         )}
         {p.archivedAt && (

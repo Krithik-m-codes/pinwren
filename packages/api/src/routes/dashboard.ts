@@ -10,6 +10,7 @@ import {
   notificationsRead,
   parseCaptureConfig,
   parseWidgetBranding,
+  panelActionsFor,
   parseWidgetConfig,
   projectCreate,
   projectUpdate,
@@ -35,7 +36,7 @@ import type { z } from "zod";
 import { isInstanceAdmin, isOrgAdmin, requireOrgAdmin, requireSession, type SessionVars } from "../context";
 import { ApiError, forbidden, notFound } from "../errors";
 import { assertFeatureWritable, publicEntitlements, resolveEntitlements } from "../license";
-import { forbidViewerWrites } from "../permissions";
+import { audienceOf, forbidViewerWrites } from "../permissions";
 import { publishDeleted } from "../realtime/publish";
 import { ensureActionSecret, rotateActionSecret, runPanelAction } from "../services/actions";
 import { assetResponse } from "../services/assets";
@@ -78,14 +79,21 @@ type ProjectRow = typeof project.$inferSelect;
  * Projects always go out with complete configs (defaults filled), so forms never see gaps. The
  * action signing secret never does — only whether one exists.
  */
-const projectOut = ({ actionSecret, identitySecret, ...p }: ProjectRow) => ({
-  ...p,
-  widgetConfig: parseWidgetConfig(p.widgetConfig),
-  captureConfig: parseCaptureConfig(p.captureConfig),
-  widgetBranding: parseWidgetBranding(p.widgetBranding),
-  hasActionSecret: actionSecret !== null,
-  hasIdentitySecret: identitySecret !== null,
-});
+const projectOut = ({ actionSecret, identitySecret, ...p }: ProjectRow, role: string) => {
+  const widget = parseWidgetConfig(p.widgetConfig);
+  return {
+    ...p,
+    // Webhook action URLs only for org admins; team-only link URLs not for viewers (ADR 0021).
+    widgetConfig: {
+      ...widget,
+      panelActions: panelActionsFor(widget.panelActions, audienceOf(role), "settings"),
+    },
+    captureConfig: parseCaptureConfig(p.captureConfig),
+    widgetBranding: parseWidgetBranding(p.widgetBranding),
+    hasActionSecret: actionSecret !== null,
+    hasIdentitySecret: identitySecret !== null,
+  };
+};
 
 /** Privacy mode shortens a "keep forever" retention to this (F-021). */
 const PRIVACY_RETENTION_DAYS = 90;
@@ -213,7 +221,7 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       })
       .returning();
     if (!created) throw new Error("project insert failed");
-    return c.json({ project: projectOut(created) }, 201);
+    return c.json({ project: projectOut(created, c.var.role) }, 201);
   })
 
   .get("/projects/:id", async (c) => {
@@ -222,10 +230,12 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       .from(project)
       .where(and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId)));
     if (!p) throw notFound("Project");
-    return c.json({ project: projectOut(p) });
+    return c.json({ project: projectOut(p, c.var.role) });
   })
 
-  .patch("/projects/:id", zValidator("json", projectUpdate), async (c) => {
+  // Project settings (origins, widget config, panel actions, retention…) are configuration: org admins
+  // only (ADR 0021) — a webhook panel action is an outbound request the server makes.
+  .patch("/projects/:id", requireOrgAdmin, zValidator("json", projectUpdate), async (c) => {
     const db = getDb();
     const {
       widgetConfig: widgetPatch,
@@ -277,17 +287,17 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       if (!p) throw notFound("Project");
       return p;
     });
-    return c.json({ project: projectOut(saved) });
+    return c.json({ project: projectOut(saved, c.var.role) });
   })
 
-  .post("/projects/:id/rotate-key", async (c) => {
+  .post("/projects/:id/rotate-key", requireOrgAdmin, async (c) => {
     const [p] = await getDb()
       .update(project)
       .set({ publicKey: newPublicKey() })
       .where(and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId)))
       .returning();
     if (!p) throw notFound("Project");
-    return c.json({ project: projectOut(p) });
+    return c.json({ project: projectOut(p, c.var.role) });
   })
 
   /** The secret that signs webhook panel actions (created on first read). Org admins only. */
@@ -334,7 +344,9 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
     c.json(await listFeedback(c.var.orgId, c.req.valid("query"))),
   )
 
-  .get("/feedback/:id", async (c) => c.json(await getFeedbackDetail(c.var.orgId, c.req.param("id"))))
+  .get("/feedback/:id", async (c) =>
+    c.json(await getFeedbackDetail(c.var.orgId, c.req.param("id"), audienceOf(c.var.role))),
+  )
 
   .patch("/feedback/:id", zValidator("json", feedbackUpdate), async (c) => {
     const updated = await updateFeedback(

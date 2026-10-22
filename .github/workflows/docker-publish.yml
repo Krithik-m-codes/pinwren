@@ -71,6 +71,8 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile
+          # Refuse to publish an image that can't verify Enterprise licences (docs/release/licence-keys.md).
+          build-args: PINWREN_RELEASE=1
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

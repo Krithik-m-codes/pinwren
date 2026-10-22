@@ -1,6 +1,6 @@
 "use client";
 
-import { MAX_SESSION_DAYS, MIN_SESSION_DAYS } from "@pinwren/core";
+import { MAX_SESSION_DAYS, MIN_SESSION_DAYS, safeHref } from "@pinwren/core";
 import { ArrowUpCircle, CircleCheck, Lock, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { timeAgo } from "@/components/feedback-meta";
@@ -154,13 +154,15 @@ export function SecuritySettingsForm() {
             </SettingRow>
             <SettingRow
               label="Behind a reverse proxy"
-              description="Trust X-Forwarded-For / -Proto / -Host from your proxy. Only turn on when a proxy sets them."
+              description="How many proxies in front of Pinwren to trust for X-Forwarded-For / -Proto / -Host. Only set it when proxies add those headers."
             >
               <div className="flex flex-col items-start gap-1 sm:items-end">
                 <Badge variant={s.trustProxy ? "secondary" : "outline"} className="font-normal">
-                  {s.trustProxy ? "Trusted" : "Not trusted"}
+                  {s.trustProxy
+                    ? `Trusted: ${s.trustProxyHops} ${s.trustProxyHops === 1 ? "hop" : "hops"}`
+                    : "Not trusted"}
                 </Badge>
-                <code className="font-mono text-xs text-muted-foreground">PINWREN_TRUST_PROXY=true</code>
+                <code className="font-mono text-xs text-muted-foreground">PINWREN_TRUST_PROXY=1</code>
               </div>
             </SettingRow>
           </SettingGroup>
@@ -216,7 +218,7 @@ export function SecuritySettingsForm() {
               <div className="flex flex-wrap items-center gap-2">
                 {s.update?.available ? (
                   <a
-                    href={s.update.url ?? "#"}
+                    href={safeHref(s.update.url) ?? "#"}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"

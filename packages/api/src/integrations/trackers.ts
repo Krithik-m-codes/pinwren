@@ -1,5 +1,6 @@
 import type { IssueProvider } from "@pinwren/core";
 import { env } from "../env";
+import { type OutboundFetch, outboundErrorText, safeFetch } from "../outbound/safe-fetch";
 
 // GitHub and GitLab REST clients for issue sync (F-076/F-077). Authenticated with a personal or
 // project access token, so a self-hosted instance needs no OAuth app or GitHub App (ADR 0015).
@@ -57,28 +58,34 @@ async function call<T>(
   method: string,
   path: string,
   body: unknown,
-  fetchImpl: typeof fetch,
+  fetchImpl: OutboundFetch,
 ): Promise<T> {
   let res: Response;
   try {
+    // A per-integration base URL is user input and goes through the outbound guard; the instance's own
+    // GITHUB_API_URL / GITLAB_URL are operator settings and may be private.
     res = await fetchImpl(`${apiBase(cfg)}${path}`, {
       method,
       headers: headers(cfg),
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      redirect: "error",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      timeoutMs: TIMEOUT_MS,
+      maxBytes: 2 * 1024 * 1024,
+      trusted: cfg.apiUrl === null,
     });
   } catch (err) {
-    const msg =
-      err instanceof Error ? (err.name === "TimeoutError" ? "timed out" : err.message) : "network error";
     throw new TrackerError(
-      `Could not reach ${cfg.provider === "github" ? "GitHub" : "GitLab"}: ${msg}`,
+      `Could not reach ${cfg.provider === "github" ? "GitHub" : "GitLab"}: ${outboundErrorText(err)}`,
       null,
     );
   }
+  if (res.status >= 300 && res.status < 400) {
+    throw new TrackerError(`${res.status} redirect — use the API's final URL`, res.status);
+  }
   const text = await res.text().catch(() => "");
   if (!res.ok) {
-    let detail = text.slice(0, 200);
+    // Only the tracker's JSON `message`/`error` field is echoed, never a raw response body: a base URL
+    // pointed at some other service must not read that service back.
+    let detail = "";
     try {
       const j = JSON.parse(text) as { message?: unknown; error?: unknown };
       const m = j.message ?? j.error;
@@ -86,7 +93,7 @@ async function call<T>(
       if (m !== undefined && m !== null)
         detail = (typeof m === "string" ? m : JSON.stringify(m)).slice(0, 200);
     } catch {
-      // not JSON — keep the text
+      // not JSON — nothing is echoed
     }
     const hint =
       res.status === 401
@@ -106,7 +113,7 @@ async function call<T>(
 export async function createIssue(
   cfg: TrackerConfig,
   issue: { title: string; body: string; labels: string[] },
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: OutboundFetch = safeFetch,
 ): Promise<IssueRef> {
   if (cfg.provider === "github") {
     const r = await call<{ number?: unknown; html_url?: unknown }>(
@@ -144,7 +151,7 @@ export async function setIssueState(
   cfg: TrackerConfig,
   number: number,
   state: "open" | "closed",
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: OutboundFetch = safeFetch,
 ): Promise<void> {
   if (cfg.provider === "github") {
     await call(
@@ -168,7 +175,7 @@ export async function setIssueState(
 /** "Test connection": can this token see the repository? */
 export async function checkAccess(
   cfg: TrackerConfig,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: OutboundFetch = safeFetch,
 ): Promise<{ ok: true; name: string } | { ok: false; message: string }> {
   try {
     const r = await call<{ full_name?: unknown; path_with_namespace?: unknown }>(

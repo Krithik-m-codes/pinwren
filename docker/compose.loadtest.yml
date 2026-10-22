@@ -6,6 +6,11 @@ services:
     environment:
       # k6 sends X-Forwarded-For per simulated visitor, so the per-IP rate limit behaves as in production.
       PINWREN_TRUST_PROXY: "1"
+      # k6 ingests ~1,500 reports a minute into one project; the per-project cap (ADR 0021) would stop it.
+      WIDGET_PROJECT_REPORTS_PER_MIN: "100000"
+      WIDGET_PROJECT_MB_PER_HOUR: "100000"
+      # k6 signs up its own accounts.
+      PINWREN_DISABLE_SIGNUP: "false"
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-20}
       PINWREN_WORKERS: ${PINWREN_WORKERS:-2}
     deploy:

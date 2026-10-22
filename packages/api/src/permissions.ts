@@ -17,6 +17,13 @@ export const isReadOnlyRole = (role: string): boolean => {
   return roles.length > 0 && roles.every((r) => r === VIEWER_ROLE);
 };
 
+/** Who is reading, for redacting configuration (panel-action URLs) in responses. */
+export function audienceOf(role: string): "admin" | "member" | "viewer" {
+  const roles = role.split(",").map((r) => r.trim());
+  if (roles.some((r) => r === "owner" || r === "admin")) return "admin";
+  return isReadOnlyRole(role) ? "viewer" : "member";
+}
+
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /**

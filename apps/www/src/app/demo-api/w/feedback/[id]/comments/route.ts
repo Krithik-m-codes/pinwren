@@ -18,11 +18,12 @@ export async function POST(req: Request, ctx: RouteContext<"/demo-api/w/feedback
   const limited = writeAllowed(req, g.key, "reply");
   if (limited) return limited;
   const { id } = await ctx.params;
-  const item = findItem(visitor(g.key), id);
+  const v = visitor(g.key);
+  const item = findItem(v, id);
   if (!item) return problem(404, "NOT_FOUND", "Feedback not found");
   const parsed = widgetCommentCreate.safeParse(await readJson(req));
   if (!parsed.success) return problem(400, "VALIDATION_ERROR", "Invalid request");
-  const reply = addReply(item, parsed.data.body, parsed.data.author?.name ?? null);
-  if (!reply) return problem(429, "DEMO_FULL", "This thread is full in the demo");
-  return json({ comment: reply }, 201);
+  const result = addReply(v, item, parsed.data.body, parsed.data.author?.name ?? null);
+  if (!result.ok) return problem(result.status, result.code, result.title);
+  return json({ comment: result.reply }, 201);
 }

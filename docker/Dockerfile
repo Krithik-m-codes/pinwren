@@ -25,6 +25,10 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS build
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# Official releases (docker-publish.yml passes PINWREN_RELEASE=1) refuse to build without a production
+# licence public key — docs/release/licence-keys.md.
+ARG PINWREN_RELEASE=0
+RUN if [ "$PINWREN_RELEASE" = "1" ]; then node docker/check-release-keys.mjs; fi
 RUN pnpm --filter @pinwren/widget build && pnpm --filter @pinwren/web build
 
 # --- runtime ---------------------------------------------------------------------------------------------

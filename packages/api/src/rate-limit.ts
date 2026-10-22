@@ -19,3 +19,37 @@ export async function consume(key: string, limit: number, windowSeconds: number)
     .returning({ count: rateLimit.count });
   return (row?.count ?? 0) <= limit;
 }
+
+/**
+ * Like `consume`, but adds `amount` (e.g. bytes) instead of 1. Returns false once the window's total
+ * passes `limit`. Values are stored as integers, so callers pass a unit that fits (KiB, not bytes).
+ */
+export async function consumeAmount(
+  key: string,
+  amount: number,
+  limit: number,
+  windowSeconds: number,
+): Promise<boolean> {
+  const n = Math.max(0, Math.ceil(amount));
+  const [row] = await getDb()
+    .insert(rateLimit)
+    .values({ key, count: n, resetAt: sql`now() + make_interval(secs => ${windowSeconds})` })
+    .onConflictDoUpdate({
+      target: rateLimit.key,
+      set: {
+        count: sql`case when ${rateLimit.resetAt} < now() then ${n} else ${rateLimit.count} + ${n} end`,
+        resetAt: sql`case when ${rateLimit.resetAt} < now() then now() + make_interval(secs => ${windowSeconds}) else ${rateLimit.resetAt} end`,
+      },
+    })
+    .returning({ count: rateLimit.count });
+  return (row?.count ?? 0) <= limit;
+}
+
+/** Has `key` already used up `limit` in its current window? Reads only. */
+export async function exhausted(key: string, limit: number): Promise<boolean> {
+  const [row] = await getDb()
+    .select({ count: rateLimit.count })
+    .from(rateLimit)
+    .where(sql`${rateLimit.key} = ${key} and ${rateLimit.resetAt} >= now()`);
+  return (row?.count ?? 0) >= limit;
+}

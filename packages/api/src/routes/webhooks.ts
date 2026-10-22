@@ -9,24 +9,15 @@ import { env } from "../env";
 import { ApiError, notFound } from "../errors";
 import { runDelivery } from "../webhooks/deliver";
 import { WEBHOOK_API_VERSION, type WebhookPayload } from "../webhooks/format";
+import { maskedWebhookUrl, storedWebhookUrl } from "../webhooks/url";
 
 type Endpoint = typeof webhookEndpoint.$inferSelect;
-
-/** Chat webhook URLs are credentials themselves: show only enough to recognise them. */
-function displayUrl(e: Endpoint): string {
-  if (e.kind === "generic") return e.url;
-  try {
-    const u = new URL(e.url);
-    return `${u.origin}/…${e.url.slice(-4)}`;
-  } catch {
-    return "…";
-  }
-}
 
 const endpointOut = (e: Endpoint) => ({
   id: e.id,
   name: e.name,
-  url: displayUrl(e),
+  // Chat webhook URLs are credentials themselves: stored encrypted, shown masked.
+  url: maskedWebhookUrl(e),
   kind: e.kind,
   events: e.events,
   projectId: e.projectId,
@@ -44,7 +35,9 @@ const deliveryOut = (d: typeof webhookDelivery.$inferSelect) => ({
   attempt: d.attempt,
   status: d.status,
   responseCode: d.responseCode,
-  responseBody: d.responseBody,
+  // Never the receiver's response (ADR 0021): status and error category only. Kept in the shape for
+  // older clients; rows written before the change are not echoed either.
+  responseBody: null,
   error: d.error,
   durationMs: d.durationMs,
   nextRetryAt: d.nextRetryAt,
@@ -139,7 +132,7 @@ export const webhooks = new Hono<{ Variables: SessionVars }>()
         orgId: c.var.orgId,
         projectId: body.projectId ?? null,
         name: body.name ?? null,
-        url: body.url,
+        url: storedWebhookUrl(body.kind, body.url),
         kind: body.kind,
         events: [...new Set(body.events)],
         secret: secret ? encryptSecret(secret) : null,
@@ -162,7 +155,7 @@ export const webhooks = new Hono<{ Variables: SessionVars }>()
     await assertProject(c.var.orgId, body.projectId);
     const set: Partial<typeof webhookEndpoint.$inferInsert> = {};
     if (body.name !== undefined) set.name = body.name;
-    if (body.url !== undefined) set.url = body.url;
+    if (body.url !== undefined) set.url = storedWebhookUrl(current.kind, body.url);
     if (body.events !== undefined) set.events = [...new Set(body.events)];
     if (body.projectId !== undefined) set.projectId = body.projectId;
     if (body.active !== undefined) {

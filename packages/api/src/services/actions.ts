@@ -3,6 +3,7 @@ import { activity, feedback, getDb, project } from "@pinwren/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { decryptSecret, encryptSecret, randomToken } from "../crypto";
 import { ApiError, notFound } from "../errors";
+import { type OutboundFetch, outboundErrorText, safeFetch } from "../outbound/safe-fetch";
 import { buildRequest, WEBHOOK_API_VERSION, type WebhookPayload } from "../webhooks/format";
 import { loadFeedbackContext } from "./feedback-payload";
 
@@ -54,7 +55,7 @@ export async function runPanelAction(
   userId: string,
   feedbackId: string,
   actionId: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: OutboundFetch = safeFetch,
 ): Promise<ActionResult> {
   const db = getDb();
   const [row] = await db
@@ -85,29 +86,26 @@ export async function runPanelAction(
   const req = buildRequest("generic", payload, secret);
   let result: ActionResult;
   try {
+    // Same outbound guard as webhooks (ADR 0021): no private addresses, no redirects, capped body.
     const res = await fetchImpl(action.url, {
       method: "POST",
       headers: req.headers,
       body: req.body,
-      redirect: "manual",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      timeoutMs: TIMEOUT_MS,
+      maxBytes: 64_000,
+      truncate: true,
     });
     const text = await res.text().catch(() => "");
     const ok = res.status >= 200 && res.status < 300;
     result = {
       ok,
       status: res.status,
-      message: messageOf(text.slice(0, 64_000)),
+      // Only a successful receiver's own `{ "message" }` is shown — never an error page's content.
+      message: ok ? messageOf(text) : null,
       error: ok ? null : `HTTP ${res.status}`,
     };
   } catch (err) {
-    const error =
-      err instanceof Error
-        ? err.name === "TimeoutError"
-          ? "timed out after 10 s"
-          : err.message
-        : "request failed";
-    result = { ok: false, status: 0, message: null, error };
+    result = { ok: false, status: 0, message: null, error: outboundErrorText(err) };
   }
   await db.insert(activity).values({
     orgId,

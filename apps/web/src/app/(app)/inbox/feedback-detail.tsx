@@ -1,6 +1,6 @@
 "use client";
 
-import { FEEDBACK_STATUSES, PRIORITIES } from "@pinwren/core";
+import { FEEDBACK_STATUSES, PRIORITIES, safeHref } from "@pinwren/core";
 import {
   BadgeCheck,
   Crosshair,
@@ -573,7 +573,7 @@ function ContextTabs({
           <Meta label="Page">
             {f.pageUrl ? (
               <a
-                href={f.pageUrl}
+                href={safeHref(f.pageUrl) ?? undefined}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="break-all underline-offset-4 hover:underline"

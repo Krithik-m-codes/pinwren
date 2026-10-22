@@ -158,7 +158,8 @@ export const widgetFeedbackCreate = z.object({
   body: z.string().trim().min(1).max(10_000),
   priority: priority.optional(),
   page: z.object({
-    url: z.url().max(2000),
+    // Shown as a link in the dashboard, emails and chat messages: http(s) only (no javascript:, data:).
+    url: z.url({ protocol: /^https?$/ }).max(2000),
     title: z.string().max(300).optional(),
     urlPattern: z.string().max(500).optional(),
   }),
@@ -488,3 +489,8 @@ export const securitySettingsUpdate = z.object({
   /** Daily check of the release feed; off on its own whenever a project uses privacy mode. */
   updateCheck: z.boolean().optional(),
 });
+
+// --- First-run setup (ADR 0021) -------------------------------------------------------------------------
+
+/** The one-time setup token printed to the server log, claimed by a signed-in user. */
+export const setupClaim = z.object({ token: z.string().trim().min(20).max(200) });

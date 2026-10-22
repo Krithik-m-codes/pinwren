@@ -1,14 +1,20 @@
 // End-to-end API smoke test: node scripts/smoke.mjs [baseUrl]
 //
-// Instance-admin checks need the server started with PINWREN_ADMIN_EMAILS=smoke-admin@example.com
-// (or SMOKE_ADMIN_EMAIL / SMOKE_ADMIN_PASSWORD pointing at an existing admin); otherwise they are
-// skipped. Webhook checks start a local HTTP receiver, so the server must be able to reach 127.0.0.1.
+// Start the server with:
+//   PINWREN_TRUST_PROXY=1 GITHUB_API_URL=http://127.0.0.1:4790 PINWREN_DISABLE_SIGNUP=false
+//   PINWREN_OUTBOUND_ALLOWLIST=127.0.0.1 PINWREN_ADMIN_EMAILS=smoke-admin@example.com,e2e-admin@example.com
+// TRUST_PROXY=1: every request carries a per-run X-Forwarded-For, so per-address limits don't leak between
+// runs. DISABLE_SIGNUP=false: the run signs up fresh accounts (sign-up closes after the first account
+// otherwise). OUTBOUND_ALLOWLIST=127.0.0.1: webhook/tracker checks use local receivers; the security
+// checks prove every other private address (127.0.0.2, 10/8, metadata…) is still refused.
+// Instance-admin checks need PINWREN_ADMIN_EMAILS=smoke-admin@example.com (or SMOKE_ADMIN_EMAIL /
+// SMOKE_ADMIN_PASSWORD pointing at an existing admin); otherwise they are skipped.
 // Wave-4 SDK/MCP/CLI checks run the built packages:
 //   pnpm --filter @pinwren/sdk --filter @pinwren/mcp --filter @pinwren/cli build
 import { spawnSync } from "node:child_process";
 import { createHmac } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import { createRequire } from "node:module";
 import { createServer as createTcpServer } from "node:net";
 import { join } from "node:path";
@@ -17,6 +23,10 @@ import { gunzipSync, gzipSync } from "node:zlib";
 
 const B = process.argv[2] ?? "http://localhost:3100";
 const mainJar = { cookie: "" };
+// The server runs with PINWREN_TRUST_PROXY=1, so the rightmost X-Forwarded-For entry is the client. One
+// address per run keeps per-address limits (sign-in, failed tokens) from carrying over between runs.
+const rand = () => Math.floor(Math.random() * 254) + 1;
+const RUN_IP = `198.18.${rand()}.${rand()}`;
 async function call(path, { method = "GET", json, rawBody, headers = {}, jar = mainJar } = {}) {
   const res = await fetch(B + path, {
     method,
@@ -24,6 +34,7 @@ async function call(path, { method = "GET", json, rawBody, headers = {}, jar = m
       ...(json ? { "content-type": "application/json" } : {}),
       ...(jar.cookie ? { cookie: jar.cookie } : {}),
       origin: B,
+      "x-forwarded-for": RUN_IP,
       ...headers,
     },
     body: rawBody ?? (json ? JSON.stringify(json) : undefined),
@@ -1316,6 +1327,34 @@ try {
     fake.requests.filter((x) => x.method === "PATCH").length === patchesBefore,
     JSON.stringify(fake.requests.filter((x) => x.method === "PATCH").slice(patchesBefore)),
   );
+  // Replay protection (ADR 0021): a verified delivery is acted on once, by its X-GitHub-Delivery id.
+  {
+    const signed = (payload, deliveryId) => {
+      const raw = JSON.stringify(payload);
+      return call("/api/integrations/github/webhook", {
+        method: "POST",
+        jar: { cookie: "" },
+        headers: {
+          "content-type": "application/json",
+          "x-github-event": "issues",
+          "x-github-delivery": deliveryId,
+          "x-hub-signature-256": `sha256=${createHmac("sha256", ghSecret).update(raw).digest("hex")}`,
+        },
+        rawBody: raw,
+      });
+    };
+    const reopenId = crypto.randomUUID();
+    r = await signed(reopen, reopenId);
+    check("signed GitHub delivery acts once", r.status === 200 && r.body.feedback?.status === "open");
+    r = await signed({ ...reopen, action: "closed" }, crypto.randomUUID());
+    r = await signed(reopen, reopenId);
+    const after = await call(`/api/feedback/${fid2}`);
+    check(
+      "replayed GitHub delivery (same id) is ignored",
+      r.status === 200 && r.body.duplicate === true && after.body.feedback?.status === "resolved",
+      JSON.stringify(r.body),
+    );
+  }
 
   // --- GitLab issue sync (F-077) ------------------------------------------------------------------
   console.log("\n— GitLab");
@@ -2519,6 +2558,393 @@ if (r.status !== 200) {
   check("remove the licence", r.status === 200 && r.body.license?.status === "none");
   r = await W("/w/config");
   check("without the licence hidePoweredBy is ignored again", r.body.branding?.hidePoweredBy === false);
+}
+
+// --- Pre-release security fixes (ADR 0021) ----------------------------------------------------------------
+// Each check is an attack that used to work. Runs last: the invitation flood queues ~30 emails. The server allowlists 127.0.0.1 for outbound requests
+// (PINWREN_OUTBOUND_ALLOWLIST=127.0.0.1) so the smoke receivers work; 127.0.0.2 and every other private
+// address must still be refused.
+console.log("\n— security (ADR 0021)");
+{
+  const secHits = [];
+  const secServer = createServer((req, res) => {
+    secHits.push(req.url);
+    // An "internal service" whose response must never be shown back.
+    res.statusCode = req.url.startsWith("/repos/") ? 404 : 200;
+    res.end("TOPSECRET internal response");
+  });
+  await new Promise((resolve) => secServer.listen(0, "127.0.0.1", resolve));
+  const secPort = secServer.address().port;
+  const ip = () => `203.0.${rand()}.${rand()}`;
+  try {
+    // HIGH 1 — SSRF: webhooks.
+    r = await call("/api/webhooks", {
+      method: "POST",
+      json: { url: `http://127.0.0.2:${secPort}/hook`, events: ["feedback.created"] },
+    });
+    const blockedHook = r.body.webhook?.id;
+    r = await call(`/api/webhooks/${blockedHook}/test`, { method: "POST" });
+    check(
+      "SSRF: webhook test to a loopback address is blocked before connecting",
+      r.status === 200 &&
+        r.body.delivery?.status === "failed" &&
+        /^blocked/.test(r.body.delivery?.error ?? "") &&
+        !secHits.includes("/hook"),
+      JSON.stringify(r.body.delivery),
+    );
+    for (const target of [
+      "http://169.254.169.254/latest/meta-data/",
+      `http://[::ffff:127.0.0.2]:${secPort}/x`,
+      "http://10.0.0.1/",
+    ]) {
+      await call(`/api/webhooks/${blockedHook}`, { method: "PATCH", json: { url: target } });
+      r = await call(`/api/webhooks/${blockedHook}/test`, { method: "POST" });
+      check(
+        `SSRF: webhook to ${new URL(target).host} is blocked`,
+        /^blocked/.test(r.body.delivery?.error ?? ""),
+        r.body.delivery?.error,
+      );
+    }
+    await call(`/api/webhooks/${blockedHook}`, { method: "DELETE" });
+    r = await call("/api/webhooks", {
+      method: "POST",
+      json: { url: `http://127.0.0.1:${secPort}/allowed`, events: ["feedback.created"] },
+    });
+    const allowedHook = r.body.webhook?.id;
+    r = await call(`/api/webhooks/${allowedHook}/test`, { method: "POST" });
+    check(
+      "webhook test returns status only, never the receiver's response body",
+      r.body.delivery?.status === "success" &&
+        r.body.delivery?.responseBody === null &&
+        !JSON.stringify(r.body).includes("TOPSECRET"),
+    );
+    r = await call(`/api/webhooks/${allowedHook}/deliveries`);
+    check("delivery log never echoes response bodies", !JSON.stringify(r.body).includes("TOPSECRET"));
+    await call(`/api/webhooks/${allowedHook}`, { method: "DELETE" });
+
+    // A dedicated project for the rest.
+    r = await call("/api/projects", {
+      method: "POST",
+      json: { name: "Security", allowedOrigins: ["localhost:5173"] },
+    });
+    const secProject = r.body.project;
+    await call(`/api/projects/${secProject.id}`, {
+      method: "PATCH",
+      json: {
+        publicRead: true,
+        widgetConfig: {
+          panelActions: [
+            { id: "ssrf", label: "SSRF", kind: "webhook", url: `http://127.0.0.2:${secPort}/action` },
+            {
+              id: "team",
+              label: "Team link",
+              kind: "link",
+              url: "https://team.example/{id}",
+              visibleTo: "team",
+            },
+          ],
+        },
+      },
+    });
+    const SW = (path, opts = {}) =>
+      call(path, {
+        ...opts,
+        jar: { cookie: "" },
+        headers: { "x-pinwren-key": secProject.publicKey, origin: site, ...(opts.headers ?? {}) },
+      });
+    const mini = (extra = {}) => ({
+      clientId: crypto.randomUUID(),
+      kind: "comment",
+      body: "security smoke",
+      page: { url: `${site}/sec` },
+      environment: { userAgent: "smoke", viewport: { w: 10, h: 10 }, dpr: 1 },
+      ...extra,
+    });
+    r = await SW("/w/feedback", { method: "POST", json: mini(), headers: { "x-forwarded-for": ip() } });
+    const secFid = r.body.feedback?.id;
+
+    // HIGH 1 — SSRF: panel actions and tracker URLs.
+    r = await call(`/api/feedback/${secFid}/actions/ssrf`, { method: "POST" });
+    check(
+      "SSRF: webhook panel action to a loopback address is blocked",
+      r.status === 200 &&
+        r.body.ok === false &&
+        /^blocked/.test(r.body.error ?? "") &&
+        !secHits.includes("/action"),
+      JSON.stringify(r.body),
+    );
+    r = await call(`/api/projects/${secProject.id}/integrations`, {
+      method: "POST",
+      json: {
+        provider: "github",
+        token: "ghp_smoke_token_1",
+        repo: "a/b",
+        apiUrl: `http://127.0.0.2:${secPort}`,
+      },
+    });
+    r = await call(`/api/integrations/${r.body.integration?.id}/test`, { method: "POST" });
+    check(
+      "SSRF: tracker base URL to a loopback address is blocked",
+      r.body.ok === false && /blocked/.test(r.body.message ?? ""),
+      r.body.message,
+    );
+    r = await call(`/api/projects/${secProject.id}/integrations`, {
+      method: "POST",
+      json: {
+        provider: "gitlab",
+        token: "glpat-smoke-token-1",
+        repo: "a/b",
+        apiUrl: `http://127.0.0.1:${secPort}`,
+      },
+    });
+    r = await call(`/api/integrations/${r.body.integration?.id}/test`, { method: "POST" });
+    check(
+      "tracker test never echoes a non-JSON response body",
+      r.body.ok === false && !JSON.stringify(r.body).includes("TOPSECRET"),
+      r.body.message,
+    );
+
+    // HIGH 1 — configuration writes are org-admin only.
+    r = await call(`/api/projects/${secProject.id}`, {
+      method: "PATCH",
+      json: {
+        widgetConfig: {
+          panelActions: [{ id: "x", label: "x", kind: "webhook", url: "https://evil.example/" }],
+        },
+      },
+      jar: memberJar,
+    });
+    check(
+      "members can't change project settings (webhook actions)",
+      r.status === 403 && r.body.code === "ADMIN_REQUIRED",
+      r.status,
+    );
+    r = await call(`/api/projects/${secProject.id}/rotate-key`, { method: "POST", jar: memberJar });
+    check("members can't rotate the project key", r.status === 403, r.status);
+    r = await call(`/api/projects/${secProject.id}`, { jar: memberJar });
+    const memberActions = r.body.project?.widgetConfig?.panelActions ?? [];
+    check(
+      "members don't see webhook action URLs",
+      memberActions.length === 2 && memberActions.find((a) => a.id === "ssrf")?.url === "",
+    );
+    r = await call(`/api/feedback/${secFid}`, { jar: viewerJar });
+    check(
+      "viewers see no team-only or webhook actions on an item",
+      r.status === 200 && r.body.panelActions?.length === 0,
+      JSON.stringify(r.body.panelActions),
+    );
+
+    // HIGH 2 — a spoofed first X-Forwarded-For entry no longer gives a fresh rate-limit bucket.
+    const real = ip();
+    const statuses = [];
+    for (let i = 0; i < 11; i++) {
+      r = await SW("/w/feedback", {
+        method: "POST",
+        json: mini(),
+        headers: { "x-forwarded-for": `6.6.6.${i + 1}, ${real}`, "x-real-ip": `7.7.7.${i + 1}` },
+      });
+      statuses.push(r.status);
+    }
+    check(
+      "spoofed X-Forwarded-For / X-Real-IP can't dodge the per-address limit",
+      statuses.slice(0, 10).every((s) => s === 201) && statuses[10] === 429,
+      statuses.join(","),
+    );
+
+    // HIGH 2 — Better Auth's limiter uses the same trusted address: rotating the spoofed first entry
+    // doesn't reset the sign-in budget.
+    const authIp = ip();
+    const signIns = [];
+    for (let i = 0; i < 11; i++) {
+      const res = await call("/api/auth/sign-in/email", {
+        method: "POST",
+        jar: { cookie: "" },
+        json: { email: "nobody@example.com", password: "wrong-password" },
+        headers: { "x-forwarded-for": `6.6.${i}.6, ${authIp}`, "x-real-ip": `7.7.${i}.7` },
+      });
+      signIns.push(res.status);
+    }
+    check("sign-in attempts are rate-limited per real address", signIns.at(-1) === 429, signIns.join(","));
+
+    // MEDIUM 5 — bodies are capped before they're read; reports must declare their length.
+    const raw = (path, headers, body) =>
+      new Promise((resolve) => {
+        const req = httpRequest(B + path, { method: "POST", headers }, (res) => {
+          let text = "";
+          res.on("data", (c) => (text += c));
+          res.on("end", () => resolve({ status: res.statusCode, text }));
+        });
+        req.on("error", (e) => resolve({ status: 0, text: String(e) }));
+        if (body) req.write(body);
+        req.end();
+      });
+    r = await raw(
+      "/w/feedback",
+      {
+        "x-pinwren-key": secProject.publicKey,
+        origin: site,
+        "content-type": "application/json",
+        "transfer-encoding": "chunked",
+        "x-forwarded-for": ip(),
+      },
+      JSON.stringify(mini()),
+    );
+    check("widget report without Content-Length is refused (411)", r.status === 411, r.status);
+    r = await call("/api/integrations/github/webhook", {
+      method: "POST",
+      jar: { cookie: "" },
+      headers: { "content-type": "application/json", "x-github-event": "issues", "x-forwarded-for": ip() },
+      rawBody: JSON.stringify({ pad: "x".repeat(2 * 1024 * 1024) }),
+    });
+    check("oversized inbound webhook refused before parsing (413)", r.status === 413, r.status);
+    r = await call(`/api/projects/${secProject.id}`, {
+      method: "PATCH",
+      json: { name: "x".repeat(3 * 1024 * 1024) },
+    });
+    check("oversized dashboard request refused (413)", r.status === 413, r.status);
+
+    // MEDIUM 6 — CSRF and content type.
+    r = await call("/api/projects", {
+      method: "POST",
+      json: { name: "csrf" },
+      headers: { origin: "https://evil.example" },
+    });
+    check(
+      "cross-site cookie request is refused",
+      r.status === 403 && r.body.code === "CROSS_SITE_REQUEST",
+      r.status,
+    );
+    r = await call("/api/projects", { method: "POST", json: { name: "csrf" }, headers: { origin: "" } });
+    check(
+      "cookie request without an origin is refused",
+      r.status === 403 && r.body.code === "CROSS_SITE_REQUEST",
+      r.status,
+    );
+    r = await call("/api/projects", {
+      method: "POST",
+      rawBody: JSON.stringify({ name: "csrf" }),
+      headers: { "content-type": "text/plain" },
+    });
+    check("non-JSON body on a JSON route is refused (415)", r.status === 415, r.status);
+    const page = await fetch(`${B}/sign-in`, { redirect: "manual" });
+    const csp = page.headers.get("content-security-policy") ?? "";
+    check(
+      "dashboard pages send a CSP that forbids framing, plugins and foreign scripts",
+      csp.includes("frame-ancestors 'none'") &&
+        csp.includes("object-src 'none'") &&
+        /script-src 'self'/.test(csp) &&
+        !/script-src[^;]*https?:/.test(csp),
+      csp,
+    );
+
+    // MEDIUM 4 — template test emails only go to the caller, and are rate-limited.
+    r = await call("/api/email-templates/feedback_created/test", {
+      method: "POST",
+      json: { to: "victim@example.com" },
+    });
+    check(
+      "template test can't email someone else",
+      r.status === 400 && r.body.code === "RECIPIENT_NOT_ALLOWED",
+      r.status,
+    );
+    let mailStatus = 0;
+    for (let i = 0; i < 12 && mailStatus !== 429; i++) {
+      mailStatus = (await call("/api/email-templates/feedback_created/test", { method: "POST", json: {} }))
+        .status;
+    }
+    check("template test sends are rate-limited", mailStatus === 429, mailStatus);
+    let inviteStatus = 0;
+    for (let i = 0; i < 35 && inviteStatus !== 429; i++) {
+      inviteStatus = (
+        await call("/api/auth/organization/invite-member", {
+          method: "POST",
+          json: { email: `flood-${i}-${Date.now()}@example.com`, role: "member" },
+        })
+      ).status;
+    }
+    check("invitations are rate-limited per organisation", inviteStatus === 429, inviteStatus);
+
+    // HIGH 3 — no admin by claiming: with PINWREN_ADMIN_EMAILS set there's nothing to claim.
+    r = await call("/api/setup");
+    check("setup is not open on a configured instance", r.status === 200 && r.body.needed === false);
+    r = await call("/api/setup/claim", { method: "POST", json: { token: `pws_${"x".repeat(40)}` } });
+    check("setup claim refused once administrators exist", r.status === 409, r.status);
+
+    // LOW — page URLs are http(s) only; deleted items' threads vanish from the page.
+    r = await SW("/w/feedback", {
+      method: "POST",
+      json: mini({ page: { url: "javascript:alert(document.cookie)//" } }),
+      headers: { "x-forwarded-for": ip() },
+    });
+    check("javascript: page URL is refused", r.status === 400, r.status);
+    r = await SW(`/w/feedback/${secFid}/comments`, {
+      method: "POST",
+      json: { body: "public reply" },
+      headers: { "x-forwarded-for": ip() },
+    });
+    r = await SW(`/w/feedback/${secFid}/comments`);
+    const before = r.body.items?.length ?? 0;
+    await call(`/api/feedback/${secFid}`, { method: "DELETE" });
+    r = await SW(`/w/feedback/${secFid}/comments`);
+    check(
+      "a deleted item's replies are gone from the widget",
+      before === 1 && r.status === 200 && r.body.items?.length === 0,
+      `${before} ${r.body.items?.length}`,
+    );
+
+    // LOW — failed Bearer tokens are rate-limited per address (API and MCP).
+    const tokIp = ip();
+    let tokStatus = 0;
+    for (let i = 0; i < 22 && tokStatus !== 429; i++) {
+      tokStatus = (
+        await call("/api/v1/feedback", {
+          jar: { cookie: "" },
+          headers: { authorization: `Bearer pwt_${"x".repeat(40)}${i}`, "x-forwarded-for": tokIp },
+        })
+      ).status;
+    }
+    check("repeated bad API tokens are rate-limited", tokStatus === 429, tokStatus);
+    r = await call("/mcp", {
+      method: "POST",
+      jar: { cookie: "" },
+      json: { jsonrpc: "2.0", id: 1, method: "initialize" },
+      headers: {
+        authorization: `Bearer pwt_${"y".repeat(40)}`,
+        "x-forwarded-for": tokIp,
+        accept: "application/json, text/event-stream",
+      },
+    });
+    check("…and MCP shares the same budget", r.status === 429, r.status);
+
+    // HIGH 2 — the per-project intake cap holds however many addresses send.
+    r = await call("/api/projects", {
+      method: "POST",
+      json: { name: "Flood", allowedOrigins: ["localhost:5173"] },
+    });
+    const flood = r.body.project;
+    let floodStatus = 0;
+    let sent = 0;
+    for (; sent < 140 && floodStatus !== 429; sent++) {
+      const res = await call("/w/feedback", {
+        method: "POST",
+        jar: { cookie: "" },
+        json: mini(),
+        headers: { "x-pinwren-key": flood.publicKey, origin: site, "x-forwarded-for": ip() },
+      });
+      floodStatus = res.status;
+      if (res.status === 429) r = res;
+    }
+    check(
+      "per-project intake cap stops a report flood from many addresses",
+      floodStatus === 429 && r.body.code === "PROJECT_RATE_LIMITED" && sent <= 121,
+      `${floodStatus} after ${sent}`,
+    );
+    await call(`/api/projects/${flood.id}`, { method: "PATCH", json: { archived: true } });
+    await call(`/api/projects/${secProject.id}`, { method: "PATCH", json: { archived: true } });
+  } finally {
+    secServer.closeAllConnections();
+    secServer.close();
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed, ${skipped} skipped`);

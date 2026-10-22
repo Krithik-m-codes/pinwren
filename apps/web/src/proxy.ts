@@ -6,6 +6,8 @@ import { type NextRequest, NextResponse } from "next/server";
 // localhost are redirected (GET/HEAD) or refused. Forwarded headers count only with
 // PINWREN_TRUST_PROXY. Read straight from the environment: the proxy must not depend on app modules.
 const flag = (v: string | undefined) => v === "true" || v === "1";
+/** PINWREN_TRUST_PROXY is a hop count (true = 1); any trusted hop makes X-Forwarded-Proto count. */
+const trusted = (v: string | undefined) => !!v && (/^true$/i.test(v.trim()) || Number(v) > 0);
 
 /** Signed-in screens. Without a session cookie there is nothing to render: send people to sign in at once. */
 const APP_PATHS = /^\/(inbox|projects|settings|onboarding)(\/|$)/;
@@ -13,7 +15,7 @@ const APP_PATHS = /^\/(inbox|projects|settings|onboarding)(\/|$)/;
 export function proxy(request: NextRequest) {
   const d = httpsDecision(request, {
     enforce: flag(process.env.PINWREN_ENFORCE_HTTPS),
-    trustProxy: flag(process.env.PINWREN_TRUST_PROXY),
+    trustProxy: trusted(process.env.PINWREN_TRUST_PROXY),
   });
   if (d.action === "redirect") return NextResponse.redirect(d.location, 308);
   if (d.action === "refuse") {

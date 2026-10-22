@@ -293,6 +293,7 @@ export type SecuritySettings = {
   updateCheck: boolean;
   enforceHttps: boolean;
   trustProxy: boolean;
+  trustProxyHops: number;
   locked: { sessionDays: boolean; updateCheck: boolean };
   privacyModeProjects: number;
   version: string;

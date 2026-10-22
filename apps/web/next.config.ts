@@ -1,6 +1,35 @@
 import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 
+/**
+ * Content-Security-Policy for the dashboard (ADR 0021). Not nonce-based: Next.js applies nonces only
+ * while rendering a request, and the dashboard's static shells (Cache Components, ADR 0020) are
+ * prerendered at build time, so their inline bootstrap/flight scripts could never carry one — the
+ * Next.js CSP guide calls nonces incompatible with partial prerendering. Inline scripts therefore stay
+ * allowed; everything else is locked down: no third-party script, style, image, font or connection,
+ * no plugins, no <base> hijack, forms only to this origin, never framed. The same policy also governs
+ * rrweb's about:blank replay iframe, so a recorded page can't load remote resources when replayed.
+ */
+function contentSecurityPolicy(): string {
+  const dev = process.env.NODE_ENV === "development";
+  return [
+    "default-src 'self'",
+    // 'unsafe-eval' only in development: React rebuilds server error stacks with eval there.
+    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "media-src 'self' blob:",
+    "connect-src 'self'",
+    "worker-src 'self' blob:",
+    "frame-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
+
 const nextConfig: NextConfig = {
   cacheComponents: true,
   // React Compiler, run by Turbopack's native Rust port rather than the Babel plugin (no
@@ -54,11 +83,21 @@ const nextConfig: NextConfig = {
         headers: [...script, { key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },
       {
+        // Pages only: API responses set their own policy where they serve content (sandboxed assets).
+        source: "/((?!w/|widget[.-]|api/|mcp).*)",
+        headers: [{ key: "Content-Security-Policy", value: contentSecurityPolicy() }],
+      },
+      {
         source: "/((?!w/|widget[.-]).*)",
         headers: [
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+          },
         ],
       },
     ]);

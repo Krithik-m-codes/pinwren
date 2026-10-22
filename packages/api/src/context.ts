@@ -1,9 +1,9 @@
-import { getDb, member, user } from "@pinwren/db";
-import { and, asc, eq } from "drizzle-orm";
+import { getDb, member } from "@pinwren/db";
+import { and, eq } from "drizzle-orm";
 import { createMiddleware } from "hono/factory";
 import { getAuth } from "./auth";
-import { env } from "./env";
 import { ApiError, unauthorized } from "./errors";
+import { isInstanceAdmin } from "./services/setup";
 
 export type SessionVars = {
   userId: string;
@@ -43,24 +43,10 @@ export const requireOrgAdmin = createMiddleware<{ Variables: SessionVars }>(asyn
 });
 
 /**
- * Instance admin (self-host settings such as SMTP): listed in PINWREN_ADMIN_EMAILS, or — when that
- * is unset — the first user who signed up (the operator who installed the instance).
+ * Instance admin (self-host settings such as SMTP): listed in PINWREN_ADMIN_EMAILS, or claimed with the
+ * one-time setup token (services/setup.ts). The first user to sign up is no longer special (ADR 0021).
  */
-export async function isInstanceAdmin(userId: string): Promise<boolean> {
-  const listed = env().PINWREN_ADMIN_EMAILS;
-  const db = getDb();
-  if (listed) {
-    const [u] = await db.select({ email: user.email }).from(user).where(eq(user.id, userId));
-    const emails = listed.split(",").map((s) => s.trim().toLowerCase());
-    return !!u && emails.includes(u.email.toLowerCase());
-  }
-  const [first] = await db
-    .select({ id: user.id })
-    .from(user)
-    .orderBy(asc(user.createdAt), asc(user.id))
-    .limit(1);
-  return first?.id === userId;
-}
+export { isInstanceAdmin } from "./services/setup";
 
 export const requireInstanceAdmin = createMiddleware<{ Variables: SessionVars }>(async (c, next) => {
   if (!(await isInstanceAdmin(c.var.userId))) {

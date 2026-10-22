@@ -55,3 +55,83 @@ describe("truncateIp", () => {
     expect(truncateIp("not an ip")).toBe("unknown");
   });
 });
+
+describe("safeHref (ADR 0021)", () => {
+  it("lets only absolute http(s) URLs through", async () => {
+    const { safeHref } = await import("./security");
+    expect(safeHref("https://example.com/a?b=1")).toBe("https://example.com/a?b=1");
+    for (const bad of [
+      "javascript:alert(1)",
+      " JaVaScRiPt:alert(1)",
+      "data:text/html,x",
+      "vbscript:x",
+      "//evil.example",
+      "/local",
+      "",
+      null,
+      42,
+    ]) {
+      expect(safeHref(bad), String(bad)).toBeNull();
+    }
+    expect(safeHref("/inbox", { allowRelative: true })).toBe("/inbox");
+    expect(safeHref("//evil.example", { allowRelative: true })).toBeNull();
+  });
+});
+
+describe("page URLs in reports", () => {
+  it("are http(s) only", async () => {
+    const { widgetFeedbackCreate } = await import("./schemas");
+    const base = {
+      clientId: crypto.randomUUID(),
+      kind: "comment",
+      body: "x",
+      environment: { userAgent: "t", viewport: { w: 1, h: 1 }, dpr: 1 },
+    };
+    expect(widgetFeedbackCreate.safeParse({ ...base, page: { url: "https://a.example/" } }).success).toBe(
+      true,
+    );
+    for (const url of ["javascript:alert(1)//", "data:text/html,<script>1</script>", "file:///etc/passwd"]) {
+      expect(widgetFeedbackCreate.safeParse({ ...base, page: { url } }).success, url).toBe(false);
+    }
+  });
+});
+
+describe("panel actions per audience", () => {
+  it("hides webhook URLs from non-admins and team actions from viewers", async () => {
+    const { panelActionsFor } = await import("./config");
+    const actions = [
+      {
+        id: "hook",
+        label: "Hook",
+        kind: "webhook",
+        url: "https://hooks.example/secret",
+        icon: null,
+        visibleTo: "team",
+      },
+      {
+        id: "team",
+        label: "Team",
+        kind: "link",
+        url: "https://jira.example/{id}",
+        icon: null,
+        visibleTo: "team",
+      },
+      {
+        id: "all",
+        label: "All",
+        kind: "link",
+        url: "https://docs.example/",
+        icon: null,
+        visibleTo: "everyone",
+      },
+    ] as const;
+    const list = [...actions];
+    expect(panelActionsFor(list, "admin", "settings")[0]?.url).toBe("https://hooks.example/secret");
+    expect(panelActionsFor(list, "admin", "detail")[0]?.url).toBe("");
+    expect(panelActionsFor(list, "member", "settings")[0]?.url).toBe("");
+    expect(panelActionsFor(list, "member", "detail").map((a) => a.id)).toEqual(["hook", "team", "all"]);
+    expect(panelActionsFor(list, "viewer", "detail").map((a) => a.id)).toEqual(["all"]);
+    const viewerSettings = panelActionsFor(list, "viewer", "settings");
+    expect(viewerSettings.map((a) => a.url)).toEqual(["", "", "https://docs.example/"]);
+  });
+});

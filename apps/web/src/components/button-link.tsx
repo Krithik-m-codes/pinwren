@@ -1,4 +1,5 @@
 import type { VariantProps } from "class-variance-authority";
+import { safeHref } from "@pinwren/core";
 import type { Route } from "next";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
@@ -37,8 +38,15 @@ export function ButtonLink<T extends string>({
 }: ButtonLinkProps<T>) {
   const cls = cn(buttonVariants({ variant, size }), className);
   if (external) {
+    // Off-site hrefs are often untrusted (reported page URLs): http(s) only, anything else renders inert.
     return (
-      <a href={href} target="_blank" rel="noopener noreferrer" className={cls} {...rest}>
+      <a
+        href={safeHref(href) ?? undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={cls}
+        {...rest}
+      >
         {children}
       </a>
     );

@@ -6,15 +6,45 @@ import { seedFor } from "./seed";
 // The in-memory backend behind /demo: one sandbox per visitor, keyed by the visitor's demo project key
 // (`pk_demo_<id>`, minted in the browser and kept in a cookie). No database; everything is bounded and
 // forgotten after a few hours, so the demo can run on any single Node process.
+//
+// Memory is bounded three ways: every byte a sandbox keeps (item text, metadata, replies, screenshot and
+// attachment data URLs) counts toward its own cap; the number of live sandboxes is capped; and the bytes of
+// all sandboxes together are capped. Visitor keys are minted by the browser, so anyone can open as many
+// sandboxes as they like; the global caps evict the least recently used ones instead of growing.
 
 export const DEMO_KEY = /^pk_demo_[A-Za-z0-9_-]{16,40}$/;
 const VISITOR_TTL_MS = 6 * 60 * 60 * 1000;
-const MAX_VISITORS = 2_000;
 const MAX_ITEMS = 60;
 const MAX_REPLIES = 40;
-/** Screenshots and attachments kept per visitor; larger ones are dropped (the report itself is kept). */
-const MAX_VISITOR_BYTES = 6 * 1024 * 1024;
-const MAX_TOTAL_BYTES = 192 * 1024 * 1024;
+/** Fixed bookkeeping per sandbox (the map entry, counters), on top of what it stores. */
+const VISITOR_OVERHEAD_BYTES = 512;
+
+/** A positive integer from the environment, or the default. Read per call so operators and tests can tune it. */
+function envInt(name: string, fallback: number): number {
+  const n = Number(process.env[name]);
+  return Number.isSafeInteger(n) && n > 0 ? n : fallback;
+}
+
+/**
+ * The store's caps. Defaults fit a small single-process host (about 192 MB worst case):
+ * - `DEMO_MAX_SANDBOXES` (2,000) live sandboxes; the least recently used is evicted to make room.
+ * - `DEMO_MAX_SANDBOX_BYTES` (6 MiB) stored per sandbox; a write that alone is larger is refused (413), one
+ *   that would overfill the sandbox is refused (429). Screenshots and attachments that don't fit are
+ *   dropped and the report is kept.
+ * - `DEMO_MAX_TOTAL_BYTES` (192 MiB) across all sandboxes; least recently used sandboxes are evicted.
+ */
+export function demoLimits() {
+  return {
+    maxSandboxes: envInt("DEMO_MAX_SANDBOXES", 2_000),
+    maxSandboxBytes: envInt("DEMO_MAX_SANDBOX_BYTES", 6 * 1024 * 1024),
+    maxTotalBytes: envInt("DEMO_MAX_TOTAL_BYTES", 192 * 1024 * 1024),
+  };
+}
+
+/** Bytes a stored value takes, estimated as its UTF-8 JSON size (data URLs are stored as strings, so they count in full). */
+export function sizeOf(value: object): number {
+  return Buffer.byteLength(JSON.stringify(value), "utf8");
+}
 
 export type DemoReply = {
   id: string;
@@ -65,16 +95,33 @@ const state: DemoState = (g.__pinwrenDemo ??= { visitors: new Map(), bytes: 0 })
 const now = () => new Date().toISOString();
 export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
-function evict() {
+/**
+ * Drop expired sandboxes, then the least recently seen ones (Map keeps insertion order; `visitor()`
+ * re-inserts on every use) until there is room for `room` more sandboxes and the total is under its cap.
+ * `keep`, the sandbox being written to, is never evicted.
+ */
+function evict(room: number, keep?: string) {
+  const { maxSandboxes, maxTotalBytes } = demoLimits();
   const cutoff = Date.now() - VISITOR_TTL_MS;
   for (const [key, v] of state.visitors) {
-    if (v.seenAt < cutoff) drop(key);
+    if (v.seenAt < cutoff && key !== keep) drop(key);
   }
-  // Least recently seen first (Map keeps insertion order; `touch` re-inserts).
   for (const key of state.visitors.keys()) {
-    if (state.visitors.size <= MAX_VISITORS && state.bytes <= MAX_TOTAL_BYTES) break;
-    drop(key);
+    if (state.visitors.size + room <= maxSandboxes && state.bytes <= maxTotalBytes) break;
+    if (key !== keep) drop(key);
   }
+}
+
+/** Account `bytes` more to a sandbox, evicting others if the store went over its total. */
+function charge(v: Visitor, bytes: number) {
+  v.bytes += bytes;
+  state.bytes += bytes;
+  if (state.bytes > demoLimits().maxTotalBytes) evict(0, v.key);
+}
+
+/** Live sandboxes and their stored bytes, for tests and diagnostics. */
+export function storeStats() {
+  return { sandboxes: state.visitors.size, bytes: state.bytes };
 }
 
 function drop(key: string) {
@@ -89,13 +136,15 @@ export function visitor(key: string): Visitor {
   let v = state.visitors.get(key);
   if (v) {
     state.visitors.delete(key);
-  } else {
-    evict();
-    const items = seedFor();
-    v = { key, counter: items.length, items, bytes: 0, seenAt: Date.now() };
+    v.seenAt = Date.now();
+    state.visitors.set(key, v);
+    return v;
   }
-  v.seenAt = Date.now();
+  evict(1);
+  const items = seedFor();
+  v = { key, counter: items.length, items, bytes: 0, seenAt: Date.now() };
   state.visitors.set(key, v);
+  charge(v, VISITOR_OVERHEAD_BYTES + key.length + sizeOf(items));
   return v;
 }
 
@@ -144,37 +193,38 @@ export function listPins(v: Visitor, url: string | null, includeClosed: boolean)
     }));
 }
 
+type Refusal = { ok: false; status: number; code: string; title: string };
+
 export type CreateResult =
-  | { ok: true; replay: boolean; feedback: { id: string; number: number; reporterToken?: string } }
-  | { ok: false; status: number; code: string; title: string };
+  { ok: true; replay: boolean; feedback: { id: string; number: number; reporterToken?: string } } | Refusal;
+
+const SANDBOX_FULL: Refusal = {
+  ok: false,
+  status: 429,
+  code: "DEMO_FULL",
+  title: "This demo sandbox is full — reset it from the demo page to keep going",
+};
+const TOO_LARGE: Refusal = {
+  ok: false,
+  status: 413,
+  code: "PAYLOAD_TOO_LARGE",
+  title: "This is too large for the demo",
+};
+
+/** Whether `bytes` more fit the sandbox; a write larger than any sandbox may hold is refused outright. */
+function fits(v: Visitor, bytes: number): Refusal | null {
+  const { maxSandboxBytes } = demoLimits();
+  if (bytes > maxSandboxBytes) return TOO_LARGE;
+  if (v.bytes + bytes > maxSandboxBytes) return SANDBOX_FULL;
+  return null;
+}
 
 export function createFeedback(v: Visitor, input: WidgetFeedbackCreate): CreateResult {
   const existing = v.items.find((i) => i.clientId === input.clientId);
   if (existing) return { ok: true, replay: true, feedback: { id: existing.id, number: existing.number } };
-  if (v.items.length >= MAX_ITEMS) {
-    return {
-      ok: false,
-      status: 429,
-      code: "DEMO_FULL",
-      title: "This demo sandbox is full — reset it from the demo page to keep going",
-    };
-  }
+  if (v.items.length >= MAX_ITEMS) return SANDBOX_FULL;
 
   const assets: DemoAsset[] = [];
-  const files: { kind: DemoAsset["kind"]; name: string | null; dataUrl: string; contentType?: string }[] = [];
-  if (input.screenshot) files.push({ kind: "screenshot", name: null, dataUrl: input.screenshot });
-  for (const a of input.attachments ?? [])
-    files.push({ kind: "attachment", name: a.name, dataUrl: a.dataUrl, contentType: a.contentType });
-  for (const f of files) {
-    const contentType = f.contentType ?? /^data:([^;]+);/.exec(f.dataUrl)?.[1] ?? "application/octet-stream";
-    // base64 → bytes, roughly; good enough for the sandbox budget.
-    const bytes = Math.floor((f.dataUrl.length - f.dataUrl.indexOf(",") - 1) * 0.75);
-    if (v.bytes + bytes > MAX_VISITOR_BYTES) continue;
-    v.bytes += bytes;
-    state.bytes += bytes;
-    assets.push({ id: randomUUID(), kind: f.kind, name: f.name, contentType, bytes, dataUrl: f.dataUrl });
-  }
-
   const reporterToken = randomBytes(32).toString("base64url");
   const consoleEntries = input.diagnostics?.console ?? [];
   const networkEntries = input.diagnostics?.network ?? [];
@@ -209,7 +259,35 @@ export function createFeedback(v: Visitor, input: WidgetFeedbackCreate): CreateR
     reporterTokenHash: sha256(reporterToken),
     seeded: false,
   };
+
+  // The report itself (text, anchor, page, environment, diagnostics summary) must fit; screenshots and
+  // attachments are then kept while they still fit, and dropped otherwise.
+  let bytes = sizeOf(item);
+  const refused = fits(v, bytes);
+  if (refused) return refused;
+  const files: { kind: DemoAsset["kind"]; name: string | null; dataUrl: string; contentType?: string }[] = [];
+  if (input.screenshot) files.push({ kind: "screenshot", name: null, dataUrl: input.screenshot });
+  for (const a of input.attachments ?? [])
+    files.push({ kind: "attachment", name: a.name, dataUrl: a.dataUrl, contentType: a.contentType });
+  for (const f of files) {
+    const contentType = f.contentType ?? /^data:([^;]+);/.exec(f.dataUrl)?.[1] ?? "application/octet-stream";
+    const asset: DemoAsset = {
+      id: randomUUID(),
+      kind: f.kind,
+      name: f.name,
+      contentType,
+      // Decoded size, shown in the inbox; the budget counts the stored data URL instead.
+      bytes: Math.floor((f.dataUrl.length - f.dataUrl.indexOf(",") - 1) * 0.75),
+      dataUrl: f.dataUrl,
+    };
+    const size = sizeOf(asset) + 1;
+    if (fits(v, bytes + size)) continue;
+    assets.push(asset);
+    bytes += size;
+  }
+
   v.items.push(item);
+  charge(v, bytes);
   return { ok: true, replay: false, feedback: { id: item.id, number: item.number, reporterToken } };
 }
 
@@ -217,12 +295,20 @@ export function findItem(v: Visitor, id: string) {
   return v.items.find((i) => i.id === id);
 }
 
-export function addReply(item: DemoItem, body: string, authorName: string | null): DemoReply | null {
-  if (item.replies.length >= MAX_REPLIES) return null;
+export type ReplyResult = { ok: true; reply: DemoReply } | Refusal;
+
+export function addReply(v: Visitor, item: DemoItem, body: string, authorName: string | null): ReplyResult {
+  if (item.replies.length >= MAX_REPLIES) {
+    return { ok: false, status: 429, code: "DEMO_FULL", title: "This thread is full in the demo" };
+  }
   const reply: DemoReply = { id: randomUUID(), body, createdAt: now(), authorName, team: false };
+  const bytes = sizeOf(reply) + 1;
+  const refused = fits(v, bytes);
+  if (refused) return refused;
   item.replies.push(reply);
   item.updatedAt = now();
-  return reply;
+  charge(v, bytes);
+  return { ok: true, reply };
 }
 
 export function setStatus(item: DemoItem, status: "resolved" | "open") {

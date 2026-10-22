@@ -1,6 +1,7 @@
 import { MAX_SESSION_DAYS } from "@pinwren/core";
 import { getDb, schema } from "@pinwren/db";
 import { betterAuth } from "better-auth";
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization } from "better-auth/plugins/organization";
 import { createAccessControl } from "better-auth/plugins/access";
@@ -8,7 +9,45 @@ import { adminAc, defaultStatements, memberAc, ownerAc } from "better-auth/plugi
 import { renderEmail } from "./email/render";
 import { env } from "./env";
 import { enqueue, QUEUES } from "./jobs/boss";
+import { consume } from "./rate-limit";
+import { signupAllowed } from "./services/setup";
 import { sessionLifetimeDays } from "./settings/instance";
+
+/** Set by the API in front of Better Auth from the trusted-proxy logic (index.ts); never client input. */
+const AUTH_IP_HEADER = "x-pinwren-client-ip";
+
+/**
+ * Sign-up policy and invitation rate limit (ADR 0021), checked before Better Auth runs the endpoint.
+ * Invitations send email to any address, so an organisation may send PINWREN_INVITES_PER_HOUR an hour.
+ */
+const policyHooks = createAuthMiddleware(async (ctx) => {
+  if (ctx.path === "/sign-up/email") {
+    const email = (ctx.body as { email?: unknown } | undefined)?.email;
+    if (typeof email !== "string" || !(await signupAllowed(email))) {
+      throw new APIError("FORBIDDEN", {
+        code: "SIGNUP_CLOSED",
+        message: "Sign-up is closed on this instance. Ask an administrator for an invitation.",
+      });
+    }
+  }
+  if (ctx.path === "/organization/invite-member") {
+    const session = await getSessionFromCtx(ctx);
+    const body = ctx.body as { organizationId?: unknown } | undefined;
+    const active: unknown = session?.session.activeOrganizationId;
+    const orgId =
+      typeof body?.organizationId === "string"
+        ? body.organizationId
+        : typeof active === "string"
+          ? active
+          : null;
+    if (orgId && !(await consume(`invite:${orgId}`, env().PINWREN_INVITES_PER_HOUR, 3600))) {
+      throw new APIError("TOO_MANY_REQUESTS", {
+        code: "INVITES_RATE_LIMITED",
+        message: "This organisation has sent too many invitations this hour.",
+      });
+    }
+  }
+});
 
 /** Dashboard page that accepts an invitation (calls Better Auth's accept-invitation endpoint). */
 export const acceptInvitationUrl = (id: string) =>
@@ -25,8 +64,24 @@ function createAuth() {
     database: drizzleAdapter(getDb(), { provider: "pg", schema }),
     emailAndPassword: {
       enabled: true,
-      disableSignUp: e.PINWREN_DISABLE_SIGNUP,
+      // Who may sign up is decided in `policyHooks` (first account, invitees, or open sign-up).
+      disableSignUp: false,
       minPasswordLength: 8,
+    },
+    hooks: { before: policyHooks },
+    // On in every environment (Better Auth's default is production only). Keyed by the address the API
+    // derived with PINWREN_TRUST_PROXY — Better Auth never reads X-Forwarded-For itself. In memory, per
+    // server process.
+    rateLimit: {
+      enabled: true,
+      // Better Auth's general default (100 per 10 s per address and path); credentials endpoints tighter.
+      window: 10,
+      max: 100,
+      customRules: {
+        "/sign-in/email": { window: 60, max: 10 },
+        "/sign-up/email": { window: 600, max: 20 },
+        "/request-password-reset": { window: 3600, max: 10 },
+      },
     },
     plugins: [
       organization({
@@ -80,7 +135,10 @@ function createAuth() {
         },
       },
     },
-    advanced: { database: { generateId: () => crypto.randomUUID() } },
+    advanced: {
+      database: { generateId: () => crypto.randomUUID() },
+      ipAddress: { ipAddressHeaders: [AUTH_IP_HEADER] },
+    },
     trustedOrigins: [e.PINWREN_URL],
   });
 }

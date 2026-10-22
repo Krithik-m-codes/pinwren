@@ -32,13 +32,15 @@ import {
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { createMiddleware } from "hono/factory";
 import { randomToken, safeEqualHex, sha256Hex } from "../crypto";
 import { env } from "../env";
 import { ApiError, notFound } from "../errors";
 import { emit } from "../events";
 import { clientIp, family } from "../net";
 import { hasFeature } from "../license";
-import { consume } from "../rate-limit";
+import { consume, consumeAmount } from "../rate-limit";
 import { verifyIdentity } from "../services/identity";
 import { decodeDataUrl, decodeImageDataUrl, EXTENSIONS, storage } from "../storage";
 
@@ -57,6 +59,22 @@ const corsHeaders = (origin: string) => ({
 });
 
 const inPrivacyMode = (p: typeof project.$inferSelect) => parseWidgetConfig(p.widgetConfig).privacyMode;
+
+/**
+ * Largest valid report: replay (14 MB of base64) + screenshot (11 MB) + three attachments (7 MB each)
+ * + text and diagnostics. Anything bigger is refused while it streams in, before it is parsed.
+ */
+const MAX_REPORT_BODY = 48 * 1024 * 1024;
+const MAX_SMALL_BODY = 64 * 1024;
+
+const tooLarge = () => new ApiError(413, "PAYLOAD_TOO_LARGE", "Request body too large");
+const limitBody = (maxSize: number) =>
+  bodyLimit({
+    maxSize,
+    onError: () => {
+      throw tooLarge();
+    },
+  });
 
 /** Per-project override (dashboard setting) or the instance default. */
 const rateLimitFor = (p: typeof project.$inferSelect) =>
@@ -113,6 +131,41 @@ async function activeRoundOf(projectId: string): Promise<{ id: string; name: str
     .limit(2);
   return rows.length === 1 ? (rows[0] ?? null) : null;
 }
+
+/**
+ * Rate limits for a new report, checked before the body is read or parsed: per sender address and,
+ * because addresses can be many, per project whatever the sender (WIDGET_PROJECT_REPORTS_PER_MIN).
+ * A report must declare its length, so its size is known before a byte is buffered.
+ */
+const reportIntake = createMiddleware<{ Variables: WidgetVars }>(async (c, next) => {
+  const p = c.var.project;
+  const length = c.req.header("content-length");
+  if (!length || c.req.header("transfer-encoding")) {
+    throw new ApiError(411, "LENGTH_REQUIRED", "Send the report with a Content-Length");
+  }
+  if (Number(length) > MAX_REPORT_BODY) throw tooLarge();
+  const ip = clientIp(c, { privacy: inPrivacyMode(p) });
+  if (!(await consume(`w:${p.id}:${ip}`, rateLimitFor(p), 60))) {
+    throw new ApiError(429, "RATE_LIMITED", "Too many reports — try again in a minute");
+  }
+  if (!(await consume(`wp:${p.id}`, env().WIDGET_PROJECT_REPORTS_PER_MIN, 60))) {
+    throw new ApiError(
+      429,
+      "PROJECT_RATE_LIMITED",
+      "This project is receiving too many reports — try again soon",
+    );
+  }
+  await next();
+});
+
+/** Replies: rate-limited before the body is parsed. */
+const replyIntake = createMiddleware<{ Variables: WidgetVars }>(async (c, next) => {
+  const p = c.var.project;
+  if (!(await consume(`wc:${p.id}:${clientIp(c, { privacy: inPrivacyMode(p) })}`, rateLimitFor(p), 60))) {
+    throw new ApiError(429, "RATE_LIMITED", "Too many replies — try again in a minute");
+  }
+  await next();
+});
 
 /**
  * Public widget API (blueprint 04 §2). Authenticated by the public project key plus the browser's
@@ -252,6 +305,8 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
         and(
           eq(comment.feedbackId, c.req.param("id")),
           eq(feedback.projectId, p.id),
+          // A deleted (trashed) item's thread is gone from the page too.
+          isNull(feedback.deletedAt),
           eq(comment.visibility, "public"),
         ),
       )
@@ -259,161 +314,180 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
     return c.json({ items });
   })
 
-  .post("/feedback", zValidator("json", widgetFeedbackCreate), async (c) => {
-    const p = c.var.project;
-    const privacy = inPrivacyMode(p);
-    const input = privacy ? privacyFilter(c.req.valid("json")) : c.req.valid("json");
-    const ip = clientIp(c, { privacy });
-    if (!(await consume(`w:${p.id}:${ip}`, rateLimitFor(p), 60))) {
-      throw new ApiError(429, "RATE_LIMITED", "Too many reports — try again in a minute");
-    }
-    if (parseWidgetConfig(p.widgetConfig).readOnly) {
-      throw new ApiError(403, "READ_ONLY", "This project is not accepting feedback from the page");
-    }
+  .post(
+    "/feedback",
+    reportIntake,
+    limitBody(MAX_REPORT_BODY),
+    zValidator("json", widgetFeedbackCreate),
+    async (c) => {
+      const p = c.var.project;
+      const privacy = inPrivacyMode(p);
+      const input = privacy ? privacyFilter(c.req.valid("json")) : c.req.valid("json");
+      if (parseWidgetConfig(p.widgetConfig).readOnly) {
+        throw new ApiError(403, "READ_ONLY", "This project is not accepting feedback from the page");
+      }
 
-    const db = getDb();
-    // Idempotency: the widget retries with the same clientId after a network failure. The replay
-    // never carries the reporter token — it was handed out once, with the 201.
-    const [existing] = await db
-      .select({ id: feedback.id, number: feedback.number })
-      .from(feedback)
-      .where(and(eq(feedback.projectId, p.id), eq(feedback.clientId, input.clientId)));
-    if (existing) return c.json({ feedback: existing }, 200);
+      const db = getDb();
+      // Idempotency: the widget retries with the same clientId after a network failure. The replay
+      // never carries the reporter token — it was handed out once, with the 201.
+      const [existing] = await db
+        .select({ id: feedback.id, number: feedback.number })
+        .from(feedback)
+        .where(and(eq(feedback.projectId, p.id), eq(feedback.clientId, input.clientId)));
+      if (existing) return c.json({ feedback: existing }, 200);
 
-    // Decode and type-check every file before anything is written.
-    const decoded: {
-      kind: StoredAsset["kind"];
-      bytes: Uint8Array;
-      contentType: string;
-      name: string | null;
-      meta: Record<string, unknown> | null;
-    }[] = [];
-    if (input.screenshot) {
-      try {
-        decoded.push({ kind: "screenshot", name: null, meta: null, ...decodeImageDataUrl(input.screenshot) });
-      } catch (err) {
+      // Decode and type-check every file before anything is written.
+      const decoded: {
+        kind: StoredAsset["kind"];
+        bytes: Uint8Array;
+        contentType: string;
+        name: string | null;
+        meta: Record<string, unknown> | null;
+      }[] = [];
+      if (input.screenshot) {
+        try {
+          decoded.push({
+            kind: "screenshot",
+            name: null,
+            meta: null,
+            ...decodeImageDataUrl(input.screenshot),
+          });
+        } catch (err) {
+          throw new ApiError(
+            400,
+            "INVALID_SCREENSHOT",
+            err instanceof Error ? err.message : "Invalid screenshot",
+          );
+        }
+      }
+      for (const [i, att] of (input.attachments ?? []).entries()) {
+        try {
+          const file = decodeDataUrl(att.dataUrl, ATTACHMENT_CONTENT_TYPES, MAX_ATTACHMENT_BYTES);
+          if (file.contentType !== att.contentType) throw new Error("data URL type differs from contentType");
+          decoded.push({ kind: "attachment", name: att.name, meta: null, ...file });
+        } catch (err) {
+          throw new ApiError(
+            400,
+            "INVALID_ATTACHMENT",
+            `Attachment ${i + 1}: ${err instanceof Error ? err.message : "invalid file"}`,
+          );
+        }
+      }
+      // Session replay (F-007): stored only when the project records replays, so an old or modified
+      // widget can't make the server keep one the admin didn't ask for.
+      if (input.replay && parseCaptureConfig(p.captureConfig).replay.enabled) {
+        try {
+          const file = decodeDataUrl(input.replay.dataUrl, [REPLAY_CONTENT_TYPE], MAX_REPLAY_BYTES);
+          decoded.push({
+            kind: "replay",
+            name: null,
+            meta: { durationMs: input.replay.durationMs, events: input.replay.events },
+            ...file,
+          });
+        } catch (err) {
+          throw new ApiError(
+            400,
+            "INVALID_REPLAY",
+            `Session replay: ${err instanceof Error ? err.message : "invalid file"} (gzip, at most 10 MB)`,
+          );
+        }
+      }
+      // Disk budget per project and hour (WIDGET_PROJECT_MB_PER_HOUR), counted in KiB of files kept, so
+      // many senders together can't fill the disk.
+      const fileKib = decoded.reduce((n, f) => n + f.bytes.length, 0) / 1024;
+      if (
+        fileKib > 0 &&
+        !(await consumeAmount(`wb:${p.id}`, fileKib, env().WIDGET_PROJECT_MB_PER_HOUR * 1024, 3600))
+      ) {
         throw new ApiError(
-          400,
-          "INVALID_SCREENSHOT",
-          err instanceof Error ? err.message : "Invalid screenshot",
+          429,
+          "PROJECT_STORAGE_LIMITED",
+          "This project has received too many files this hour",
         );
       }
-    }
-    for (const [i, att] of (input.attachments ?? []).entries()) {
-      try {
-        const file = decodeDataUrl(att.dataUrl, ATTACHMENT_CONTENT_TYPES, MAX_ATTACHMENT_BYTES);
-        if (file.contentType !== att.contentType) throw new Error("data URL type differs from contentType");
-        decoded.push({ kind: "attachment", name: att.name, meta: null, ...file });
-      } catch (err) {
-        throw new ApiError(
-          400,
-          "INVALID_ATTACHMENT",
-          `Attachment ${i + 1}: ${err instanceof Error ? err.message : "invalid file"}`,
+      const pageUrl = normalizePageUrl(input.page.url);
+
+      // Signed identity (wave-4 contract §4). The signature itself is never stored.
+      let reporter: ReporterGuest | null = null;
+      if (input.reporter) {
+        const { signature, ...who } = input.reporter;
+        reporter = { ...who, verified: verifyIdentity(p.identitySecret, who.externalId, signature) };
+      }
+
+      // Resolve the page outside the transaction and without touching an existing row: an upsert
+      // that updates the row locks it, and every report on a busy page would queue behind it.
+      const [inserted] = await db
+        .insert(page)
+        .values({
+          orgId: p.orgId,
+          projectId: p.id,
+          url: pageUrl,
+          urlPattern: input.page.urlPattern,
+          title: input.page.title,
+        })
+        .onConflictDoNothing({ target: [page.projectId, page.url] })
+        .returning({ id: page.id });
+      const pageId =
+        inserted?.id ??
+        (
+          await db
+            .select({ id: page.id })
+            .from(page)
+            .where(and(eq(page.projectId, p.id), eq(page.url, pageUrl)))
+        )[0]?.id;
+
+      // Write files before the insert, so the per-project counter row is locked only for a few
+      // inserts, never for disk or network I/O.
+      const assets: StoredAsset[] = [];
+      const removeAll = async () => {
+        await Promise.all(
+          assets.map((a) =>
+            storage()
+              .remove(a.key)
+              .catch(() => {
+                // Orphaned files are swept by the nightly cleanup job.
+              }),
+          ),
         );
-      }
-    }
-    // Session replay (F-007): stored only when the project records replays, so an old or modified
-    // widget can't make the server keep one the admin didn't ask for.
-    if (input.replay && parseCaptureConfig(p.captureConfig).replay.enabled) {
+      };
       try {
-        const file = decodeDataUrl(input.replay.dataUrl, [REPLAY_CONTENT_TYPE], MAX_REPLAY_BYTES);
-        decoded.push({
-          kind: "replay",
-          name: null,
-          meta: { durationMs: input.replay.durationMs, events: input.replay.events },
-          ...file,
-        });
+        for (const f of decoded) {
+          const key = `${p.id}/${crypto.randomUUID()}.${EXTENSIONS[f.contentType] ?? "bin"}`;
+          await storage().put(key, f.bytes, f.contentType);
+          assets.push({
+            kind: f.kind,
+            key,
+            contentType: f.contentType,
+            bytes: f.bytes.length,
+            name: f.name,
+            meta: f.meta,
+          });
+        }
       } catch (err) {
-        throw new ApiError(
-          400,
-          "INVALID_REPLAY",
-          `Session replay: ${err instanceof Error ? err.message : "invalid file"} (gzip, at most 10 MB)`,
-        );
+        await removeAll();
+        throw err;
       }
-    }
-    const pageUrl = normalizePageUrl(input.page.url);
 
-    // Signed identity (wave-4 contract §4). The signature itself is never stored.
-    let reporter: ReporterGuest | null = null;
-    if (input.reporter) {
-      const { signature, ...who } = input.reporter;
-      reporter = { ...who, verified: verifyIdentity(p.identitySecret, who.externalId, signature) };
-    }
+      // Proof of authorship for resolve/reopen from the page: random, returned once, stored hashed.
+      const reporterToken = randomToken(32);
 
-    // Resolve the page outside the transaction and without touching an existing row: an upsert
-    // that updates the row locks it, and every report on a busy page would queue behind it.
-    const [inserted] = await db
-      .insert(page)
-      .values({
-        orgId: p.orgId,
-        projectId: p.id,
-        url: pageUrl,
-        urlPattern: input.page.urlPattern,
-        title: input.page.title,
-      })
-      .onConflictDoNothing({ target: [page.projectId, page.url] })
-      .returning({ id: page.id });
-    const pageId =
-      inserted?.id ??
-      (
-        await db
-          .select({ id: page.id })
-          .from(page)
-          .where(and(eq(page.projectId, p.id), eq(page.url, pageUrl)))
-      )[0]?.id;
-
-    // Write files before the insert, so the per-project counter row is locked only for a few
-    // inserts, never for disk or network I/O.
-    const assets: StoredAsset[] = [];
-    const removeAll = async () => {
-      await Promise.all(
-        assets.map((a) =>
-          storage()
-            .remove(a.key)
-            .catch(() => {
-              // Orphaned files are swept by the nightly cleanup job.
-            }),
-        ),
-      );
-    };
-    try {
-      for (const f of decoded) {
-        const key = `${p.id}/${crypto.randomUUID()}.${EXTENSIONS[f.contentType] ?? "bin"}`;
-        await storage().put(key, f.bytes, f.contentType);
-        assets.push({
-          kind: f.kind,
-          key,
-          contentType: f.contentType,
-          bytes: f.bytes.length,
-          name: f.name,
-          meta: f.meta,
-        });
-      }
-    } catch (err) {
-      await removeAll();
-      throw err;
-    }
-
-    // Proof of authorship for resolve/reopen from the page: random, returned once, stored hashed.
-    const reporterToken = randomToken(32);
-
-    // One statement allocates the per-project number and writes the report with its diagnostics,
-    // file records and activity entry. The counter row is locked only for the length of this
-    // statement; with separate round trips a busy event loop held it long enough for reports to
-    // queue behind each other (k6 load test: ~30 connections waiting on that one row; ADR 0013).
-    const json = (v: unknown) => (v === undefined || v === null ? null : JSON.stringify(v));
-    const diag = input.diagnostics;
-    const assetRows = assets.map((a) => ({
-      kind: a.kind,
-      storage_key: a.key,
-      content_type: a.contentType,
-      bytes: a.bytes,
-      name: a.name,
-      meta: a.meta,
-    }));
-    let created: { id: string; number: number } | undefined;
-    try {
-      const rows = await db.execute<{ id: string; number: number }>(sql`
+      // One statement allocates the per-project number and writes the report with its diagnostics,
+      // file records and activity entry. The counter row is locked only for the length of this
+      // statement; with separate round trips a busy event loop held it long enough for reports to
+      // queue behind each other (k6 load test: ~30 connections waiting on that one row; ADR 0013).
+      const json = (v: unknown) => (v === undefined || v === null ? null : JSON.stringify(v));
+      const diag = input.diagnostics;
+      const assetRows = assets.map((a) => ({
+        kind: a.kind,
+        storage_key: a.key,
+        content_type: a.contentType,
+        bytes: a.bytes,
+        name: a.name,
+        meta: a.meta,
+      }));
+      let created: { id: string; number: number } | undefined;
+      try {
+        const rows = await db.execute<{ id: string; number: number }>(sql`
         with counter as (
           update ${project} set feedback_counter = feedback_counter + 1
           where id = ${p.id}
@@ -451,57 +525,62 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
         )
         select id, number from f
       `);
-      created = rows[0];
-      if (!created) throw new Error("insert failed");
-    } catch (err) {
-      await removeAll();
-      // Two retries of the same report racing each other: the unique (project, clientId) index
-      // lets exactly one win; answer the other with the stored record.
-      const [dup] = await db
-        .select({ id: feedback.id, number: feedback.number })
-        .from(feedback)
-        .where(and(eq(feedback.projectId, p.id), eq(feedback.clientId, input.clientId)));
-      if (dup) return c.json({ feedback: dup }, 200);
-      throw err;
-    }
+        created = rows[0];
+        if (!created) throw new Error("insert failed");
+      } catch (err) {
+        await removeAll();
+        // Two retries of the same report racing each other: the unique (project, clientId) index
+        // lets exactly one win; answer the other with the stored record.
+        const [dup] = await db
+          .select({ id: feedback.id, number: feedback.number })
+          .from(feedback)
+          .where(and(eq(feedback.projectId, p.id), eq(feedback.clientId, input.clientId)));
+        if (dup) return c.json({ feedback: dup }, 200);
+        throw err;
+      }
 
-    emit({
-      type: "feedback.created",
-      orgId: p.orgId,
-      feedbackId: created.id,
-      actor: { kind: "guest", id: null },
-    });
-    return c.json({ feedback: { id: created.id, number: created.number, reporterToken } }, 201);
-  })
+      emit({
+        type: "feedback.created",
+        orgId: p.orgId,
+        feedbackId: created.id,
+        actor: { kind: "guest", id: null },
+      });
+      return c.json({ feedback: { id: created.id, number: created.number, reporterToken } }, 201);
+    },
+  )
 
   /**
    * Resolve or reopen from the page (wave-1 contract §5). Allowed when the project lets visitors
    * resolve, or when the caller proves it filed the report with its reporter token.
    */
-  .patch("/feedback/:id", zValidator("json", widgetFeedbackStatusUpdate), async (c) => {
-    const p = c.var.project;
-    const { status } = c.req.valid("json");
-    const db = getDb();
-    const [f] = await db
-      .select({ id: feedback.id, status: feedback.status, tokenHash: feedback.reporterTokenHash })
-      .from(feedback)
-      .where(
-        and(eq(feedback.id, c.req.param("id")), eq(feedback.projectId, p.id), isNull(feedback.deletedAt)),
-      );
-    if (!f) throw notFound("Feedback");
+  .patch(
+    "/feedback/:id",
+    limitBody(MAX_SMALL_BODY),
+    zValidator("json", widgetFeedbackStatusUpdate),
+    async (c) => {
+      const p = c.var.project;
+      const { status } = c.req.valid("json");
+      const db = getDb();
+      const [f] = await db
+        .select({ id: feedback.id, status: feedback.status, tokenHash: feedback.reporterTokenHash })
+        .from(feedback)
+        .where(
+          and(eq(feedback.id, c.req.param("id")), eq(feedback.projectId, p.id), isNull(feedback.deletedAt)),
+        );
+      if (!f) throw notFound("Feedback");
 
-    const token = c.req.header(REPORTER_TOKEN_HEADER);
-    const isReporter = !!token && !!f.tokenHash && safeEqualHex(sha256Hex(token), f.tokenHash);
-    const config = parseWidgetConfig(p.widgetConfig);
-    const visitorAllowed = config.visitorsCanResolve && p.publicRead && !config.readOnly;
-    if (!isReporter && !visitorAllowed) {
-      throw new ApiError(403, "RESOLVE_NOT_ALLOWED", "You can't change the status of this feedback");
-    }
-    if (f.status === status) return c.json({ feedback: { id: f.id, status: f.status } });
+      const token = c.req.header(REPORTER_TOKEN_HEADER);
+      const isReporter = !!token && !!f.tokenHash && safeEqualHex(sha256Hex(token), f.tokenHash);
+      const config = parseWidgetConfig(p.widgetConfig);
+      const visitorAllowed = config.visitorsCanResolve && p.publicRead && !config.readOnly;
+      if (!isReporter && !visitorAllowed) {
+        throw new ApiError(403, "RESOLVE_NOT_ALLOWED", "You can't change the status of this feedback");
+      }
+      if (f.status === status) return c.json({ feedback: { id: f.id, status: f.status } });
 
-    // Status and timeline entry in one statement; matching on the old status guards against a
-    // concurrent change.
-    const rows = await db.execute<{ id: string; status: string }>(sql`
+      // Status and timeline entry in one statement; matching on the old status guards against a
+      // concurrent change.
+      const rows = await db.execute<{ id: string; status: string }>(sql`
       with u as (
         update ${feedback} set status = ${status}::feedback_status,
           resolved_at = ${isClosedStatus(status) ? sql`now()` : sql`null`}, updated_at = now()
@@ -515,67 +594,72 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       )
       select id, status from u
     `);
-    const updated = rows[0];
-    if (!updated) throw new ApiError(409, "CONFLICT", "The status changed meanwhile — reload and try again");
-    const base = { orgId: p.orgId, feedbackId: f.id, actor: { kind: "guest" as const, id: null } };
-    const changes = { status: { from: f.status, to: status } };
-    emit(
-      { ...base, type: "feedback.updated", changes },
-      { ...base, type: "feedback.status_changed", changes },
-    );
-    return c.json({ feedback: { id: updated.id, status: updated.status } });
-  })
-
-  .post("/feedback/:id/comments", zValidator("json", widgetCommentCreate), async (c) => {
-    const p = c.var.project;
-    if (!p.publicRead) throw notFound("Feedback");
-    if (parseWidgetConfig(p.widgetConfig).readOnly) {
-      throw new ApiError(403, "READ_ONLY", "This project is not accepting replies from the page");
-    }
-    if (!(await consume(`wc:${p.id}:${clientIp(c, { privacy: inPrivacyMode(p) })}`, rateLimitFor(p), 60))) {
-      throw new ApiError(429, "RATE_LIMITED", "Too many replies — try again in a minute");
-    }
-    const db = getDb();
-    const [f] = await db
-      .select({ id: feedback.id })
-      .from(feedback)
-      .where(
-        and(eq(feedback.id, c.req.param("id")), eq(feedback.projectId, p.id), isNull(feedback.deletedAt)),
+      const updated = rows[0];
+      if (!updated)
+        throw new ApiError(409, "CONFLICT", "The status changed meanwhile — reload and try again");
+      const base = { orgId: p.orgId, feedbackId: f.id, actor: { kind: "guest" as const, id: null } };
+      const changes = { status: { from: f.status, to: status } };
+      emit(
+        { ...base, type: "feedback.updated", changes },
+        { ...base, type: "feedback.status_changed", changes },
       );
-    if (!f) throw notFound("Feedback");
-    const body = c.req.valid("json");
-    let authorGuest: ReporterGuest | null = null;
-    if (body.author) {
-      const { signature, ...who } = body.author;
-      authorGuest = { ...who, verified: verifyIdentity(p.identitySecret, who.externalId, signature) };
-    }
-    const [created] = await db
-      .insert(comment)
-      .values({
+      return c.json({ feedback: { id: updated.id, status: updated.status } });
+    },
+  )
+
+  .post(
+    "/feedback/:id/comments",
+    replyIntake,
+    limitBody(MAX_SMALL_BODY),
+    zValidator("json", widgetCommentCreate),
+    async (c) => {
+      const p = c.var.project;
+      if (!p.publicRead) throw notFound("Feedback");
+      if (parseWidgetConfig(p.widgetConfig).readOnly) {
+        throw new ApiError(403, "READ_ONLY", "This project is not accepting replies from the page");
+      }
+      const db = getDb();
+      const [f] = await db
+        .select({ id: feedback.id })
+        .from(feedback)
+        .where(
+          and(eq(feedback.id, c.req.param("id")), eq(feedback.projectId, p.id), isNull(feedback.deletedAt)),
+        );
+      if (!f) throw notFound("Feedback");
+      const body = c.req.valid("json");
+      let authorGuest: ReporterGuest | null = null;
+      if (body.author) {
+        const { signature, ...who } = body.author;
+        authorGuest = { ...who, verified: verifyIdentity(p.identitySecret, who.externalId, signature) };
+      }
+      const [created] = await db
+        .insert(comment)
+        .values({
+          orgId: p.orgId,
+          feedbackId: f.id,
+          body: body.body,
+          authorGuest,
+          visibility: "public",
+        })
+        .returning({ id: comment.id, body: comment.body, createdAt: comment.createdAt });
+      if (!created) throw new Error("comment insert failed");
+      emit({
+        type: "comment.created",
         orgId: p.orgId,
         feedbackId: f.id,
-        body: body.body,
-        authorGuest,
-        visibility: "public",
-      })
-      .returning({ id: comment.id, body: comment.body, createdAt: comment.createdAt });
-    if (!created) throw new Error("comment insert failed");
-    emit({
-      type: "comment.created",
-      orgId: p.orgId,
-      feedbackId: f.id,
-      commentId: created.id,
-      actor: { kind: "guest", id: null },
-    });
-    return c.json(
-      {
-        comment: {
-          ...created,
-          authorName: body.author?.name ?? null,
-          team: false,
-          authorVerified: authorGuest?.verified === true,
+        commentId: created.id,
+        actor: { kind: "guest", id: null },
+      });
+      return c.json(
+        {
+          comment: {
+            ...created,
+            authorName: body.author?.name ?? null,
+            team: false,
+            authorVerified: authorGuest?.verified === true,
+          },
         },
-      },
-      201,
-    );
-  });
+        201,
+      );
+    },
+  );

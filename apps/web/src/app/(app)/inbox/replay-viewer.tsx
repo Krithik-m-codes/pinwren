@@ -5,11 +5,11 @@ import { Film, TriangleAlert } from "lucide-react";
 import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type Asset, assetUrl, type FeedbackDetail } from "@/lib/api";
+import { loadReplayEvents } from "@/lib/replay";
 import { cn } from "@/lib/utils";
 
 export type ReplayHandle = { seekTo: (epochMs: number) => void };
 
-type RrwebEvent = { type: number; timestamp: number; data?: { width?: number; height?: number } };
 type Player = {
   goto: (offset: number, play?: boolean) => void;
   addEventListener: (event: string, handler: (params: unknown) => unknown) => void;
@@ -19,20 +19,6 @@ type Marker = { at: number; offset: number; kind: "error" | "warn" | "network"; 
 
 const META_EVENT = 4;
 const CONTROLLER_PX = 80;
-
-/** A replay asset is gzip of a JSON array of rrweb 2.x events (wave-4 contract §3). */
-export async function loadReplayEvents(res: Response): Promise<RrwebEvent[]> {
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  const gzipped = bytes[0] === 0x1f && bytes[1] === 0x8b;
-  const text = gzipped
-    ? await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).text()
-    : new TextDecoder().decode(bytes);
-  const events: unknown = JSON.parse(text);
-  if (!Array.isArray(events)) throw new Error("Not a replay");
-  return (events as RrwebEvent[])
-    .filter((e) => typeof e.timestamp === "number")
-    .sort((a, b) => a.timestamp - b.timestamp);
-}
 
 /** Console errors/warnings and failed requests as points on the replay's timeline. */
 export function timelineMarkers(
@@ -113,6 +99,9 @@ export function ReplayViewer({
       const width = Math.max(240, target.parentElement?.clientWidth ?? target.clientWidth);
       const ratio = meta?.width && meta.height ? meta.height / meta.width : 0.625;
       const height = Math.min(Math.round(width * ratio), 520);
+      // Remote images, fonts and stylesheets recorded on the reporter's page are not fetched: rrweb's
+      // replay iframe is about:blank, so it inherits the dashboard's CSP (img-src/style-src/font-src
+      // 'self' data: blob:; ADR 0021). A replay can't make the viewer's browser call other servers.
       instance = new Player({
         target,
         props: {

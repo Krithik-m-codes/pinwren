@@ -28,6 +28,10 @@ export default defineConfig({
     url: `${BASE}/api/health`,
     reuseExistingServer: true,
     timeout: 120_000,
-    env: { PINWREN_ADMIN_EMAILS: "smoke-admin@example.com,e2e-admin@example.com" },
+    env: {
+      PINWREN_ADMIN_EMAILS: "smoke-admin@example.com,e2e-admin@example.com",
+      // The seed signs up fresh accounts; sign-up is otherwise closed after the first one (ADR 0021).
+      PINWREN_DISABLE_SIGNUP: "false",
+    },
   },
 });

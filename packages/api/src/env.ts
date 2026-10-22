@@ -16,16 +16,44 @@ const schema = z.object({
   PINWREN_URL: z.url("PINWREN_URL must be the public URL, e.g. https://feedback.example.com"),
   PINWREN_SECRET: z.string().min(32, "PINWREN_SECRET must be at least 32 characters"),
   PINWREN_DATA_DIR: z.string().default("./data"),
+  /**
+   * Unset: anyone may create the first account; after that, sign-up is closed (invitations still
+   * work). "false" keeps open sign-up on; "true" closes it even for the first account.
+   */
   PINWREN_DISABLE_SIGNUP: z
-    .enum(["true", "false"])
+    .enum(["true", "false", ""])
+    .optional()
+    .transform((v) => (v === undefined || v === "" ? undefined : v === "true")),
+  /**
+   * Reverse proxies in front of the app: how many X-Forwarded-For hops to trust (true = 1). 0/false:
+   * forwarded headers are ignored and the socket address is used.
+   */
+  PINWREN_TRUST_PROXY: z
+    .string()
+    .trim()
+    .regex(/^(true|false|\d{1,2})$/i, "use a number of proxy hops, true (= 1) or false")
     .default("false")
-    .transform((v) => v === "true"),
-  PINWREN_TRUST_PROXY: bool("false"),
+    .transform((v) => (/^true$/i.test(v) ? 1 : /^false$/i.test(v) ? 0 : Number(v))),
+  /**
+   * Hosts (`gitlab.internal`, `*.corp.example`) and CIDRs (`10.0.0.0/8`) that webhooks, panel actions
+   * and tracker URLs may reach although they are private. Everything private is refused otherwise.
+   */
+  PINWREN_OUTBOUND_ALLOWLIST: optionalString,
+  /** Development and tests only: let outbound requests reach any address. */
+  PINWREN_OUTBOUND_ALLOW_PRIVATE: bool("false"),
   /** all = serve HTTP and run jobs; web = serve only (jobs are still enqueued); worker = jobs only. */
   PINWREN_ROLE: z.enum(["all", "web", "worker"]).default("all"),
-  /** Comma-separated emails of instance admins. Unset: the first user who signed up. */
+  /**
+   * Comma-separated emails of instance admins. Besides these, an admin can only be made with the
+   * one-time setup token printed to the server log (ADR 0021).
+   */
   PINWREN_ADMIN_EMAILS: optionalString,
   WIDGET_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(10),
+  /** Per project, whatever the sender's address: reports per minute and stored bytes per hour. */
+  WIDGET_PROJECT_REPORTS_PER_MIN: z.coerce.number().int().positive().default(120),
+  WIDGET_PROJECT_MB_PER_HOUR: z.coerce.number().int().positive().default(500),
+  /** Invitations an organisation may send per hour. */
+  PINWREN_INVITES_PER_HOUR: z.coerce.number().int().positive().default(30),
 
   // Security. PINWREN_ENFORCE_HTTPS redirects/refuses plain-HTTP requests that don't come from
   // localhost (X-Forwarded-Proto/Host count only with PINWREN_TRUST_PROXY).

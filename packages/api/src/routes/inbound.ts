@@ -1,9 +1,13 @@
 import { brandAsset, getDb, issueIntegration } from "@pinwren/db";
 import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
-import { decryptSecret, hmacSha256Hex, safeEqualStr as timingSafeEqualStr } from "../crypto";
+import { bodyLimit } from "hono/body-limit";
+import { createMiddleware } from "hono/factory";
+import { decryptSecret, hmacSha256Hex, sha256Hex, safeEqualStr as timingSafeEqualStr } from "../crypto";
 import { ApiError, notFound } from "../errors";
 import { applyInboundState } from "../integrations/issues";
+import { clientIp } from "../net";
+import { consume } from "../rate-limit";
 import { storage } from "../storage";
 
 // Routes that run without a dashboard session: logos (loaded by email clients and the widget on a
@@ -36,12 +40,34 @@ function secretOf(i: Integration): string | null {
   }
 }
 
-async function readBody(req: Request): Promise<string> {
-  const len = Number(req.headers.get("content-length") ?? 0);
-  if (len > MAX_BODY) throw new ApiError(413, "PAYLOAD_TOO_LARGE", "Payload too large");
-  const text = await req.text();
-  if (text.length > MAX_BODY) throw new ApiError(413, "PAYLOAD_TOO_LARGE", "Payload too large");
-  return text;
+/** Deliveries per sender address and minute, counted before the body is read. */
+const INBOUND_PER_MIN = 120;
+/** How long a delivery id is remembered: longer than GitHub's and GitLab's redelivery windows. */
+const REPLAY_WINDOW_S = 7 * 24 * 3600;
+
+/** Rate limit, then a streamed size cap — both before any parsing or signature work. */
+const inboundGuard = [
+  createMiddleware(async (c, next) => {
+    if (!(await consume(`in:${clientIp(c)}`, INBOUND_PER_MIN, 60))) {
+      throw new ApiError(429, "RATE_LIMITED", "Too many deliveries — slow down");
+    }
+    await next();
+  }),
+  bodyLimit({
+    maxSize: MAX_BODY,
+    onError: () => {
+      throw new ApiError(413, "PAYLOAD_TOO_LARGE", "Payload too large");
+    },
+  }),
+] as const;
+
+/**
+ * Replay protection: a verified delivery is acted on once. Keyed by the provider's delivery id (or the
+ * body's hash when there is none) and remembered for a week in the rate-limit table.
+ */
+async function firstDelivery(provider: string, integrationId: string, id: string | undefined, raw: string) {
+  const key = `in:seen:${provider}:${integrationId}:${id && id.length <= 100 ? id : sha256Hex(raw)}`;
+  return consume(key, 1, REPLAY_WINDOW_S);
 }
 
 function parse(text: string): Record<string, unknown> {
@@ -87,8 +113,8 @@ export const inbound = new Hono()
    * the integration's webhook secret). Several projects may sync the same repository, so each
    * candidate's secret is tried; only the one that verifies is acted on.
    */
-  .post("/integrations/github/webhook", async (c) => {
-    const raw = await readBody(c.req.raw);
+  .post("/integrations/github/webhook", ...inboundGuard, async (c) => {
+    const raw = await c.req.text();
     const sig = c.req.header("x-hub-signature-256") ?? "";
     if (!/^sha256=[0-9a-f]{64}$/.test(sig)) throw invalidSignature();
     const body = parse(raw);
@@ -98,6 +124,9 @@ export const inbound = new Hono()
       return !!secret && timingSafeEqualStr(`sha256=${hmacSha256Hex(secret, raw)}`, sig);
     });
     if (!match) throw invalidSignature();
+    if (!(await firstDelivery("github", match.id, c.req.header("x-github-delivery"), raw))) {
+      return c.json({ ok: true, duplicate: true });
+    }
     const event = c.req.header("x-github-event");
     if (event === "ping") return c.json({ ok: true, event: "ping" });
     const action = body.action;
@@ -110,8 +139,8 @@ export const inbound = new Hono()
   })
 
   /** GitLab issue hook. Verified with `X-Gitlab-Token` (the integration's webhook secret). */
-  .post("/integrations/gitlab/webhook", async (c) => {
-    const raw = await readBody(c.req.raw);
+  .post("/integrations/gitlab/webhook", ...inboundGuard, async (c) => {
+    const raw = await c.req.text();
     const token = c.req.header("x-gitlab-token") ?? "";
     if (!token || token.length > 200) throw invalidSignature();
     const body = parse(raw);
@@ -121,6 +150,10 @@ export const inbound = new Hono()
       return !!secret && timingSafeEqualStr(secret, token);
     });
     if (!match) throw invalidSignature();
+    const deliveryId = c.req.header("x-gitlab-event-uuid") ?? c.req.header("idempotency-key");
+    if (!(await firstDelivery("gitlab", match.id, deliveryId, raw))) {
+      return c.json({ ok: true, duplicate: true });
+    }
     const attrs = obj(body.object_attributes);
     const action = attrs.action;
     const number = Number(attrs.iid);

@@ -1,6 +1,7 @@
 import { getDb, project, setting } from "@pinwren/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { env } from "../env";
+import { type OutboundFetch, outboundErrorText, safeFetch } from "../outbound/safe-fetch";
 
 // Instance security settings (session lifetime, update check). Stored in `setting` and edited by
 // instance admins; an environment variable for a field overrides and locks it (CLAUDE.md).
@@ -17,6 +18,8 @@ export type SecuritySettingsView = {
   /** Read-only, from the environment. */
   enforceHttps: boolean;
   trustProxy: boolean;
+  /** X-Forwarded-For hops trusted (PINWREN_TRUST_PROXY). */
+  trustProxyHops: number;
   locked: { sessionDays: boolean; updateCheck: boolean };
   /** Projects with privacy mode on; any of them switches the update check off. */
   privacyModeProjects: number;
@@ -60,7 +63,8 @@ export async function getSecuritySettings(): Promise<SecuritySettingsView> {
     sessionDays: e.PINWREN_SESSION_DAYS ?? stored.sessionDays ?? DEFAULT_SESSION_DAYS,
     updateCheck: e.PINWREN_UPDATE_CHECK ?? stored.updateCheck ?? true,
     enforceHttps: e.PINWREN_ENFORCE_HTTPS,
-    trustProxy: e.PINWREN_TRUST_PROXY,
+    trustProxy: e.PINWREN_TRUST_PROXY > 0,
+    trustProxyHops: e.PINWREN_TRUST_PROXY,
     locked: {
       sessionDays: e.PINWREN_SESSION_DAYS !== undefined,
       updateCheck: e.PINWREN_UPDATE_CHECK !== undefined,
@@ -135,7 +139,7 @@ export type UpdateCheckResult =
  * admin switched it off or any project uses privacy mode (no third-party calls, F-021). Never
  * throws: offline instances just record the error.
  */
-export async function runUpdateCheck(fetchImpl: typeof fetch = fetch): Promise<UpdateCheckResult> {
+export async function runUpdateCheck(fetchImpl: OutboundFetch = safeFetch): Promise<UpdateCheckResult> {
   const s = await getSecuritySettings();
   if (!s.updateCheck) return { checked: false, reason: "disabled" };
   if (s.privacyModeProjects > 0) return { checked: false, reason: "privacy_mode" };
@@ -151,7 +155,10 @@ export async function runUpdateCheck(fetchImpl: typeof fetch = fetch): Promise<U
   try {
     const res = await fetchImpl(`${base}/repos/${e.PINWREN_UPDATE_REPO}/releases/latest`, {
       headers: { accept: "application/vnd.github+json", "user-agent": `Pinwren/${e.PINWREN_VERSION}` },
-      signal: AbortSignal.timeout(5000),
+      // GITHUB_API_URL is the operator's own setting; size and time caps still apply.
+      trusted: true,
+      timeoutMs: 5000,
+      maxBytes: 512 * 1024,
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = (await res.json()) as { tag_name?: unknown; html_url?: unknown };
@@ -162,7 +169,10 @@ export async function runUpdateCheck(fetchImpl: typeof fetch = fetch): Promise<U
     state.url = url;
     state.available = !!tag && isNewerVersion(tag, e.PINWREN_VERSION);
   } catch (err) {
-    state.error = err instanceof Error ? err.message.slice(0, 200) : "check failed";
+    state.error =
+      err instanceof Error && err.name !== "OutboundError"
+        ? err.message.slice(0, 200)
+        : outboundErrorText(err);
   }
   await writeSetting(UPDATE_STATE_KEY, state, null).catch(() => {
     // The result is advisory; the next scheduled check tries again.

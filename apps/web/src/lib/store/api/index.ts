@@ -90,6 +90,7 @@ export const {
   useLicenseQuery,
   useUploadLicenseMutation,
   useRemoveLicenseMutation,
+  useClaimSetupMutation,
 } = api;
 
 /** Server-fetched data a client subtree starts with (see `HydrateQueries`). */

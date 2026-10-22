@@ -15,6 +15,18 @@ const IGNORED = [
 
 /** Every test fails on a browser console error or uncaught exception (e.g. Base UI misuse warnings). */
 export const test = base.extend<{ consoleErrors: string[] }>({
+  // The API refuses cookie-authenticated writes without a same-origin Origin header (CSRF, ADR 0021).
+  // Browsers always send it; Playwright's API client doesn't, so the tests' direct API calls add it.
+  request: async ({ playwright, baseURL, storageState }, provide) => {
+    const origin = new URL(baseURL ?? "http://localhost:3100").origin;
+    const ctx = await playwright.request.newContext({
+      baseURL: origin,
+      ...(storageState ? { storageState } : {}),
+      extraHTTPHeaders: { origin },
+    });
+    await provide(ctx);
+    await ctx.dispose();
+  },
   consoleErrors: [
     async ({ page }, use) => {
       const errors: string[] = [];

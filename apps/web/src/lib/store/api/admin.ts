@@ -168,5 +168,11 @@ export const adminApi = roundsApi.injectEndpoints({
       },
       invalidatesTags: ["Entitlements"],
     }),
+
+    /** First-run setup (ADR 0021): claim the instance with the token from the server log. */
+    claimSetup: build.mutation<{ instanceAdmin: true }, string>({
+      query: (token) => ({ url: "/setup/claim", method: "POST", body: { token } }),
+      invalidatesTags: ["Me", "Security"],
+    }),
   }),
 });

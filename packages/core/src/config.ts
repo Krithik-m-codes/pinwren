@@ -75,6 +75,25 @@ export const panelAction = z
 export type PanelAction = z.infer<typeof panelAction>;
 
 /**
+ * Panel actions as one dashboard reader may see them (ADR 0021). A webhook action's URL is only for
+ * org admins (who configure it): everyone else gets the action without its URL — running it needs only
+ * the id. Viewers (read-only) don't see team-only actions at all, or webhook actions they can't run.
+ */
+export function panelActionsFor(
+  actions: readonly PanelAction[],
+  audience: "admin" | "member" | "viewer",
+  where: "settings" | "detail",
+): PanelAction[] {
+  return actions
+    .filter((a) => !(where === "detail" && audience === "viewer" && a.visibleTo === "team"))
+    .map((a) => {
+      if (a.kind === "webhook" && (audience !== "admin" || where === "detail")) return { ...a, url: "" };
+      if (audience === "viewer" && a.visibleTo === "team") return { ...a, url: "" };
+      return a;
+    });
+}
+
+/**
  * Fill `{id}`, `{number}`, `{url}`, `{projectSlug}` in a link action, each value URL-encoded so it
  * can't break out of the query or path segment it sits in.
  */

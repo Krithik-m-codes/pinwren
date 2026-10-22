@@ -1,6 +1,6 @@
 "use client";
 
-import type { FeedbackStatus, Priority } from "@pinwren/core";
+import { type FeedbackStatus, type Priority, safeHref } from "@pinwren/core";
 import {
   ArrowRight,
   BadgeCheck,
@@ -154,7 +154,7 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
     );
   } else if (e.type === "issue_linked") {
     icon = <ExternalLink className="size-3.5" />;
-    const url = typeof e.data.url === "string" && /^https?:\/\//.test(e.data.url) ? e.data.url : null;
+    const url = safeHref(e.data.url);
     const label = `${e.data.provider === "gitlab" ? "GitLab" : "GitHub"} issue #${str(e.data.number)}`;
     body = (
       <>

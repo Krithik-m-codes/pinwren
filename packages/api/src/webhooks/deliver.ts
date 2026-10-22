@@ -2,7 +2,9 @@ import { getDb, webhookDelivery, webhookEndpoint } from "@pinwren/db";
 import { and, eq, lt, sql } from "drizzle-orm";
 import { decryptSecret } from "../crypto";
 import { enqueue, enqueueAfter, QUEUES } from "../jobs/boss";
+import { type OutboundFetch, outboundErrorText, safeFetch } from "../outbound/safe-fetch";
 import { buildRequest, type WebhookPayload } from "./format";
+import { webhookTargetUrl } from "./url";
 
 /** Delay before attempt n+1 after attempt n fails (blueprint 04 §5): 1m, 5m, 30m, 2h, 6h, 12h. */
 export const RETRY_DELAYS_S = [60, 300, 1800, 7200, 21600, 43200] as const;
@@ -12,28 +14,22 @@ const TIMEOUT_MS = 10_000;
 type Endpoint = typeof webhookEndpoint.$inferSelect;
 type Delivery = typeof webhookDelivery.$inferSelect;
 
+/**
+ * What an attempt records: status and a short error category. The receiver's response body is never
+ * stored or shown — with it, a webhook pointed at an internal service would read that service back.
+ */
 export type AttemptResult = {
   ok: boolean;
   responseCode: number | null;
   durationMs: number;
   error: string | null;
-  responseBody: string | null;
 };
-
-async function readSome(res: Response, max = 1024): Promise<string> {
-  try {
-    const t = await res.text();
-    return t.length > max ? `${t.slice(0, max)}…` : t;
-  } catch {
-    return "";
-  }
-}
 
 /** One HTTP attempt. Never throws. */
 export async function sendOnce(
   endpoint: Endpoint,
   payload: WebhookPayload,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: OutboundFetch = safeFetch,
 ): Promise<AttemptResult> {
   let secret: string | null = null;
   if (endpoint.secret) {
@@ -45,39 +41,36 @@ export async function sendOnce(
         responseCode: null,
         durationMs: 0,
         error: "signing secret unreadable (PINWREN_SECRET changed?)",
-        responseBody: null,
       };
     }
+  }
+  const url = webhookTargetUrl(endpoint);
+  if (url === null) {
+    return {
+      ok: false,
+      responseCode: null,
+      durationMs: 0,
+      error: "URL unreadable (PINWREN_SECRET changed?)",
+    };
   }
   const req = buildRequest(endpoint.kind, payload, secret);
   const started = performance.now();
   try {
-    const res = await fetchImpl(endpoint.url, {
+    // Redirects are reported (3xx), never followed; the body is drained up to 1 KiB and dropped.
+    const res = await fetchImpl(url, {
       method: "POST",
       headers: req.headers,
       body: req.body,
-      redirect: "manual",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      timeoutMs: TIMEOUT_MS,
+      maxBytes: 1024,
+      truncate: true,
     });
-    const responseBody = await readSome(res);
     const durationMs = Math.round(performance.now() - started);
     const ok = res.status >= 200 && res.status < 300;
-    return {
-      ok,
-      responseCode: res.status,
-      durationMs,
-      error: ok ? null : `HTTP ${res.status}`,
-      responseBody,
-    };
+    return { ok, responseCode: res.status, durationMs, error: ok ? null : `HTTP ${res.status}` };
   } catch (err) {
     const durationMs = Math.round(performance.now() - started);
-    const msg =
-      err instanceof Error
-        ? err.name === "TimeoutError"
-          ? "timed out after 10 s"
-          : err.message
-        : "request failed";
-    return { ok: false, responseCode: null, durationMs, error: msg, responseBody: null };
+    return { ok: false, responseCode: null, durationMs, error: outboundErrorText(err) };
   }
 }
 
@@ -135,7 +128,7 @@ export async function runDelivery(
     .set({
       status: result.ok ? "success" : nextRetryAt ? "retrying" : "failed",
       responseCode: result.responseCode,
-      responseBody: result.responseBody,
+      responseBody: null,
       error: result.error,
       durationMs: result.durationMs,
       nextRetryAt,

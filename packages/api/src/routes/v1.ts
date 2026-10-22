@@ -9,10 +9,13 @@ import { apiToken, feedback, getDb, member, project, user } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { createMiddleware } from "hono/factory";
 import { sha256Hex, verifyToken } from "../crypto";
 import { ApiError } from "../errors";
-import { isReadOnlyRole, readOnlyError } from "../permissions";
+import { clientIp, isInternalRequest } from "../net";
+import { consume, exhausted } from "../rate-limit";
+import { audienceOf, isReadOnlyRole, readOnlyError } from "../permissions";
 import { assetResponse } from "../services/assets";
 import { addTeamComment, getFeedbackDetail, listFeedback, updateFeedback } from "../services/feedback";
 import { reproductionContext } from "../services/reproduction";
@@ -30,7 +33,36 @@ const LAST_USED_INTERVAL_MS = 60_000;
 
 const invalidToken = () => new ApiError(401, "INVALID_TOKEN", "Missing, invalid or expired API token");
 
+/** Failed token checks per address in 10 minutes before the address is refused outright. */
+export const MAX_TOKEN_FAILURES = 20;
+export const TOKEN_FAILURE_WINDOW_S = 600;
+
+/**
+ * Brute-force guard (ADR 0021): every rejected token counts against the caller's address; past the
+ * limit even a valid token gets 429 until the window ends. /mcp authenticates through here too.
+ */
 const requireToken = createMiddleware<{ Variables: TokenVars }>(async (c, next) => {
+  // The /mcp endpoint's own calls: it applied this guard with the real caller's address already.
+  if (isInternalRequest(c.req.raw.headers)) {
+    await checkToken(c);
+    await next();
+    return;
+  }
+  const failKey = `tokfail:${clientIp(c)}`;
+  if (await exhausted(failKey, MAX_TOKEN_FAILURES)) {
+    throw new ApiError(429, "RATE_LIMITED", "Too many failed authentication attempts — try again later");
+  }
+  try {
+    await checkToken(c);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401)
+      await consume(failKey, MAX_TOKEN_FAILURES, TOKEN_FAILURE_WINDOW_S);
+    throw err;
+  }
+  await next();
+});
+
+async function checkToken(c: Context<{ Variables: TokenVars }>) {
   const header = c.req.header("authorization") ?? "";
   const match = /^Bearer\s+(\S+)$/i.exec(header);
   const secret = match?.[1];
@@ -68,8 +100,7 @@ const requireToken = createMiddleware<{ Variables: TokenVars }>(async (c, next) 
   c.set("scopes", t.scopes);
   c.set("tokenId", t.id);
   c.set("role", m.role);
-  await next();
-});
+}
 
 /** A viewer's token reads like the viewer and writes nothing (wave-4 contract §4). */
 const forbidViewerWrites = createMiddleware<{ Variables: TokenVars }>(async (c, next) => {
@@ -130,7 +161,7 @@ export const v1 = new Hono<{ Variables: TokenVars }>()
     c.json(await listFeedback(c.var.orgId, c.req.valid("query"))),
   )
   .get("/feedback/:id", scope("feedback:read"), async (c) =>
-    c.json(await getFeedbackDetail(c.var.orgId, c.req.param("id"))),
+    c.json(await getFeedbackDetail(c.var.orgId, c.req.param("id"), audienceOf(c.var.role))),
   )
   .get("/feedback/:id/reproduction", scope("feedback:read"), async (c) =>
     c.json(await reproductionContext(c.var.orgId, c.req.param("id"))),

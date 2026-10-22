@@ -15,7 +15,10 @@ services:
       PINWREN_SECRET: ${PINWREN_SECRET:?Set PINWREN_SECRET (openssl rand -base64 48)}
       DATABASE_URL: postgres://pinwren:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/pinwren
       PINWREN_TRUST_PROXY: ${PINWREN_TRUST_PROXY:-1}
-      PINWREN_DISABLE_SIGNUP: ${PINWREN_DISABLE_SIGNUP:-false}
+      # Unset: first account + invitations only (ADR 0021). false: open sign-up. true: closed.
+      PINWREN_DISABLE_SIGNUP: ${PINWREN_DISABLE_SIGNUP:-}
+      PINWREN_ADMIN_EMAILS: ${PINWREN_ADMIN_EMAILS:-}
+      PINWREN_OUTBOUND_ALLOWLIST: ${PINWREN_OUTBOUND_ALLOWLIST:-}
       # Node processes serving requests; roughly one per CPU core you give the container.
       PINWREN_WORKERS: ${PINWREN_WORKERS:-2}
       # Enterprise licence file inside the container (e.g. /data/pinwren.lic); empty = upload in Settings.

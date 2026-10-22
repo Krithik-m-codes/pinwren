@@ -59,3 +59,21 @@ export function truncateIp(ip: string): string {
   }
   return "unknown";
 }
+
+/**
+ * A URL that is safe as an `href`: absolute http(s) only (or a same-origin path when `allowRelative`).
+ * Anything else — `javascript:`, `data:`, `vbscript:`, protocol-relative `//host`, garbage — is null,
+ * so untrusted values (page URLs, network entries, tracker links) never become script.
+ */
+export function safeHref(value: unknown, opts: { allowRelative?: boolean } = {}): string | null {
+  if (typeof value !== "string") return null;
+  const v = value.trim();
+  if (!v) return null;
+  if (opts.allowRelative && v.startsWith("/") && !v.startsWith("//") && !v.startsWith("/\\")) return v;
+  try {
+    const u = new URL(v);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
+  } catch {
+    return null;
+  }
+}
