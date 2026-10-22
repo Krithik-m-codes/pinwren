@@ -53,7 +53,8 @@ An independent review before the first release found:
    for `next dev`, `next start` and the standalone Docker server; without it the address is `"unknown"`.
 
    Better Auth's limiter reads only a header the API sets from the same logic. It is enabled in every
-   environment and keeps its counters in memory, per process.
+   environment. Its counters live in Postgres (`auth_rate_limit`, added after this ADR), so every cluster
+   worker and replica shares one allowance — in memory, each worker granted its own.
 
    Per-project caps hold however many addresses send: `WIDGET_PROJECT_REPORTS_PER_MIN` (120) and
    `WIDGET_PROJECT_MB_PER_HOUR` (500, counting stored files).

@@ -36,6 +36,57 @@ without a redeploy.
   add it there or in an override file — see [Passing more settings](/docs/self-hosting#passing-more-settings).
 </Callout>
 
+## Client addresses
+
+Rate limits and the sign-in limiter key on the client's IP address. `PINWREN_TRUST_PROXY` is the
+**number of reverse proxies** in front of Pinwren whose `X-Forwarded-For` entries it believes:
+
+| Value                    | Meaning                                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------------------- |
+| `0` or `false` (default) | No proxy. Forwarded headers are ignored; the TCP peer address is used.                              |
+| `1` or `true`            | One proxy (Caddy, nginx, Traefik). The client is the address that proxy connected from or appended. |
+| `2`, `3`, …              | That many proxies in a chain, e.g. `2` for a CDN in front of your proxy.                            |
+
+Pinwren walks `X-Forwarded-For` from the right and skips one entry per trusted hop, so whatever a client writes
+into the header itself is never taken as its address. `X-Real-IP` is never read. Set the count to exactly what
+you run: too low and every client looks like your proxy (one shared rate limit); too high and clients can choose
+their own address. The details are under [Reverse proxy](/docs/self-hosting/reverse-proxy#client-addresses).
+
+## Sign-up and instance admins
+
+- **Sign-up.** With `PINWREN_DISABLE_SIGNUP` unset, the first account can always be created and after that only
+  people with a pending invitation can sign up. `PINWREN_DISABLE_SIGNUP=false` opens sign-up to anyone.
+  `PINWREN_DISABLE_SIGNUP=true` behaves like unset: the first account and invited people can still sign up.
+- **Instance admins** (SMTP, storage, licence and other instance settings) come from exactly two places: the
+  addresses in `PINWREN_ADMIN_EMAILS`, or the account that claimed the one-time setup token at `/setup` — see
+  [First run](/docs/self-hosting#first-run). Signing up first does not make anyone an admin.
+
+## Outbound requests
+
+Webhooks, Slack and Discord channels, webhook panel actions and the GitHub/GitLab base URL an admin enters are
+URLs typed by users, so Pinwren refuses to send requests to private and internal addresses: loopback, RFC 1918
+ranges, CGNAT, link-local and cloud metadata addresses, IPv6 unique-local and link-local, multicast,
+documentation and reserved ranges — including IPv6 forms that embed one of those IPv4 addresses. Redirects are
+never followed.
+
+- `PINWREN_OUTBOUND_ALLOWLIST` admits internal targets, comma- or space-separated: exact host names
+  (`gitlab.internal`), wildcard subdomains (`*.corp.example`) and CIDRs (`10.20.0.0/16`). Use it for a
+  self-managed GitLab, Mattermost or an internal webhook receiver.
+- `PINWREN_OUTBOUND_ALLOW_PRIVATE=true` switches the address check off entirely. It is meant **for local
+  development and tests only** — never set it on a server people can reach.
+
+`GITHUB_API_URL` and `GITLAB_URL` come from you, not from a user, so they may point at private addresses without
+the allowlist (timeouts, size caps and no-redirects still apply).
+
+## Intake and invitation limits
+
+| Variable                         | Default | Limit                                                                                                               |
+| -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
+| `WIDGET_RATE_LIMIT_PER_MIN`      | `10`    | Reports (and replies) per minute from one address to one project, unless the project sets its own.                  |
+| `WIDGET_PROJECT_REPORTS_PER_MIN` | `120`   | Reports per minute to one project, however many addresses send them (`429 PROJECT_RATE_LIMITED`).                   |
+| `WIDGET_PROJECT_MB_PER_HOUR`     | `500`   | Megabytes of files (screenshots, attachments, replays) stored per project and hour (`429 PROJECT_STORAGE_LIMITED`). |
+| `PINWREN_INVITES_PER_HOUR`       | `30`    | Invitations one organisation may send per hour.                                                                     |
+
 ## Reference
 
 <EnvTable />
@@ -58,10 +109,10 @@ passed to Pinwren itself.
 | `PINWREN_BIND`      | `127.0.0.1`      | Host address the port is bound to. `0.0.0.0` exposes it on every interface (not recommended without a proxy). |
 
 Besides the three required values, the compose file forwards `PINWREN_TRUST_PROXY`, `PINWREN_DISABLE_SIGNUP`,
-`PINWREN_WORKERS` and `PINWREN_LICENSE_FILE` (empty by default) from `docker/.env`. It sets
-`PINWREN_TRUST_PROXY=1` by default, because it expects a reverse proxy in front.
-Set `PINWREN_TRUST_PROXY=false` if clients reach the container directly — otherwise they could forge the
-`X-Forwarded-For` address the rate limits use.
+`PINWREN_ADMIN_EMAILS`, `PINWREN_OUTBOUND_ALLOWLIST`, `PINWREN_WORKERS` and `PINWREN_LICENSE_FILE` from
+`docker/.env`. It sets `PINWREN_TRUST_PROXY=1` by default, because it expects one reverse proxy in front. Set
+`PINWREN_TRUST_PROXY=0` if clients reach the container directly, and a higher number if there are more proxies
+— see [Client addresses](#client-addresses).
 
 ## Generating secrets
 

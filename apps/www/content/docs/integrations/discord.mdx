@@ -48,8 +48,12 @@ Each event is one message with a short headline — `New feedback: Marketing sit
 
 ## Good to know
 
-- The webhook URL is a credential: Pinwren shows it masked after you save. Anyone with it can post to the channel —
-  delete the webhook in Discord if it leaks.
+- The webhook URL is a credential: Pinwren stores it encrypted and only ever shows it masked after you save
+  (`https://discord.com/…abcd`). Anyone with it can post to the channel — delete the webhook in Discord if it
+  leaks, and paste the whole new URL to change it.
 - Deliveries retry and are logged like [webhooks](/docs/integrations/webhooks#retries), and switch off after three days
-  of continuous failure.
+  of continuous failure. **Send test event** and the delivery log show the status code and an error category only,
+  never Discord's response.
+- Pinwren posts only to public addresses and doesn't follow redirects; a Discord-compatible receiver on a private
+  network needs [`PINWREN_OUTBOUND_ALLOWLIST`](/docs/self-hosting/environment#outbound-requests).
 - `comment.created` includes **internal notes**; leave it out for channels outside your team.

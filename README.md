@@ -214,6 +214,12 @@ pnpm --filter @pinwren/www test:e2e    # Playwright on :3200 (builds and starts 
 docker build -f apps/www/Dockerfile -t pinwren-www . && docker run --rm -p 3200:3000 pinwren-www
 ```
 
+Hosting the demo publicly: it's anonymous and in memory, so it is capped — 2,000 sandboxes, 6 MiB each, 192 MiB
+in total (`DEMO_MAX_*`), with per-visitor and per-address write limits. Request headers are not trusted by
+default, so every visitor shares one rate-limit bucket. Set `DEMO_TRUST_PLATFORM_IP_HEADER` when the platform
+sets a client-IP header it controls (e.g. `x-vercel-forwarded-for` on Vercel), or `PINWREN_TRUST_PROXY` to the
+number of proxies in front of the site (X-Forwarded-For is then read from the right).
+
 ## Contributing
 
 Issues and pull requests are welcome — please read [CONTRIBUTING.md](CONTRIBUTING.md) first. Commits follow

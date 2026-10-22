@@ -15,19 +15,25 @@ reports, half with a screenshot), dashboard use and a single-IP flood running at
 | Server         | Settings            | Comfortable load                                           |
 | -------------- | ------------------- | ---------------------------------------------------------- |
 | 1–2 vCPU, 1 GB | `PINWREN_WORKERS=2` | ~70 requests/s — thousands of daily active widget visitors |
-| 4 vCPU, 2 GB   | `PINWREN_WORKERS=4` | 130+ requests/s with p95 under 100 ms                      |
+| 4 vCPU, 2 GB   | `PINWREN_WORKERS=4` | ~130 requests/s with p95 under 100 ms                      |
 
-The two passing runs:
+The passing runs:
 
-| App limits       | Offered load | p95 widget read / dashboard / submit | Errors |
-| ---------------- | ------------ | ------------------------------------ | ------ |
-| 2 CPU, 2 workers | ~74 req/s    | 20 ms / 41 ms / 50 ms                | 0      |
-| 4 CPU, 4 workers | ~130 req/s   | 38 ms / 65 ms / 70 ms                | 0      |
+| Build                    | App limits       | Offered load | p95 widget read / dashboard / submit | Errors |
+| ------------------------ | ---------------- | ------------ | ------------------------------------ | ------ |
+| Hardened (2026-10-22)    | 4 CPU, 4 workers | ~130 req/s   | 46 ms / 76 ms / 83 ms                | 0      |
+| Before hardening (10-21) | 4 CPU, 4 workers | ~130 req/s   | 38 ms / 65 ms / 70 ms                | 0      |
+| Before hardening (10-21) | 2 CPU, 2 workers | ~74 req/s    | 20 ms / 41 ms / 50 ms                | 0      |
 
-Results from 2026-10-21 on Windows 11 with Docker Desktop, 2-minute runs. The first build saturated at 64
-req/s with multi-second p95s; three row-lock hot spots were fixed (one SQL statement per report, no
-page-row updates, throttled "last seen" writes) and the app was put on several cores — the details are in the
-load-test notes and ADR 0013. Run the test against your own hardware before you rely on these numbers.
+The latest run (2026-10-22) is on the image with the pre-release security hardening — outbound checks,
+streamed body caps, per-project intake caps and the Postgres-backed sign-in limiter. All thresholds passed with
+zero errors; the few extra milliseconds are those checks. The 2-worker figure predates the hardening and was
+not re-measured. All runs are 2 minutes on Windows 11 with Docker Desktop.
+
+The first build saturated at 64 req/s with multi-second p95s; three row-lock hot spots were fixed (one SQL
+statement per report, no page-row updates, throttled "last seen" writes) and the app was put on several cores —
+the details are in the load-test notes and ADR 0013. Run the test against your own hardware before you rely on
+these numbers.
 
 ## Use more cores: `PINWREN_WORKERS`
 
@@ -40,6 +46,16 @@ PINWREN_WORKERS=4
 ```
 
 `PINWREN_WORKERS=1` runs a single process with no cluster.
+
+Workers (and replicas) share everything that matters through Postgres, so it doesn't matter which one a request
+lands on:
+
+- **Live updates.** Every event carries one global id, so a browser that reconnects to `/api/stream` with
+  `Last-Event-ID` resumes on whichever worker it reaches.
+- **The sign-in limiter.** Sign-in, sign-up and password-reset attempts are counted in Postgres, so the
+  allowance is shared rather than granted once per worker. The widget and API rate limits are counted there too.
+- **Settings.** Instance settings such as the session lifetime are read from the database on each sign-in, not
+  cached per process.
 
 ## Database connections
 
@@ -80,5 +96,10 @@ Each project can override the limit in its settings (1–1000). Over the limit, 
 `429 RATE_LIMITED` and shows the message. In the load test, the single-IP flood got exactly its 10 per minute
 through and everything else was answered `429`.
 
-Behind a proxy, rate limits key on `X-Forwarded-For` only with `PINWREN_TRUST_PROXY=true` — see [Reverse
-proxy](/docs/self-hosting/reverse-proxy).
+On top of the per-IP limit, each project has caps that hold however many addresses send:
+`WIDGET_PROJECT_REPORTS_PER_MIN` (default 120 reports per minute, `429 PROJECT_RATE_LIMITED`) and
+`WIDGET_PROJECT_MB_PER_HOUR` (default 500 MB of stored files per hour, `429 PROJECT_STORAGE_LIMITED`). Raise them
+for a load test or a very busy project.
+
+Behind a proxy, rate limits key on `X-Forwarded-For` only when `PINWREN_TRUST_PROXY` is set to the number of
+proxies — see [Client addresses](/docs/self-hosting/reverse-proxy#client-addresses).

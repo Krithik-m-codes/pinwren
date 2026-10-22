@@ -19,6 +19,12 @@ Both act with an [API token](/docs/api#authentication) and can do exactly what t
 for the agent in **Settings › API tokens** — `feedback:read` to look only, plus `feedback:write` and
 `comments:write` to triage and resolve.
 
+The hosted endpoint `/mcp` shares the REST API's [limits](/docs/api#limits): request bodies over **2 MB** are refused
+with `413`, and an address that sends **20 bad tokens in 10 minutes** gets `429 RATE_LIMITED` until the window ends —
+failures on `/mcp` and `/api/v1` count together. A missing or bad token is answered `401` with a
+`WWW-Authenticate: Bearer` challenge. Being token-authenticated, `/mcp` is exempt from the dashboard's same-origin
+and JSON-only checks.
+
 ## Claude Code
 
 ```bash

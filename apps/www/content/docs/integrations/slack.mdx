@@ -55,10 +55,16 @@ Feedback comes from anyone who can open your site, so Pinwren never lets it form
 
 ## Good to know
 
-- The webhook URL is a credential: Pinwren shows it masked after you save (`https://hooks.slack.com/…abcd`).
-  Anyone with the URL can post to the channel — rotate it in Slack if it leaks.
+- The webhook URL is a credential: Pinwren stores it encrypted and only ever shows it masked after you save
+  (`https://hooks.slack.com/…abcd`), in the dashboard and the API alike. Anyone with the URL can post to the
+  channel — rotate it in Slack if it leaks, and paste the whole new URL to change it.
 - Slack deliveries retry and are logged exactly like [webhooks](/docs/integrations/webhooks#retries), and are
   switched off after three days of continuous failure (for example, when the channel's webhook was deleted).
+  **Send test event** and the delivery log show the status code and an error category only, never Slack's
+  response.
+- Pinwren posts only to public addresses and doesn't follow redirects. A Slack-compatible receiver on your own
+  network (Mattermost, for example) needs its host in
+  [`PINWREN_OUTBOUND_ALLOWLIST`](/docs/self-hosting/environment#outbound-requests).
 - `comment.created` includes **internal notes**. If the channel is wider than your team, subscribe to
   `feedback.created` and status events only.
 - Messages link to the dashboard, which needs a sign-in; screenshots are not posted to Slack.

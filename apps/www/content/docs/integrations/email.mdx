@@ -60,6 +60,19 @@ editable Markdown template with a live preview and its own **Send me this email*
 [email templates](/docs/dashboard/settings#email-templates). Untrusted text (feedback, names, URLs) is escaped, so it
 can't inject markup into an email.
 
+So that template tests can't be used to send mail to strangers:
+
+- **Send me this email** goes only to the signed-in admin's own address. Through the API
+  (`POST /api/email-templates/:key/test`), any other `to` is refused with `400 RECIPIENT_NOT_ALLOWED`.
+- Each person can send 10 template tests an hour, and a workspace 30; beyond that the answer is
+  `429 RATE_LIMITED`.
+
+## Invitations
+
+Invitation emails go to any address an admin types, so they are limited too: a workspace can send
+`PINWREN_INVITES_PER_HOUR` invitations an hour (default 30). Beyond that, inviting is refused
+(`INVITES_RATE_LIMITED`) until the hour is up. Raise the variable for a large onboarding.
+
 ## Delivery
 
 Emails are sent by a background job. If the SMTP server refuses or times out, the job retries with backoff (up to

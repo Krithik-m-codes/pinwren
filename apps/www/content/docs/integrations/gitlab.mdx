@@ -68,10 +68,14 @@ Changes from GitLab appear in the timeline as the integration and are never push
 ## Reliability and security
 
 - Issue creation and state changes are retried background jobs; a GitLab outage never blocks a report. The last error
-  shows on the integration until the next success.
+  shows on the integration until the next success: the status code plus GitLab's JSON `message` (or `error`) field —
+  never a raw response body — or a category such as `Could not reach GitLab: timed out`. Redirects are not followed.
 - The webhook is verified by comparing `X-Gitlab-Token` with the integration's secret in constant time. Only issue
   events with the `close` or `reopen` action change anything; others are acknowledged and ignored. Requests over
-  1 MB are refused.
+  1 MB are refused with `413` before they are parsed, and each sending address may make 120 deliveries a minute.
+- Replay protection: each verified delivery is acted on once. Pinwren remembers its `X-Gitlab-Event-UUID` (or
+  `Idempotency-Key`, or the body's hash) for 7 days and acknowledges a repeat with
+  `{ "ok": true, "duplicate": true }` without acting on it.
 - When several Pinwren projects sync one GitLab project, only the integration whose secret matches acts.
 - If the webhook secret leaks, rotate it with `POST /api/integrations/:id/rotate-webhook-secret` (workspace admin
   session; the tab has no button for it) and paste the new one into GitLab.
@@ -81,5 +85,12 @@ Changes from GitLab appear in the timeline as the integration and are never push
 Set **Self-managed GitLab URL** per integration, or `GITLAB_URL` for the whole instance. Your Pinwren server must
 reach GitLab's API, and GitLab must reach Pinwren's webhook URL — on self-managed GitLab, allow requests to your
 Pinwren host under **Admin › Settings › Network › Outbound requests** if it is on a private network.
+
+The reverse applies on Pinwren's side. A per-integration **Self-managed GitLab URL** is entered by a workspace admin,
+so Pinwren refuses it when it resolves to a private address (`blocked: the address is private or reserved`) unless
+the instance operator lists the host or range in
+[`PINWREN_OUTBOUND_ALLOWLIST`](/docs/self-hosting/environment#outbound-requests), e.g.
+`PINWREN_OUTBOUND_ALLOWLIST=gitlab.internal`. `GITLAB_URL` is set by the operator and may be private without the
+allowlist.
 
 <EnvTable group="Issue trackers" />

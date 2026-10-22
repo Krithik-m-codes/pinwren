@@ -5,7 +5,8 @@ description: Every widget, capture and branding option, its default, and where i
 
 Widget settings live **per project on the server**, not in your snippet. You change them in the dashboard
 (the project's **Widget**, **Capture**, **Actions** and **Privacy & data** tabs), they are stored in the database, and the widget fetches them on every page load from
-`GET /w/config`. A change reaches every page that embeds the project at the next load — no redeploy.
+`GET /w/config`. A change reaches every page that embeds the project at the next load — no redeploy. Only
+organisation owners and admins can change these settings; members see the tabs read-only.
 
 The server always sends every key with its default filled in, and the widget validates each value again
 before using it: an unknown or malformed value falls back to its default instead of breaking the page.
@@ -269,11 +270,18 @@ Set on the **Widget** tab, in the **Widget branding** card.
 | Limit                      | Value                                                                                                                                          |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | Reports and replies per IP | 10 per minute per project by default (`WIDGET_RATE_LIMIT_PER_MIN`, or the project's own limit under Privacy & data › Abuse protection, 1–1000) |
+| Reports per project        | 120 per minute from all addresses together (`WIDGET_PROJECT_REPORTS_PER_MIN`)                                                                  |
+| Stored files per project   | 500 MB of screenshots, attachments and replays per hour (`WIDGET_PROJECT_MB_PER_HOUR`)                                                         |
+| Report size                | 48 MB as one request, with a `Content-Length`; replies and status changes 64 KB                                                                |
+| Page URL                   | `http://` or `https://` only (`page.url`, up to 2,000 characters)                                                                              |
 | Comment body               | 10,000 characters                                                                                                                              |
 | Screenshot                 | PNG, JPEG or WebP data URL                                                                                                                     |
 | Attachments                | 3 files, 5 MB each, PNG, JPEG, WebP, GIF or PDF                                                                                                |
 | Session replay             | 10 MB (gzip), only stored when `capture.replay.enabled` is on                                                                                  |
 | Pins returned for a page   | 100 most recent open items                                                                                                                     |
 
-Over the rate limit the API answers `429 RATE_LIMITED`; the widget shows the message and keeps bug reports in
-its [offline outbox](/docs/widget/bug-reports#offline-outbox).
+Over the per-address limit the API answers `429 RATE_LIMITED`, over the project caps `429 PROJECT_RATE_LIMITED` or
+`429 PROJECT_STORAGE_LIMITED`; the widget shows the message and keeps bug reports in its
+[offline outbox](/docs/widget/bug-reports#offline-outbox). A body that is too large is refused with
+`413 PAYLOAD_TOO_LARGE`, a report without `Content-Length` with `411 LENGTH_REQUIRED` — see
+[bug report limits](/docs/widget/bug-reports#limits).

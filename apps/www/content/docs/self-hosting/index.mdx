@@ -52,7 +52,10 @@ services:
       PINWREN_SECRET: ${PINWREN_SECRET:?Set PINWREN_SECRET (openssl rand -base64 48)}
       DATABASE_URL: postgres://pinwren:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/pinwren
       PINWREN_TRUST_PROXY: ${PINWREN_TRUST_PROXY:-1}
-      PINWREN_DISABLE_SIGNUP: ${PINWREN_DISABLE_SIGNUP:-false}
+      # Unset: first account + invitations only. false: open sign-up.
+      PINWREN_DISABLE_SIGNUP: ${PINWREN_DISABLE_SIGNUP:-}
+      PINWREN_ADMIN_EMAILS: ${PINWREN_ADMIN_EMAILS:-}
+      PINWREN_OUTBOUND_ALLOWLIST: ${PINWREN_OUTBOUND_ALLOWLIST:-}
       PINWREN_WORKERS: ${PINWREN_WORKERS:-2}
       PINWREN_LICENSE_FILE: ${PINWREN_LICENSE_FILE:-}
     volumes:
@@ -115,12 +118,29 @@ up in the dashboard instead (**Settings › Email**).
 
 1. Start the stack: `docker compose -f docker/compose.yml --env-file docker/.env up -d`. Migrations run on
    start.
-2. Open `PINWREN_URL` and sign up. Without `PINWREN_ADMIN_EMAILS`, the first person to sign up becomes the
-   instance admin — so sign up before you expose the server publicly.
-3. Name your workspace, create the first project and enter your site's domain.
-4. Copy the snippet from the project's **Install** tab into your site. The tab shows **Connected** once the
+2. Open `PINWREN_URL` and create the first account. Anyone can create the first account; after that, sign-up
+   is closed except for invited people (set `PINWREN_DISABLE_SIGNUP=false` for open sign-up).
+3. Make yourself the instance admin, in one of two ways:
+   - **Setup token.** While the instance has no admin, every server start prints a one-time token to the log:
+
+     ```bash
+     docker compose -f docker/compose.yml --env-file docker/.env logs pinwren | grep "setup token"
+     # [pinwren] and enter this one-time setup token:  pws_…
+     ```
+
+     Signed in, open `PINWREN_URL/setup`, paste the `pws_…` token and choose **Claim administration**. The
+     first claim wins and every outstanding token is discarded. A token stays valid for 7 days or until it is
+     claimed; the server stores only its hash.
+
+   - **`PINWREN_ADMIN_EMAILS`.** List your address (comma-separated for several) in `docker/.env` and restart.
+     Listed accounts are instance admins, and no setup token is printed.
+
+   Being the first to sign up does not make anyone an admin.
+
+4. Name your workspace, create the first project and enter your site's domain.
+5. Copy the snippet from the project's **Install** tab into your site. The tab shows **Connected** once the
    widget has loaded.
-5. Set `PINWREN_DISABLE_SIGNUP=true` once your team has accounts, and invite everyone else.
+6. Invite everyone else from **Settings › Members**.
 
 ## Before you go live
 
@@ -135,7 +155,7 @@ up in the dashboard instead (**Settings › Email**).
     Dump Postgres and copy the files volume — and test a restore.
   </Card>
   <Card title="Security checklist" href="/docs/security">
-    Secrets, allowed sites, sign-up and privacy mode.
+    Secrets, allowed sites, sign-up, outbound requests and privacy mode.
   </Card>
 </Cards>
 

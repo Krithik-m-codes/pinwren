@@ -171,3 +171,27 @@ attempt, errors that won't fix themselves (a `400` or `403`) are shown in the di
 ```
 
 The response is `201 { "feedback": { "id", "number", "reporterToken" } }`.
+
+## Limits
+
+The server checks each limit before it parses or stores anything:
+
+| Limit                                                                                               | Answer                        |
+| --------------------------------------------------------------------------------------------------- | ----------------------------- |
+| The report must declare its size with `Content-Length`                                              | `411 LENGTH_REQUIRED`         |
+| Whole report under 48 MB (the [proxy](/docs/self-hosting/reverse-proxy) must allow it too)          | `413 PAYLOAD_TOO_LARGE`       |
+| Replies and status changes up to 64 KB                                                              | `413 PAYLOAD_TOO_LARGE`       |
+| `page.url` must be `http://` or `https://`                                                          | `400` (validation)            |
+| Attachments: 3 files of up to 5 MB; replay: gzip, up to 10 MB                                       | `400`, `400 INVALID_REPLAY`   |
+| Reports per minute from one address (`WIDGET_RATE_LIMIT_PER_MIN`, default 10, or the project's own) | `429 RATE_LIMITED`            |
+| Reports per minute to the project from everyone (`WIDGET_PROJECT_REPORTS_PER_MIN`, default 120)     | `429 PROJECT_RATE_LIMITED`    |
+| Stored files per project and hour (`WIDGET_PROJECT_MB_PER_HOUR`, default 500 MB)                    | `429 PROJECT_STORAGE_LIMITED` |
+
+The widget treats every `429` as temporary and queues the report in its [outbox](#offline-outbox).
+
+## Replays in the dashboard
+
+The dashboard plays a replay inside its own Content-Security-Policy, so a recorded page can't load anything from
+other servers when it is replayed: no remote images, fonts, stylesheets or scripts, and nothing is fetched from the
+recorded site. A replay therefore shows the page's structure and text as captured, with missing remote images and
+web fonts. The viewer also stops unpacking a replay past 64 MB of decompressed data.

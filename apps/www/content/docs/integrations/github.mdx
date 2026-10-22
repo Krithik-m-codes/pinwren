@@ -88,12 +88,19 @@ assignees, and are not pushed back to GitHub, so nothing loops. Title, comments 
 Creating issues and pushing state changes are background jobs: they retry with backoff (six retries), and a GitHub
 outage never blocks a report or a triage change. The last error is shown on the integration — for example
 `401 Bad credentials (check the token)` or `404 Not Found (check the repository and the token's access)` — until the
-next success.
+next success. The text after the status code is GitHub's JSON `message` field; a response that isn't JSON shows only
+the status code, and a server that can't be reached shows a category such as `Could not reach GitHub: timed out`.
+Redirects are not followed (`301 redirect — use the API's final URL`).
 
 The webhook is verified with `X-Hub-Signature-256` (HMAC-SHA256 of the raw body with the integration's secret). When
-several projects sync the same repository, only the integration whose secret verifies acts on it. Requests over 1 MB
-are refused. If the secret leaks, rotate it with `POST /api/integrations/:id/rotate-webhook-secret` (workspace
-admin session; the tab has no button for it) and paste the new one into GitHub.
+several projects sync the same repository, only the integration whose secret verifies acts on it.
+
+- **Size and rate.** Requests over 1 MB are refused with `413` before they are parsed, and each sending address may
+  make 120 deliveries a minute (`429` beyond).
+- **Replay protection.** Each verified delivery is acted on once: Pinwren remembers its `X-GitHub-Delivery` id (or
+  the body's hash) for 7 days, and a repeat is acknowledged with `{ "ok": true, "duplicate": true }` and ignored.
+  GitHub's **Redeliver** button therefore does nothing for a delivery that already arrived. If the secret leaks, rotate it with `POST /api/integrations/:id/rotate-webhook-secret` (workspace
+  admin session; the tab has no button for it) and paste the new one into GitHub.
 
 ## Tokens and people
 
@@ -105,5 +112,11 @@ existing issues stay in GitHub but stop syncing, and the links on items are remo
 
 Set **GitHub Enterprise API URL** per integration, or `GITHUB_API_URL` for the whole instance. Your Pinwren server
 must reach the GHES API, and GHES must reach Pinwren's webhook URL.
+
+A per-integration URL is entered by a workspace admin, so it goes through Pinwren's outbound check: if your GHES
+resolves to a private address, the instance operator must list it in
+[`PINWREN_OUTBOUND_ALLOWLIST`](/docs/self-hosting/environment#outbound-requests) (for example
+`github.example.com` or `10.20.0.0/16`), otherwise the connection fails with `blocked: the address is private or
+reserved`. `GITHUB_API_URL` is set by the operator and may point at a private address without the allowlist.
 
 <EnvTable group="Issue trackers" />

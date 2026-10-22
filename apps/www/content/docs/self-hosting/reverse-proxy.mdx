@@ -12,8 +12,8 @@ host reaches it, the internet does not.
 | Requirement                                        | Why                                                                                                                                                                                                                                                                                                                    |
 | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Terminate TLS                                      | Widgets on HTTPS sites can only call an HTTPS server, and sessions should never travel in clear text.                                                                                                                                                                                                                  |
-| Set `X-Forwarded-For/-Proto/-Host`                 | With `PINWREN_TRUST_PROXY=true`, Pinwren uses them for the client IP (rate limits) and the request's scheme and host (HTTPS enforcement).                                                                                                                                                                              |
-| Allow request bodies of **40 MB**                  | A bug report is one JSON request: a screenshot (up to 8 MB, about 11 MB as a base64 data URL), up to three 5 MB attachments (about 7 MB each once encoded) and a session replay of up to 10 MB (about 13.4 MB encoded). Pinwren itself accepts bodies up to 40 MB and checks every per-file limit on its own.          |
+| Append to `X-Forwarded-For`, set `-Proto/-Host`    | With `PINWREN_TRUST_PROXY` set to the number of proxies, Pinwren uses them for the client IP (rate limits, sign-in limiter) and the request's scheme and host (HTTPS enforcement). See [Client addresses](#client-addresses).                                                                                          |
+| Allow request bodies of **48 MB**                  | A bug report is one JSON request: a screenshot (up to 8 MB, about 11 MB as a base64 data URL), up to three 5 MB attachments (about 7 MB each once encoded) and a session replay of up to 10 MB (about 13.4 MB encoded). Pinwren itself accepts bodies up to 48 MB and checks every per-file limit on its own.          |
 | Don't buffer `/api/stream`                         | The dashboard's live updates are a long-lived Server-Sent Events response. Keep it open for at least 16 minutes: Pinwren ends each stream after 15 minutes and the browser reconnects.                                                                                                                                 |
 | Compress the widget with brotli (gzip as fallback) | `/widget.js` and its chunks are what your customers' visitors download. Let the proxy compress them (and cache the compressed copies).                                                                                                                                                                                 |
 | Keep Pinwren's cache headers                       | `/widget.js` is served with `Cache-Control: public, max-age=300` (its name never changes); its chunks `/widget-<name>.<10-hex-hash>.js` with `public, max-age=31536000, immutable` (their name changes with their content). Both carry `Access-Control-Allow-Origin: *` because customer sites load them cross-origin. |
@@ -23,10 +23,37 @@ uncompressed responses from Pinwren (drop the `Accept-Encoding` header on the wa
 examples below) and compress them itself. The real-time stream is sent with `Cache-Control: no-cache,
 no-transform` and `X-Accel-Buffering: no`, so compressing proxies leave it alone.
 
-<Callout type="warn" title="Trust the proxy only when there is one">
-  `PINWREN_TRUST_PROXY` makes Pinwren believe `X-Forwarded-*`. The compose file turns it on by default because
-  it expects a proxy. If clients can reach the container directly, set it to `false` — otherwise anyone can
-  pick their own IP address and step around the per-IP rate limits.
+Leave security headers to Pinwren. Dashboard pages are sent with their own `Content-Security-Policy`,
+`X-Frame-Options: DENY`, `Referrer-Policy`, `Cross-Origin-Opener-Policy` and `Permissions-Policy`; the widget's
+files and `/w` are exempt so customer sites can load them. Don't add a second CSP at the proxy — browsers
+enforce both, and a stricter one breaks the dashboard. HSTS comes from `PINWREN_ENFORCE_HTTPS`
+([below](#enforce-https)).
+
+## Client addresses
+
+`PINWREN_TRUST_PROXY` is a **hop count**: the number of proxies between the internet and Pinwren whose
+`X-Forwarded-For` entries it believes.
+
+| Setup                                                     | `PINWREN_TRUST_PROXY` |
+| --------------------------------------------------------- | --------------------- |
+| Clients reach Pinwren directly (no proxy)                 | `0` (or `false`)      |
+| One proxy — Caddy, nginx or Traefik (the compose default) | `1` (or `true`)       |
+| A CDN or load balancer in front of your proxy             | `2`                   |
+
+Each proxy adds the address it received the request from to the **right** end of `X-Forwarded-For`. Pinwren
+reads that header from the right and skips one entry per trusted hop, so the address it uses is the one your
+outermost trusted proxy saw — anything a client wrote into the header itself sits further left and is ignored.
+`X-Real-IP` is never read.
+
+For this to hold, every proxy in the chain must **append** to the `X-Forwarded-For` it received, not overwrite
+it with a value of its own choosing and not pass a client's header through unchanged. nginx does this with
+`$proxy_add_x_forwarded_for`. Caddy and Traefik append only for requests from addresses they trust, so behind a
+CDN list the CDN's ranges as `trusted_proxies` (Caddy) or `forwardedHeaders.trustedIPs` (Traefik).
+
+<Callout type="warn" title="Count the proxies exactly">
+  Too low, and Pinwren sees your proxy's address for every visitor, so all of them share one rate limit. Too
+  high, or set when clients can reach the container directly, and anyone can pick their own address and step
+  around the per-IP limits. With no trusted hop, forwarded headers are ignored and the socket address is used.
 </Callout>
 
 ## Caddy
@@ -41,7 +68,7 @@ feedback.example.com {
 	encode br zstd gzip
 
 	request_body {
-		max_size 40MB
+		max_size 48MB
 	}
 
 	reverse_proxy 127.0.0.1:3000 {
@@ -77,7 +104,7 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/feedback.example.com/privkey.pem;
 
     # Screenshots, attachments and the session replay arrive as one JSON body.
-    client_max_body_size 40m;
+    client_max_body_size 48m;
 
     brotli on;
     brotli_comp_level 6;
@@ -121,7 +148,7 @@ server {
 If Traefik (v3) already runs on the host, attach the app to its network with labels, in an override file next
 to the main compose file. Traefik's `compress` middleware encodes brotli and gzip and skips
 `text/event-stream` responses, so the real-time stream is not buffered; the `buffering` middleware sets the
-body limit (40 MB = `41943040` bytes).
+body limit (48 MB = `50331648` bytes).
 
 ```yaml title="docker/compose.override.yml"
 services:
@@ -135,7 +162,7 @@ services:
       # An empty value removes the header: Pinwren answers uncompressed and Traefik compresses.
       - traefik.http.middlewares.pinwren-identity.headers.customrequestheaders.Accept-Encoding=
       - traefik.http.middlewares.pinwren-compress.compress.encodings=br,gzip
-      - traefik.http.middlewares.pinwren-body.buffering.maxRequestBodyBytes=41943040
+      - traefik.http.middlewares.pinwren-body.buffering.maxRequestBodyBytes=50331648
       - traefik.http.services.pinwren.loadbalancer.server.port=3000
     networks: [default, traefik]
 networks:
@@ -143,14 +170,15 @@ networks:
     external: true
 ```
 
-Traefik sets the forwarded headers. The `entrypoints` and `certresolver` names are whatever your Traefik
+Traefik sets the forwarded headers (and appends to `X-Forwarded-For`). The `entrypoints` and `certresolver` names are whatever your Traefik
 configuration defines. For streams longer than Traefik's default timeouts, set
 `--entrypoints.websecure.transport.respondingTimeouts.readTimeout=20m` (and `idleTimeout`) on the Traefik
 command line.
 
 ## Enforce HTTPS
 
-Once the proxy serves HTTPS, set `PINWREN_ENFORCE_HTTPS=true` (with `PINWREN_TRUST_PROXY=true`):
+Once the proxy serves HTTPS, set `PINWREN_ENFORCE_HTTPS=true` (with `PINWREN_TRUST_PROXY` at least `1`, so the
+forwarded scheme counts):
 
 - plain-HTTP `GET` and `HEAD` requests are redirected to `https://` with a `308`;
 - any other plain-HTTP request is refused with `403 HTTPS_REQUIRED`, so a form post never silently loses its

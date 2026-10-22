@@ -70,13 +70,23 @@ curl http://localhost:3000/api/health
 
 ### Create your account and first project
 
-Open `PINWREN_URL` and sign up. The first account becomes the instance admin (unless you set
-`PINWREN_ADMIN_EMAILS`). The setup screen asks for a **workspace name**, a **first project** and your
-**website domain** — the domain becomes the project's first allowed site.
+Open `PINWREN_URL` and create the first account. The setup screen asks for a **workspace name**, a **first
+project** and your **website domain** — the domain becomes the project's first allowed site.
 
-<Callout type="warn" title="Close sign-up afterwards">
-  Sign-up is open by default. Once your team has accounts, set `PINWREN_DISABLE_SIGNUP=true` in `docker/.env`
-  and restart; invite everyone else from **Settings › Members**.
+Then claim the instance admin role, which unlocks email, security and licence settings. The server prints a
+one-time setup token to its log while no admin exists:
+
+```bash
+docker compose -f docker/compose.yml --env-file docker/.env logs pinwren | grep "setup token"
+# [pinwren] and enter this one-time setup token:  pws_…
+```
+
+Open `PINWREN_URL/setup` while signed in, paste the `pws_…` token and choose **Claim administration**. Or skip
+the token: set `PINWREN_ADMIN_EMAILS=you@example.com` in `docker/.env` and restart.
+
+<Callout title="Sign-up is closed after the first account">
+  Anyone else needs an invitation from **Settings › Members**. To let anyone sign up, set
+  `PINWREN_DISABLE_SIGNUP=false` in `docker/.env` and restart.
 </Callout>
 
 </Step>

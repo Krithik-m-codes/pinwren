@@ -116,6 +116,10 @@ How it behaves:
 
 - **Verified offline.** The signature is checked against public keys built into the server, chosen by `kid`
   so keys can rotate. Nothing phones home, so licences work on air-gapped installs.
+- **Production builds trust production keys only.** With `NODE_ENV=production` (the Docker image), only the
+  maintainers' production keys verify; the development key used in the repository's tests is refused. A
+  production server built without any production key logs `PRODUCTION_KEYS is empty` at start, and can verify no
+  licence at all.
 - **Expiry is gentle.** After `expiresAt`, everything keeps working for `graceDays` (30 unless the licence says
   otherwise).
   After the grace period, Enterprise settings become read-only: what you configured keeps working, you just
@@ -125,6 +129,12 @@ How it behaves:
 - **Invalid files** — a bad signature, an unknown key, a file bound to another instance — are treated as no
   licence, and the reason is returned in the licence status.
 - Signed-in members can read their instance's entitlements from `GET /api/me/entitlements`.
+
+<Callout title="For maintainers">
+  Release images must carry a production public key: building with `PINWREN_RELEASE=1` fails while
+  `PRODUCTION_KEYS` is empty. Generating, storing, committing and rotating the signing key is described in
+  [`docs/release/licence-keys.md`](https://github.com/Krithik-m-codes/pinwren/blob/main/docs/release/licence-keys.md).
+</Callout>
 
 A contribution is licensed under the licence of the files it changes; see
 [CONTRIBUTING.md](https://github.com/Krithik-m-codes/pinwren/blob/main/CONTRIBUTING.md).

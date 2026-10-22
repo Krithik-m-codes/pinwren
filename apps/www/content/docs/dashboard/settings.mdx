@@ -36,10 +36,16 @@ Hostnames are compared exactly, so `example.com` never matches `evil-example.com
 | **Actions**        | Custom buttons on threads — see [panel actions](/docs/widget/panel-actions)                                                                                                                                                                                             |
 | **Issue trackers** | [GitHub](/docs/integrations/github) and [GitLab](/docs/integrations/gitlab) sync                                                                                                                                                                                        |
 | **Privacy & data** | Privacy mode, showing pins to visitors, retention, emailing the reporter, the rate limit                                                                                                                                                                                |
-| **Danger zone**    | Rotate the key, archive or restore the project (not shown to viewers)                                                                                                                                                                                                   |
+| **Danger zone**    | Rotate the key, archive or restore the project (owners and admins only)                                                                                                                                                                                                 |
 
 The project header also links to the project's **Rounds** ([review rounds](/docs/dashboard/review-rounds)), **Pages**
-([page review](/docs/dashboard/page-review)) and **Open inbox**. Viewers see every tab read-only.
+([page review](/docs/dashboard/page-review)) and **Open inbox**.
+
+Project settings are configuration, so **only organisation owners and admins can change them** — allowed sites,
+widget and capture settings, panel actions, issue trackers, privacy, the signing and identity secrets, the key and
+archiving. Members and viewers see the tabs read-only (without the Danger zone), with a note saying why; webhook
+action URLs are hidden from them. The server enforces the same rule: a change from anyone else is answered
+`403 ADMIN_REQUIRED`.
 
 ### Privacy & data
 
@@ -64,25 +70,26 @@ Your **workspace** holds the projects and the people who triage them. Owners and
 **Settings › Members** (**Invite people**: email address and role, then **Send invite**); the invitation links to `/accept-invitation/<id>`, where they sign in or create an account. Pending
 invitations are listed until they are accepted, cancelled or expire.
 
-| Role       | Can                                                                                                     |
-| ---------- | ------------------------------------------------------------------------------------------------------- |
-| **Viewer** | Read everything, change nothing — for clients and stakeholders who follow progress without triaging     |
-| **Member** | Triage feedback and comment                                                                             |
-| **Admin**  | Also manage members, projects and integrations (webhooks, issue trackers), branding and email templates |
-| **Owner**  | Full control, including the workspace itself                                                            |
+| Role       | Can                                                                                                             |
+| ---------- | --------------------------------------------------------------------------------------------------------------- |
+| **Viewer** | Read everything, change nothing — for clients and stakeholders who follow progress without triaging             |
+| **Member** | Triage feedback and comment                                                                                     |
+| **Admin**  | Also manage members, project settings and integrations (webhooks, issue trackers), branding and email templates |
+| **Owner**  | Full control, including the workspace itself                                                                    |
 
 Invitations can be for **Viewer**, **Member** or **Admin**; only an owner can make someone an owner, by changing
 the role in the member list afterwards. Owners and admins change a member's role from the list and remove members
 from its **⋯** menu (**Remove from workspace**).
+
+A workspace can send `PINWREN_INVITES_PER_HOUR` invitations an hour (default 30); beyond that, inviting is refused
+until the hour is up. Sign-up on a self-hosted instance is closed to everyone but invited people once the first
+account exists (unless the operator sets `PINWREN_DISABLE_SIGNUP=false`), so an invitation is how people join.
 
 Viewers get read-only screens, and the server enforces it: any change they try is answered `403 READ_ONLY_ROLE`.
 They can still mark notifications read, set their notification preferences, create their own API tokens (which are
 read-only too) and keep personal [saved views](/docs/dashboard/saved-views).
 
 The people who leave feedback through the widget are not members and need no account; they are unlimited.
-
-Once your team has accounts, set `PINWREN_DISABLE_SIGNUP=true` so new people can only join by invitation — see the
-[environment reference](/docs/self-hosting/environment).
 
 ## Branding
 
@@ -97,7 +104,8 @@ project under **Widget**; see [configuration](/docs/widget/configuration).
 
 **Settings › Email** lets admins rewrite every email the workspace sends. Each template is a subject and a Markdown
 body with `{{variable}}` placeholders; raw HTML is shown as text, never rendered, and variables are escaped. Every
-template has a live preview, **Send me this email** (a test to your own address) and **Reset to default**. Instance
+template has a live preview, **Send me this email** (a test to your own address only — at most 10 an hour per
+person and 30 per workspace) and **Reset to default**. Instance
 admins who aren't workspace admins see only the SMTP part of this page.
 
 | Template                          | Sent                                                 |
@@ -126,12 +134,14 @@ A placeholder that isn't available in a template is rejected when you save.
 
 ## Instance settings
 
-Three pages belong to whoever runs the server — the **instance admins**: the addresses in `PINWREN_ADMIN_EMAILS`, or,
-when that is unset, the first person who signed up.
+Three pages belong to whoever runs the server — the **instance admins**: the accounts whose addresses are in
+`PINWREN_ADMIN_EMAILS`, and the account that claimed the instance with the one-time setup token at `/setup` (see
+[first run](/docs/self-hosting#first-run)). Signing up first does not make anyone an instance admin.
 
 - **Settings › Email** — the SMTP server, with **Send test email**. See [email](/docs/integrations/email).
 - **Settings › Security** — session lifetime (1–90 days, for new sign-ins), whether HTTPS is enforced and whether the
-  server trusts a reverse proxy (both read-only, set by `PINWREN_ENFORCE_HTTPS` and `PINWREN_TRUST_PROXY`), and the
+  server trusts reverse proxies and how many hops (both read-only, set by `PINWREN_ENFORCE_HTTPS` and
+  `PINWREN_TRUST_PROXY`), and the
   daily update check with **Check now**.
 - **Settings › Licence** — install or remove an Enterprise licence. See [licensing](/docs/licensing#installing-a-licence).
 

@@ -5,6 +5,8 @@ description: Add your own buttons to feedback threads — links that open your t
 
 Panel actions are up to **five** custom buttons a project adds to every feedback item: “Open in Linear”,
 “Send to agent”, “View in admin”. You define them in the dashboard on the project's **Actions** tab (**Panel actions** card, **Add action**).
+Adding, editing and removing actions — and revealing or rotating the signing secret — is for organisation owners
+and admins only; members see the tab read-only.
 
 | Kind        | Where it shows                                                      | What happens                                                             |
 | ----------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -61,10 +63,24 @@ https://admin.example.com/feedback/{projectSlug}/{id}
 Links open with `rel="noopener noreferrer"`. Only `link` actions visible to `everyone` are ever sent to the
 page: team links and webhook URLs never leave the server.
 
+## Who sees what
+
+| Who               | Actions tab (settings)                       | Feedback item in the dashboard                         |
+| ----------------- | -------------------------------------------- | ------------------------------------------------------ |
+| Owners and admins | Every action, with its URL; can edit         | Every action; webhook buttons run, their URL is hidden |
+| Members           | Every action, read-only; webhook URLs hidden | Every action; can run webhook actions                  |
+| Viewers           | Read-only; webhook and team URLs hidden      | Only actions visible to `everyone`; nothing runs       |
+
+A webhook action's URL is never sent to the inbox, even for admins — the server looks it up when the button is
+pressed.
+
 ## Webhook actions
 
 Running a webhook action from the dashboard makes the server `POST` this JSON to your URL, with a 10-second
-timeout and without following redirects:
+timeout and without following redirects. Like [webhooks](/docs/integrations/webhooks#which-urls-can-receive), the
+URL must resolve to a public address: private and internal targets fail with
+`blocked: the address is private or reserved` unless the instance operator lists them in
+[`PINWREN_OUTBOUND_ALLOWLIST`](/docs/self-hosting/environment#outbound-requests).
 
 ```json title="action.run payload"
 {
@@ -102,8 +118,9 @@ It carries the same headers as [generic webhooks](/docs/integrations/webhooks) �
 rotate in the **Signing secret** card on the same Actions tab.
 
 Answer with any `2xx` to mark the run as successful. A JSON body like `{ "message": "Queued for the agent" }`
-is shown to the team member as a toast (up to 200 characters). Every run is logged in the item's activity
-timeline.
+is shown to the team member as a toast (up to 200 characters) — only on a `2xx` answer. Any other answer shows just
+its status (`HTTP 500`, or `301` for a redirect), and a failed connection shows a category such as `timed out`;
+the body of an error response is never shown. Every run is logged in the item's activity timeline.
 
 ```ts title="Verify the signature (Node)"
 import { createHmac, timingSafeEqual } from "node:crypto";

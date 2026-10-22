@@ -41,6 +41,25 @@ every write answers `403 READ_ONLY_ROLE`, whatever its scopes.
 `{ token: { id, name, expiresAt, scopes }, user: { id, name }, orgId, role }`. The CLI and MCP clients use it to
 check a token.
 
+### Limits
+
+- **Failed tokens.** Every rejected token counts against the caller's IP address, across `/api/v1` and
+  [`/mcp`](/docs/api/mcp). After **20 failures in 10 minutes** the address gets `429 RATE_LIMITED` for the rest of
+  the window — even with a valid token — so a script stuck on a revoked token locks itself out for a while.
+- **Request size.** Bodies on `/api` and `/mcp` are capped at **2 MB** while they stream in; a larger one is refused
+  with `413 PAYLOAD_TOO_LARGE` before it is parsed.
+
+### Session-cookie calls
+
+The dashboard's own endpoints under `/api` (everything except `/api/v1`) are authenticated by the session cookie. A
+request that changes something and carries that cookie must come from Pinwren's own pages: its `Origin` must equal
+`PINWREN_URL`, or the browser must mark it `Sec-Fetch-Site: same-origin`. A cross-site request, or one with neither
+header, gets `403 CROSS_SITE_REQUEST`. Their bodies must be JSON — any other `Content-Type` gets
+`415 UNSUPPORTED_MEDIA_TYPE`.
+
+Bearer-token calls are exempt from both checks: `/api/v1` and `/mcp` carry no cookie and can be called from any
+script or server. Use them for automation rather than replaying a browser session.
+
 ## Endpoints
 
 | Method  | Path                                | Scope            |
@@ -227,6 +246,8 @@ application/problem+json`:
 | 403    | `INSUFFICIENT_SCOPE`                 | The token lacks the scope for this endpoint       |
 | 403    | `READ_ONLY_ROLE`                     | The token's owner is a viewer; writes are refused |
 | 404    | `NOT_FOUND`                          | No such item in the token's workspace             |
+| 413    | `PAYLOAD_TOO_LARGE`                  | The request body is over 2 MB                     |
+| 429    | `RATE_LIMITED`                       | Too many failed tokens from this address          |
 | 500    | `INTERNAL_ERROR`                     | Something went wrong on the server (see its logs) |
 
 Branch on `code`, not on `title` — titles are for people and may change. The one exception to the problem format is
@@ -251,4 +272,7 @@ from a server with a spoofed `Origin` — use `/api/v1` instead.
 Reports and replies are each rate-limited per IP and project — by default 10 a minute (`WIDGET_RATE_LIMIT_PER_MIN`,
 or the project's own limit) — and answer `429 RATE_LIMITED` beyond it; a read-only project answers writes with
 `403 READ_ONLY`. A missing or unknown key is `401 MISSING_PROJECT_KEY` / `401 INVALID_PROJECT_KEY`, a site not on the
-list `403 ORIGIN_NOT_ALLOWED`.
+list `403 ORIGIN_NOT_ALLOWED`. The other limits on `/w` are listed under
+[bug reports](/docs/widget/bug-reports#limits): a report must send a `Content-Length` (`411 LENGTH_REQUIRED`),
+replies and status changes are capped at 64 KB, each project has its own intake caps
+(`429 PROJECT_RATE_LIMITED`, `429 PROJECT_STORAGE_LIMITED`), and `page.url` must be `http://` or `https://`.

@@ -38,8 +38,12 @@ and email, in that order, so a broken mail server never holds back a webhook.
 - **Nothing blocks ingest.** The widget's request returns as soon as the report is stored; integrations run
   afterwards. A tracker or chat outage never loses or delays a report.
 - **Everything retries.** Webhooks retry six times over about 21 hours; issue sync and email retry with backoff.
-- **Failures are visible.** Each webhook has a delivery log with every attempt, its status code, response and
-  duration; a GitHub or GitLab integration shows its last error.
+- **Failures are visible.** Each webhook has a delivery log with every attempt, its status code, error category
+  and duration (never the receiver's response body); a GitHub or GitLab integration shows its last error.
+- **Only public targets.** Webhooks, chat channels and custom tracker URLs can't reach private or internal
+  addresses unless the operator allows them with
+  [`PINWREN_OUTBOUND_ALLOWLIST`](/docs/self-hosting/environment#outbound-requests), and redirects are never
+  followed.
 - **Jobs run where you want.** By default every server process also runs jobs. With several instances, run the
   web servers with `PINWREN_ROLE=web` and one `PINWREN_ROLE=worker` — see [scaling](/docs/self-hosting/scaling).
 

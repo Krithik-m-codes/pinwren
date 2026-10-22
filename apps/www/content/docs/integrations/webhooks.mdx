@@ -19,6 +19,14 @@ As a workspace owner or admin, open **Settings › Integrations** and add a webh
 | **Projects** | All projects in the workspace, or just one                                                                                                                |
 | **Active**   | Paused webhooks receive nothing                                                                                                                           |
 
+### Which URLs can receive
+
+The URL must be `http://` or `https://`, without a user name or password in it. Pinwren refuses to deliver to
+private and internal addresses — `localhost`, `10.x`, `192.168.x`, cloud metadata addresses and the like — and
+checks every address the host name resolves to, at the moment it connects. Such a delivery fails with
+`blocked: the address is private or reserved`. To deliver to a receiver on your own network, the instance
+operator lists its host or range in [`PINWREN_OUTBOUND_ALLOWLIST`](/docs/self-hosting/environment#outbound-requests).
+
 A JSON webhook gets a **signing secret** (`whsec_…`). It is shown **once**, when you create the webhook — store it
 in your receiver's secrets. **Rotate secret** issues a new one (shown once again); the old one stops signing at once.
 
@@ -228,8 +236,11 @@ Anything else — another status, a timeout, a connection error — is retried o
 | 6       | 6 hours                |
 | 7       | 12 hours               |
 
-That is seven attempts over about 21 hours. Answer fast and do the work in the background; the first 1 KB of your
-response body is kept in the log to help you debug.
+That is seven attempts over about 21 hours. Answer fast and do the work in the background. Your response body is
+read (up to 1 KB) and discarded — Pinwren never stores or shows it.
+
+A `3xx` answer counts as a failure with its status code; Pinwren does not follow it to another address. Point the
+webhook at the final URL.
 
 **Auto-disable.** When an endpoint has failed continuously for **3 days**, it is switched off (`active: false`) and
 receives nothing until an admin turns it on again. The webhook shows when it started failing (`failingSince`), and the
@@ -238,10 +249,14 @@ first success clears it. Re-enabling starts a fresh three-day window.
 ## Delivery log, test and redeliver
 
 Each webhook keeps a log of the last 30 days, one row per attempt: event, attempt number, status (`pending`,
-`success`, `retrying`, `failed`), response code and body, error, duration and when the next retry is due. The
+`success`, `retrying`, `failed`), response code, error, duration and when the next retry is due. The
 webhook's **Recent deliveries** list in the dashboard shows the latest 50.
 
-- **Send test event** sends a `ping` event now and shows the result. The dashboard offers it while the webhook is
+The error is a short category, never your receiver's response: `HTTP 500`, `timed out`, `host not found`,
+`TLS error`, `connection failed`, `invalid URL` or `blocked: the address is private or reserved`. The API still
+has a `responseBody` field for older clients; it is always `null`.
+
+- **Send test event** sends a `ping` event now and shows the result — the status code and error category only. The dashboard offers it while the webhook is
   active; `POST /api/webhooks/:id/test` also pings a paused one.
 - **Redeliver** re-sends any logged delivery immediately with the same `id`, so your de-duplication still works. The
   webhook must be active (else `409 WEBHOOK_DISABLED`).
@@ -260,5 +275,6 @@ Webhooks are managed under `/api` with an owner or admin session:
 | `GET /api/webhooks/:id/deliveries?limit=`    | The log, newest first (default 50, up to 100)                                      |
 | `POST /api/webhook-deliveries/:id/redeliver` | Re-send now → `{ delivery }`                                                       |
 
-`kind` is `generic` (default), `slack` or `discord`. Slack and Discord URLs come back masked
-(`https://hooks.slack.com/…abcd`), because the URL itself is the credential.
+`kind` is `generic` (default), `slack` or `discord`. Slack and Discord URLs are stored encrypted (with a key
+derived from `PINWREN_SECRET`) and always come back masked (`https://hooks.slack.com/…abcd`), because the URL
+itself is the credential. To change one, enter the whole new URL.
