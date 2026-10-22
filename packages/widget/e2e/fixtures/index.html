@@ -180,14 +180,23 @@
     <p class="note" data-testid="secret">Account 4242 4242 4242 4242</p>
     <p class="note">Fixture page for the Pinwren widget E2E suite.</p>
     <script>
-      // ?locale=fr sets data-locale, like a site would on its script tag.
-      const w = document.createElement("script");
-      w.src = "/widget.js";
-      w.dataset.project = "pk_test";
-      w.dataset.endpoint = "http://localhost:5180";
-      const loc = new URLSearchParams(location.search).get("locale");
-      if (loc) w.dataset.locale = loc;
-      document.body.append(w);
+      // Query parameters become script-tag attributes, like a site would set them:
+      // ?locale=fr → data-locale, ?urlPattern=… → data-url-pattern, ?forceShow → data-force-show,
+      // ?allowReplay → data-allow-replay-in-privacy-mode, ?noAuto → no script tag (the test loads the widget).
+      const params = new URLSearchParams(location.search);
+      if (!params.has("noAuto")) {
+        const w = document.createElement("script");
+        w.src = "/widget.js";
+        w.dataset.project = "pk_test";
+        w.dataset.endpoint = "http://localhost:5180";
+        const loc = params.get("locale");
+        if (loc) w.dataset.locale = loc;
+        const pattern = params.get("urlPattern");
+        if (pattern) w.dataset.urlPattern = pattern;
+        if (params.has("forceShow")) w.dataset.forceShow = "";
+        if (params.has("allowReplay")) w.dataset.allowReplayInPrivacyMode = "";
+        document.body.append(w);
+      }
     </script>
   </body>
 </html>

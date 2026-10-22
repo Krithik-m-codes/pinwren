@@ -149,6 +149,8 @@ export default {
   network_other: "{n} solicitudes fallidas",
   files_one: "{n} adjunto",
   files_other: "{n} adjuntos",
+  replayRow: "Repetición de la sesión · últimos {s} s",
+  replayInclude: "Incluir la repetición de la sesión",
   sendReport: "Enviar informe",
   sending: "Enviando…",
   bugSent: "Informe de error #{n} enviado — ¡gracias!",

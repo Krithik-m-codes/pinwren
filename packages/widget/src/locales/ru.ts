@@ -160,6 +160,8 @@ export default {
   files_few: "{n} вложения",
   files_many: "{n} вложений",
   files_other: "{n} вложения",
+  replayRow: "Запись сеанса · последние {s} с",
+  replayInclude: "Приложить запись сеанса",
   sendReport: "Отправить отчёт",
   sending: "Отправка…",
   bugSent: "Отчёт об ошибке №{n} отправлен — спасибо!",

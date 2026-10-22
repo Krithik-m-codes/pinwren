@@ -63,7 +63,7 @@ const imageSize = (page: Page, src: string) =>
 
 /** Make the DOM capture fail, as on a page whose cross-origin assets taint SnapDOM. */
 async function breakDomCapture(page: Page) {
-  await page.route("**/widget-capture.js", async (route) => {
+  await page.route("**/widget-capture.*.js", async (route) => {
     const res = await route.fetch();
     const body = `${await res.text()}
 ;(() => { const m = window.__pinwrenCapture; m.capture = () => Promise.reject(new Error("DOM capture blocked")); })();`;
@@ -455,7 +455,7 @@ test("French UI from data-locale, lazy-loaded catalogue", async ({ page }) => {
   const requested: string[] = [];
   page.on("request", (r) => requested.push(new URL(r.url()).pathname));
   await ready(page, "/?locale=fr");
-  expect(requested).toContain("/widget-i18n-fr.js");
+  expect(requested.some((p) => /^\/widget-i18n-fr\.[0-9a-f]{10}\.js$/.test(p))).toBe(true);
   await page.locator("pinwren-root .launcher").click();
   await expect(page.getByRole("menuitem", { name: /Ajouter un commentaire/ })).toBeVisible();
   await page.getByRole("menuitem", { name: /Signaler un bug/ }).click();

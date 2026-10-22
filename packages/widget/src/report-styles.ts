@@ -73,6 +73,11 @@ export const REPORT_CSS = /* css */ `
 .summary svg { width: 14px; height: 14px; color: var(--muted); }
 .summary li.on > svg:last-child { color: var(--ok); }
 .summary li.off { color: var(--muted); }
+.summary .sw { all: unset; box-sizing: border-box; flex: none; width: 28px; height: 16px; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; transition: background .15s; }
+.summary .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .25); transition: transform .15s; }
+.summary .sw[aria-checked=true] { background: var(--ok); }
+.summary .sw[aria-checked=true]::after { transform: translateX(12px); }
+.summary .sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .card.ask { position: static; width: 380px; padding: 20px; display: grid; gap: 8px; }
 .ask-ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
 .ask-title { font-size: 15px; }

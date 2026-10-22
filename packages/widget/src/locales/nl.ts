@@ -149,6 +149,8 @@ export default {
   network_other: "{n} mislukte verzoeken",
   files_one: "{n} bijlage",
   files_other: "{n} bijlagen",
+  replayRow: "Sessie-opname · laatste {s} s",
+  replayInclude: "Sessie-opname meesturen",
   sendReport: "Melding versturen",
   sending: "Versturen…",
   bugSent: "Bugmelding #{n} verstuurd — bedankt!",

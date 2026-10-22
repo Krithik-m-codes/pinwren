@@ -30,6 +30,8 @@ export const enReport = {
   network_other: "{n} failed requests",
   files_one: "{n} attachment",
   files_other: "{n} attachments",
+  replayRow: "Session replay · last {s} s",
+  replayInclude: "Include the session replay",
   sendReport: "Send report",
   sending: "Sending…",
   bugSent: "Bug report #{n} sent — thank you!",

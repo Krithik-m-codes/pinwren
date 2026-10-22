@@ -149,6 +149,8 @@ export default {
   network_other: "{n} विफल अनुरोध",
   files_one: "{n} अटैचमेंट",
   files_other: "{n} अटैचमेंट",
+  replayRow: "सत्र रीप्ले · पिछले {s} सेकंड",
+  replayInclude: "सत्र रीप्ले शामिल करें",
   sendReport: "रिपोर्ट भेजें",
   sending: "भेजा जा रहा है…",
   bugSent: "बग रिपोर्ट #{n} भेज दी गई — धन्यवाद!",

@@ -22,7 +22,23 @@ describe("resolveConfig", () => {
       consent: { enabled: false, text: null, privacyUrl: null },
       panelActions: [],
       privacyMode: false,
+      visibility: { environments: "all", minViewportWidth: 0 },
     });
+  });
+
+  it("validates the visibility rules", () => {
+    expect(
+      resolveConfig({ visibility: { environments: "non-production", minViewportWidth: 768.4 } }).visibility,
+    ).toEqual({ environments: "non-production", minViewportWidth: 768 });
+    expect(
+      resolveConfig({ visibility: { environments: "staging", minViewportWidth: -5 } }).visibility,
+    ).toEqual({
+      environments: "all",
+      minViewportWidth: 0,
+    });
+    expect(resolveConfig({ visibility: { minViewportWidth: Number.NaN } }).visibility.minViewportWidth).toBe(
+      0,
+    );
   });
 
   it("merges partial nested config over the defaults", () => {

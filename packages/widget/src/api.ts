@@ -2,6 +2,8 @@ import type { WidgetFeedbackCreate } from "@pinwren/core";
 import {
   type Branding,
   type CaptureCfg,
+  type FeedbackPayload,
+  type ReporterPayload,
   resolveBranding,
   resolveCapture,
   resolveConfig,
@@ -90,15 +92,17 @@ export class WidgetApi {
       branding: resolveBranding(raw.branding, this.endpoint),
     };
   }
-  pins(url: string, includeClosed: boolean) {
-    return this.req<{ items: Pin[] }>(
-      `/feedback?url=${encodeURIComponent(url)}${includeClosed ? "&include=closed" : ""}`,
-    );
+  /** Pins for this page; with a page scope (wave-4 §4) the server matches by `urlPattern` instead. */
+  pins(url: string, includeClosed: boolean, urlPattern?: string) {
+    const q = new URLSearchParams({ url });
+    if (urlPattern) q.set("urlPattern", urlPattern);
+    if (includeClosed) q.set("include", "closed");
+    return this.req<{ items: Pin[] }>(`/feedback?${q.toString()}`);
   }
   replies(id: string) {
     return this.req<{ items: Reply[] }>(`/feedback/${encodeURIComponent(id)}/comments`);
   }
-  reply(id: string, body: string, author?: { name?: string; email?: string }) {
+  reply(id: string, body: string, author?: ReporterPayload) {
     return this.req<{ comment: Reply }>(`/feedback/${encodeURIComponent(id)}/comments`, {
       method: "POST",
       json: { body, author },
@@ -113,7 +117,7 @@ export class WidgetApi {
   }
 
   /** Submit, retrying network failures with the same clientId — the server dedupes on it. */
-  async submit(payload: WidgetFeedbackCreate): Promise<Created> {
+  async submit(payload: FeedbackPayload): Promise<Created> {
     let lastError: unknown;
     for (const delay of [0, 1000, 3000]) {
       if (delay) await new Promise((r) => setTimeout(r, delay));
@@ -128,7 +132,7 @@ export class WidgetApi {
   }
 
   /** One attempt; the caller decides whether a failure goes to the offline outbox. */
-  submitOnce(payload: WidgetFeedbackCreate): Promise<Created> {
+  submitOnce(payload: FeedbackPayload): Promise<Created> {
     return this.req<Created>("/feedback", { method: "POST", json: payload });
   }
 }

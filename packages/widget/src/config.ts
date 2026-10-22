@@ -1,7 +1,8 @@
-// Widget configuration as served by `GET /w/config` (docs/contracts/wave-1.md §1, wave-3.md §1–§3).
-// The type and its defaults are mirrored here rather than imported from `@pinwren/core` (which doesn't export
-// the wave-3 fields yet): the server fills defaults too, but the widget must never trust that every key is
-// present or valid — this file is the last line of defence before values reach the DOM.
+// Widget configuration as served by `GET /w/config` (docs/contracts/wave-1.md §1, wave-3.md §1–§3,
+// wave-4.md §3–§4). The type and its defaults are mirrored here rather than imported from `@pinwren/core`
+// (which doesn't export the newer fields yet): the server fills defaults too, but the widget must never trust
+// that every key is present or valid — this file is the last line of defence before values reach the DOM.
+import type { WidgetFeedbackCreate } from "@pinwren/core";
 
 export type LauncherPosition = "bottom-right" | "bottom-left" | "top-right" | "top-left";
 
@@ -26,6 +27,8 @@ export type WidgetConfig = {
   panelActions: PanelAction[];
   /** F-021: mask every text field in screenshots, no performance metadata, coarse user agent. */
   privacyMode: boolean;
+  /** F-012 (wave-4 §4): where the widget shows at all. Widget-side only; `forceShow` overrides both. */
+  visibility: { environments: "all" | "non-production"; minViewportWidth: number };
 };
 
 export type PanelAction = {
@@ -59,6 +62,7 @@ export const DEFAULT_CONFIG: WidgetConfig = {
   consent: { enabled: false, text: null, privacyUrl: null },
   panelActions: [],
   privacyMode: false,
+  visibility: { environments: "all", minViewportWidth: 0 },
 };
 
 type Obj = Record<string, unknown>;
@@ -97,6 +101,11 @@ export function resolveConfig(raw: unknown, accentOverride?: string): WidgetConf
   const clampOff = (n: number) => (Number.isFinite(n) ? Math.min(400, Math.max(0, n)) : 20);
   l.offset = { x: clampOff(l.offset.x), y: clampOff(l.offset.y) };
   c.panelActions = sanitizeActions(c.panelActions);
+  const v = c.visibility;
+  if (v.environments !== "non-production") v.environments = "all";
+  v.minViewportWidth = Number.isFinite(v.minViewportWidth)
+    ? Math.min(10_000, Math.max(0, Math.round(v.minViewportWidth)))
+    : 0;
   return c;
 }
 
@@ -172,6 +181,8 @@ export type CaptureCfg = {
   console: "off" | "errors" | "warnings" | "all";
   network: "off" | "failures";
   maskSelectors: string[];
+  /** F-007 session replay (wave-4 §3): off by default; a rolling buffer of the last `seconds`. */
+  replay: { enabled: boolean; seconds: number };
 };
 
 export function resolveCapture(raw: unknown): CaptureCfg {
@@ -184,7 +195,14 @@ export function resolveCapture(raw: unknown): CaptureCfg {
     network: pick(c.network, ["off", "failures"], "failures"),
     // A selector that doesn't parse would make the whole capture throw — drop it here instead.
     maskSelectors: masks.filter((m): m is string => typeof m === "string" && validSelector(m)).slice(0, 50),
+    replay: resolveReplay(c.replay),
   };
+}
+
+function resolveReplay(raw: unknown): CaptureCfg["replay"] {
+  const r = isObj(raw) ? raw : {};
+  const s = typeof r.seconds === "number" && Number.isFinite(r.seconds) ? Math.round(r.seconds) : 60;
+  return { enabled: r.enabled === true, seconds: Math.min(120, Math.max(30, s)) };
 }
 
 function validSelector(sel: string): boolean {
@@ -196,3 +214,20 @@ function validSelector(sel: string): boolean {
     return false;
   }
 }
+
+// --- Wire additions not yet in @pinwren/core (wave-4 §3, §4, §6) ---------------------------------------
+
+/** `replay` of `POST /w/feedback`: a gzip JSON array of rrweb events. */
+export type ReplayPayload = { dataUrl: string; durationMs: number; events: number };
+/** `consent` of `POST /w/feedback`: which notice the reporter accepted, and when. */
+export type ConsentRecord = { version: string; acceptedAt: string };
+/** `reporter` with a signed identity: `externalId` is the host app's user id, `signature` its HMAC. */
+export type ReporterPayload = NonNullable<WidgetFeedbackCreate["reporter"]> & {
+  signature?: string | undefined;
+};
+
+export type FeedbackPayload = Omit<WidgetFeedbackCreate, "reporter"> & {
+  reporter?: ReporterPayload | undefined;
+  replay?: ReplayPayload | undefined;
+  consent?: ConsentRecord | undefined;
+};

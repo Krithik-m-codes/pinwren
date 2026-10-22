@@ -1,13 +1,13 @@
 import { actionHref, visitorActions } from "./actions";
 import type { Pin, Reply } from "./api";
-import type { WidgetConfig } from "./config";
+import type { ReporterPayload, WidgetConfig } from "./config";
 import { adoptStyle, guard, h, icon } from "./dom";
 import { errText } from "./env";
 import { cleanPageUrl, deepLink } from "./export";
 import { t } from "./i18n";
 import * as I from "./icons";
 import { PANEL_CSS } from "./panel-styles";
-import { type Reporter, store } from "./store";
+import { type Identity, type Reporter, store } from "./store";
 import { ago, avatar, isClosed, kindOf, tag } from "./ui";
 
 // Thread card (F-011): a pin's comment, its public replies, resolve/reopen, copy link and the project's
@@ -19,10 +19,10 @@ export type ThreadHost = {
   cfg: WidgetConfig;
   projectKey: string;
   projectSlug: string;
-  identity: () => Reporter;
+  identity: () => Identity;
   api: {
     replies(id: string): Promise<{ items: Reply[] }>;
-    reply(id: string, body: string, author?: { name?: string; email?: string }): Promise<{ comment: Reply }>;
+    reply(id: string, body: string, author?: ReporterPayload): Promise<{ comment: Reply }>;
     setStatus(id: string, status: "resolved" | "open", token?: string): Promise<unknown>;
   };
   toast(text: string): void;
@@ -132,9 +132,14 @@ export function threadCard(
       const body = box.value.trim();
       if (!body || send.disabled) return;
       send.disabled = true;
-      const me = { ...store.reporter(), ...stripEmpty(host.identity()) };
+      const who = host.identity();
+      const me = { ...store.reporter(), ...stripEmpty(who) };
       try {
-        const author = me.name || me.email ? stripEmpty(me) : undefined;
+        // A signed host-app identity (wave-4 §4) goes with replies too, so they show as verified.
+        const signed: ReporterPayload = who.id
+          ? { externalId: who.id, ...(who.signature ? { signature: who.signature } : {}) }
+          : {};
+        const author = me.name || me.email || who.id ? { ...stripEmpty(me), ...signed } : undefined;
         const { comment } = await host.api.reply(pin.id, body, author);
         list.append(message(comment.authorName ?? me.name ?? t("you"), comment.createdAt, body, false));
         list.scrollTop = list.scrollHeight;

@@ -149,6 +149,8 @@ export default {
   network_other: "{n} 个失败的请求",
   files_one: "{n} 个附件",
   files_other: "{n} 个附件",
+  replayRow: "会话回放 · 最近 {s} 秒",
+  replayInclude: "包含会话回放",
   sendReport: "发送报告",
   sending: "正在发送…",
   bugSent: "Bug 报告 #{n} 已发送，谢谢！",

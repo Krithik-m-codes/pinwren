@@ -35,6 +35,7 @@ export const wifi = svg(
 export const globe = svg(
   '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
 );
+export const replay = svg('<circle cx="12" cy="12" r="9"/><path d="m10 8.5 5 3.5-5 3.5Z"/>');
 export const minus = svg('<path d="M6 12h12"/>');
 export const download = svg('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>');
 export const close = svg('<path d="M18 6 6 18M6 6l12 12"/>');

@@ -1,37 +1,53 @@
+import { setNonce } from "./chunks";
+import { identityOf, urlPatternOf } from "./identity";
 import * as lib from "./lib";
-import type { Reporter } from "./store";
-import { PinwrenWidget, type Mode, type WidgetEvent, type WidgetOptions } from "./widget";
+import type { Identity } from "./store";
+import type {
+  IdentifyOptions,
+  Mode,
+  PageScope,
+  PinwrenApi,
+  PinwrenOptions,
+  PinwrenUser,
+  WidgetEvent,
+} from "./types";
+import { PinwrenWidget } from "./widget";
 
 // Script-tag entry:
 //   <script src="https://feedback.example.com/widget.js" data-project="pk_…" async></script>
-// Optional: data-accent="#5b5bd6", data-endpoint="https://…" (defaults to the script's origin),
-// data-locale="fr" (otherwise the browser's language; English fallback).
+// Optional attributes: data-endpoint="https://…" (defaults to the script's origin), data-accent="#5b5bd6",
+// data-locale="fr" (otherwise the browser's language; English fallback), data-url-pattern="/product/:id"
+// (page scope), data-force-show (ignore the visibility rules), data-nonce="…" (CSP nonce for the chunks),
+// data-allow-replay-in-privacy-mode.
 //
-// Public API (blueprint 05 §8): Pinwren.init / open / close / on / identify / destroy. Calls made before
-// this script loads can be queued as `window.Pinwren = { q: [["open", "comment"], …] }`.
-// Events: open, close, submit, error, ready. A `ready` handler added after the widget is ready still runs.
+// Public API (blueprint 05 §8): Pinwren.init / open / close / on / identify / setPageScope / destroy. Calls
+// made before this script loads can be queued as `window.Pinwren = { q: [["open", "comment"], …] }` — the npm
+// entry (loader.ts) and @pinwren/react do exactly that. Events: open, close, submit, error, ready. A `ready`
+// handler added after the widget is ready still runs.
 
 type Handler = (data?: unknown) => void;
-type InitOptions = Pick<WidgetOptions, "projectKey" | "endpoint" | "accent" | "locale">;
-// Properties, not methods: none of them use `this`, so the queued-call replay below can call them bare.
-type Api = {
-  init: (o: InitOptions) => void;
-  open: (mode?: Mode) => void;
-  close: () => void;
-  on: (event: WidgetEvent, cb: Handler) => () => void;
-  identify: (user: Reporter) => void;
-  destroy: () => void;
-};
 
 const g = window as unknown as {
-  Pinwren?: Api & { q?: unknown[] };
+  Pinwren?: PinwrenApi | { q?: unknown[] };
   __pinwrenInstance?: PinwrenWidget | undefined;
   __pinwrenLib?: typeof lib;
 };
 // Shared with the lazy chunks (see chunks.ts / build.mjs).
 g.__pinwrenLib = lib;
+
+// Chunks and locales are served next to widget.js, which may be a CDN rather than the API endpoint.
+const script = document.currentScript as HTMLScriptElement | null;
+const assetBase = (() => {
+  try {
+    return script?.src ? new URL(".", script.src).href.replace(/\/$/, "") : undefined;
+  } catch {
+    return undefined;
+  }
+})();
+setNonce(script?.nonce || script?.dataset.nonce || undefined);
+
 const handlers = new Map<WidgetEvent, Set<Handler>>();
-let identity: Reporter = {};
+let identity: Identity = {};
 let pendingOpen: [Mode | undefined] | null = null;
 let isReady = false;
 
@@ -60,21 +76,42 @@ const safe =
     }
   };
 
-const init = safe((opts: InitOptions) => {
+// The scope set before init, or kept across destroy → init (as React does on a remount).
+let scope: string | undefined;
+
+const init = safe((o: PinwrenOptions) => {
   if (g.__pinwrenInstance) return; // one widget per page
-  const w = new PinwrenWidget({ ...opts, emit, identity });
+  if (typeof o.projectKey !== "string" || !o.projectKey || typeof o.endpoint !== "string") {
+    console.warn("[pinwren] init needs a projectKey and an endpoint");
+    return;
+  }
+  const endpoint = o.endpoint.replace(/\/+$/, "");
+  if (o.urlPattern !== undefined) scope = urlPatternOf(o.urlPattern);
+  const w = new PinwrenWidget({
+    projectKey: o.projectKey,
+    endpoint,
+    assets: assetBase ?? endpoint,
+    accent: o.accent,
+    locale: o.locale,
+    forceShow: o.forceShow === true,
+    urlPattern: scope,
+    allowReplayInPrivacyMode: o.allowReplayInPrivacyMode === true,
+    emit,
+    identity,
+  });
   g.__pinwrenInstance = w;
   void w.start().catch((err: unknown) => console.warn("[pinwren]", err));
   if (pendingOpen) w.open(pendingOpen[0]);
   pendingOpen = null;
 }, undefined);
 
-const queued = Array.isArray(g.Pinwren?.q) ? g.Pinwren.q : [];
+const existing = g.Pinwren as { q?: unknown } | undefined;
+const queued: unknown[] = Array.isArray(existing?.q) ? existing.q : [];
 const noop = () => {
   // the fallback for a call that failed: nothing to return
 };
 
-const api: Api = {
+const api: PinwrenApi = {
   init,
   open: safe((mode?: Mode) => {
     if (g.__pinwrenInstance) g.__pinwrenInstance.open(mode);
@@ -91,14 +128,15 @@ const api: Api = {
     handlers.set(event, set);
     if (event === "ready" && isReady) queueMicrotask(() => set.has(cb) && call(cb));
     return () => set.delete(cb);
-  }, noop),
+  }, noop) as PinwrenApi["on"],
   // Plain-JS hosts can pass anything; only well-typed fields are kept.
-  identify: safe((user: { name?: unknown; email?: unknown } | null | undefined) => {
-    identity = {
-      name: typeof user?.name === "string" ? user.name.slice(0, 120) : undefined,
-      email: typeof user?.email === "string" ? user.email.slice(0, 254) : undefined,
-    };
+  identify: safe((user: PinwrenUser | null, opts?: IdentifyOptions) => {
+    identity = identityOf(user, opts);
     g.__pinwrenInstance?.identify(identity);
+  }, undefined),
+  setPageScope: safe((s: PageScope | null) => {
+    scope = urlPatternOf(s?.urlPattern);
+    g.__pinwrenInstance?.setPageScope(scope);
   }, undefined),
   destroy: safe(() => {
     g.__pinwrenInstance?.destroy();
@@ -108,23 +146,29 @@ const api: Api = {
 };
 g.Pinwren = api;
 
-for (const call of queued) {
-  if (!Array.isArray(call)) continue;
-  const [method, ...args] = call as [keyof Api, ...unknown[]];
+for (const c of queued) {
+  if (!Array.isArray(c)) continue;
+  const [method, ...args] = c as [keyof PinwrenApi, ...unknown[]];
   const fn = api[method] as ((...a: unknown[]) => unknown) | undefined;
   if (typeof fn === "function") fn(...args);
 }
 
-const script = document.currentScript as HTMLScriptElement | null;
 const key = script?.dataset.project;
 if (script && key) {
-  const start = () =>
+  const d = script.dataset;
+  // A bare attribute (value "") counts as on; only "false" turns it off.
+  const flag = (v: string | undefined) => v !== undefined && v !== "false";
+  const start = () => {
     init({
       projectKey: key,
-      endpoint: (script.dataset.endpoint ?? new URL(script.src).origin).replace(/\/$/, ""),
-      accent: script.dataset.accent,
-      locale: script.dataset.locale,
+      endpoint: (d.endpoint ?? new URL(script.src).origin).replace(/\/$/, ""),
+      accent: d.accent,
+      locale: d.locale,
+      urlPattern: d.urlPattern,
+      forceShow: flag(d.forceShow),
+      allowReplayInPrivacyMode: flag(d.allowReplayInPrivacyMode),
     });
+  };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
   else start();
 }

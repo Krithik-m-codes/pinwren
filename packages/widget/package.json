@@ -29,20 +29,28 @@
   },
   "type": "module",
   "sideEffects": [
-    "./dist/*.js"
+    "./dist/widget*.js"
   ],
-  "main": "./dist/widget.js",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "unpkg": "./dist/widget.js",
   "jsdelivr": "./dist/widget.js",
   "exports": {
-    ".": "./dist/widget.js",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
     "./widget.js": "./dist/widget.js",
+    "./manifest.json": "./dist/manifest.json",
     "./dist/*": "./dist/*",
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
-    "LICENSE"
+    "LICENSE",
+    "README.md"
   ],
   "publishConfig": {
     "access": "public",
@@ -57,9 +65,10 @@
     "prepublishOnly": "node build.mjs"
   },
   "devDependencies": {
-    "@pinwren/core": "workspace:*",
     "@medv/finder": "^4.0.2",
+    "@pinwren/core": "workspace:*",
     "@playwright/test": "^1.64.1",
+    "@rrweb/record": "^2.1.7",
     "@types/node": "^22",
     "@zumer/snapdom": "^3.3.6",
     "esbuild": "^0.28.2",

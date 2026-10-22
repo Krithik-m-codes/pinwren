@@ -1,4 +1,4 @@
-// Screenshot annotation editor (blueprint F-004), part of the lazy widget-capture.js chunk. Shapes stay
+// Screenshot annotation editor (blueprint F-004) — the lazy widget-editor.js chunk (wave-4 §7). Shapes stay
 // vectors (see shapes.ts) and are flattened onto the screenshot only on export, so undo/redo, drafts and
 // re-rendering at any size are lossless.
 import {
@@ -340,3 +340,6 @@ function pixelate(
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(tiny, 0, 0, tiny.width, tiny.height, x, y, w, h);
 }
+
+export type EditorModule = { Editor: typeof Editor };
+(window as unknown as { __pinwrenEditor: EditorModule }).__pinwrenEditor = { Editor };

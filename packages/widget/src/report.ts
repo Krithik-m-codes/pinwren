@@ -1,12 +1,11 @@
-import type { WidgetFeedbackCreate } from "@pinwren/core";
 import type { Created } from "./api";
 import { type Attachment, MAX_FILES, readFile, sanitizeAttachments, validateFiles } from "./attachments";
 import type { CaptureMode, CaptureModule } from "./capture";
 import { loadChunk } from "./chunks";
-import type { Branding, CaptureCfg, WidgetConfig } from "./config";
+import type { Branding, CaptureCfg, FeedbackPayload, ReplayPayload, WidgetConfig } from "./config";
 import { diagnosticsSummary, performanceTiming, snapshotDiagnostics } from "./diagnostics";
 import { adoptStyle, h, ICONS, icon, trapFocus } from "./dom";
-import type { Editor } from "./editor";
+import type { Editor, EditorModule } from "./editor";
 import { environment, errText, uuid } from "./env";
 import { consentBlock, identityFields } from "./form";
 import { addEnglish, t, tn } from "./i18n";
@@ -17,17 +16,22 @@ import { Picker } from "./picker";
 import { isRetryable } from "./queue";
 import { REPORT_CSS } from "./report-styles";
 import { COLORS, type Shape, type Size, sanitizeShapes, type Tool } from "./shapes";
-import type { Reporter } from "./store";
+import type { Identity } from "./store";
 import { ago } from "./ui";
 
 // Bug report mode (F-003): capture → annotate → describe → send. This file is the lazy widget-report.js
 // chunk: the form, the capture orchestration, drafts (F-010, IndexedDB) and the hand-off to the offline
-// outbox. The heavy parts (SnapDOM, the editor) live in widget-capture.js, loaded alongside it.
+// outbox. The heavy parts load alongside it: SnapDOM in widget-capture.js, the annotation editor in
+// widget-editor.js.
+
+/** The session replay recorded up to the moment the report opened (wave-4 §3), gzipped on send. */
+export type ReplayOffer = { seconds: number; pack: () => Promise<ReplayPayload | null> };
 
 export type ReportCtx = {
   host: HTMLElement;
   root: HTMLElement;
-  endpoint: string;
+  /** Where widget.js and its chunks are served from. */
+  assets: string;
   project: string;
   cfg: WidgetConfig;
   /** Mask selectors already include the privacy-mode field masks when that is on. */
@@ -35,9 +39,12 @@ export type ReportCtx = {
   branding: Branding;
   /** Where focus goes back to when the report closes. */
   opener: Element | null;
-  identity: Reporter;
-  submit: (p: WidgetFeedbackCreate) => Promise<Created>;
-  queue: (clientId: string, p: WidgetFeedbackCreate) => Promise<void>;
+  identity: Identity;
+  /** Page scope sent as `page.urlPattern` (wave-4 §4). */
+  urlPattern: string | undefined;
+  replay: ReplayOffer | null;
+  submit: (p: FeedbackPayload) => Promise<Created>;
+  queue: (clientId: string, p: FeedbackPayload) => Promise<void>;
   toast: (text: string) => void;
   sent: (id: string, number: number, token?: string) => void;
   error: (message: string) => void;
@@ -67,7 +74,8 @@ const PRIORITY = { low: "low", medium: "medium", high: "high", critical: "urgent
 const CAPTURE_TIMEOUT = 8000;
 const drafts = idbKV<Draft>("drafts");
 
-const loadModule = (endpoint: string) => loadChunk<CaptureModule>(endpoint, "capture");
+const loadModule = (assets: string) => loadChunk<CaptureModule>(assets, "capture");
+const loadEditor = (assets: string) => loadChunk<EditorModule>(assets, "editor");
 
 const timeout = <T>(p: Promise<T>, ms: number) =>
   Promise.race([
@@ -146,6 +154,9 @@ export class BugReport {
   private clientId = uuid();
   private attachments: Attachment[] = [];
   private mod: CaptureModule | null = null;
+  private Ed: EditorModule["Editor"] | null = null;
+  /** Whether the reporter keeps the session replay in this report (they can leave it out). */
+  private withReplay = true;
   private base: HTMLCanvasElement | null = null;
   private baseUrl: string | null = null;
   private editor: Editor | null = null;
@@ -171,9 +182,12 @@ export class BugReport {
       await drafts.del(this.ctx.project).catch(ignoreDraftError);
     }
     this.ctx.root.style.visibility = "hidden"; // the launcher must not flash into the first frame
+    // The editor isn't needed until the screenshot is there: it downloads while SnapDOM works.
+    const editor = this.loadEd();
     try {
-      this.mod = await loadModule(this.ctx.endpoint);
+      this.mod = await loadModule(this.ctx.assets);
       this.base = await timeout(this.mod.capture("visible", this.ctx.capture.maskSelectors), CAPTURE_TIMEOUT);
+      await editor;
       this.state = "ready";
     } catch (err) {
       console.warn("[pinwren] screenshot failed:", err);
@@ -182,6 +196,15 @@ export class BugReport {
       this.ctx.root.style.visibility = "";
     }
     if (!this.closed) this.build();
+  }
+
+  /** Load the editor chunk; a failure leaves `Ed` null and the screenshot area offers the fallbacks. */
+  private async loadEd() {
+    try {
+      this.Ed = (await loadEditor(this.ctx.assets)).Editor;
+    } catch (err) {
+      console.warn("[pinwren]", err);
+    }
   }
 
   private askResume(d: Draft): Promise<"resume" | "discard" | "cancel"> {
@@ -232,8 +255,10 @@ export class BugReport {
     this.body.value = d.body;
     this.severity = d.severity;
     this.attachments = d.attachments;
+    const editor = this.loadEd();
     try {
-      this.mod = await loadModule(this.ctx.endpoint);
+      this.mod = await loadModule(this.ctx.assets);
+      await editor;
       if (d.screenshot) {
         this.base = await toCanvas(d.screenshot);
         this.baseUrl = d.screenshot;
@@ -311,7 +336,7 @@ export class BugReport {
         return;
       }
       consent.accept();
-      void this.send(send, body, ident.read());
+      void this.send(send, body, ident.read(), consent.record());
     });
 
     const modal = h(
@@ -454,7 +479,8 @@ export class BugReport {
     this.editor = null;
     if (state === "ready" && this.base && this.mod) {
       try {
-        this.editor = new this.mod.Editor(this.base, shapes, t("textPlaceholder"));
+        if (!this.Ed) throw new Error("The annotation editor didn't load");
+        this.editor = new this.Ed(this.base, shapes, t("textPlaceholder"));
         this.editor.onChange = () => {
           this.renderTools();
           this.saveSoon();
@@ -782,6 +808,30 @@ export class BugReport {
         true,
       ),
       ...(this.attachments.length ? [row(I.clip, tn("files", this.attachments.length), true)] : []),
+      ...(this.ctx.replay ? [this.replayRow(this.ctx.replay.seconds)] : []),
+    );
+  }
+
+  /** "Session replay · last 60 s" with a switch, so the reporter can leave the recording out. */
+  private replayRow(seconds: number) {
+    const on = this.withReplay;
+    return h(
+      "li",
+      { class: on ? "on" : "off" },
+      icon(I.replay),
+      h("span", { class: "grow" }, t("replayRow", { s: seconds })),
+      h("button", {
+        type: "button",
+        class: "sw",
+        role: "switch",
+        "aria-checked": String(on),
+        "aria-label": t("replayInclude"),
+        onclick: () => {
+          this.withReplay = !this.withReplay;
+          this.renderSummary();
+          this.summary.querySelector<HTMLElement>(".sw")?.focus();
+        },
+      }),
     );
   }
 
@@ -829,22 +879,41 @@ export class BugReport {
 
   // --- Sending ------------------------------------------------------------------------------------
 
-  private async send(btn: HTMLButtonElement, body: string, reporter: Reporter | undefined) {
+  private async send(
+    btn: HTMLButtonElement,
+    body: string,
+    reporter: FeedbackPayload["reporter"],
+    consent: FeedbackPayload["consent"],
+  ) {
     if (this.sending) return;
     this.sending = true;
     clearTimeout(this.saveTimer);
     const label = btn.textContent;
     btn.disabled = true;
     btn.textContent = t("sending");
-    const payload: WidgetFeedbackCreate = {
+    // A replay that can't be packed (too big, no CompressionStream) just isn't attached.
+    const replay =
+      this.ctx.replay && this.withReplay
+        ? await this.ctx.replay.pack().catch((err: unknown) => {
+            console.warn("[pinwren] session replay not attached:", err);
+            return null;
+          })
+        : null;
+    const payload: FeedbackPayload = {
       clientId: this.clientId,
       kind: "bug",
       title: this.title.value.trim() || undefined,
       body,
       priority: PRIORITY[this.severity],
-      page: { url: location.href, title: document.title.slice(0, 300) },
+      page: {
+        url: location.href,
+        title: document.title.slice(0, 300),
+        ...(this.ctx.urlPattern ? { urlPattern: this.ctx.urlPattern } : {}),
+      },
       environment: environment(this.ctx.cfg.privacyMode),
-      reporter: reporter,
+      reporter,
+      consent,
+      replay: replay ?? undefined,
       diagnostics: snapshotDiagnostics(),
       // Privacy mode (wave-3 §3) sends no page-timing metadata.
       metadata: this.ctx.cfg.privacyMode ? undefined : { performance: performanceTiming() },
@@ -854,7 +923,7 @@ export class BugReport {
             name: a.name,
             contentType: a.contentType,
             dataUrl: a.dataUrl,
-          })) as WidgetFeedbackCreate["attachments"])
+          })) as FeedbackPayload["attachments"])
         : undefined,
     };
     try {

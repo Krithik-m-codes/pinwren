@@ -149,6 +149,8 @@ export default {
   network_other: "{n} requêtes échouées",
   files_one: "{n} pièce jointe",
   files_other: "{n} pièces jointes",
+  replayRow: "Relecture de session · {s} dernières s",
+  replayInclude: "Inclure la relecture de session",
   sendReport: "Envoyer le rapport",
   sending: "Envoi en cours…",
   bugSent: "Rapport de bug #{n} envoyé — merci !",

@@ -1,7 +1,7 @@
-// Screenshot capture + annotation editor — built as its own file (widget-capture.js) and loaded only when
-// someone reports a bug, so SnapDOM and the editor never weigh on the page otherwise (blueprint 05 §2, §6).
+// Screenshot capture — built as its own file (widget-capture.js: SnapDOM + this glue) and loaded only when
+// someone reports a bug, so SnapDOM never weighs on the page otherwise (blueprint 05 §2, §6). The annotation
+// editor is a separate chunk (widget-editor.js, wave-4 §7) that downloads alongside it.
 import { snapdom } from "@zumer/snapdom";
-import { Editor } from "./editor";
 import { blockGeometry, MASKS, maskedRects, paintBlocks, type Rect } from "./mask";
 
 export type CaptureMode = "visible" | "full" | "element";
@@ -117,11 +117,9 @@ async function screenShare(
 export type CaptureModule = {
   capture: typeof capture;
   screenShare: typeof screenShare;
-  Editor: typeof Editor;
 };
 
 (window as unknown as { __pinwrenCapture: CaptureModule }).__pinwrenCapture = {
   capture,
   screenShare,
-  Editor,
 };

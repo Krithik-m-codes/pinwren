@@ -1,0 +1,76 @@
+{
+  "name": "@pinwren/react",
+  "version": "0.1.0",
+  "description": "React component and hook for the Pinwren feedback widget (Next.js App Router ready)",
+  "keywords": [
+    "pinwren",
+    "react",
+    "nextjs",
+    "feedback",
+    "feedback-widget",
+    "bug-report",
+    "visual-feedback"
+  ],
+  "license": "MIT",
+  "author": "Krithik-m-codes (https://github.com/Krithik-m-codes)",
+  "homepage": "https://pinwren.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Krithik-m-codes/pinwren.git",
+    "directory": "packages/react"
+  },
+  "bugs": {
+    "url": "https://github.com/Krithik-m-codes/pinwren/issues"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "prepublishOnly": "tsup"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@pinwren/widget": "workspace:*",
+    "@playwright/test": "^1.64.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "esbuild": "^0.28.2",
+    "happy-dom": "^20.14.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tsup": "^8.5.1",
+    "vitest": "^4.1.12"
+  }
+}

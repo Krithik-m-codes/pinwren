@@ -1,3 +1,4 @@
+import { chunkUrl, script } from "./chunks";
 import { en } from "./locales/en";
 import type { enPanel } from "./locales/en-panel";
 import type { enReport } from "./locales/en-report";
@@ -75,7 +76,8 @@ export function tn(stem: string, n: number, vars?: Vars): string {
 }
 
 /** Load a non-English catalogue from `<endpoint>/widget-i18n-<code>.js`. Never throws; English stays on failure. */
-export async function loadLocale(code: Locale, endpoint: string, timeoutMs = 3000): Promise<void> {
+/** Load a locale's catalogue from `base` (where widget.js is served), falling back to English. */
+export async function loadLocale(code: Locale, assets: string, timeoutMs = 3000): Promise<void> {
   if (code === "en") {
     setCatalog("en", base);
     return;
@@ -84,9 +86,7 @@ export async function loadLocale(code: Locale, endpoint: string, timeoutMs = 300
   if (!w.__pinwrenI18n?.[code]) {
     try {
       await new Promise<void>((resolve, reject) => {
-        const s = document.createElement("script");
-        s.src = `${endpoint}/widget-i18n-${code}.js`;
-        s.async = true;
+        const s = script(chunkUrl(assets, `i18n-${code}`));
         s.onload = () => resolve();
         s.onerror = () => reject(new Error(`locale ${code} unavailable`));
         setTimeout(() => reject(new Error(`locale ${code} timed out`)), timeoutMs);

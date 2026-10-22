@@ -149,6 +149,8 @@ export default {
   network_other: "{n} fehlgeschlagene Anfragen",
   files_one: "{n} Anhang",
   files_other: "{n} Anhänge",
+  replayRow: "Sitzungsaufzeichnung · letzte {s} s",
+  replayInclude: "Sitzungsaufzeichnung mitsenden",
   sendReport: "Bericht senden",
   sending: "Wird gesendet…",
   bugSent: "Fehlerbericht #{n} gesendet — danke!",

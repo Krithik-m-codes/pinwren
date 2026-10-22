@@ -2,6 +2,10 @@
 // access is guarded and the widget works without it.
 
 export type Reporter = { name?: string | undefined; email?: string | undefined };
+/** A reporter the host app identified (wave-4 §4): `id` + `signature` make it a verified reporter. */
+export type Identity = Reporter & { id?: string | undefined; signature?: string | undefined };
+/** The consent notice a visitor accepted (wave-4 §6). */
+export type Consent = { version: string; acceptedAt: string };
 export type Mine = { id: string; token?: string | undefined };
 
 function read<T>(key: string, fallback: T): T {
@@ -46,7 +50,15 @@ export const store = {
     write(`pinwren:mine:${project}`, list.slice(0, 300));
   },
 
-  // The page can write localStorage too: only a literal `true` counts.
-  consented: (project: string) => read<unknown>(`pinwren:consent:${project}`, false) === true,
-  setConsented: (project: string) => write(`pinwren:consent:${project}`, true),
+  /**
+   * The accepted notice for this project, when it is the current `version`. A changed notice text is a new
+   * version and is asked for again. The page can write localStorage too, so only a well-formed record counts
+   * (the bare `true` older widgets stored predates versions and is asked for once more).
+   */
+  consent: (project: string, version: string): Consent | null => {
+    const c = read<unknown>(`pinwren:consent:${project}`, null) as Partial<Consent> | null;
+    if (c?.version !== version || typeof c.acceptedAt !== "string") return null;
+    return Number.isNaN(Date.parse(c.acceptedAt)) ? null : { version, acceptedAt: c.acceptedAt };
+  },
+  setConsent: (project: string, c: Consent) => write(`pinwren:consent:${project}`, c),
 };

@@ -385,7 +385,7 @@ test("Russian UI with its plural forms, lazy-loaded", async ({ page }) => {
   const requested: string[] = [];
   page.on("request", (r) => requested.push(new URL(r.url()).pathname));
   await ready(page, "/?locale=ru");
-  expect(requested).toContain("/widget-i18n-ru.js");
+  expect(requested.some((p) => /^\/widget-i18n-ru\.[0-9a-f]{10}\.js$/.test(p))).toBe(true);
   await expect(launcher(page)).toHaveAttribute("aria-label", "Оставить отзыв");
   await launcher(page).click();
   await expect(page.getByRole("menuitem", { name: /Добавить комментарий/ })).toBeVisible();

@@ -55,6 +55,7 @@ export type WidgetCfg = DeepPartial<{
   consent: { enabled: boolean; text: string | null; privacyUrl: string | null };
   panelActions: Record<string, unknown>[];
   privacyMode: boolean;
+  visibility: { environments: "all" | "non-production"; minViewportWidth: number };
 }>;
 
 const CLOSED = ["resolved", "wont_fix", "duplicate"];

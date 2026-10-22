@@ -149,6 +149,8 @@ export default {
   network_other: "失敗したリクエスト {n} 件",
   files_one: "添付ファイル {n} 件",
   files_other: "添付ファイル {n} 件",
+  replayRow: "セッションリプレイ · 直近 {s} 秒",
+  replayInclude: "セッションリプレイを含める",
   sendReport: "レポートを送信",
   sending: "送信中…",
   bugSent: "バグレポート #{n} を送信しました。ありがとうございます！",

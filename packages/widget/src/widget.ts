@@ -1,8 +1,15 @@
-import type { AnchorBundle, WidgetFeedbackCreate } from "@pinwren/core";
+import type { AnchorBundle } from "@pinwren/core";
 import { captureAnchor, resolveAnchor } from "./anchor";
 import { type Created, type Pin, WidgetApi } from "./api";
 import { loadChunk, preload } from "./chunks";
-import { type Branding, type CaptureCfg, DEFAULT_CONFIG, readableOn, type WidgetConfig } from "./config";
+import {
+  type Branding,
+  type CaptureCfg,
+  DEFAULT_CONFIG,
+  type FeedbackPayload,
+  readableOn,
+  type WidgetConfig,
+} from "./config";
 import { installDiagnostics, snapshotDiagnostics, uninstallDiagnostics } from "./diagnostics";
 import { focused, h, ICONS, icon, trapFocus } from "./dom";
 import { hasDraft } from "./drafts";
@@ -15,10 +22,12 @@ import type { Panel, PanelModule, PanelRow } from "./panel";
 import { elementAt, type Pick, Picker } from "./picker";
 import { Outbox } from "./queue";
 import { type Box, isRegion, type PinPct, pinBox, placeCard, regionPin } from "./region";
-import type { ReportModule } from "./report";
+import type { Recorder, ReplayModule } from "./replay";
+import type { ReplayOffer, ReportModule } from "./report";
 import { findQuote, pageSelection, textRects, toTextRange } from "./selection";
-import { type Reporter, store } from "./store";
+import { type Identity, store } from "./store";
 import { STYLES } from "./styles";
+import type { Mode, WidgetEvent } from "./types";
 import {
   ago,
   avatar,
@@ -31,17 +40,25 @@ import {
   shortName,
   tag,
 } from "./ui";
+import { hiddenBy } from "./visibility";
 
-export type WidgetEvent = "open" | "close" | "submit" | "error" | "ready";
-export type Mode = "comment" | "bug" | "panel";
+export type { Mode, WidgetEvent };
 export type WidgetOptions = {
   projectKey: string;
   endpoint: string;
+  /** Where widget.js and its chunks are served from (the script's directory); defaults to `endpoint`. */
+  assets?: string | undefined;
   accent?: string | undefined;
   emit?: (event: WidgetEvent, data?: unknown) => void;
-  identity?: Reporter;
+  identity?: Identity;
   /** `data-locale` from the script tag; otherwise the browser's languages decide. */
   locale?: string | undefined;
+  /** Ignore the visibility rules (wave-4 §4). */
+  forceShow?: boolean | undefined;
+  /** Page scope (wave-4 §4): sent as `page.urlPattern`, and pins are listed by it. */
+  urlPattern?: string | undefined;
+  /** Privacy mode turns session replay off unless the host sets this. */
+  allowReplayInPrivacyMode?: boolean | undefined;
 };
 
 /** Highlight boxes for a quoted text range, re-measured every frame. */
@@ -79,6 +96,8 @@ const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export class PinwrenWidget {
   private readonly api: WidgetApi;
+  /** Base URL of the widget's own files (chunks, locales). */
+  private readonly assets: string;
   private readonly host = document.createElement("pinwren-root");
   private readonly root: HTMLDivElement;
   private cfg: WidgetConfig = DEFAULT_CONFIG;
@@ -116,16 +135,28 @@ export class PinwrenWidget {
   private isOpen = false;
   private raf = 0;
   private cleanup: (() => void)[] = [];
-  private identity: Reporter;
+  private identity: Identity;
+  private urlPattern: string | undefined;
+  /** Hidden by `visibility.minViewportWidth` (re-checked on resize). */
+  private suppressed = false;
+  private recorder: Recorder | null = null;
+  private replayMod: ReplayModule | null = null;
   private rightDown = { t: 0, x: 0, y: 0 };
-  private capture: CaptureCfg = { console: "warnings", network: "failures", maskSelectors: [] };
-  private outbox: Outbox<WidgetFeedbackCreate, Created> | null = null;
+  private capture: CaptureCfg = {
+    console: "warnings",
+    network: "failures",
+    maskSelectors: [],
+    replay: { enabled: false, seconds: 60 },
+  };
+  private outbox: Outbox<FeedbackPayload, Created> | null = null;
   private queued = 0;
   private draftWaiting = false;
 
   constructor(private readonly opts: WidgetOptions) {
     this.api = new WidgetApi(opts.endpoint, opts.projectKey);
+    this.assets = opts.assets ?? opts.endpoint;
     this.identity = opts.identity ?? {};
+    this.urlPattern = opts.urlPattern;
     const shadow = this.host.attachShadow({ mode: "closed" });
     const style = document.createElement("style");
     style.textContent = STYLES;
@@ -146,13 +177,22 @@ export class PinwrenWidget {
       navigator.languages.length ? navigator.languages : [navigator.language],
     );
     try {
-      [loaded] = await Promise.all([this.api.config(this.opts.accent), loadLocale(lang, this.opts.endpoint)]);
+      [loaded] = await Promise.all([this.api.config(this.opts.accent), loadLocale(lang, this.assets)]);
     } catch (err) {
       console.warn("[pinwren] widget disabled:", errText(err));
       this.destroy();
       return;
     }
     if (this.destroyed) return;
+    // Visibility rules (wave-4 §4): on a production host with `environments: "non-production"` the widget
+    // doesn't run at all — no launcher, no diagnostics wrappers, no replay.
+    const forceShow = this.opts.forceShow === true;
+    const visibility = loaded.widget.visibility;
+    if (hiddenBy(visibility, { hostname: location.hostname, width: Infinity, forceShow }) === "environment") {
+      console.info("[pinwren] hidden on this production host (visibility: non-production only)");
+      this.destroy();
+      return;
+    }
     this.capture = loaded.capture;
     installDiagnostics(loaded.capture);
     this.cfg = loaded.widget;
@@ -168,8 +208,18 @@ export class PinwrenWidget {
     }
 
     const reposition = () => this.schedule();
+    // Below `minViewportWidth` the widget is hidden, and comes back when the window grows again.
+    const fit = () => {
+      const hide = hiddenBy(visibility, { hostname: "", width: innerWidth, forceShow }) === "viewport";
+      if (hide === this.suppressed) return;
+      this.suppressed = hide;
+      if (hide) this.close();
+      this.host.style.setProperty("display", hide ? "none" : "block", "important");
+    };
+    fit();
     this.listen(window, "scroll", reposition, { passive: true, capture: true });
     this.listen(window, "resize", reposition, { passive: true });
+    if (visibility.minViewportWidth > 0) this.listen(window, "resize", fit, { passive: true });
     this.listen(document, "keydown", this.onKey);
     this.listen(
       document,
@@ -233,6 +283,7 @@ export class PinwrenWidget {
     this.cleanup.push(() => observer.disconnect());
 
     this.ready = true;
+    this.startReplay();
     this.emit("ready");
     const deepLink = new URLSearchParams(location.search).get("pinwren");
     if (deepLink) setTimeout(() => void this.focusPin(deepLink), 300);
@@ -256,16 +307,30 @@ export class PinwrenWidget {
     for (const fn of this.cleanup) fn();
     this.cleanup = [];
     cancelAnimationFrame(this.raf);
+    this.recorder?.stop();
+    this.recorder = null;
     uninstallDiagnostics();
     this.host.remove();
   }
 
-  identify(r: Reporter) {
-    this.identity = { name: r.name?.trim() || undefined, email: r.email?.trim() || undefined };
+  identify(r: Identity) {
+    this.identity = {
+      name: r.name?.trim() || undefined,
+      email: r.email?.trim() || undefined,
+      id: r.id || undefined,
+      signature: r.id ? r.signature : undefined,
+    };
+  }
+
+  /** Change the page scope (wave-4 §4); the pins on the page are re-listed under it. */
+  setPageScope(urlPattern: string | undefined) {
+    if (urlPattern === this.urlPattern) return;
+    this.urlPattern = urlPattern;
+    if (this.ready) void this.loadPins();
   }
 
   open(mode?: Mode) {
-    if (this.destroyed) return;
+    if (this.destroyed || this.suppressed) return;
     if (!this.ready) {
       this.pending = { mode };
       return;
@@ -340,7 +405,7 @@ export class PinwrenWidget {
   }
 
   private onKey = (e: KeyboardEvent) => {
-    if (e.defaultPrevented || !this.ready) return;
+    if (e.defaultPrevented || !this.ready || this.suppressed) return;
     const path = e.composedPath();
     if (e.key === "Escape") {
       if (this.card) this.closeCard();
@@ -366,7 +431,14 @@ export class PinwrenWidget {
 
   /** F-015: right-click → composer at the cursor. Only a genuine right-button click, no modifiers. */
   private onContext = (e: MouseEvent) => {
-    if (!this.ready || !this.cfg.rightClickComment || !this.canComment || e.defaultPrevented) return;
+    if (
+      !this.ready ||
+      this.suppressed ||
+      !this.cfg.rightClickComment ||
+      !this.canComment ||
+      e.defaultPrevented
+    )
+      return;
     if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || this.modalClose) return;
     // The context-menu key and Shift+F10 fire `contextmenu` without a right-button press — leave those alone.
     const r = this.rightDown;
@@ -489,8 +561,8 @@ export class PinwrenWidget {
   private prefetch() {
     if (this.prefetched || !this.ready) return;
     this.prefetched = true;
-    if (this.publicRead) preload(this.opts.endpoint, "panel");
-    if (this.canBug) preload(this.opts.endpoint, "report");
+    if (this.publicRead) preload(this.assets, "panel");
+    if (this.canBug) preload(this.assets, "report");
   }
 
   private closeMenu() {
@@ -518,7 +590,7 @@ export class PinwrenWidget {
     let items: Pin[] = [];
     if (this.publicRead) {
       try {
-        items = (await this.api.pins(location.href, withClosed)).items;
+        items = (await this.api.pins(location.href, withClosed, this.urlPattern)).items;
       } catch {
         // Pins are a nicety; failing to load them must never break the page.
         return;
@@ -562,12 +634,12 @@ export class PinwrenWidget {
       void this.openThread(pin, p);
     });
     marker.addEventListener("pointerenter", () => {
-      preload(this.opts.endpoint, "panel"); // a click opens the thread card, which lives in that chunk
+      preload(this.assets, "panel"); // a click opens the thread card, which lives in that chunk
       this.hover(p, true);
     });
     marker.addEventListener("pointerleave", () => this.hover(p, false));
     marker.addEventListener("focus", () => {
-      preload(this.opts.endpoint, "panel");
+      preload(this.assets, "panel");
       this.hover(p, true);
     });
     marker.addEventListener("blur", () => this.hover(p, false));
@@ -962,7 +1034,7 @@ export class PinwrenWidget {
         return;
       }
       consent.accept();
-      void this.submitComment(pick, anchor, kind, body, ident.read() ?? {}, clientId);
+      void this.submitComment(pick, anchor, kind, body, ident.read() ?? {}, clientId, consent.record());
     };
     send.addEventListener("click", submit);
     text.addEventListener("keydown", (e) => {
@@ -1024,10 +1096,10 @@ export class PinwrenWidget {
     pick: Pick & { range?: Range },
     anchor: AnchorBundle,
     kind: Kind,
-
     body: string,
-    reporter: Reporter,
+    reporter: NonNullable<FeedbackPayload["reporter"]>,
     clientId: string,
+    consent: FeedbackPayload["consent"],
   ) {
     // Optimistic: the pin appears now and gets its number when the server answers.
     const pin: Pin = {
@@ -1051,11 +1123,16 @@ export class PinwrenWidget {
         clientId,
         kind,
         body,
-        page: { url: location.href, title: document.title.slice(0, 300) },
+        page: {
+          url: location.href,
+          title: document.title.slice(0, 300),
+          ...(this.urlPattern ? { urlPattern: this.urlPattern } : {}),
+        },
         anchor,
         environment: environment(this.cfg.privacyMode),
-        reporter: reporter.name || reporter.email ? reporter : undefined,
+        reporter: reporter.name || reporter.email || reporter.externalId ? reporter : undefined,
         diagnostics: kind === "bug" ? snapshotDiagnostics() : undefined,
+        consent,
       });
       pin.id = feedback.id;
       pin.number = feedback.number;
@@ -1084,7 +1161,7 @@ export class PinwrenWidget {
   /** The viewer chunk (side panel + thread card), or null after telling the visitor it couldn't load. */
   private async viewer(): Promise<PanelModule | null> {
     try {
-      return await loadChunk<PanelModule>(this.opts.endpoint, "panel");
+      return await loadChunk<PanelModule>(this.assets, "panel");
     } catch (err) {
       console.warn("[pinwren]", err);
       if (!this.destroyed) this.toast(t("loadFailed"));
@@ -1155,7 +1232,7 @@ export class PinwrenWidget {
     this.panelLoading = true;
     let mod: PanelModule;
     try {
-      mod = await loadChunk<PanelModule>(this.opts.endpoint, "panel");
+      mod = await loadChunk<PanelModule>(this.assets, "panel");
     } catch (err) {
       console.warn("[pinwren]", err);
       if (want === this.panelWant && !this.destroyed) this.toast(t("loadFailed"));
@@ -1228,7 +1305,7 @@ export class PinwrenWidget {
 
   private startOutbox() {
     const project = this.opts.projectKey;
-    this.outbox = new Outbox<WidgetFeedbackCreate, Created>({
+    this.outbox = new Outbox<FeedbackPayload, Created>({
       kv: idbKV("outbox"),
       project,
       send: (p) => this.api.submitOnce(p),
@@ -1254,13 +1331,16 @@ export class PinwrenWidget {
     this.closeCard();
     this.closePanel();
     this.active("bug");
-    // The form (widget-report.js) and the screenshot engine (widget-capture.js) load side by side.
+    // What happened before the report opened is what matters: the replay is frozen now, packed on send.
+    const replay = this.replayOffer();
+    // The form, the screenshot engine and the annotation editor load side by side.
     const want = ++this.reportWant;
     this.reportLoading = true;
-    preload(this.opts.endpoint, "capture");
+    preload(this.assets, "capture");
+    preload(this.assets, "editor");
     let mod: ReportModule;
     try {
-      mod = await loadChunk<ReportModule>(this.opts.endpoint, "report");
+      mod = await loadChunk<ReportModule>(this.assets, "report");
     } catch (err) {
       console.warn("[pinwren]", err);
       if (want === this.reportWant && !this.destroyed) {
@@ -1280,14 +1360,15 @@ export class PinwrenWidget {
     const report = new mod.BugReport({
       host: this.host,
       root: this.root,
-      endpoint: this.opts.endpoint,
+      assets: this.assets,
       project: this.opts.projectKey,
       cfg: this.cfg,
       capture: { ...this.capture, maskSelectors: masks },
       branding: this.branding,
       opener: opener && opener !== document.body ? opener : this.launcher,
       identity: this.identity,
-
+      urlPattern: this.urlPattern,
+      replay,
       submit: (p) => this.api.submitOnce(p),
       queue: async (id, p) => {
         await this.outbox?.add(id, p);
@@ -1313,6 +1394,46 @@ export class PinwrenWidget {
       console.warn("[pinwren]", err);
       report.close(false);
     }
+  }
+
+  // --- Session replay (F-007), lazy widget-replay.js ----------------------------------------------
+
+  /**
+   * Start recording when the project turned replay on — in privacy mode only if the host page explicitly
+   * allowed it. Recording starts when the browser is idle and stays in memory; it's only sent inside a bug
+   * report, after the consent notice where there is one, and the reporter can leave it out.
+   */
+  private startReplay() {
+    const r = this.capture.replay;
+    if (!r.enabled || (this.cfg.privacyMode && !this.opts.allowReplayInPrivacyMode)) return;
+    if (!("CompressionStream" in window)) return; // the upload must be gzip (wave-4 §3)
+    const go = () => {
+      loadChunk<ReplayModule>(this.assets, "replay")
+        .then((m) => {
+          if (this.destroyed || this.recorder) return;
+          this.replayMod = m;
+          this.recorder = m.startReplay({
+            seconds: r.seconds,
+            maskSelectors: this.capture.maskSelectors,
+            maskAllText: this.cfg.privacyMode,
+          });
+        })
+        .catch((err: unknown) => console.warn("[pinwren]", err));
+    };
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(go, { timeout: 5000 });
+      this.cleanup.push(() => cancelIdleCallback(id));
+    } else {
+      const id = setTimeout(go, 1500);
+      this.cleanup.push(() => clearTimeout(id));
+    }
+  }
+
+  private replayOffer(): ReplayOffer | null {
+    const frozen = this.recorder?.freeze();
+    const mod = this.replayMod;
+    if (!frozen || !mod) return null;
+    return { seconds: this.capture.replay.seconds, pack: () => mod.pack(frozen) };
   }
 }
 

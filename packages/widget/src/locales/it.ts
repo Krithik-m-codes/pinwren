@@ -149,6 +149,8 @@ export default {
   network_other: "{n} richieste non riuscite",
   files_one: "{n} allegato",
   files_other: "{n} allegati",
+  replayRow: "Replay della sessione · ultimi {s} s",
+  replayInclude: "Includi il replay della sessione",
   sendReport: "Invia segnalazione",
   sending: "Invio in corso…",
   bugSent: "Segnalazione bug #{n} inviata — grazie!",
