@@ -1,4 +1,4 @@
-import { sendEmail } from "../email/send";
+import { type EmailMessage, sendEmail } from "../email/send";
 import { env } from "../env";
 import type { DomainEvent } from "../events";
 import { type IssueJob, runIssueJob } from "../integrations/issues";
@@ -30,9 +30,11 @@ export function startJobs(): Promise<void> {
       { batchSize: 5, pollingIntervalSeconds: 1 },
       each(dispatchEvent),
     );
-    await boss.work<{ to: string; subject: string; html: string; text: string }>(
+    // Several local workers: a burst of reports fans out to many emails, and one SMTP round trip at a
+    // time let replies to reporters wait behind minutes of team notifications.
+    await boss.work<EmailMessage>(
       QUEUES.email,
-      { pollingIntervalSeconds: 2 },
+      { pollingIntervalSeconds: 1, localConcurrency: 4 },
       each(sendEmail),
     );
     await boss.work<{ deliveryId: string }>(

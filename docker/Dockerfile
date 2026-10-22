@@ -7,11 +7,18 @@ WORKDIR /repo
 # --- dependencies (cached until a manifest or the lockfile changes) ------------------------------------
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# The image builds only apps/web, but --frozen-lockfile needs every workspace manifest.
 COPY apps/web/package.json apps/web/
+COPY apps/www/package.json apps/www/
 COPY packages/api/package.json packages/api/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
 COPY packages/widget/package.json packages/widget/
+COPY packages/react/package.json packages/react/
+COPY packages/sdk/package.json packages/sdk/
+COPY packages/mcp/package.json packages/mcp/
+COPY packages/cli/package.json packages/cli/
+COPY tools/sign-license/package.json tools/sign-license/
 RUN pnpm install --frozen-lockfile
 
 # --- build -----------------------------------------------------------------------------------------------

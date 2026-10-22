@@ -15,7 +15,7 @@ export type StorageDriver = {
 };
 
 // `<projectId>/<uuid>.<ext>` — random, generated server-side; never derived from user input.
-const KEY_PATTERN = /^[a-z0-9-]+\/[a-z0-9-]+\.(png|jpe?g|webp|gif|pdf)$/;
+const KEY_PATTERN = /^[a-z0-9-]+\/[a-z0-9-]+\.(png|jpe?g|webp|gif|pdf|gz)$/;
 function assertKey(key: string) {
   if (!KEY_PATTERN.test(key)) throw new Error(`refusing storage key ${key}`);
 }
@@ -133,6 +133,8 @@ const MAGIC: Record<string, (b: Uint8Array) => boolean> = {
     b[0] === 0x52 && b[1] === 0x49 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50,
   "image/gif": (b) => b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38,
   "application/pdf": (b) => b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46 && b[4] === 0x2d,
+  // Session replays (F-007): gzip (RFC 1952) magic plus the deflate method byte.
+  "application/gzip": (b) => b[0] === 0x1f && b[1] === 0x8b && b[2] === 0x08,
 };
 
 export const EXTENSIONS: Record<string, string> = {
@@ -141,6 +143,7 @@ export const EXTENSIONS: Record<string, string> = {
   "image/webp": "webp",
   "image/gif": "gif",
   "application/pdf": "pdf",
+  "application/gzip": "gz",
 };
 
 /**

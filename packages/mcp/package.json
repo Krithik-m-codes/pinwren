@@ -1,0 +1,84 @@
+{
+  "name": "@pinwren/mcp",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for Pinwren: let AI coding agents read, reproduce and resolve feedback",
+  "keywords": [
+    "pinwren",
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "claude",
+    "cursor",
+    "feedback",
+    "bug-report"
+  ],
+  "license": "MIT",
+  "author": "Krithik-m-codes (https://github.com/Krithik-m-codes)",
+  "homepage": "https://pinwren.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Krithik-m-codes/pinwren.git",
+    "directory": "packages/mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/Krithik-m-codes/pinwren/issues"
+  },
+  "type": "module",
+  "sideEffects": [
+    "./dist/cli.js"
+  ],
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "pinwren-mcp": "./dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "tsup"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "import": {
+          "types": "./dist/index.d.ts",
+          "default": "./dist/index.js"
+        },
+        "require": {
+          "types": "./dist/index.d.cts",
+          "default": "./dist/index.cjs"
+        }
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@pinwren/sdk": "workspace:^",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsup": "^9.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.12"
+  }
+}

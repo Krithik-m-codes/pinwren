@@ -3,8 +3,17 @@
 // Instance-admin checks need the server started with PINWREN_ADMIN_EMAILS=smoke-admin@example.com
 // (or SMOKE_ADMIN_EMAIL / SMOKE_ADMIN_PASSWORD pointing at an existing admin); otherwise they are
 // skipped. Webhook checks start a local HTTP receiver, so the server must be able to reach 127.0.0.1.
+// Wave-4 SDK/MCP/CLI checks run the built packages:
+//   pnpm --filter @pinwren/sdk --filter @pinwren/mcp --filter @pinwren/cli build
+import { spawnSync } from "node:child_process";
 import { createHmac } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { createRequire } from "node:module";
+import { createServer as createTcpServer } from "node:net";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { gunzipSync, gzipSync } from "node:zlib";
 
 const B = process.argv[2] ?? "http://localhost:3100";
 const mainJar = { cookie: "" };
@@ -534,7 +543,9 @@ try {
   });
   const fid4 = r.body.feedback?.id;
   const created = await waitFor(() =>
-    received.find((x) => x.headers["pinwren-event"] === "feedback.created" && x.body.includes(fid4)),
+    received.find(
+      (x) => x.path === "/hook" && x.headers["pinwren-event"] === "feedback.created" && x.body.includes(fid4),
+    ),
   );
   check("feedback.created delivered by the job queue", !!created, created ? "" : "timeout");
   check("delivery signature verifies", created && verify(created, secret));
@@ -579,7 +590,7 @@ console.log("\n— public API");
 r = await call("/api/tokens", { method: "POST", json: { name: "read only", scopes: ["feedback:read"] } });
 check(
   "create read token (secret shown once)",
-  r.status === 201 && r.body.secret?.startsWith("ann_"),
+  r.status === 201 && r.body.secret?.startsWith("pwt_"),
   r.status,
 );
 const readToken = r.body.secret;
@@ -958,9 +969,11 @@ try {
     r.status,
   );
   r = await W("/w/config");
+  // "Hide Powered by" is Enterprise white-label (wave-4 §6): saved, but only applied with a licence
+  // (checked at the end, once a licence is installed).
   check(
-    "widget config carries branding",
-    r.body.branding?.hidePoweredBy === true &&
+    "widget config carries branding (Powered by stays without white-label)",
+    r.body.branding?.hidePoweredBy === false &&
       r.body.branding?.dialogAccent === "#112233" &&
       r.body.branding?.logoUrl === logo?.url,
   );
@@ -1275,6 +1288,7 @@ try {
   check(
     "inbound changes are not echoed back to GitHub",
     fake.requests.filter((x) => x.method === "PATCH").length === patchesBefore,
+    JSON.stringify(fake.requests.filter((x) => x.method === "PATCH").slice(patchesBefore)),
   );
 
   // --- GitLab issue sync (F-077) ------------------------------------------------------------------
@@ -1462,6 +1476,1023 @@ try {
   }
 } finally {
   fakeServer.close();
+}
+
+// =============================================================================================
+// Wave 4: real time, rounds + views, replay, identity, URL patterns, viewer role, SDK/MCP/CLI,
+// consent, unsubscribe, licences (docs/contracts/wave-4.md)
+// =============================================================================================
+const root = fileURLToPath(new URL("..", import.meta.url));
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+const w4report = (extra = {}) => ({
+  ...report,
+  clientId: crypto.randomUUID(),
+  screenshot: undefined,
+  diagnostics: undefined,
+  reporter: undefined,
+  ...extra,
+});
+
+/** Read an SSE stream into `events` until closed. */
+async function openStream(jar, query = "", headers = {}) {
+  const ctrl = new AbortController();
+  const res = await fetch(`${B}/api/stream${query}`, {
+    headers: { cookie: jar.cookie, accept: "text/event-stream", ...headers },
+    signal: ctrl.signal,
+  });
+  const events = [];
+  if (res.ok && res.body) {
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    void (async () => {
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let i;
+          while ((i = buf.indexOf("\n\n")) >= 0) {
+            const chunk = buf.slice(0, i);
+            buf = buf.slice(i + 2);
+            const ev = {};
+            for (const line of chunk.split("\n")) {
+              const m = /^(\w+): ?(.*)$/.exec(line);
+              if (m) ev[m[1]] = ev[m[1]] === undefined ? m[2] : `${ev[m[1]]}\n${m[2]}`;
+            }
+            if (ev.event)
+              events.push({ event: ev.event, id: ev.id, data: JSON.parse(ev.data ?? "{}"), at: Date.now() });
+          }
+        }
+      } catch {
+        // aborted
+      }
+    })();
+  }
+  return {
+    status: res.status,
+    type: res.headers.get("content-type") ?? "",
+    events,
+    close: () => ctrl.abort(),
+  };
+}
+
+console.log("\n— wave 4: health + real time");
+// Wave 4 files many reports from one IP: lift the per-minute widget limit for the test project.
+await call(`/api/projects/${projectId}`, { method: "PATCH", json: { widgetRateLimitPerMin: 1000 } });
+r = await call("/api/health");
+check("health reports the version", r.body.ok === true && typeof r.body.version === "string");
+
+const otherProject = (
+  await call("/api/projects", {
+    method: "POST",
+    json: { name: "Second site", allowedOrigins: ["localhost:5173"] },
+  })
+).body.project;
+const stream = await openStream(mainJar);
+check("SSE stream opens", stream.status === 200 && stream.type.includes("text/event-stream"), stream.status);
+const scoped = await openStream(mainJar, `?projectIds=${otherProject.id}`);
+await waitFor(
+  () => stream.events.some((e) => e.event === "ping") && scoped.events.some((e) => e.event === "ping"),
+  10_000,
+);
+check(
+  "stream sends a ping at once",
+  stream.events.some((e) => e.event === "ping"),
+);
+r = await call(`/api/stream?projectIds=${crypto.randomUUID()}`);
+check("stream refuses another org's project", r.status === 404, r.status);
+
+const t0 = Date.now();
+r = await W("/w/feedback", { method: "POST", json: w4report({ body: "Realtime check", kind: "comment" }) });
+const rtId = r.body.feedback?.id;
+const created4 = await waitFor(
+  () => stream.events.find((e) => e.event === "feedback.created" && e.data.id === rtId),
+  5_000,
+);
+check(
+  "feedback.created reaches the stream within 2 s of a widget submit",
+  !!created4 && created4.at - t0 < 2_000 && created4.data.number > 0 && created4.data.projectId === projectId,
+  created4 ? `${created4.at - t0} ms` : "timeout",
+);
+check(
+  "stream scoped to another project doesn't get it",
+  !scoped.events.some((e) => e.event === "feedback.created" && e.data.id === rtId),
+);
+const createdEventId = created4?.id;
+await call(`/api/feedback/${rtId}`, { method: "PATCH", json: { status: "in_progress" } });
+const upd = await waitFor(
+  () => stream.events.find((e) => e.event === "feedback.updated" && e.data.id === rtId),
+  5_000,
+);
+check("feedback.updated carries the change", upd?.data.changes?.status?.to === "in_progress");
+await call(`/api/feedback/${rtId}/comments`, {
+  method: "POST",
+  json: { body: "On it", visibility: "internal" },
+});
+const cmt = await waitFor(
+  () => stream.events.find((e) => e.event === "comment.created" && e.data.feedbackId === rtId),
+  5_000,
+);
+check(
+  "comment.created on the stream",
+  cmt?.data.visibility === "internal" && cmt.data.authorName === "Smoke Tester",
+);
+
+r = await call("/api/presence", { method: "POST", json: { feedbackId: rtId }, jar: memberJar });
+check("presence heartbeat accepted", r.status === 200, r.status);
+const here = await waitFor(
+  () =>
+    stream.events.find(
+      (e) =>
+        e.event === "presence" && e.data.feedbackId === rtId && e.data.users.some((u) => u.id === memberId),
+    ),
+  5_000,
+);
+check("presence event lists who is viewing", !!here && here.data.users[0]?.name === "Smoke Member");
+r = await call("/api/presence", { method: "POST", json: { feedbackId: null }, jar: memberJar });
+const gone = await waitFor(
+  () =>
+    stream.events.find(
+      (e) => e.event === "presence" && e.data.feedbackId === rtId && e.data.users.length === 0,
+    ),
+  5_000,
+);
+check("leaving clears presence", !!gone);
+r = await call("/api/presence", { method: "POST", json: { feedbackId: crypto.randomUUID() } });
+check("presence on an unknown item is 404", r.status === 404, r.status);
+
+const resumed = await openStream(mainJar, "", { "last-event-id": createdEventId ?? "" });
+await waitFor(() => resumed.events.some((e) => e.event === "feedback.updated" && e.data.id === rtId), 5_000);
+check(
+  "Last-Event-ID replays what came after",
+  resumed.events.some((e) => e.event === "feedback.updated" && e.data.id === rtId) &&
+    !resumed.events.some((e) => e.event === "feedback.created" && e.data.id === rtId),
+);
+resumed.close();
+r = await W("/w/feedback", { method: "POST", json: w4report({ body: "Delete me" }) });
+const delId = r.body.feedback?.id;
+await call(`/api/feedback/${delId}`, { method: "DELETE" });
+check(
+  "feedback.deleted on the stream",
+  !!(await waitFor(
+    () => stream.events.find((e) => e.event === "feedback.deleted" && e.data.id === delId),
+    5_000,
+  )),
+);
+stream.close();
+scoped.close();
+
+// --- Rounds + views -------------------------------------------------------------------------------
+console.log("\n— wave 4: review rounds + saved views");
+r = await call(`/api/projects/${projectId}/rounds`, {
+  method: "POST",
+  json: { name: "Sprint 1", dueAt: new Date(Date.now() + 7 * 86_400_000).toISOString() },
+});
+check("create a review round", r.status === 201 && r.body.round?.status === "active", r.status);
+const round1 = r.body.round;
+r = await W("/w/config");
+check(
+  "/w/config names the active round",
+  r.body.activeRound?.id === round1?.id && r.body.activeRound.name === "Sprint 1",
+);
+r = await W("/w/feedback", {
+  method: "POST",
+  json: w4report({ body: '=HYPERLINK("http://evil.example","x") (paren) back\\slash ünïcode ✓' }),
+});
+const inRound = r.body.feedback?.id;
+r = await call(`/api/feedback/${inRound}`);
+check("ingest defaults to the active round", r.body.feedback?.roundId === round1?.id);
+r = await call(`/api/projects/${projectId}/rounds`, { method: "POST", json: { name: "Sprint 2" } });
+const round2 = r.body.round;
+r = await W("/w/config");
+check("two active rounds: no default", r.body.activeRound === null);
+r = await W("/w/feedback", { method: "POST", json: w4report({ roundId: round2?.id }) });
+const inRound2 = r.body.feedback?.id;
+r = await call(`/api/feedback/${inRound2}`);
+check("ingest honours roundId", r.body.feedback?.roundId === round2?.id);
+r = await call(`/api/projects/${otherProject.id}/rounds`, { method: "POST", json: { name: "Elsewhere" } });
+const foreignRound = r.body.round;
+r = await call(`/api/feedback/${inRound2}`, { method: "PATCH", json: { roundId: foreignRound?.id } });
+check(
+  "moving into another project's round is refused",
+  r.status === 400 && r.body.code === "INVALID_ROUND",
+  r.status,
+);
+r = await call(`/api/feedback/${inRound2}`, { method: "PATCH", json: { roundId: round1?.id } });
+check("PATCH feedback roundId", r.status === 200 && r.body.feedback?.roundId === round1?.id);
+r = await call(`/api/feedback?status=all&roundId=${round1?.id}`);
+check(
+  "list filters by round",
+  r.status === 200 && r.body.items.length === 2 && r.body.items.every((i) => i.roundId === round1?.id),
+  r.body.items?.length,
+);
+r = await call(`/api/projects/${projectId}/rounds`);
+const listed = r.body.rounds?.find((x) => x.id === round1?.id);
+check(
+  "rounds list with counts",
+  listed?.counts?.total === 2 && listed.counts.open === 2,
+  JSON.stringify(listed?.counts),
+);
+r = await call(`/api/rounds/${round2?.id}`, {
+  method: "PATCH",
+  json: { status: "closed", name: "Sprint 2 (done)" },
+});
+check("close a round", r.status === 200 && r.body.round?.status === "closed" && !!r.body.round.closedAt);
+r = await W("/w/config");
+check("one active round again", r.body.activeRound?.id === round1?.id);
+const csvRes = await fetch(`${B}/api/rounds/${round1?.id}/export?format=csv`, {
+  headers: { cookie: mainJar.cookie },
+});
+const csv = await csvRes.text();
+check(
+  "CSV export",
+  csvRes.status === 200 &&
+    (csvRes.headers.get("content-type") ?? "").startsWith("text/csv") &&
+    (csvRes.headers.get("content-disposition") ?? "").startsWith("attachment") &&
+    csv.includes("number,kind,status"),
+);
+check(
+  "CSV neutralises formulas",
+  csv.includes(`"'=HYPERLINK(""http://evil.example""`) && !/(^|,)=HYPERLINK/m.test(csv),
+);
+const pdfRes = await fetch(`${B}/api/rounds/${round1?.id}/export?format=pdf`, {
+  headers: { cookie: mainJar.cookie },
+});
+const pdfBytes = Buffer.from(await pdfRes.arrayBuffer());
+const pdfText = pdfBytes.toString("latin1");
+check(
+  "PDF export starts with %PDF",
+  pdfRes.status === 200 &&
+    pdfRes.headers.get("content-type") === "application/pdf" &&
+    pdfText.startsWith("%PDF-") &&
+    pdfText.trimEnd().endsWith("%%EOF"),
+  pdfRes.status,
+);
+check(
+  "PDF escapes untrusted text",
+  pdfText.includes("\\(paren\\) back\\\\slash") && pdfText.includes("Sprint 1"),
+);
+r = await call(`/api/rounds/${round2?.id}`, { method: "DELETE" });
+check("delete a round", r.status === 204, r.status);
+r = await call(`/api/rounds/${round2?.id}`);
+check("deleted round is gone", r.status === 404, r.status);
+r = await call(`/api/rounds/${round1?.id}/export?format=docx`);
+check("unknown export format refused", r.status === 400, r.status);
+
+r = await call("/api/views", {
+  method: "POST",
+  json: {
+    name: "Open bugs",
+    filters: { status: "open", kind: "bug", projectId },
+    layout: "board",
+    shared: true,
+  },
+});
+check(
+  "create a shared view",
+  r.status === 201 && r.body.view?.layout === "board" && r.body.view.mine === true,
+  r.status,
+);
+const sharedView = r.body.view;
+r = await call("/api/views", { method: "POST", json: { name: "Mine only", filters: { q: "checkout" } } });
+const personalView = r.body.view;
+r = await call("/api/views", { jar: memberJar });
+check(
+  "members see shared views, not others' personal ones",
+  r.body.views?.some((v) => v.id === sharedView?.id) && !r.body.views.some((v) => v.id === personalView?.id),
+);
+r = await call(`/api/views/${sharedView?.id}`, {
+  method: "PATCH",
+  json: { name: "Hijacked" },
+  jar: memberJar,
+});
+check("only the owner (or an admin) edits a shared view", r.status === 403, r.status);
+r = await call(`/api/views/${personalView?.id}`, { method: "PATCH", json: { name: "Peek" }, jar: memberJar });
+check("others' personal views are invisible", r.status === 404, r.status);
+r = await call(`/api/views/${sharedView?.id}`, {
+  method: "PATCH",
+  json: { filters: { status: "all" }, layout: "list" },
+});
+check(
+  "owner edits a view",
+  r.status === 200 && r.body.view?.filters?.status === "all" && r.body.view.layout === "list",
+);
+r = await call("/api/views", { method: "POST", json: { name: "Bad", filters: { status: "nope" } } });
+check("view filters are validated", r.status === 400, r.status);
+r = await call(`/api/views/${personalView?.id}`, { method: "DELETE" });
+check("delete a view", r.status === 204, r.status);
+
+// --- Session replay ---------------------------------------------------------------------------------
+console.log("\n— wave 4: session replay");
+const now4 = Date.now();
+const rrweb = [
+  { type: 4, timestamp: now4, data: { href: `${site}/checkout`, width: 390, height: 844 } },
+  {
+    type: 2,
+    timestamp: now4 + 10,
+    data: {
+      node: {
+        type: 0,
+        id: 1,
+        childNodes: [
+          {
+            type: 2,
+            id: 2,
+            tagName: "button",
+            attributes: { id: "pay" },
+            childNodes: [{ type: 3, id: 3, textContent: "Pay <now>" }],
+          },
+        ],
+      },
+    },
+  },
+  { type: 3, timestamp: now4 + 1500, data: { source: 2, type: 2, id: 2 } },
+];
+const replayGz = gzipSync(Buffer.from(JSON.stringify(rrweb)));
+const replay = {
+  dataUrl: `data:application/gzip;base64,${replayGz.toString("base64")}`,
+  durationMs: 1500,
+  events: 3,
+};
+r = await W("/w/feedback", { method: "POST", json: w4report({ replay }) });
+const noReplay = r.body.feedback?.id;
+r = await call(`/api/feedback/${noReplay}`);
+check("replay ignored while the project doesn't record replays", r.body.assets?.length === 0);
+r = await call(`/api/projects/${projectId}`, {
+  method: "PATCH",
+  json: { captureConfig: { replay: { enabled: true, seconds: 90 } } },
+});
+check("enable replay capture", r.body.project?.captureConfig?.replay?.seconds === 90);
+r = await W("/w/config");
+check(
+  "/w/config carries capture.replay",
+  r.body.capture?.replay?.enabled === true && r.body.capture.replay.seconds === 90,
+);
+r = await call(`/api/projects/${projectId}`, {
+  method: "PATCH",
+  json: { captureConfig: { replay: { seconds: 500 } } },
+});
+check(
+  "replay seconds stay within 30..120",
+  r.status === 400 && r.body.code === "INVALID_CAPTURE_CONFIG",
+  r.status,
+);
+r = await W("/w/feedback", {
+  method: "POST",
+  json: w4report({
+    replay,
+    body: "Pay button broken",
+    diagnostics: {
+      console: [{ level: "error", message: "TypeError: pay is not a function", at: now4 + 1600 }],
+      network: [{ method: "POST", url: "/api/pay", status: 500, durationMs: 120, at: now4 + 1550 }],
+    },
+  }),
+});
+check("report with a replay accepted", r.status === 201, r.status);
+const replayFid = r.body.feedback?.id;
+r = await call(`/api/feedback/${replayFid}`);
+const replayAsset = r.body.assets?.find((a) => a.kind === "replay");
+check(
+  "replay stored as an asset with its facts",
+  replayAsset?.contentType === "application/gzip" &&
+    replayAsset.meta?.durationMs === 1500 &&
+    replayAsset.meta.events === 3,
+);
+const replayRes = await fetch(`${B}/api/assets/${replayAsset?.id}`, { headers: { cookie: mainJar.cookie } });
+const replayBack = Buffer.from(await replayRes.arrayBuffer());
+check("replay served back as gzip rrweb events", JSON.parse(gunzipSync(replayBack).toString()).length === 3);
+r = await call("/api/feedback?status=all&limit=100");
+check("list marks hasReplay", r.body.items?.find((i) => i.id === replayFid)?.hasReplay === true);
+r = await W("/w/feedback", {
+  method: "POST",
+  json: w4report({
+    replay: {
+      ...replay,
+      dataUrl: `data:application/gzip;base64,${Buffer.from("not gzip").toString("base64")}`,
+    },
+  }),
+});
+check("replay that isn't gzip refused", r.status === 400 && r.body.code === "INVALID_REPLAY", r.status);
+const big = Buffer.alloc(10 * 1024 * 1024 + 1);
+big[0] = 0x1f;
+big[1] = 0x8b;
+big[2] = 0x08;
+r = await W("/w/feedback", {
+  method: "POST",
+  json: w4report({
+    replay: { ...replay, dataUrl: `data:application/gzip;base64,${big.toString("base64")}` },
+  }),
+});
+// The API answers 400 INVALID_REPLAY; until next.config raises middlewareClientMaxBodySize, Next's
+// proxy cuts bodies at 10 MB first and the truncated JSON is a 400 as well.
+check(
+  "replay over 10 MB refused",
+  r.status === 400 && (r.body.code === "INVALID_REPLAY" || r.body.code === "HTTP_ERROR"),
+  `${r.status} ${r.body.code}`,
+);
+
+// --- Consent, identity, URL patterns ----------------------------------------------------------------
+console.log("\n— wave 4: consent, signed identity, URL patterns");
+r = await W("/w/feedback", {
+  method: "POST",
+  json: w4report({ consent: { version: "privacy-v3", acceptedAt: new Date().toISOString() } }),
+});
+r = await call(`/api/feedback/${r.body.feedback?.id}`);
+check("consent record stored on the feedback", r.body.feedback?.consent?.version === "privacy-v3");
+r = await call(`/api/projects/${projectId}/identity-secret`, { jar: memberJar });
+check("members can't read the identity secret", r.status === 403, r.status);
+r = await call(`/api/projects/${projectId}/identity-secret`);
+const idSecret = r.body.secret;
+check("identity secret created on first read", r.status === 200 && idSecret?.startsWith("idsec_"));
+r = await call(`/api/projects/${projectId}/identity-secret`);
+check("identity secret is stable", r.body.secret === idSecret);
+const signId = (secret, id) => createHmac("sha256", secret).update(id).digest("hex");
+const identified = (signature) =>
+  W("/w/feedback", {
+    method: "POST",
+    json: w4report({
+      reporter: { externalId: "user-42", name: "Signed Sam", email: "sam@example.com", signature },
+    }),
+  });
+r = await identified(signId(idSecret, "user-42"));
+const signedFid = r.body.feedback?.id;
+r = await call(`/api/feedback/${signedFid}`);
+check(
+  "valid signature marks the reporter verified (signature not stored)",
+  r.body.feedback?.reporterGuest?.verified === true &&
+    !JSON.stringify(r.body).includes(signId(idSecret, "user-42")),
+);
+r = await W(`/w/feedback/${signedFid}/comments`, {
+  method: "POST",
+  json: {
+    body: "Signed reply",
+    author: { name: "Signed Sam", externalId: "user-42", signature: signId(idSecret, "user-42") },
+  },
+});
+check(
+  "signed widget reply is verified",
+  r.status === 201 && r.body.comment?.authorVerified === true,
+  r.status,
+);
+r = await W(`/w/feedback/${signedFid}/comments`);
+check(
+  "thread shows the verified reply",
+  r.body.items?.some((c) => c.body === "Signed reply" && c.authorVerified === true),
+);
+r = await identified(signId(idSecret, "user-43"));
+r = await call(`/api/feedback/${r.body.feedback?.id}`);
+check("signature for another id: not verified", r.body.feedback?.reporterGuest?.verified === false);
+r = await call(`/api/projects/${projectId}/identity-secret/rotate`, { method: "POST" });
+check("rotate the identity secret", r.status === 200 && r.body.secret !== idSecret);
+r = await identified(signId(idSecret, "user-42"));
+r = await call(`/api/feedback/${r.body.feedback?.id}`);
+check("old secret stops verifying after rotation", r.body.feedback?.reporterGuest?.verified === false);
+
+for (const [path, pattern] of [
+  ["/product/1", "/product/:id"],
+  ["/product/2?color=red", "/product/:id"],
+  ["/about", undefined],
+]) {
+  await W("/w/feedback", {
+    method: "POST",
+    json: w4report({
+      kind: "comment",
+      page: { url: `${site}${path}`, ...(pattern ? { urlPattern: pattern } : {}) },
+    }),
+  });
+}
+await W("/w/feedback", {
+  method: "POST",
+  json: w4report({ kind: "comment", page: { url: `${site}/product/3` } }),
+});
+r = await W(`/w/feedback?urlPattern=${encodeURIComponent("/product/:id")}`);
+const patternUrls = (r.body.items ?? []).map((i) => i.pageUrl);
+check(
+  "pins by URL pattern group every matching page",
+  r.status === 200 &&
+    patternUrls.some((u) => u.includes("/product/1")) &&
+    patternUrls.some((u) => u.includes("/product/2")) &&
+    patternUrls.some((u) => u.includes("/product/3")) &&
+    !patternUrls.some((u) => u.includes("/about")),
+  patternUrls.length,
+);
+r = await W(`/w/feedback?urlPattern=${encodeURIComponent("/blog/*")}`);
+check("pattern with no pages: no pins", r.status === 200 && r.body.items.length === 0);
+r = await W(`/w/feedback?url=${encodeURIComponent(`${site}/checkout?b=2&a=1`)}`);
+check("plain url pins still work", r.status === 200 && Array.isArray(r.body.items));
+
+// --- Viewer role ----------------------------------------------------------------------------------------
+console.log("\n— wave 4: viewer role");
+const viewerEmail = `smoke-viewer+${Date.now()}@example.com`;
+r = await call("/api/auth/organization/invite-member", {
+  method: "POST",
+  json: { email: viewerEmail, role: "viewer" },
+});
+check("invite a viewer", r.status === 200, r.status);
+const viewerJar = { cookie: "" };
+await call("/api/auth/sign-up/email", {
+  method: "POST",
+  json: { name: "Smoke Viewer", email: viewerEmail, password: "correct-horse-3" },
+  jar: viewerJar,
+});
+await call("/api/auth/organization/accept-invitation", {
+  method: "POST",
+  json: { invitationId: r.body?.id },
+  jar: viewerJar,
+});
+await call("/api/auth/organization/set-active", {
+  method: "POST",
+  json: { organizationId: orgId },
+  jar: viewerJar,
+});
+r = await call("/api/me", { jar: viewerJar });
+check("viewer reaches the dashboard", r.status === 200 && r.body.role === "viewer");
+r = await call("/api/feedback?status=all", { jar: viewerJar });
+check("viewer reads the inbox (200)", r.status === 200 && r.body.items.length > 0);
+r = await call(`/api/feedback/${fid}`, { jar: viewerJar });
+check("viewer reads an item (200)", r.status === 200);
+r = await call(`/api/projects/${projectId}/rounds`, { jar: viewerJar });
+check("viewer reads rounds (200)", r.status === 200);
+r = await call(`/api/feedback/${fid}`, { method: "PATCH", json: { status: "open" }, jar: viewerJar });
+check(
+  "viewer can't change an item (403 READ_ONLY_ROLE)",
+  r.status === 403 && r.body.code === "READ_ONLY_ROLE",
+  r.status,
+);
+r = await call(`/api/feedback/${fid}/comments`, { method: "POST", json: { body: "hi" }, jar: viewerJar });
+check("viewer can't comment", r.status === 403 && r.body.code === "READ_ONLY_ROLE", r.status);
+r = await call(`/api/projects/${projectId}/rounds`, { method: "POST", json: { name: "x" }, jar: viewerJar });
+check("viewer can't create rounds", r.status === 403 && r.body.code === "READ_ONLY_ROLE", r.status);
+r = await call("/api/projects", { method: "POST", json: { name: "x" }, jar: viewerJar });
+check("viewer can't create projects", r.status === 403 && r.body.code === "READ_ONLY_ROLE", r.status);
+r = await call("/api/views", { method: "POST", json: { name: "x", shared: true }, jar: viewerJar });
+check("viewer can't share a view", r.status === 403 && r.body.code === "READ_ONLY_ROLE", r.status);
+r = await call("/api/views", { method: "POST", json: { name: "My view" }, jar: viewerJar });
+check("viewer keeps personal views", r.status === 201, r.status);
+r = await call("/api/presence", { method: "POST", json: { feedbackId: fid }, jar: viewerJar });
+check("viewer shows up in presence", r.status === 200, r.status);
+r = await call("/api/tokens", {
+  method: "POST",
+  json: { name: "viewer", scopes: ["feedback:read", "feedback:write", "comments:write"] },
+  jar: viewerJar,
+});
+const viewerToken = r.body.secret;
+r = await V(`/feedback/${fid}`, viewerToken);
+check("viewer token reads (200)", r.status === 200, r.status);
+r = await V(`/feedback/${fid}`, viewerToken, { method: "PATCH", json: { status: "open" } });
+check(
+  "viewer token can't write, whatever its scopes",
+  r.status === 403 && r.body.code === "READ_ONLY_ROLE",
+  r.status,
+);
+
+// --- SDK, MCP, CLI against the live server --------------------------------------------------------------
+console.log("\n— wave 4: SDK, MCP, CLI");
+const reqMcp = createRequire(join(root, "packages/mcp/package.json"));
+const sdkDist = join(root, "packages/sdk/dist/index.js");
+const mcpCli = join(root, "packages/mcp/dist/cli.js");
+const pinwrenCli = join(root, "packages/cli/dist/cli.js");
+if (!existsSync(sdkDist) || !existsSync(mcpCli) || !existsSync(pinwrenCli)) {
+  skip(
+    "SDK / MCP / CLI",
+    "build them first: pnpm --filter @pinwren/sdk --filter @pinwren/mcp --filter @pinwren/cli build",
+  );
+} else {
+  const { Pinwren, PinwrenError } = await import(pathToFileURL(sdkDist).href);
+  const pw = new Pinwren({ url: B, token: writeToken });
+  const projects = await pw.projects.list();
+  check(
+    "SDK lists projects with open counts",
+    projects.some((p) => p.id === projectId && typeof p.openCount === "number"),
+  );
+  const page1 = await pw.feedback.list({ projectId, status: "all", limit: 2 });
+  check("SDK lists feedback with a cursor", page1.items.length === 2 && typeof page1.nextCursor === "string");
+  let n = 0;
+  for await (const _ of pw.feedback.iterate({ projectId, status: "all", limit: 5 })) n++;
+  check("SDK iterates every page", n > 5, n);
+  const detail = await pw.feedback.get(replayFid);
+  check(
+    "SDK gets an item with its assets",
+    detail.feedback.id === replayFid && detail.assets.some((a) => a.kind === "replay"),
+  );
+  const updated = await pw.feedback.update(replayFid, { priority: "urgent" });
+  check("SDK updates", updated.priority === "urgent");
+  const repro = await pw.feedback.reproduction(replayFid);
+  check(
+    "reproduction context from replay + diagnostics",
+    repro.replay?.summarized === true &&
+      repro.markdown.includes('Clicked button\\#pay "Pay \\<now\\>"') &&
+      repro.markdown.includes("Request failed: POST /api/pay → 500") &&
+      repro.markdown.includes("Console error: TypeError") &&
+      repro.steps.findIndex((s) => s.kind === "click") < repro.steps.findIndex((s) => s.kind === "network"),
+    repro.markdown.slice(0, 120),
+  );
+  const rounds4 = await pw.rounds.list(projectId);
+  check(
+    "SDK lists rounds",
+    rounds4.some((x) => x.id === round1?.id),
+  );
+  const asset = await pw.assets.get(replayAsset?.id);
+  check(
+    "SDK downloads assets",
+    asset.contentType === "application/gzip" && asset.bytes.length === replayGz.length,
+  );
+  const err = await new Pinwren({ url: B, token: readToken }).feedback.list().catch((e) => e);
+  check(
+    "SDK raises PinwrenError",
+    err instanceof PinwrenError && err.status === 401 && err.code === "INVALID_TOKEN",
+  );
+
+  // MCP over Streamable HTTP at /mcp, with the official client.
+  const { Client } = await import(
+    pathToFileURL(reqMcp.resolve("@modelcontextprotocol/sdk/client/index.js")).href
+  );
+  const { StreamableHTTPClientTransport } = await import(
+    pathToFileURL(reqMcp.resolve("@modelcontextprotocol/sdk/client/streamableHttp.js")).href
+  );
+  const { StdioClientTransport } = await import(
+    pathToFileURL(reqMcp.resolve("@modelcontextprotocol/sdk/client/stdio.js")).href
+  );
+  const mcpText = (res) => res.content?.map((c) => c.text).join("") ?? "";
+  r = await call("/mcp", {
+    method: "POST",
+    json: { jsonrpc: "2.0", id: 1, method: "tools/list" },
+    jar: { cookie: "" },
+  });
+  check("/mcp needs a token", r.status === 401 && r.body.code === "INVALID_TOKEN", r.status);
+  r = await call("/mcp", {
+    method: "POST",
+    json: { jsonrpc: "2.0", id: 1, method: "tools/list" },
+    headers: { authorization: `Bearer ${writeToken.slice(0, -3)}xyz` },
+    jar: { cookie: "" },
+  });
+  check("/mcp refuses a wrong token", r.status === 401, r.status);
+  const http = new Client({ name: "smoke", version: "1.0.0" });
+  await http.connect(
+    new StreamableHTTPClientTransport(new URL(`${B}/mcp`), {
+      requestInit: { headers: { authorization: `Bearer ${writeToken}` } },
+    }),
+  );
+  const tools = (await http.listTools()).tools.map((t) => t.name).sort();
+  check(
+    "MCP (HTTP) exposes the 7 tools",
+    JSON.stringify(tools) ===
+      JSON.stringify(
+        [
+          "add_comment",
+          "get_feedback",
+          "get_reproduction_context",
+          "list_projects",
+          "resolve_feedback",
+          "search_feedback",
+          "update_feedback",
+        ].sort(),
+      ),
+    tools.join(","),
+  );
+  let res = await http.callTool({ name: "list_projects", arguments: {} });
+  check(
+    "MCP list_projects",
+    JSON.parse(mcpText(res)).some((p) => p.id === projectId),
+  );
+  res = await http.callTool({
+    name: "search_feedback",
+    arguments: { projectId, status: "all", text: "Pay button", limit: 5 },
+  });
+  check(
+    "MCP search_feedback",
+    JSON.parse(mcpText(res)).items.some((i) => i.id === replayFid),
+  );
+  res = await http.callTool({ name: "get_feedback", arguments: { id: replayFid } });
+  const got = JSON.parse(mcpText(res));
+  check(
+    "MCP get_feedback: thread, errors, asset URLs",
+    got.id === replayFid &&
+      got.console.length === 1 &&
+      got.failingRequests.length === 1 &&
+      got.assets[0]?.url.includes("/api/v1/assets/"),
+  );
+  res = await http.callTool({ name: "get_reproduction_context", arguments: { id: replayFid } });
+  check(
+    "MCP get_reproduction_context is Markdown",
+    mcpText(res).startsWith("# Reproduce #") && mcpText(res).includes("## Steps"),
+  );
+  res = await http.callTool({ name: "add_comment", arguments: { id: replayFid, body: "Looking (via MCP)" } });
+  check("MCP add_comment", !res.isError && JSON.parse(mcpText(res)).visibility === "internal");
+  res = await http.callTool({ name: "update_feedback", arguments: { id: replayFid, status: "in_review" } });
+  check("MCP update_feedback", JSON.parse(mcpText(res)).status === "in_review");
+  res = await http.callTool({
+    name: "resolve_feedback",
+    arguments: { id: replayFid, note: "Fixed in https://example.com/pr/1" },
+  });
+  check("MCP resolve_feedback with a note", JSON.parse(mcpText(res)).status === "resolved");
+  r = await call(`/api/feedback/${replayFid}`);
+  check(
+    "resolution note saved as internal comment",
+    r.body.comments?.some((c) => c.body.includes("/pr/1") && c.visibility === "internal"),
+  );
+  res = await http.callTool({ name: "get_feedback", arguments: { id: crypto.randomUUID() } });
+  check("MCP reports API errors as tool errors", res.isError === true && mcpText(res).includes("NOT_FOUND"));
+  await http.close();
+  const viewerMcp = new Client({ name: "smoke-viewer", version: "1.0.0" });
+  await viewerMcp.connect(
+    new StreamableHTTPClientTransport(new URL(`${B}/mcp`), {
+      requestInit: { headers: { authorization: `Bearer ${viewerToken}` } },
+    }),
+  );
+  res = await viewerMcp.callTool({ name: "update_feedback", arguments: { id: replayFid, status: "open" } });
+  check("MCP respects the viewer role", res.isError === true && mcpText(res).includes("READ_ONLY_ROLE"));
+  await viewerMcp.close();
+
+  // The stdio binary, as `npx @pinwren/mcp` runs it.
+  const stdio = new Client({ name: "smoke-stdio", version: "1.0.0" });
+  await stdio.connect(
+    new StdioClientTransport({
+      command: process.execPath,
+      args: [mcpCli],
+      env: { ...process.env, PINWREN_URL: B, PINWREN_TOKEN: writeToken },
+      stderr: "ignore",
+    }),
+  );
+  check("MCP (stdio) lists the tools", (await stdio.listTools()).tools.length === 7);
+  res = await stdio.callTool({ name: "search_feedback", arguments: { projectId, status: "all", limit: 3 } });
+  check("MCP (stdio) search_feedback", JSON.parse(mcpText(res)).items.length === 3);
+  await stdio.close();
+
+  // CLI
+  const runCli = (args) => {
+    const out = spawnSync(process.execPath, [pinwrenCli, ...args], { encoding: "utf8", timeout: 60_000 });
+    return { code: out.status, stdout: out.stdout, stderr: out.stderr };
+  };
+  let cli = runCli(["doctor", "--url", B, "--key", publicKey, "--origin", site, "--json"]);
+  let doc = JSON.parse(cli.stdout || "{}");
+  check(
+    "CLI doctor: server, widget.js and config OK",
+    cli.code === 0 &&
+      doc.ok === true &&
+      doc.checks?.some((c) => c.name === "server" && c.detail.includes("Pinwren")),
+    cli.stdout || cli.stderr,
+  );
+  cli = runCli(["doctor", "--url", B, "--key", publicKey, "--origin", "https://evil.example", "--json"]);
+  doc = JSON.parse(cli.stdout || "{}");
+  check(
+    "CLI doctor flags an origin that isn't allowed",
+    cli.code === 1 &&
+      doc.checks?.some((c) => c.name === "widget config" && !c.ok && c.detail.includes("allowed origins")),
+  );
+  cli = runCli(["status", "--url", B, "--token", writeToken, "--json"]);
+  const st = JSON.parse(cli.stdout || "{}");
+  check(
+    "CLI status lists projects and open counts",
+    cli.code === 0 && st.user === "Smoke Tester" && st.projects?.some((p) => p.id === projectId),
+    cli.stderr,
+  );
+  cli = runCli(["init", "--url", B, "--key", publicKey, "--framework", "html"]);
+  check("CLI init prints the snippet", cli.code === 0 && cli.stdout.includes(`data-project="${publicKey}"`));
+}
+
+// --- Reporter unsubscribe -------------------------------------------------------------------------------
+console.log("\n— wave 4: reporter unsubscribe");
+r = await call(`/api/unsubscribe?token=nope`, { jar: { cookie: "" } });
+check("bad unsubscribe token refused", r.status === 400, r.status);
+r = await call("/api/admin/settings/email", { jar: adminJar });
+if (r.status !== 200) {
+  skip(
+    "unsubscribe suppresses reporter email",
+    "needs an instance admin (PINWREN_ADMIN_EMAILS=smoke-admin@example.com)",
+  );
+} else if (r.body.email?.locked?.host || r.body.email?.configured) {
+  skip("unsubscribe suppresses reporter email", "SMTP is configured on this instance");
+} else {
+  // A tiny SMTP sink plays the mail server.
+  const mails = [];
+  const smtp = createTcpServer((sock) => {
+    let buf = "";
+    let data = false;
+    let cur = { to: [], raw: "" };
+    sock.write("220 smoke ESMTP\r\n");
+    sock.on("data", (d) => {
+      buf += d.toString("latin1");
+      for (;;) {
+        if (data) {
+          const end = buf.indexOf("\r\n.\r\n");
+          if (end < 0) return;
+          cur.raw = buf.slice(0, end);
+          buf = buf.slice(end + 5);
+          mails.push(cur);
+          cur = { to: [], raw: "" };
+          data = false;
+          sock.write("250 OK\r\n");
+          continue;
+        }
+        const i = buf.indexOf("\r\n");
+        if (i < 0) return;
+        const line = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        const verb = line.slice(0, 4).toUpperCase();
+        if (verb === "EHLO" || verb === "HELO") sock.write("250-smoke\r\n250 8BITMIME\r\n");
+        else if (verb === "RCPT") {
+          cur.to.push((/<([^>]*)>/.exec(line)?.[1] ?? "").toLowerCase());
+          sock.write("250 OK\r\n");
+        } else if (verb === "DATA") {
+          data = true;
+          sock.write("354 go ahead\r\n");
+        } else if (verb === "QUIT") {
+          sock.end("221 bye\r\n");
+          return;
+        } else sock.write("250 OK\r\n");
+      }
+    });
+  });
+  await new Promise((res) => smtp.listen(0, listenHost, res));
+  try {
+    await call("/api/admin/settings/email", {
+      method: "PATCH",
+      json: {
+        host: receiverHost,
+        port: smtp.address().port,
+        secure: false,
+        from: "Pinwren <noreply@example.com>",
+      },
+      jar: adminJar,
+    });
+    await call(`/api/projects/${projectId}`, { method: "PATCH", json: { notifyReporter: true } });
+    const stamp = Date.now();
+    const leaver = `leaver+${stamp}@example.com`;
+    const stayer = `stayer+${stamp}@example.com`;
+    const fileReport = async (to) =>
+      (await W("/w/feedback", { method: "POST", json: w4report({ reporter: { name: "R", email: to } }) }))
+        .body.feedback?.id;
+    const leaverFid = await fileReport(leaver);
+    const stayerFid = await fileReport(stayer);
+    const reply = (id, body) =>
+      call(`/api/feedback/${id}/comments`, { method: "POST", json: { body, visibility: "public" } });
+    const mailsTo = (to) => mails.filter((m) => m.to.includes(to));
+    await reply(leaverFid, "First reply");
+    const first = await waitFor(() => mailsTo(leaver)[0], 60_000);
+    const headers = (first?.raw ?? "").split("\r\n\r\n")[0].replace(/\r\n[ \t]+/g, " ");
+    const listUnsub = /^List-Unsubscribe: <([^>]+)>/im.exec(headers)?.[1];
+    check(
+      "reporter email carries List-Unsubscribe + one-click headers",
+      !!listUnsub &&
+        /^List-Unsubscribe-Post: List-Unsubscribe=One-Click/im.test(headers) &&
+        listUnsub.includes("/api/unsubscribe?token="),
+      first ? "" : "no email (timeout)",
+    );
+    const unsubPath = listUnsub
+      ? new URL(listUnsub).pathname + new URL(listUnsub).search
+      : "/api/unsubscribe?token=x";
+    r = await call(unsubPath, { jar: { cookie: "" } });
+    check(
+      "GET shows a confirmation, doesn't unsubscribe",
+      r.status === 200 && String(r.body).includes('<form method="post"') && String(r.body).includes(leaver),
+    );
+    r = await call(unsubPath, {
+      method: "POST",
+      rawBody: "List-Unsubscribe=One-Click",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      jar: { cookie: "" },
+    });
+    check(
+      "one-click POST unsubscribes",
+      r.status === 200 && String(r.body).includes("unsubscribed"),
+      r.status,
+    );
+    await reply(leaverFid, "Second reply");
+    await reply(stayerFid, "Reply to the stayer");
+    await waitFor(() => mailsTo(stayer).length >= 1, 30_000);
+    await sleep(4_000);
+    check(
+      "the next reporter email to them is suppressed",
+      mailsTo(leaver).length === 1,
+      mailsTo(leaver).length,
+    );
+    check("other reporters still get theirs", mailsTo(stayer).length === 1, mailsTo(stayer).length);
+  } finally {
+    await call("/api/admin/settings/email", {
+      method: "PATCH",
+      json: { host: null, port: null, secure: null, from: null },
+      jar: adminJar,
+    });
+    await call(`/api/projects/${projectId}`, { method: "PATCH", json: { notifyReporter: false } });
+    smtp.close();
+  }
+}
+
+// --- Enterprise licence ----------------------------------------------------------------------------------
+console.log("\n— wave 4: enterprise licence");
+r = await call("/api/admin/license", { jar: adminJar });
+if (r.status !== 200) {
+  skip("licence checks", "needs an instance admin (PINWREN_ADMIN_EMAILS=smoke-admin@example.com)");
+} else if (r.body.license?.source === "file") {
+  skip("licence checks", "PINWREN_LICENSE_FILE is set on this instance");
+} else {
+  const { signLicense } = await import(pathToFileURL(join(root, "tools/sign-license/lib.mjs")).href);
+  const devKey = readFileSync(join(root, "tools/sign-license/dev-private-key.pem"), "utf8");
+  const day = 86_400_000;
+  const lic = (fromDays, toDays, extra = {}) =>
+    signLicense(
+      {
+        kid: "dev-2026",
+        lid: `lic_smoke_${Date.now()}`,
+        customer: "Smoke GmbH",
+        features: ["white_label", "sso"],
+        limits: { seats: 50 },
+        issuedAt: new Date(Date.now() + fromDays * day).toISOString(),
+        expiresAt: new Date(Date.now() + toDays * day).toISOString(),
+        graceDays: 30,
+        ...extra,
+      },
+      devKey,
+    );
+  const install = (text) =>
+    call("/api/admin/license", { method: "POST", json: { license: text }, jar: adminJar });
+  const previewHtml = async () =>
+    (await call("/api/email-templates/feedback_created/preview", { method: "POST", json: {} })).body.preview
+      ?.html ?? "";
+  await call("/api/admin/license", { method: "DELETE", jar: adminJar });
+  r = await call("/api/me/entitlements");
+  check(
+    "no licence: Community, nothing gated in",
+    r.body.edition === "community" && r.body.status === "none" && r.body.features.length === 0,
+  );
+  check("Community emails say Powered by Pinwren", (await previewHtml()).includes("Powered by Pinwren"));
+  r = await call("/api/admin/license", { method: "POST", json: { license: lic(-1, 365) } });
+  check("only instance admins upload licences", r.status === 403, r.status);
+  r = await install(lic(-1, 365));
+  check(
+    "valid licence accepted",
+    r.status === 200 &&
+      r.body.license?.status === "valid" &&
+      r.body.license.features.includes("white_label") &&
+      r.body.license.details?.customer === "Smoke GmbH",
+    r.status,
+  );
+  r = await call("/api/me/entitlements", { jar: memberJar });
+  check(
+    "members read entitlements",
+    r.status === 200 && r.body.edition === "enterprise" && r.body.seats.limit === 50,
+  );
+  r = await W("/w/config");
+  check("white-label: stored hidePoweredBy now applies", r.body.branding?.hidePoweredBy === true);
+  check("white-label: emails drop Powered by", !(await previewHtml()).includes("Powered by Pinwren"));
+  const [body, sig] = lic(-1, 365).split(".");
+  const forged = Buffer.from(
+    JSON.stringify({
+      ...JSON.parse(Buffer.from(body, "base64url").toString()),
+      customer: "Mallory",
+      limits: { seats: 9999 },
+    }),
+  ).toString("base64url");
+  r = await install(`${forged}.${sig}`);
+  check(
+    "tampered licence refused",
+    r.status === 400 && r.body.code === "INVALID_LICENSE" && /signature/.test(r.body.title),
+    r.status,
+  );
+  r = await install(lic(-1, 365, { kid: "someone-else" }));
+  check(
+    "licence from an unknown key refused",
+    r.status === 400 && r.body.code === "INVALID_LICENSE",
+    r.status,
+  );
+  r = await install(lic(-400, -5));
+  check(
+    "expired within grace: still in force, with a deadline",
+    r.status === 200 &&
+      r.body.license?.status === "grace" &&
+      r.body.license.readOnly === false &&
+      r.body.license.features.includes("white_label"),
+    r.body.license?.status,
+  );
+  r = await W("/w/config");
+  check("grace: white-label still applies", r.body.branding?.hidePoweredBy === true);
+  r = await install(lic(-400, -40));
+  check(
+    "expired after grace: read-only",
+    r.status === 200 && r.body.license?.status === "expired" && r.body.license.readOnly === true,
+  );
+  r = await W("/w/config");
+  check("after grace: configured white-label keeps working", r.body.branding?.hidePoweredBy === true);
+  r = await call(`/api/projects/${projectId}`, {
+    method: "PATCH",
+    json: { widgetBranding: { hidePoweredBy: false } },
+  });
+  check(
+    "after grace: white-label can't be changed",
+    r.status === 403 && r.body.code === "LICENSE_READ_ONLY",
+    r.status,
+  );
+  r = await call(`/api/projects/${projectId}`, {
+    method: "PATCH",
+    json: { widgetBranding: { dialogAccent: "#223344" } },
+  });
+  check("after grace: everything else still editable", r.status === 200);
+  r = await call("/api/admin/license", { method: "DELETE", jar: adminJar });
+  check("remove the licence", r.status === 200 && r.body.license?.status === "none");
+  r = await W("/w/config");
+  check("without the licence hidePoweredBy is ignored again", r.body.branding?.hidePoweredBy === false);
 }
 
 console.log(`\n${passed} passed, ${failed} failed, ${skipped} skipped`);

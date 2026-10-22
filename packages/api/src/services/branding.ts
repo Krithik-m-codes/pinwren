@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { DEFAULT_BRAND, type EmailBrand } from "../email/templates";
 import { env } from "../env";
 import { ApiError, notFound } from "../errors";
+import { hasFeature } from "../license";
 import { decodeDataUrl, EXTENSIONS, storage } from "../storage";
 
 // Organisation branding (F-094): product name, logo and accent for the dashboard and emails. Logos
@@ -44,11 +45,13 @@ export async function getOrgBranding(orgId: string): Promise<OrgBranding> {
 export async function emailBrand(orgId: string | null | undefined): Promise<EmailBrand> {
   if (!orgId) return DEFAULT_BRAND;
   try {
-    const b = await getOrgBranding(orgId);
+    const [b, whiteLabel] = await Promise.all([getOrgBranding(orgId), hasFeature("white_label")]);
     return {
       productName: b.productName ?? DEFAULT_BRAND.productName,
       accent: b.accent ?? DEFAULT_BRAND.accent,
       logoUrl: b.logoUrl,
+      // Custom email branding without a "Powered by Pinwren" footer is Enterprise white-label.
+      poweredBy: !whiteLabel,
     };
   } catch {
     return DEFAULT_BRAND;

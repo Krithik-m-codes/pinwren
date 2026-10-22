@@ -1,5 +1,6 @@
 import type { WebhookEvent } from "@pinwren/core";
 import { enqueue, QUEUES } from "./jobs/boss";
+import { publishDomainEvent } from "./realtime/publish";
 
 /** A domain event, fanned out by the `events.dispatch` job to notifications, email and webhooks. */
 export type DomainEvent = {
@@ -21,7 +22,11 @@ export type EventInput = Omit<DomainEvent, "at">;
  */
 export function emit(...events: EventInput[]): void {
   const at = new Date().toISOString();
-  for (const e of events) void enqueue(QUEUES.dispatch, { ...e, at });
+  for (const e of events) {
+    void enqueue(QUEUES.dispatch, { ...e, at });
+    // Real-time inbox (SSE): same moment, not through the queue, so the dashboard sees it at once.
+    publishDomainEvent(e).catch((err: unknown) => console.warn("[pinwren] realtime publish failed", err));
+  }
 }
 
 /** Events for a dashboard/API feedback update, from the before/after rows. */

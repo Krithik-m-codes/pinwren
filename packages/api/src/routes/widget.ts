@@ -8,13 +8,27 @@ import {
   parseWidgetBranding,
   parseWidgetConfig,
   publicWidgetConfig,
+  MAX_REPLAY_BYTES,
+  REPLAY_CONTENT_TYPE,
   REPORTER_TOKEN_HEADER,
+  urlPatternRegexSource,
   type WidgetFeedbackCreate,
   widgetCommentCreate,
   widgetFeedbackCreate,
   widgetFeedbackStatusUpdate,
 } from "@pinwren/core";
-import { activity, comment, diagnostics, feedback, feedbackAsset, getDb, page, project } from "@pinwren/db";
+import {
+  activity,
+  comment,
+  diagnostics,
+  feedback,
+  feedbackAsset,
+  getDb,
+  page,
+  project,
+  type ReporterGuest,
+  reviewRound,
+} from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
@@ -23,10 +37,14 @@ import { env } from "../env";
 import { ApiError, notFound } from "../errors";
 import { emit } from "../events";
 import { clientIp, family } from "../net";
+import { hasFeature } from "../license";
 import { consume } from "../rate-limit";
+import { verifyIdentity } from "../services/identity";
 import { decodeDataUrl, decodeImageDataUrl, EXTENSIONS, storage } from "../storage";
 
 const LAST_SEEN_INTERVAL_MS = 60_000;
+/** Postgres regex capturing the path of a stored (normalised, absolute) page URL. */
+const URL_PATH_RE = "^[a-z][a-z0-9+.-]*://[^/?#]*([^?#]*)";
 
 type WidgetVars = { project: typeof project.$inferSelect; origin: string };
 
@@ -78,12 +96,23 @@ function privacyFilter(input: WidgetFeedbackCreate): WidgetFeedbackCreate {
 }
 
 type StoredAsset = {
-  kind: "screenshot" | "attachment";
+  kind: "screenshot" | "attachment" | "replay";
   key: string;
   contentType: string;
   bytes: number;
   name: string | null;
+  meta: Record<string, unknown> | null;
 };
+
+/** The project's active review round, when it has exactly one (wave-4 contract §2). */
+async function activeRoundOf(projectId: string): Promise<{ id: string; name: string } | null> {
+  const rows = await getDb()
+    .select({ id: reviewRound.id, name: reviewRound.name })
+    .from(reviewRound)
+    .where(and(eq(reviewRound.projectId, projectId), eq(reviewRound.status, "active")))
+    .limit(2);
+  return rows.length === 1 ? (rows[0] ?? null) : null;
+}
 
 /**
  * Public widget API (blueprint 04 §2). Authenticated by the public project key plus the browser's
@@ -126,12 +155,17 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       parseWidgetConfig(p.widgetConfig),
       parseCaptureConfig(p.captureConfig),
     );
+    const [activeRound, whiteLabel] = await Promise.all([activeRoundOf(p.id), hasFeature("white_label")]);
+    const branding = parseWidgetBranding(p.widgetBranding);
     return c.json({
       // slug fills `{projectSlug}` in panel-action links (wave-3 contract §1).
       project: { name: p.name, slug: p.slug, publicRead: p.publicRead },
       widget: w,
       capture,
-      branding: parseWidgetBranding(p.widgetBranding),
+      // Hiding "Powered by Pinwren" is Enterprise white-label: without the entitlement the stored
+      // setting is kept but not applied (wave-4 contract §6).
+      branding: { ...branding, hidePoweredBy: branding.hidePoweredBy && whiteLabel },
+      activeRound,
     });
   })
 
@@ -139,12 +173,35 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
     const p = c.var.project;
     if (!p.publicRead) return c.json({ items: [] });
     const url = c.req.query("url");
+    const urlPattern = c.req.query("urlPattern");
     const where = [eq(feedback.projectId, p.id), isNull(feedback.deletedAt)];
     // Closed items stay off the page unless asked for; the widget only pins what is still open.
     if (c.req.query("include") !== "closed") {
       where.push(inArray(feedback.status, ["open", "in_progress", "in_review"]));
     }
-    if (url) {
+    if (urlPattern) {
+      // Page scope (wave-4 contract §4): pins of every page reported under this pattern or whose path
+      // matches it, so `/product/:id` groups all product pages.
+      const re = urlPatternRegexSource(urlPattern);
+      if (!re) return c.json({ items: [] });
+      const pages = await getDb()
+        .select({ id: page.id })
+        .from(page)
+        .where(
+          and(
+            eq(page.projectId, p.id),
+            sql`(${page.urlPattern} = ${urlPattern} or substring(${page.url} from ${URL_PATH_RE}) ~ ${re})`,
+          ),
+        )
+        .limit(1000);
+      if (!pages.length) return c.json({ items: [] });
+      where.push(
+        inArray(
+          feedback.pageId,
+          pages.map((x) => x.id),
+        ),
+      );
+    } else if (url) {
       const [pg] = await getDb()
         .select({ id: page.id })
         .from(page)
@@ -164,6 +221,8 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
         anchor: feedback.anchor,
         createdAt: feedback.createdAt,
         reporterName: sql<string | null>`${feedback.reporterGuest}->>'name'`,
+        reporterVerified: sql<boolean>`coalesce((${feedback.reporterGuest}->>'verified')::boolean, false)`,
+        pageUrl: sql<string | null>`(select pg.url from ${page} pg where pg.id = ${feedback.pageId})`,
         replyCount: sql<number>`(select count(*)::int from ${comment} cm where cm.feedback_id = ${feedback.id} and cm.visibility = 'public')`,
       })
       .from(feedback)
@@ -185,6 +244,7 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
           string | null
         >`coalesce((select name from "user" u where u.id = ${comment.authorId}), ${comment.authorGuest}->>'name')`,
         team: sql<boolean>`${comment.authorId} is not null`,
+        authorVerified: sql<boolean>`coalesce((${comment.authorGuest}->>'verified')::boolean, false)`,
       })
       .from(comment)
       .innerJoin(feedback, eq(feedback.id, comment.feedbackId))
@@ -226,10 +286,11 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       bytes: Uint8Array;
       contentType: string;
       name: string | null;
+      meta: Record<string, unknown> | null;
     }[] = [];
     if (input.screenshot) {
       try {
-        decoded.push({ kind: "screenshot", name: null, ...decodeImageDataUrl(input.screenshot) });
+        decoded.push({ kind: "screenshot", name: null, meta: null, ...decodeImageDataUrl(input.screenshot) });
       } catch (err) {
         throw new ApiError(
           400,
@@ -242,7 +303,7 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       try {
         const file = decodeDataUrl(att.dataUrl, ATTACHMENT_CONTENT_TYPES, MAX_ATTACHMENT_BYTES);
         if (file.contentType !== att.contentType) throw new Error("data URL type differs from contentType");
-        decoded.push({ kind: "attachment", name: att.name, ...file });
+        decoded.push({ kind: "attachment", name: att.name, meta: null, ...file });
       } catch (err) {
         throw new ApiError(
           400,
@@ -251,7 +312,33 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
         );
       }
     }
+    // Session replay (F-007): stored only when the project records replays, so an old or modified
+    // widget can't make the server keep one the admin didn't ask for.
+    if (input.replay && parseCaptureConfig(p.captureConfig).replay.enabled) {
+      try {
+        const file = decodeDataUrl(input.replay.dataUrl, [REPLAY_CONTENT_TYPE], MAX_REPLAY_BYTES);
+        decoded.push({
+          kind: "replay",
+          name: null,
+          meta: { durationMs: input.replay.durationMs, events: input.replay.events },
+          ...file,
+        });
+      } catch (err) {
+        throw new ApiError(
+          400,
+          "INVALID_REPLAY",
+          `Session replay: ${err instanceof Error ? err.message : "invalid file"} (gzip, at most 10 MB)`,
+        );
+      }
+    }
     const pageUrl = normalizePageUrl(input.page.url);
+
+    // Signed identity (wave-4 contract §4). The signature itself is never stored.
+    let reporter: ReporterGuest | null = null;
+    if (input.reporter) {
+      const { signature, ...who } = input.reporter;
+      reporter = { ...who, verified: verifyIdentity(p.identitySecret, who.externalId, signature) };
+    }
 
     // Resolve the page outside the transaction and without touching an existing row: an upsert
     // that updates the row locks it, and every report on a busy page would queue behind it.
@@ -293,7 +380,14 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       for (const f of decoded) {
         const key = `${p.id}/${crypto.randomUUID()}.${EXTENSIONS[f.contentType] ?? "bin"}`;
         await storage().put(key, f.bytes, f.contentType);
-        assets.push({ kind: f.kind, key, contentType: f.contentType, bytes: f.bytes.length, name: f.name });
+        assets.push({
+          kind: f.kind,
+          key,
+          contentType: f.contentType,
+          bytes: f.bytes.length,
+          name: f.name,
+          meta: f.meta,
+        });
       }
     } catch (err) {
       await removeAll();
@@ -315,6 +409,7 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       content_type: a.contentType,
       bytes: a.bytes,
       name: a.name,
+      meta: a.meta,
     }));
     let created: { id: string; number: number } | undefined;
     try {
@@ -326,11 +421,19 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
         ), f as (
           insert into ${feedback}
             (org_id, project_id, page_id, number, kind, title, body, priority, client_id,
-             anchor, environment, metadata, reporter_guest, reporter_token_hash)
+             anchor, environment, metadata, reporter_guest, reporter_token_hash, consent, round_id)
           select ${p.orgId}, ${p.id}, ${pageId ?? null}, counter.n, ${input.kind}::feedback_kind,
              ${input.title ?? null}, ${input.body}, ${input.priority ?? "none"}::priority, ${input.clientId},
              ${json(input.anchor)}::jsonb, ${json(input.environment)}::jsonb, ${json(input.metadata)}::jsonb,
-             ${json(input.reporter)}::jsonb, ${sha256Hex(reporterToken)}
+             ${json(reporter)}::jsonb, ${sha256Hex(reporterToken)}, ${json(input.consent)}::jsonb,
+             -- The round asked for when it is an active round of this project, else the project's only
+             -- active round (a stale widget config still lands somewhere sensible), else none.
+             coalesce(
+               (select r.id from ${reviewRound} r where r.id = ${input.roundId ?? null}::uuid
+                  and r.project_id = ${p.id} and r.status = 'active'),
+               (select (array_agg(r.id))[1] from ${reviewRound} r
+                  where r.project_id = ${p.id} and r.status = 'active' having count(*) = 1)
+             )
           from counter
           returning id, number
         ), d as (
@@ -338,10 +441,10 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
           select f.id, ${json(diag?.console)}::jsonb, ${json(diag?.network)}::jsonb
           from f where ${diag !== undefined}
         ), a as (
-          insert into ${feedbackAsset} (org_id, feedback_id, kind, storage_key, content_type, bytes, name)
-          select ${p.orgId}, f.id, x.kind::asset_kind, x.storage_key, x.content_type, x.bytes, x.name
+          insert into ${feedbackAsset} (org_id, feedback_id, kind, storage_key, content_type, bytes, name, meta)
+          select ${p.orgId}, f.id, x.kind::asset_kind, x.storage_key, x.content_type, x.bytes, x.name, x.meta
           from f, jsonb_to_recordset(${JSON.stringify(assetRows)}::jsonb)
-            as x(kind text, storage_key text, content_type text, bytes int, name text)
+            as x(kind text, storage_key text, content_type text, bytes int, name text, meta jsonb)
         ), act as (
           insert into ${activity} (org_id, feedback_id, actor_kind, type, data)
           select ${p.orgId}, f.id, 'guest', 'created', '{"source":"widget"}'::jsonb from f
@@ -441,13 +544,18 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       );
     if (!f) throw notFound("Feedback");
     const body = c.req.valid("json");
+    let authorGuest: ReporterGuest | null = null;
+    if (body.author) {
+      const { signature, ...who } = body.author;
+      authorGuest = { ...who, verified: verifyIdentity(p.identitySecret, who.externalId, signature) };
+    }
     const [created] = await db
       .insert(comment)
       .values({
         orgId: p.orgId,
         feedbackId: f.id,
         body: body.body,
-        authorGuest: body.author ?? null,
+        authorGuest,
         visibility: "public",
       })
       .returning({ id: comment.id, body: comment.body, createdAt: comment.createdAt });
@@ -459,5 +567,15 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       commentId: created.id,
       actor: { kind: "guest", id: null },
     });
-    return c.json({ comment: { ...created, authorName: body.author?.name ?? null, team: false } }, 201);
+    return c.json(
+      {
+        comment: {
+          ...created,
+          authorName: body.author?.name ?? null,
+          team: false,
+          authorVerified: authorGuest?.verified === true,
+        },
+      },
+      201,
+    );
   });

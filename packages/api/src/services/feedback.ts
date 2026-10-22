@@ -18,9 +18,10 @@ import {
   project,
   user,
 } from "@pinwren/db";
-import { and, asc, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { ApiError, notFound } from "../errors";
 import { emit, updateEvents } from "../events";
+import { assertRoundFor } from "./rounds";
 
 export const ACTIVE_STATUSES = ["open", "in_progress", "in_review"] as const;
 
@@ -32,6 +33,11 @@ export async function listFeedback(orgId: string, q: FeedbackListQuery) {
   if (q.status === "active") where.push(inArray(feedback.status, [...ACTIVE_STATUSES]));
   else if (q.status !== "all") where.push(eq(feedback.status, q.status));
   if (q.kind) where.push(eq(feedback.kind, q.kind));
+  if (q.priority) where.push(eq(feedback.priority, q.priority));
+  if (q.roundId) where.push(eq(feedback.roundId, q.roundId));
+  if (q.assigneeId) where.push(sql`${q.assigneeId} = any(${feedback.assigneeIds})`);
+  if (q.since) where.push(gte(feedback.createdAt, new Date(q.since)));
+  if (q.page) where.push(sql`strpos(${page.url}, ${q.page}) > 0`);
   if (q.q) where.push(sql`${feedback.search} @@ plainto_tsquery('simple', ${q.q})`);
   if (q.cursor) {
     const at = new Date(q.cursor);
@@ -54,6 +60,8 @@ export async function listFeedback(orgId: string, q: FeedbackListQuery) {
       projectId: feedback.projectId,
       projectName: project.name,
       pageUrl: page.url,
+      roundId: feedback.roundId,
+      hasReplay: sql<boolean>`exists(select 1 from ${feedbackAsset} a where a.feedback_id = ${feedback.id} and a.kind = 'replay')`,
       hasScreenshot: sql<boolean>`exists(select 1 from ${feedbackAsset} a where a.feedback_id = ${feedback.id} and a.kind in ('screenshot', 'screenshot_annotated'))`,
       attachmentCount: sql<number>`(select count(*)::int from ${feedbackAsset} a where a.feedback_id = ${feedback.id} and a.kind = 'attachment')`,
       commentCount: sql<number>`(select count(*)::int from ${comment} cm where cm.feedback_id = ${feedback.id})`,
@@ -96,6 +104,7 @@ export async function getFeedbackDetail(orgId: string, id: string) {
         contentType: feedbackAsset.contentType,
         bytes: feedbackAsset.bytes,
         name: feedbackAsset.name,
+        meta: feedbackAsset.meta,
       })
       .from(feedbackAsset)
       .where(eq(feedbackAsset.feedbackId, id))
@@ -215,6 +224,7 @@ export async function updateFeedback(orgId: string, actor: Actor, id: string, pa
       .where(and(eq(feedback.id, id), eq(feedback.orgId, orgId), isNull(feedback.deletedAt)))
       .for("update");
     if (!before) throw notFound("Feedback");
+    if (patch.roundId) await assertRoundFor(orgId, before.projectId, patch.roundId);
 
     const set: Partial<typeof feedback.$inferInsert> = { ...patch };
     if (patch.status && patch.status !== before.status) {

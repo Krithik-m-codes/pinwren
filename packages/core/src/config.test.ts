@@ -61,6 +61,7 @@ describe("capture config", () => {
       network: "failures",
       screenshotOnComment: false,
       maskSelectors: [],
+      replay: { enabled: false, seconds: 60 },
     });
   });
   it("validates", () => {

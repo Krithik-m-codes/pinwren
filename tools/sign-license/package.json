@@ -1,0 +1,17 @@
+{
+  "name": "@pinwren/sign-license",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Sign Pinwren Enterprise licence files (Ed25519). Internal tool; the private key comes from the environment.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "bin": {
+    "pinwren-sign-license": "./index.mjs"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.12"
+  }
+}

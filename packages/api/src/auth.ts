@@ -3,6 +3,8 @@ import { getDb, schema } from "@pinwren/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization } from "better-auth/plugins/organization";
+import { createAccessControl } from "better-auth/plugins/access";
+import { adminAc, defaultStatements, memberAc, ownerAc } from "better-auth/plugins/organization/access";
 import { renderEmail } from "./email/render";
 import { env } from "./env";
 import { enqueue, QUEUES } from "./jobs/boss";
@@ -11,6 +13,8 @@ import { sessionLifetimeDays } from "./settings/instance";
 /** Dashboard page that accepts an invitation (calls Better Auth's accept-invitation endpoint). */
 export const acceptInvitationUrl = (id: string) =>
   `${env().PINWREN_URL.replace(/\/$/, "")}/accept-invitation/${encodeURIComponent(id)}`;
+
+const ac = createAccessControl(defaultStatements);
 
 function createAuth() {
   const e = env();
@@ -27,6 +31,15 @@ function createAuth() {
     plugins: [
       organization({
         allowUserToCreateOrganization: true,
+        // Better Auth's three roles plus `viewer` (wave-4 contract §4): reads everything, changes nothing.
+        // Viewers hold no organisation permissions here; the API refuses their writes (READ_ONLY_ROLE).
+        ac,
+        roles: {
+          owner: ac.newRole(ownerAc.statements),
+          admin: ac.newRole(adminAc.statements),
+          member: ac.newRole(memberAc.statements),
+          viewer: ac.newRole({ ac: ["read"] }),
+        },
         invitationExpiresIn: 7 * 24 * 3600,
         // There is no email-verification flow yet (SMTP is optional). Accepting needs the
         // invitation id, a random UUID that only reaches the invitee's inbox (and the org's own

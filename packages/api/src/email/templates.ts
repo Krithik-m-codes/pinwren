@@ -10,8 +10,11 @@ export { esc } from "./markdown";
 
 export type Rendered = { subject: string; html: string; text: string };
 
-/** Organisation branding applied to every email (F-094). */
-export type EmailBrand = { productName: string; accent: string; logoUrl: string | null };
+/**
+ * Organisation branding applied to every email (F-094). `poweredBy`: add "Powered by Pinwren" to the
+ * footer — dropped only with the Enterprise `white_label` entitlement (wave-4 contract §6).
+ */
+export type EmailBrand = { productName: string; accent: string; logoUrl: string | null; poweredBy?: boolean };
 export const DEFAULT_BRAND: EmailBrand = { productName: "Pinwren", accent: "#5b5bd6", logoUrl: null };
 
 export type TemplateVariable = { name: string; description: string; sample: string };
@@ -161,7 +164,12 @@ export function contrastText(hex: string): string {
   return l > 0.4 ? "#111118" : "#ffffff";
 }
 
-function layout(content: string, brand: EmailBrand, cta: { label: string; url: string } | null): string {
+function layout(
+  content: string,
+  brand: EmailBrand,
+  cta: { label: string; url: string } | null,
+  unsubscribeUrl?: string,
+): string {
   const accent = HEX.test(brand.accent) ? brand.accent : DEFAULT_BRAND.accent;
   const logo = brand.logoUrl ? safeHref(brand.logoUrl) : null;
   const button = cta
@@ -174,7 +182,12 @@ ${logo ? `<p style="margin:0 0 16px"><img src="${esc(logo)}" alt="${esc(brand.pr
 ${content}
 ${button}
 </td></tr></table>
-<p style="text-align:center;font-size:12px;color:#8b8b99;margin-top:16px">Sent by ${esc(brand.productName)}</p>
+<p style="text-align:center;font-size:12px;color:#8b8b99;margin-top:16px">Sent by ${esc(brand.productName)}${brand.poweredBy && brand.productName !== DEFAULT_BRAND.productName ? " · Powered by Pinwren" : ""}</p>${
+    unsubscribeUrl && safeHref(unsubscribeUrl)
+      ? `
+<p style="text-align:center;font-size:12px;color:#8b8b99;margin:4px 0 0"><a href="${esc(unsubscribeUrl)}" style="color:#8b8b99">Unsubscribe</a> from these emails</p>`
+      : ""
+  }
 </body></html>`;
 }
 
@@ -187,6 +200,7 @@ export function renderTemplate(
   source: { subject: string; body: string },
   vars: Record<string, string>,
   brand: EmailBrand = DEFAULT_BRAND,
+  options: { unsubscribeUrl?: string | undefined } = {},
 ): Rendered {
   const def = TEMPLATES[key];
   const all: Record<string, string> = { ...vars, productName: brand.productName };
@@ -199,8 +213,14 @@ export function renderTemplate(
       : null;
   return {
     subject: renderSubject(source.subject, all),
-    html: layout(md.html, brand, cta),
-    text: [md.text, cta ? `${cta.label}: ${cta.url}` : null].filter(Boolean).join("\n\n"),
+    html: layout(md.html, brand, cta, options.unsubscribeUrl),
+    text: [
+      md.text,
+      cta ? `${cta.label}: ${cta.url}` : null,
+      options.unsubscribeUrl ? `Unsubscribe: ${options.unsubscribeUrl}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
   };
 }
 

@@ -44,6 +44,11 @@ const schema = z.object({
     .default("Krithik-m-codes/pinwren"),
   PINWREN_VERSION: z.string().default("0.1.0"), // x-release-please-version
 
+  // Enterprise licence (F-098). A file path here overrides and locks the upload in Settings › Licence.
+  PINWREN_LICENSE_FILE: optionalString,
+  /** Optional: licences with an `instance` binding only verify on the instance with this id. */
+  PINWREN_INSTANCE_ID: optionalString,
+
   // Issue trackers (F-076/F-077). Per-integration base URLs override these (GHES, self-managed GitLab).
   GITHUB_API_URL: z.url().default("https://api.github.com"),
   GITLAB_URL: z.url().default("https://gitlab.com"),

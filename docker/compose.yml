@@ -18,6 +18,8 @@ services:
       PINWREN_DISABLE_SIGNUP: ${PINWREN_DISABLE_SIGNUP:-false}
       # Node processes serving requests; roughly one per CPU core you give the container.
       PINWREN_WORKERS: ${PINWREN_WORKERS:-2}
+      # Enterprise licence file inside the container (e.g. /data/pinwren.lic); empty = upload in Settings.
+      PINWREN_LICENSE_FILE: ${PINWREN_LICENSE_FILE:-}
     volumes:
       - pinwren-data:/data
     depends_on:

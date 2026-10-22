@@ -8,7 +8,7 @@ import {
   webhookEndpoint,
 } from "@pinwren/db";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
-import { renderEmail } from "../email/render";
+import { renderEmail, reporterEmail } from "../email/render";
 import { excerpt, type FeedbackSummary, feedbackVars, type Rendered, statusLabel } from "../email/templates";
 import type { DomainEvent } from "../events";
 import { autoCreateIssues, syncIssueState } from "../integrations/issues";
@@ -149,10 +149,13 @@ async function notifications(
     );
     // The reporter hears about team decisions only, not about their own resolve from the page.
     if (e.actor.kind !== "guest" && ctx.notifyReporter && ctx.reporterEmail) {
-      await enqueue(QUEUES.email, {
-        to: ctx.reporterEmail,
-        ...(await renderEmail(e.orgId, "reporter_status", { ...reporterVars, status: statusLabel(to) })),
-      });
+      await enqueue(
+        QUEUES.email,
+        await reporterEmail(e.orgId, ctx.reporterEmail, "reporter_status", {
+          ...reporterVars,
+          status: statusLabel(to),
+        }),
+      );
     }
     return;
   }
@@ -177,14 +180,14 @@ async function notifications(
       }),
     );
     if (commentInfo.team && commentInfo.visibility === "public" && ctx.notifyReporter && ctx.reporterEmail) {
-      await enqueue(QUEUES.email, {
-        to: ctx.reporterEmail,
-        ...(await renderEmail(e.orgId, "reporter_reply", {
+      await enqueue(
+        QUEUES.email,
+        await reporterEmail(e.orgId, ctx.reporterEmail, "reporter_reply", {
           ...reporterVars,
           authorName: commentInfo.authorName ?? "The team",
           reply: excerpt(commentInfo.body),
-        })),
-      });
+        }),
+      );
     }
   }
 }

@@ -21,11 +21,11 @@ describe("secrets at rest", () => {
 
   it("hashes API tokens with scrypt and verifies them", async () => {
     const { hashToken, verifyToken } = await import("./crypto");
-    const h = await hashToken("ann_secret");
+    const h = await hashToken("pwt_secret");
     expect(h.startsWith("scrypt$")).toBe(true);
-    expect(await verifyToken("ann_secret", h)).toBe(true);
-    expect(await verifyToken("ann_other", h)).toBe(false);
-    expect(await verifyToken("ann_secret", "garbage")).toBe(false);
+    expect(await verifyToken("pwt_secret", h)).toBe(true);
+    expect(await verifyToken("pwt_other", h)).toBe(false);
+    expect(await verifyToken("pwt_secret", "garbage")).toBe(false);
   });
 });
 

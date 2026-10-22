@@ -65,7 +65,7 @@ export function TokensSettings() {
         <CardTitle>API tokens</CardTitle>
         <CardDescription>
           For scripts and integrations calling <code className="font-mono">/api/v1</code> with{" "}
-          <code className="font-mono">Authorization: Bearer ann_…</code>. A token acts as you.
+          <code className="font-mono">Authorization: Bearer pwt_…</code>. A token acts as you.
         </CardDescription>
       </CardHeader>
       <CardContent>

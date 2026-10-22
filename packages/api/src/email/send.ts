@@ -1,7 +1,17 @@
 import nodemailer, { type Transporter } from "nodemailer";
 import { resolveSmtp, type SmtpConfig } from "./config";
+import { isSuppressed } from "./unsubscribe";
 
-export type EmailMessage = { to: string; subject: string; html: string; text: string };
+export type EmailMessage = {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  /** Extra headers (List-Unsubscribe for reporter emails). */
+  headers?: Record<string, string>;
+  /** Reporter emails: skipped when this address unsubscribed from the organisation. */
+  suppressionOrgId?: string;
+};
 export type SendResult = { sent: true; messageId: string } | { sent: false; reason: string };
 
 let cached: { key: string; transport: Transporter } | undefined;
@@ -32,6 +42,10 @@ function transportFor(c: SmtpConfig): Transporter {
  * jobs, which retry.
  */
 export async function sendEmail(msg: EmailMessage): Promise<SendResult> {
+  // Checked when sending, not only when queueing: an unsubscribe also stops mail already queued.
+  if (msg.suppressionOrgId && (await isSuppressed(msg.suppressionOrgId, msg.to))) {
+    return { sent: false, reason: "unsubscribed" };
+  }
   const config = await resolveSmtp();
   if (!config) {
     console.info(`[pinwren] email skipped (SMTP not configured): "${msg.subject}"`);
@@ -43,6 +57,7 @@ export async function sendEmail(msg: EmailMessage): Promise<SendResult> {
     subject: msg.subject,
     html: msg.html,
     text: msg.text,
+    ...(msg.headers ? { headers: msg.headers } : {}),
   });
   return { sent: true, messageId: info.messageId };
 }

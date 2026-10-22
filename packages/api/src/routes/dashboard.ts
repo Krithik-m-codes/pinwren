@@ -20,7 +20,6 @@ import {
   activity,
   comment,
   feedback,
-  feedbackAsset,
   getDb,
   invitation,
   member,
@@ -35,13 +34,19 @@ import { Hono } from "hono";
 import type { z } from "zod";
 import { isInstanceAdmin, isOrgAdmin, requireOrgAdmin, requireSession, type SessionVars } from "../context";
 import { ApiError, forbidden, notFound } from "../errors";
+import { assertFeatureWritable, publicEntitlements, resolveEntitlements } from "../license";
+import { forbidViewerWrites } from "../permissions";
+import { publishDeleted } from "../realtime/publish";
 import { ensureActionSecret, rotateActionSecret, runPanelAction } from "../services/actions";
+import { assetResponse } from "../services/assets";
+import { ensureIdentitySecret, rotateIdentitySecret } from "../services/identity";
 import { addTeamComment, getFeedbackDetail, listFeedback, updateFeedback } from "../services/feedback";
 import { getSecuritySettings } from "../settings/instance";
-import { storage } from "../storage";
 import { admin } from "./admin";
 import { branding } from "./branding";
 import { integrations } from "./integrations";
+import { realtime } from "./realtime";
+import { rounds } from "./rounds";
 import { tokens } from "./tokens";
 import { webhooks } from "./webhooks";
 
@@ -73,12 +78,13 @@ type ProjectRow = typeof project.$inferSelect;
  * Projects always go out with complete configs (defaults filled), so forms never see gaps. The
  * action signing secret never does — only whether one exists.
  */
-const projectOut = ({ actionSecret, ...p }: ProjectRow) => ({
+const projectOut = ({ actionSecret, identitySecret, ...p }: ProjectRow) => ({
   ...p,
   widgetConfig: parseWidgetConfig(p.widgetConfig),
   captureConfig: parseCaptureConfig(p.captureConfig),
   widgetBranding: parseWidgetBranding(p.widgetBranding),
   hasActionSecret: actionSecret !== null,
+  hasIdentitySecret: identitySecret !== null,
 });
 
 /** Privacy mode shortens a "keep forever" retention to this (F-021). */
@@ -107,6 +113,8 @@ const PREF_DEFAULTS = { newFeedback: true, assigned: true, replies: true, status
 
 export const dashboard = new Hono<{ Variables: SessionVars }>()
   .use(requireSession)
+  // Viewers (wave-4 contract §4) are refused every write before validation or any lookup runs.
+  .use(forbidViewerWrites)
 
   // --- Me -----------------------------------------------------------------------------------------
   .get("/me", async (c) => {
@@ -125,6 +133,9 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       update: update?.available ? { latest: update.latest, url: update.url } : null,
     });
   })
+
+  /** Licence state and the Enterprise features in force (F-098). Every member may read it. */
+  .get("/me/entitlements", async (c) => c.json(publicEntitlements(await resolveEntitlements())))
 
   .get("/members", async (c) => {
     const rows = await getDb()
@@ -243,12 +254,12 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       }
     }
     if (brandingPatch) {
-      set.widgetBranding = mergeAndValidate(
-        widgetBranding,
-        parseWidgetBranding(current.widgetBranding),
-        brandingPatch,
-        "INVALID_WIDGET_BRANDING",
-      );
+      const before = parseWidgetBranding(current.widgetBranding);
+      const next = mergeAndValidate(widgetBranding, before, brandingPatch, "INVALID_WIDGET_BRANDING");
+      // "Hide Powered by" is white-label: stored either way (it only applies with the entitlement),
+      // but frozen once an Enterprise licence is past its grace period.
+      if (next.hidePoweredBy !== before.hidePoweredBy) await assertFeatureWritable("white_label");
+      set.widgetBranding = next;
     }
     if (capturePatch) {
       set.captureConfig = mergeAndValidate(
@@ -293,6 +304,26 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
     return c.json({ secret: await rotateActionSecret(p.id) });
   })
 
+  /** Signed-identity secret (wave-4 contract §4), created on first read. Org admins only. */
+  .get("/projects/:id/identity-secret", requireOrgAdmin, async (c) => {
+    const [p] = await getDb()
+      .select({ id: project.id, identitySecret: project.identitySecret })
+      .from(project)
+      .where(and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId)));
+    if (!p) throw notFound("Project");
+    return c.json({ secret: await ensureIdentitySecret(p) });
+  })
+
+  /** New secret; signatures made with the old one stop verifying at once. */
+  .post("/projects/:id/identity-secret/rotate", requireOrgAdmin, async (c) => {
+    const [p] = await getDb()
+      .select({ id: project.id })
+      .from(project)
+      .where(and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId)));
+    if (!p) throw notFound("Project");
+    return c.json({ secret: await rotateIdentitySecret(p.id) });
+  })
+
   // --- Feedback ------------------------------------------------------------------------------------
   .get("/feedback", zValidator("query", feedbackListQuery), async (c) =>
     c.json(await listFeedback(c.var.orgId, c.req.valid("query"))),
@@ -315,8 +346,9 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       .update(feedback)
       .set({ deletedAt: new Date() })
       .where(and(eq(feedback.id, c.req.param("id")), eq(feedback.orgId, c.var.orgId)))
-      .returning({ id: feedback.id });
+      .returning({ id: feedback.id, projectId: feedback.projectId });
     if (!f) throw notFound("Feedback");
+    publishDeleted(c.var.orgId, f.projectId, f.id);
     return c.body(null, 204);
   })
 
@@ -377,31 +409,8 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
     return c.body(null, 204);
   })
 
-  // --- Assets (screenshots, attachments) -----------------------------------------------------------
-  .get("/assets/:id", async (c) => {
-    const [a] = await getDb()
-      .select()
-      .from(feedbackAsset)
-      .where(and(eq(feedbackAsset.id, c.req.param("id")), eq(feedbackAsset.orgId, c.var.orgId)));
-    if (!a) throw notFound("Asset");
-    const file = await storage().get(a.storageKey);
-    if (!file) throw notFound("Asset file");
-    const headers: Record<string, string> = {
-      "content-type": a.contentType,
-      "cache-control": "private, max-age=3600",
-      "content-security-policy": "default-src 'none'; sandbox",
-      "x-content-type-options": "nosniff",
-    };
-    if (file.bytes) headers["content-length"] = String(file.bytes);
-    if (a.kind === "attachment") {
-      // Non-images download rather than render (blueprint 09: Content-Disposition for non-images).
-      const safe = (a.name ?? "attachment").replace(/[^\w.-]+/g, "_").slice(0, 120) || "attachment";
-      const disposition = a.contentType.startsWith("image/") ? "inline" : "attachment";
-      headers["content-disposition"] =
-        `${disposition}; filename="${safe}"; filename*=UTF-8''${encodeURIComponent(a.name ?? safe)}`;
-    }
-    return new Response(file.body, { headers });
-  })
+  // --- Assets (screenshots, attachments, replays: gzip JSON of rrweb events) ----------------------
+  .get("/assets/:id", (c) => assetResponse(c.var.orgId, c.req.param("id")))
 
   // --- Notifications -------------------------------------------------------------------------------
   .get("/notifications", async (c) => {
@@ -506,6 +515,8 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
     });
   })
 
+  .route("/", realtime)
+  .route("/", rounds)
   .route("/", webhooks)
   .route("/", tokens)
   .route("/", integrations)

@@ -166,7 +166,7 @@ test.describe("settings", () => {
     await page.getByRole("option", { name: "30 days" }).click();
     await dialog.getByRole("button", { name: "Create token" }).click();
     const secret = (await page.getByTestId("secret-value").textContent()) ?? "";
-    expect(secret).toMatch(/^ann_/);
+    expect(secret).toMatch(/^pwt_/);
     await shoot(page, "settings-token-secret");
     await page.getByRole("button", { name: "I've saved it" }).click();
 

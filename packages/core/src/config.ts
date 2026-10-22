@@ -11,6 +11,9 @@ export const LAUNCHER_SHAPES = ["round", "pill"] as const;
 export const LAUNCHER_ICONS = ["pin", "comment", "bug"] as const;
 export const CONSOLE_CAPTURE_LEVELS = ["off", "errors", "warnings", "all"] as const;
 export const NETWORK_CAPTURE_MODES = ["off", "failures"] as const;
+export const VISIBILITY_ENVIRONMENTS = ["all", "non-production"] as const;
+export const MIN_REPLAY_SECONDS = 30;
+export const MAX_REPLAY_SECONDS = 120;
 
 // --- Panel actions (F-016, wave-3 contract §1) -----------------------------------------------------
 
@@ -137,6 +140,17 @@ export const widgetConfig = z.object({
    * truncates stored IPs and skips outbound update checks; the widget masks every input.
    */
   privacyMode: z.boolean().default(false),
+  /**
+   * Where the launcher shows (SitePing parity, wave-4 contract §4) — applied by the widget only.
+   * "non-production" hides it on production hosts unless `forceShow` (`data-force-show` / init option).
+   * Below `minViewportWidth` px the launcher stays hidden.
+   */
+  visibility: z
+    .object({
+      environments: z.enum(VISIBILITY_ENVIRONMENTS).default("all"),
+      minViewportWidth: z.number().int().min(0).max(10_000).default(0),
+    })
+    .prefault({}),
 });
 export type WidgetConfig = z.infer<typeof widgetConfig>;
 /** What the dashboard may send: any subset, merged into the stored config. */
@@ -147,6 +161,13 @@ export const captureConfig = z.object({
   network: z.enum(NETWORK_CAPTURE_MODES).default("failures"),
   screenshotOnComment: z.boolean().default(false),
   maskSelectors: z.array(z.string().trim().min(1).max(200)).max(50).default([]),
+  /** F-007 session replay: the widget keeps a rolling rrweb buffer of the last `seconds`. */
+  replay: z
+    .object({
+      enabled: z.boolean().default(false),
+      seconds: z.number().int().min(MIN_REPLAY_SECONDS).max(MAX_REPLAY_SECONDS).default(60),
+    })
+    .prefault({}),
 });
 export type CaptureConfig = z.infer<typeof captureConfig>;
 export type CaptureConfigInput = z.input<typeof captureConfig>;

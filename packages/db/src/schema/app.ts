@@ -4,6 +4,9 @@ import {
   ISSUE_AUTO_CREATE,
   ISSUE_PROVIDERS,
   PRIORITIES,
+  REVIEW_ROUND_STATUSES,
+  VIEW_LAYOUTS,
+  type WidgetConsent,
   WEBHOOK_KINDS,
 } from "@pinwren/core";
 import { sql } from "drizzle-orm";
@@ -78,6 +81,8 @@ export const project = pgTable(
     widgetBranding: jsonb("widget_branding").$type<Record<string, unknown>>().notNull().default({}),
     /** AES-256-GCM ciphertext of the secret that signs webhook panel actions (F-016). */
     actionSecret: text("action_secret"),
+    /** AES-256-GCM ciphertext of the signed-identity secret (`identify(..., { signature })`). */
+    identitySecret: text("identity_secret"),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps,
@@ -105,7 +110,30 @@ export type ReporterGuest = {
   name?: string | undefined;
   email?: string | undefined;
   externalId?: string | undefined;
+  /** The host app signed `externalId` with the project's identity secret (wave-4 contract §4). */
+  verified?: boolean | undefined;
 };
+
+export const reviewRoundStatusEnum = pgEnum("review_round_status", REVIEW_ROUND_STATUSES);
+
+/** Review rounds (F-055): a named, time-boxed batch of feedback on a project. */
+export const reviewRound = pgTable(
+  "review_round",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    status: reviewRoundStatusEnum("status").notNull().default("active"),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [index("review_round_project_status_idx").on(t.projectId, t.status)],
+);
 
 export const feedback = pgTable(
   "feedback",
@@ -135,6 +163,9 @@ export const feedback = pgTable(
     environment: jsonb("environment"),
     metadata: jsonb("metadata"),
     source: feedbackSourceEnum("source").notNull().default("widget"),
+    roundId: uuid("round_id").references(() => reviewRound.id, { onDelete: "set null" }),
+    /** The consent notice the reporter accepted (F-019): `{ version, acceptedAt }`. */
+    consent: jsonb("consent").$type<WidgetConsent>(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
     search: tsvector("search").generatedAlwaysAs(
       sql`to_tsvector('simple', coalesce(title, '') || ' ' || body)`,
@@ -147,6 +178,7 @@ export const feedback = pgTable(
     uniqueIndex("feedback_project_client_uq").on(t.projectId, t.clientId),
     index("feedback_project_status_idx").on(t.projectId, t.status, t.createdAt),
     index("feedback_org_created_idx").on(t.orgId, t.createdAt),
+    index("feedback_round_idx").on(t.roundId),
     index("feedback_search_idx").using("gin", t.search),
   ],
 );
@@ -173,6 +205,8 @@ export const feedbackAsset = pgTable(
     bytes: integer("bytes").notNull(),
     /** Original file name for attachments (display only; never used as a storage path). */
     name: text("name"),
+    /** Kind-specific facts, e.g. a replay's `{ durationMs, events }`. */
+    meta: jsonb("meta").$type<Record<string, unknown>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("asset_feedback_idx").on(t.feedbackId)],
@@ -465,3 +499,50 @@ export const issueLink = pgTable(
     index("issue_link_integration_number_idx").on(t.integrationId, t.number),
   ],
 );
+
+export const viewLayoutEnum = pgEnum("view_layout", VIEW_LAYOUTS);
+
+/** Saved inbox filters. Personal unless `shared` (then every member of the organisation sees it). */
+export const savedView = pgTable(
+  "saved_view",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    filters: jsonb("filters").$type<Record<string, unknown>>().notNull().default({}),
+    layout: viewLayoutEnum("layout").notNull().default("list"),
+    shared: boolean("shared").notNull().default(false),
+    ...timestamps,
+  },
+  (t) => [index("saved_view_org_idx").on(t.orgId, t.ownerId)],
+);
+
+/**
+ * Addresses that unsubscribed from an organisation's reporter emails (one-click link,
+ * `List-Unsubscribe`). Every reporter email checks this list before it is sent.
+ */
+export const emailSuppression = pgTable(
+  "email_suppression",
+  {
+    orgId: orgId(),
+    /** Lower-cased. */
+    email: text("email").notNull(),
+    reason: text("reason").notNull().default("unsubscribe"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.orgId, t.email] })],
+);
+
+/** Uploaded Enterprise licence files (instance-level; the newest one is in force). */
+export const license = pgTable("license", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** The `.lic` text as uploaded: `base64url(payload).base64url(signature)`. */
+  raw: text("raw").notNull(),
+  /** Decoded payload, for display; always re-verified from `raw`. */
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+  installedAt: timestamp("installed_at", { withTimezone: true }).notNull().defaultNow(),
+  installedBy: text("installed_by").references(() => user.id, { onDelete: "set null" }),
+});

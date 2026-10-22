@@ -7,8 +7,8 @@ import { isOrgAdmin, type SessionVars } from "../context";
 import { hashToken, randomToken } from "../crypto";
 import { notFound } from "../errors";
 
-export const TOKEN_PREFIX = "ann_";
-/** Characters of the token stored in clear to find it (and shown in lists): `ann_` + 8. */
+export const TOKEN_PREFIX = "pwt_";
+/** Characters of the token stored in clear to find it (and shown in lists): `pwt_` + 8. */
 export const TOKEN_LOOKUP_LENGTH = 12;
 
 const tokenOut = (t: typeof apiToken.$inferSelect) => ({

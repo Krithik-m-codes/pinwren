@@ -122,6 +122,33 @@ export const widgetAttachment = z.object({
 });
 export type WidgetAttachment = z.infer<typeof widgetAttachment>;
 
+// --- Widget: consent record + session replay (wave-4 contract §3, §6) -------------------------------
+
+export const widgetConsent = z.object({
+  /** The notice version the reporter saw (an admin-chosen label or a hash of the text). */
+  version: z.string().trim().min(1).max(64),
+  acceptedAt: z.iso.datetime({ offset: true }),
+});
+export type WidgetConsent = z.infer<typeof widgetConsent>;
+
+export const MAX_REPLAY_BYTES = 10 * 1024 * 1024;
+export const REPLAY_CONTENT_TYPE = "application/gzip";
+
+export const widgetReplay = z.object({
+  // base64 of 10 MB is ~13.98 M characters, plus the data-URL prefix.
+  dataUrl: z
+    .string()
+    .regex(/^data:application\/gzip;base64,/)
+    .max(14_000_000),
+  durationMs: z
+    .number()
+    .int()
+    .min(0)
+    .max(30 * 60_000),
+  events: z.number().int().min(0).max(1_000_000),
+});
+export type WidgetReplay = z.infer<typeof widgetReplay>;
+
 // --- Widget: create feedback (blueprint 04 §2) ------------------------------------------------------
 
 export const widgetFeedbackCreate = z.object({
@@ -142,7 +169,16 @@ export const widgetFeedbackCreate = z.object({
     .object({
       name: z.string().trim().max(120).optional(),
       email: z.email().max(254).optional(),
+      /** The host app's user id (`Pinwren.identify({ id })`). */
       externalId: z.string().max(200).optional(),
+      /**
+       * Signed identity (wave-4 contract §4): hex HMAC-SHA256(project identity secret, externalId),
+       * computed by the host app's server. A valid one marks the reporter `verified`.
+       */
+      signature: z
+        .string()
+        .regex(/^[0-9a-fA-F]{64}$/)
+        .optional(),
     })
     .optional(),
   diagnostics: z
@@ -157,6 +193,12 @@ export const widgetFeedbackCreate = z.object({
     .max(11_000_000)
     .optional(),
   attachments: z.array(widgetAttachment).max(MAX_ATTACHMENTS).optional(),
+  /** Review round (F-055). Omitted: the project's active round, if it has exactly one. */
+  roundId: z.uuid().optional(),
+  /** What the reporter accepted in the consent notice (F-019), stored on the feedback. */
+  consent: widgetConsent.optional(),
+  /** Session replay (F-007): gzip of a JSON array of rrweb events, ≤ 10 MB decoded. */
+  replay: widgetReplay.optional(),
 });
 export type WidgetFeedbackCreate = z.infer<typeof widgetFeedbackCreate>;
 
@@ -194,6 +236,8 @@ export const feedbackUpdate = z.object({
   priority: priority.optional(),
   title: z.string().trim().max(200).nullable().optional(),
   assigneeIds: z.array(z.string()).max(20).optional(),
+  /** Move into a review round of the same project, or out of any (null). */
+  roundId: z.uuid().nullable().optional(),
 });
 export type FeedbackUpdate = z.infer<typeof feedbackUpdate>;
 
@@ -202,10 +246,20 @@ export const feedbackListQuery = z.object({
   status: z.union([feedbackStatus, z.literal("active"), z.literal("all")]).default("active"),
   kind: feedbackKind.optional(),
   q: z.string().trim().max(200).optional(),
+  priority: priority.optional(),
+  /** Only items in this review round. */
+  roundId: z.uuid().optional(),
+  /** Only items assigned to this user. */
+  assigneeId: z.string().max(100).optional(),
+  /** Only items whose page URL contains this text. */
+  page: z.string().trim().max(2000).optional(),
+  /** Only items created at or after this instant (ISO 8601). */
+  since: z.iso.datetime({ offset: true }).optional(),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 export type FeedbackListQuery = z.infer<typeof feedbackListQuery>;
+export type FeedbackListQueryInput = z.input<typeof feedbackListQuery>;
 
 export const commentCreate = z.object({
   body: z.string().trim().min(1).max(10_000),
@@ -218,7 +272,18 @@ export const commentUpdate = z.object({
 
 export const widgetCommentCreate = z.object({
   body: z.string().trim().min(1).max(10_000),
-  author: z.object({ name: z.string().trim().max(120).optional(), email: z.email().optional() }).optional(),
+  author: z
+    .object({
+      name: z.string().trim().max(120).optional(),
+      email: z.email().optional(),
+      /** Signed identity, as on `POST /w/feedback` (wave-4 contract §4). */
+      externalId: z.string().max(200).optional(),
+      signature: z
+        .string()
+        .regex(/^[0-9a-fA-F]{64}$/)
+        .optional(),
+    })
+    .optional(),
 });
 
 /** `PATCH /w/feedback/:id` — resolve or reopen from the page (wave-1 contract §5). */

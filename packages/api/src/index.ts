@@ -7,12 +7,19 @@ import { env } from "./env";
 import { ApiError, problem } from "./errors";
 import { dashboard } from "./routes/dashboard";
 import { inbound } from "./routes/inbound";
+import { mcpRoutes } from "./routes/mcp";
+import { unsubscribe } from "./routes/unsubscribe";
 import { v1 } from "./routes/v1";
 import { widget } from "./routes/widget";
 
 export { getAuth } from "./auth";
 export { env } from "./env";
 export { startJobs, stopJobs } from "./jobs";
+
+/** In-process requests (the /mcp tools call /api/v1 without a network hop). */
+function internalFetch(req: Request): Promise<Response> {
+  return Promise.resolve(app.fetch(req));
+}
 
 /**
  * The whole Pinwren HTTP API. Mounted by the Next.js app under /api and /w, and runnable on its own
@@ -34,14 +41,18 @@ export const app = new Hono()
     await next();
     if (d.hsts) c.res.headers.set("strict-transport-security", HSTS_HEADER);
   })
-  .get("/api/health", (c) => c.json({ ok: true }))
+  // `version` lets `pinwren doctor` and monitors see what runs.
+  .get("/api/health", (c) => c.json({ ok: true, version: env().PINWREN_VERSION }))
   .on(["GET", "POST"], "/api/auth/*", (c) => getAuth().handler(c.req.raw))
   // Token-authenticated public API first: the session middleware below covers the rest of /api.
   .route("/api/v1", v1)
   // Logos and tracker webhooks: no session (verified by random id / signature).
   .route("/api", inbound)
+  .route("/api", unsubscribe)
   .route("/api", dashboard)
   .route("/w", widget)
+  // AI agents: MCP Streamable HTTP, token-authenticated (blueprint 04 §6).
+  .route("/mcp", mcpRoutes(internalFetch))
   .notFound((c) => problem(c, 404, "NOT_FOUND", "Not found"))
   .onError((err, c) => {
     // Let the widget read its own errors (429, validation…). Only the error text is exposed.

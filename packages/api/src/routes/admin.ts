@@ -1,4 +1,4 @@
-import { emailSettingsUpdate, emailTest, securitySettingsUpdate } from "@pinwren/core";
+import { emailSettingsUpdate, emailTest, licenseUpload, securitySettingsUpdate } from "@pinwren/core";
 import { getDb, user } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { eq } from "drizzle-orm";
@@ -8,8 +8,34 @@ import { getEmailSettings, updateEmailSettings } from "../email/config";
 import { sendEmail } from "../email/send";
 import { testEmail } from "../email/templates";
 import { ApiError } from "../errors";
+import {
+  installLicense,
+  publicEntitlements,
+  removeLicense,
+  type Resolved,
+  resolveEntitlements,
+} from "../license";
 import { emailBrand } from "../services/branding";
 import { getSecuritySettings, runUpdateCheck, updateSecuritySettings } from "../settings/instance";
+
+/** What instance admins see in Settings › Licence: entitlements plus where the licence comes from. */
+const licenseOut = (r: Resolved) => ({
+  ...publicEntitlements(r),
+  source: r.source,
+  details: r.payload
+    ? {
+        lid: r.payload.lid,
+        customer: r.payload.customer,
+        email: r.payload.email ?? null,
+        features: r.payload.features,
+        limits: r.payload.limits,
+        issuedAt: r.payload.issuedAt,
+        expiresAt: r.payload.expiresAt,
+        graceDays: r.payload.graceDays,
+        instance: r.payload.instance,
+      }
+    : null,
+});
 
 /** Instance settings for self-host administrators (mounted at /api/admin, after requireSession). */
 export const admin = new Hono<{ Variables: SessionVars }>()
@@ -63,6 +89,16 @@ export const admin = new Hono<{ Variables: SessionVars }>()
     }
     return c.json({ security: await getSecuritySettings() });
   })
+
+  // --- Enterprise licence (F-098) ---------------------------------------------------------------------
+  .get("/license", async (c) => c.json({ license: licenseOut(await resolveEntitlements()) }))
+
+  /** Upload a `.lic` file's text. Invalid or tampered → 400 INVALID_LICENSE; env-set → 409 LICENSE_LOCKED. */
+  .post("/license", zValidator("json", licenseUpload), async (c) =>
+    c.json({ license: licenseOut(await installLicense(c.req.valid("json").license, c.var.userId)) }),
+  )
+
+  .delete("/license", async (c) => c.json({ license: licenseOut(await removeLicense()) }))
 
   /** Run the update check now: `{ checked: true, state }` or `{ checked: false, reason }`. */
   .post("/update-check", async (c) => c.json(await runUpdateCheck()));
