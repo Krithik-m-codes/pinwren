@@ -46,16 +46,11 @@ node docker/check-release-keys.mjs   # prints "[release] 1 production licence ke
 
 Commit with `feat(license): add production licence key pinwren-2026`.
 
-## 4. Turn on the release gate in CI
+## 4. The release gate in CI (already on)
 
-In `.github/workflows/docker-publish.yml`, add to the `docker/build-push-action` step:
-
-```yaml
-build-args: |
-  PINWREN_RELEASE=1
-```
-
-From then on an official image can't be published without a production key.
+`.github/workflows/docker-publish.yml` builds official images with `build-args: PINWREN_RELEASE=1`, so
+until step 3 is done **every official image build fails** with a pointer to this file. That is intended:
+an image that can't verify licences must not ship.
 
 ## 5. Sign a test licence and verify it on a production build
 

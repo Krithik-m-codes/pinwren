@@ -151,6 +151,9 @@ export type WidgetReplay = z.infer<typeof widgetReplay>;
 
 // --- Widget: create feedback (blueprint 04 §2) ------------------------------------------------------
 
+/** Largest `metadata` object a report may carry, as serialised JSON. */
+export const MAX_METADATA_BYTES = 16_384;
+
 export const widgetFeedbackCreate = z.object({
   clientId: z.uuid(),
   kind: feedbackKind,
@@ -165,7 +168,14 @@ export const widgetFeedbackCreate = z.object({
   }),
   anchor: anchorBundle.optional(),
   environment,
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  /** Host-supplied context (`Pinwren.setMetadata`) plus the widget's timings. Capped (blueprint 04 §2):
+   *  unbounded, any visitor could store megabytes of JSON with every report. */
+  metadata: z
+    .record(z.string(), z.unknown())
+    .refine((m) => JSON.stringify(m).length <= MAX_METADATA_BYTES, {
+      message: `metadata must be at most ${MAX_METADATA_BYTES} bytes of JSON`,
+    })
+    .optional(),
   reporter: z
     .object({
       name: z.string().trim().max(120).optional(),

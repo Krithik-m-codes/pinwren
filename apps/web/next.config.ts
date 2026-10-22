@@ -40,7 +40,7 @@ const nextConfig: NextConfig = {
     // The proxy (src/proxy.ts) buffers request bodies, by default only the first 10 MB — a 10 MB session
     // replay is ~13.4 MB as base64 JSON, plus screenshot and attachments. The API enforces its own limits
     // per field (replay ≤ 10 MB decoded, attachments ≤ 5 MB each); this only has to let them through.
-    proxyClientMaxBodySize: "40mb",
+    proxyClientMaxBodySize: "48mb",
   },
   // `<Link href>` and `router.push()` are checked against the app's real routes.
   typedRoutes: true,

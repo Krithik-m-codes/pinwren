@@ -18,7 +18,7 @@ const schema = z.object({
   PINWREN_DATA_DIR: z.string().default("./data"),
   /**
    * Unset: anyone may create the first account; after that, sign-up is closed (invitations still
-   * work). "false" keeps open sign-up on; "true" closes it even for the first account.
+   * work). "false" keeps open sign-up on; "true" behaves like unset (first account and invitees only).
    */
   PINWREN_DISABLE_SIGNUP: z
     .enum(["true", "false", ""])

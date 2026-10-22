@@ -1,4 +1,8 @@
 {
   ".": "0.0.0",
-  "packages/widget": "0.0.0"
+  "packages/widget": "0.0.0",
+  "packages/sdk": "0.0.0",
+  "packages/mcp": "0.0.0",
+  "packages/cli": "0.0.0",
+  "packages/react": "0.0.0"
 }

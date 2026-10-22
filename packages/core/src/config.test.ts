@@ -209,3 +209,19 @@ describe("widget branding", () => {
     });
   });
 });
+
+describe("widget report metadata cap", () => {
+  const base = {
+    clientId: "5f1c6c2e-1d3a-4b7e-9c2a-1a2b3c4d5e6f",
+    kind: "bug",
+    body: "x",
+    page: { url: "https://example.com/" },
+    environment: { userAgent: "t", viewport: { w: 1, h: 1 }, dpr: 1 },
+  };
+  it("accepts small metadata and refuses oversized metadata", async () => {
+    const { widgetFeedbackCreate, MAX_METADATA_BYTES } = await import("./schemas");
+    expect(widgetFeedbackCreate.safeParse({ ...base, metadata: { plan: "pro" } }).success).toBe(true);
+    const big = { pad: "x".repeat(MAX_METADATA_BYTES) };
+    expect(widgetFeedbackCreate.safeParse({ ...base, metadata: big }).success).toBe(false);
+  });
+});
