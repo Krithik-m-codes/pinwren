@@ -90,25 +90,21 @@ export async function updateSecuritySettings(
   if (patch.sessionDays !== undefined) next.sessionDays = patch.sessionDays;
   if (patch.updateCheck !== undefined) next.updateCheck = patch.updateCheck;
   await writeSetting(SECURITY_SETTING_KEY, next, userId);
-  lifetimeCache = undefined;
   return [];
 }
 
-// Read on every sign-in; cached briefly so a burst of sign-ins costs one query. Other processes
-// pick up a change within the TTL.
-let lifetimeCache: { days: number; until: number } | undefined;
+// Read on every sign-in. Deliberately not cached: with several worker processes a per-process cache
+// kept serving the old lifetime after an admin changed it, and sign-ins are rare enough that one small
+// query each costs nothing.
 export async function sessionLifetimeDays(): Promise<number> {
   const e = env();
   if (e.PINWREN_SESSION_DAYS !== undefined) return e.PINWREN_SESSION_DAYS;
-  if (lifetimeCache && lifetimeCache.until > Date.now()) return lifetimeCache.days;
-  let days = DEFAULT_SESSION_DAYS;
   try {
-    days = (await readSetting<StoredSecurity>(SECURITY_SETTING_KEY)).sessionDays ?? DEFAULT_SESSION_DAYS;
+    return (await readSetting<StoredSecurity>(SECURITY_SETTING_KEY)).sessionDays ?? DEFAULT_SESSION_DAYS;
   } catch {
     // The settings table is unreachable: fall back to the default rather than failing sign-in.
+    return DEFAULT_SESSION_DAYS;
   }
-  lifetimeCache = { days, until: Date.now() + 30_000 };
-  return days;
 }
 
 // --- Update check ----------------------------------------------------------------------------------

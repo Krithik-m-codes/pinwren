@@ -2118,7 +2118,11 @@ const reqMcp = createRequire(join(root, "packages/mcp/package.json"));
 const sdkDist = join(root, "packages/sdk/dist/index.js");
 const mcpCli = join(root, "packages/mcp/dist/cli.js");
 const pinwrenCli = join(root, "packages/cli/dist/cli.js");
-if (!existsSync(sdkDist) || !existsSync(mcpCli) || !existsSync(pinwrenCli)) {
+if (process.env.SMOKE_SKIP_PACKAGES === "1") {
+  // Running from a Linux container against a Windows checkout: pnpm's node_modules links don't resolve
+  // there. Run this section from the host instead.
+  skip("SDK / MCP / CLI", "SMOKE_SKIP_PACKAGES=1");
+} else if (!existsSync(sdkDist) || !existsSync(mcpCli) || !existsSync(pinwrenCli)) {
   skip(
     "SDK / MCP / CLI",
     "build them first: pnpm --filter @pinwren/sdk --filter @pinwren/mcp --filter @pinwren/cli build",

@@ -327,6 +327,27 @@ describe("realtime bus", () => {
     resumed.unsubscribe();
   });
 
+  it("resumes Last-Event-ID from a global event id, whichever worker the reconnect lands on", async () => {
+    const bus = await import("./realtime/bus");
+    bus.resetBusForTests();
+    const st = (globalThis as unknown as { __pinwrenBus: { listening: unknown } }).__pinwrenBus;
+    st.listening = Promise.resolve();
+    // Ids are minted by the publishing process and travel in the NOTIFY payload, so another worker
+    // (this process, here) holds the very same ids in its ring.
+    const ev = (id: string, fid: string) =>
+      ({ t: "e", id, orgId: "o1", projectId: "p1", event: "feedback.created", data: { id: fid } }) as const;
+    bus.receive(ev("g-1", "f1"));
+    bus.receive(ev("g-2", "f2"));
+    bus.receive({ ...ev("g-3", "x"), orgId: "o2" });
+    bus.receive(ev("g-4", "f4"));
+    const resumed = await bus.subscribe({ orgId: "o1", projectIds: null, send: () => undefined }, "g-1");
+    expect(resumed.backlog.map((e) => e.id)).toEqual(["g-2", "g-4"]);
+    const unknown = await bus.subscribe({ orgId: "o1", projectIds: null, send: () => undefined }, "gone");
+    expect(unknown.backlog).toEqual([]);
+    resumed.unsubscribe();
+    unknown.unsubscribe();
+  });
+
   it("drops oversized changes instead of exceeding the NOTIFY limit", async () => {
     const { encodeMessage, MAX_PAYLOAD_BYTES } = await import("./realtime/bus");
     const text = encodeMessage({

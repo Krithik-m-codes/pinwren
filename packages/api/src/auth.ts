@@ -74,6 +74,9 @@ function createAuth() {
     // server process.
     rateLimit: {
       enabled: true,
+      // Shared by every worker process and replica (in memory, each worker had its own allowance).
+      storage: "database",
+      modelName: "authRateLimit",
       // Better Auth's general default (100 per 10 s per address and path); credentials endpoints tighter.
       window: 10,
       max: 100,

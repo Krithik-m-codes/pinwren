@@ -29,6 +29,13 @@
       "when": 1792631498062,
       "tag": "0003_wave4",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792657627852,
+      "tag": "0004_auth_rate_limit",
+      "breakpoints": true
     }
   ]
 }

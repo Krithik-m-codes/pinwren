@@ -19,6 +19,9 @@ const SWEEP_MS = 5_000;
 /** A feedback/comment event, as broadcast. */
 export type BusEvent = {
   t: "e";
+  /** Global event id, set by `publish`: every process receives the same id, so `Last-Event-ID` can
+   *  resume on whichever cluster worker or replica the reconnect lands on. */
+  id?: string;
   orgId: string;
   projectId: string;
   event: Exclude<StreamEventName, "presence" | "ping">;
@@ -45,7 +48,7 @@ export type Subscriber = {
 
 type PresenceEntry = { user: PresenceUser; feedbackId: string; projectId: string; expires: number };
 type Stored = {
-  seq: number;
+  id: string;
   orgId: string;
   projectId: string;
   event: BusEvent["event"];
@@ -103,6 +106,7 @@ export function encodeMessage(msg: BusMessage): string {
 
 /** Broadcast to every process. Never throws: real time is best effort and must not fail a write. */
 export async function publish(msg: BusMessage): Promise<void> {
+  if (msg.t === "e") msg.id ??= `${Date.now().toString(36)}-${randomBytes(6).toString("base64url")}`;
   try {
     await getDb().execute(sql`select pg_notify(${CHANNEL}, ${encodeMessage(msg)})`);
   } catch (err) {
@@ -132,7 +136,7 @@ export function receive(msg: BusMessage): void {
   const st = state();
   if (msg.t === "e") {
     const stored: Stored = {
-      seq: ++st.seq,
+      id: msg.id ?? `${st.bootId}.${++st.seq}`,
       orgId: msg.orgId,
       projectId: msg.projectId,
       event: msg.event,
@@ -140,7 +144,7 @@ export function receive(msg: BusMessage): void {
     };
     st.ring.push(stored);
     if (st.ring.length > RING_SIZE) st.ring.splice(0, st.ring.length - RING_SIZE);
-    const out: Delivered = { id: `${st.bootId}.${stored.seq}`, event: msg.event, data: msg.data };
+    const out: Delivered = { id: stored.id, event: msg.event, data: msg.data };
     for (const s of st.subscribers) if (visibleTo(s, msg.orgId, msg.projectId)) s.send(out);
     return;
   }
@@ -198,10 +202,11 @@ function startListening(): Promise<void> {
 }
 
 /**
- * Subscribe an SSE client. `lastEventId` (from `Last-Event-ID`) replays what this process still holds
- * in its ring (best effort: another worker's ids, or ids older than the last 500 events, replay
- * nothing). Returns the replayed events, the current presence for the client's scope and an
- * unsubscribe function.
+ * Subscribe an SSE client. `lastEventId` (from `Last-Event-ID`) replays what came after that event.
+ * Every process receives every event in the same (commit) order with the same global id, so this works
+ * on whichever worker the reconnect lands on. An id older than the last 500 events replays nothing; the
+ * client refetches on reconnect anyway. Returns the replayed events, the current presence for the
+ * client's scope and an unsubscribe function.
  */
 export async function subscribe(
   s: Subscriber,
@@ -211,13 +216,10 @@ export async function subscribe(
   const st = state();
   st.subscribers.add(s);
   const backlog: Delivered[] = [];
-  const m = lastEventId ? /^([\w-]+)\.(\d+)$/.exec(lastEventId) : null;
-  if (m?.[1] === st.bootId) {
-    const after = Number(m[2]);
-    for (const e of st.ring) {
-      if (e.seq > after && visibleTo(s, e.orgId, e.projectId)) {
-        backlog.push({ id: `${st.bootId}.${e.seq}`, event: e.event, data: e.data });
-      }
+  const from = lastEventId ? st.ring.findIndex((e) => e.id === lastEventId) : -1;
+  if (from >= 0) {
+    for (const e of st.ring.slice(from + 1)) {
+      if (visibleTo(s, e.orgId, e.projectId)) backlog.push({ id: e.id, event: e.event, data: e.data });
     }
   }
   const presence: Delivered[] = [];

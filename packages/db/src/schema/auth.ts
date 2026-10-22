@@ -1,4 +1,4 @@
-import { boolean, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 // Tables owned by Better Auth (core + organization plugin). Column names follow its defaults so
 // the drizzle adapter maps them without overrides. Ids are Better Auth's text ids.
@@ -100,4 +100,16 @@ export const invitation = pgTable("invitation", {
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Better Auth's rate-limit counters (`rateLimit.storage: "database"`). In memory, every cluster worker
+ * kept its own count, so an attacker got the sign-in allowance once per worker; Postgres makes it one
+ * shared count. Separate from the widget's `rate_limit` table, which has a different shape.
+ */
+export const authRateLimit = pgTable("auth_rate_limit", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
