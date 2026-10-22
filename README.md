@@ -104,8 +104,9 @@ Each release also publishes a multi-arch image (amd64, arm64) to `ghcr.io/krithi
 `PINWREN_IMAGE=ghcr.io/krithik-m-codes/pinwren:<version>` in `docker/.env` and leave out `--build`.
 
 Open `PINWREN_URL`, create your account and workspace, and add a project for your site with its allowed
-origins. In production, put a TLS reverse proxy (Caddy, Traefik, nginx) in front and allow request bodies of
-at least 12 MB for screenshots. Data lives in two volumes: `pinwren-db` (Postgres) and `pinwren-data`
+origins. In production, put a TLS reverse proxy (Caddy, Traefik, nginx) in front: allow request bodies of at
+least 32 MB (screenshots, attachments and a 10 MB session replay) and let it compress the widget with brotli —
+ready-made configs are in [`docs/self-hosting/reverse-proxy.md`](docs/self-hosting/reverse-proxy.md). Data lives in two volumes: `pinwren-db` (Postgres) and `pinwren-data`
 (uploaded files). Every setting is documented in [`apps/web/.env.example`](apps/web/.env.example) and
 [`blueprint/08-self-hosting.md`](blueprint/08-self-hosting.md).
 

@@ -20,7 +20,8 @@
     "build": "node scripts/prepare.mjs && next build",
     "start": "next start -p 3200",
     "typecheck": "node scripts/prepare.mjs && fumadocs-mdx && next typegen && tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "codegen": "node scripts/prepare.mjs && fumadocs-mdx && next typegen"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

@@ -235,44 +235,49 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       ...rest
     } = c.req.valid("json");
     const where = and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId));
-    const [current] = await db.select().from(project).where(where);
-    if (!current) throw notFound("Project");
-    const set: Partial<typeof project.$inferInsert> = withoutUndefined(rest);
-    if (archived !== undefined) set.archivedAt = archived ? (current.archivedAt ?? new Date()) : null;
-    if (widgetPatch) {
-      const before = parseWidgetConfig(current.widgetConfig);
-      const next = mergeAndValidate(widgetConfig, before, widgetPatch, "INVALID_WIDGET_CONFIG");
-      set.widgetConfig = next;
-      // Turning privacy mode on shortens "keep forever" to 90 days, unless this request sets it.
-      if (
-        next.privacyMode &&
-        !before.privacyMode &&
-        rest.retentionDays === undefined &&
-        current.retentionDays === null
-      ) {
-        set.retentionDays = PRIVACY_RETENTION_DAYS;
+    // Read-merge-write under a row lock: two saves of different settings at the same moment (e.g. two
+    // toggles in quick succession) must both land, not the last one overwrite the other's merge.
+    const saved = await db.transaction(async (tx) => {
+      const [current] = await tx.select().from(project).where(where).for("update");
+      if (!current) throw notFound("Project");
+      const set: Partial<typeof project.$inferInsert> = withoutUndefined(rest);
+      if (archived !== undefined) set.archivedAt = archived ? (current.archivedAt ?? new Date()) : null;
+      if (widgetPatch) {
+        const before = parseWidgetConfig(current.widgetConfig);
+        const next = mergeAndValidate(widgetConfig, before, widgetPatch, "INVALID_WIDGET_CONFIG");
+        set.widgetConfig = next;
+        // Turning privacy mode on shortens "keep forever" to 90 days, unless this request sets it.
+        if (
+          next.privacyMode &&
+          !before.privacyMode &&
+          rest.retentionDays === undefined &&
+          current.retentionDays === null
+        ) {
+          set.retentionDays = PRIVACY_RETENTION_DAYS;
+        }
       }
-    }
-    if (brandingPatch) {
-      const before = parseWidgetBranding(current.widgetBranding);
-      const next = mergeAndValidate(widgetBranding, before, brandingPatch, "INVALID_WIDGET_BRANDING");
-      // "Hide Powered by" is white-label: stored either way (it only applies with the entitlement),
-      // but frozen once an Enterprise licence is past its grace period.
-      if (next.hidePoweredBy !== before.hidePoweredBy) await assertFeatureWritable("white_label");
-      set.widgetBranding = next;
-    }
-    if (capturePatch) {
-      set.captureConfig = mergeAndValidate(
-        captureConfig,
-        parseCaptureConfig(current.captureConfig),
-        capturePatch,
-        "INVALID_CAPTURE_CONFIG",
-      );
-    }
-    if (!Object.keys(set).length) return c.json({ project: projectOut(current) });
-    const [p] = await db.update(project).set(set).where(where).returning();
-    if (!p) throw notFound("Project");
-    return c.json({ project: projectOut(p) });
+      if (brandingPatch) {
+        const before = parseWidgetBranding(current.widgetBranding);
+        const next = mergeAndValidate(widgetBranding, before, brandingPatch, "INVALID_WIDGET_BRANDING");
+        // "Hide Powered by" is white-label: stored either way (it only applies with the entitlement),
+        // but frozen once an Enterprise licence is past its grace period.
+        if (next.hidePoweredBy !== before.hidePoweredBy) await assertFeatureWritable("white_label");
+        set.widgetBranding = next;
+      }
+      if (capturePatch) {
+        set.captureConfig = mergeAndValidate(
+          captureConfig,
+          parseCaptureConfig(current.captureConfig),
+          capturePatch,
+          "INVALID_CAPTURE_CONFIG",
+        );
+      }
+      if (!Object.keys(set).length) return current;
+      const [p] = await tx.update(project).set(set).where(where).returning();
+      if (!p) throw notFound("Project");
+      return p;
+    });
+    return c.json({ project: projectOut(saved) });
   })
 
   .post("/projects/:id/rotate-key", async (c) => {

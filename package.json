@@ -24,14 +24,15 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:e2e": "pnpm --filter @pinwren/widget build && pnpm --filter @pinwren/widget test:e2e && pnpm --filter @pinwren/react test:e2e && pnpm --filter @pinwren/web test:e2e",
-    "lint": "eslint . --max-warnings=0",
-    "lint:fix": "eslint . --fix",
+    "lint": "pnpm codegen && eslint . --max-warnings=0",
+    "lint:fix": "pnpm codegen && eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "db:generate": "pnpm --filter @pinwren/db generate",
     "db:migrate": "pnpm --filter @pinwren/db migrate",
-    "db:up": "docker compose -f docker/compose.dev.yml up -d"
+    "db:up": "docker compose -f docker/compose.dev.yml up -d",
+    "codegen": "turbo run codegen"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged",

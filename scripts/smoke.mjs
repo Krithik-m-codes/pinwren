@@ -220,6 +220,32 @@ check(
   "project PATCH rejects an invalid widget config",
   r.status === 400 && r.body.code === "INVALID_WIDGET_CONFIG",
 );
+{
+  // Concurrent saves of different keys must both land (row-locked read-merge-write).
+  const saves = await Promise.all([
+    call(`/api/projects/${projectId}`, { method: "PATCH", json: { widgetConfig: { shortcuts: false } } }),
+    call(`/api/projects/${projectId}`, { method: "PATCH", json: { widgetConfig: { readOnly: true } } }),
+    call(`/api/projects/${projectId}`, { method: "PATCH", json: { captureConfig: { network: "off" } } }),
+  ]);
+  r = await call(`/api/projects/${projectId}`);
+  const p = r.body.project;
+  check(
+    "concurrent project saves don't overwrite each other",
+    saves.every((s) => s.status === 200) &&
+      p.widgetConfig.shortcuts === false &&
+      p.widgetConfig.readOnly === true &&
+      p.captureConfig.network === "off",
+    JSON.stringify({
+      shortcuts: p.widgetConfig.shortcuts,
+      readOnly: p.widgetConfig.readOnly,
+      network: p.captureConfig.network,
+    }),
+  );
+  r = await call(`/api/projects/${projectId}`, {
+    method: "PATCH",
+    json: { widgetConfig: { shortcuts: true, readOnly: false }, captureConfig: { network: "failures" } },
+  });
+}
 r = await W("/w/config");
 check(
   "config: stored values merged over defaults",
