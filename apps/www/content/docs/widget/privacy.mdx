@@ -13,13 +13,13 @@ element's size, so whoever reads the report sees that something was withheld rat
 like a rendering bug. Masking applies to every capture mode, including screen share of the current tab, and
 to [session replay](/docs/widget/bug-reports#session-replay).
 
-| Masked              | How                                                                                  |
-| ------------------- | ------------------------------------------------------------------------------------ |
-| Password fields     | Always — `input[type=password]`.                                                     |
-| Payment card fields | Always — anything with `autocomplete="cc-…"`.                                        |
-| Elements you mark   | Always — add `data-pinwren-mask` to an element; its whole subtree is blocked out.    |
-| Project selectors   | The project's `capture.maskSelectors`: up to 50 CSS selectors, set in the dashboard. |
-| Every text field    | In privacy mode — inputs, textareas, selects and `contenteditable` regions.          |
+| Masked              | How                                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Password fields     | Always — `input[type=password]`.                                                                             |
+| Payment card fields | Always — anything with `autocomplete="cc-…"`.                                                                |
+| Elements you mark   | Always — add `data-pinwren-mask` to an element; its whole subtree is blocked out.                            |
+| Project selectors   | The project's `capture.maskSelectors`: up to 50 CSS selectors, set on the Capture tab (**Masked elements**). |
+| Every text field    | In privacy mode — inputs, textareas, selects and `contenteditable` regions.                                  |
 
 ```html
 <div class="account-summary" data-pinwren-mask>Jane Doe · IBAN DE89 3704 0044 0532 0130 00</div>
@@ -39,7 +39,7 @@ own UI is always left out.
 
 ## Privacy mode
 
-Turn on **privacy mode** in the project's widget settings for pages that show personal data (customer
+Turn on **Privacy mode** on the project's **Privacy & data** tab (the **EU privacy mode** card) for pages that show personal data (customer
 portals, health or finance apps, anything under GDPR scrutiny). It changes both sides:
 
 **In the widget**
@@ -48,18 +48,20 @@ portals, health or finance apps, anything under GDPR scrutiny). It changes both 
 - no page-timing metadata is sent;
 - the user agent is reduced to the browser and OS families (“Chrome on Windows”) — no versions, no device
   model; time zone and referrer are left out;
-- session replay is off unless the page explicitly opts in (`allowReplayInPrivacyMode`). <sup>New in 0.1</sup>
+- session replay is off unless the page explicitly opts in (`allowReplayInPrivacyMode`).
 
 **On the server**
 
 - the consent notice is forced on, and console capture is capped at errors;
 - reports from older or modified widgets are filtered again on arrival: non-error console entries and timing
   data are dropped and the user agent is reduced;
-- stored IP addresses are truncated, and the instance's outbound update check is switched off.
+- stored IP addresses are truncated (to /24 for IPv4, /48 for IPv6), and the instance's outbound update check
+  is switched off;
+- turning it on shortens a “keep forever” retention to 90 days (unless you set a retention in the same change).
 
 ## Consent notice
 
-With `consent.enabled`, the composer and the bug report show a short notice above the send button, which
+With `consent.enabled` (**Ask for consent** in the Widget tab's **Consent notice** card), the composer and the bug report show a short notice above the send button, which
 becomes **Agree & send**. The default text, in the visitor's language:
 
 > Sending shares your comment, this page's address, the element you marked and basic browser details (browser,
@@ -69,10 +71,8 @@ becomes **Agree & send**. The default text, in the visitor's language:
 Set `consent.text` for your own wording (up to 1,000 characters) and `consent.privacyUrl` to link your privacy
 policy. The visitor is asked once per project and browser; changing the text or link asks again.
 
-<NewIn>
-  Each submission also records which notice was accepted and when (`consent: { version, acceptedAt }`), stored
-  with the feedback.
-</NewIn>
+Each submission also records which notice was accepted and when (`consent: { version, acceptedAt }`), stored
+with the feedback.
 
 ## What is sent, and when
 

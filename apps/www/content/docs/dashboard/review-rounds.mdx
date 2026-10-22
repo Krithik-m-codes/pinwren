@@ -3,34 +3,38 @@ title: Review rounds
 description: Group a client review into a named round with a due date, track its progress and export it as CSV or PDF.
 ---
 
-<NewIn>
-  Review rounds are new in 0.1. The server side — rounds, the widget's active round, exports and the
-  [API](#api) — is in place; the dashboard screens for them are still being built. Until they land, manage
-  rounds through the API at the end of this page.
-</NewIn>
-
 A **round** is one pass of review on a project — "Homepage v2 — client review 1" — with an optional due date.
 Feedback sent while a round is active joins it, so you can tell what this review produced, chase what's still open
 before the deadline, and hand the client a report at the end.
 
 ## Create a round
 
-Open the project and create a round with a **name** (up to 120 characters) and, optionally, a **due date**. A round is
-`active` when created and `closed` when you close it; closing records when it ended. You can rename it, move the due
-date, reopen or delete it later. Deleting a round keeps its feedback — the items simply leave the round.
+Open the project and click **Rounds** in its header (`/projects/<id>/rounds`), then **New round**. Give it a **name**
+(up to 120 characters) and, optionally, a **due date** — a day, stored as the end of that day in your time zone. A
+round is **Active** when created and **Closed** when you close it; closing records when it ended.
 
-Each round carries its counts — `counts: { total, open, closed }` — and `closedAt` once closed.
+Each round shows as a card with its due date (red once it's overdue), a progress bar ("N of M done", "N open"),
+**View items** (the inbox filtered to the round) and **Close**. Its **⋯** menu has **Export CSV**, **Export PDF**,
+**Edit** (rename, move the due date), **Close round** / **Reopen** and **Delete**. Deleting a round keeps its feedback —
+the items simply leave the round. Viewers can open and export rounds but not change them.
+
+In the API each round carries its counts — `counts: { total, open, closed }` — and `closedAt` once closed.
 
 ## How feedback joins a round
 
 - **From the widget**: when a project has **exactly one** active round, the widget is told about it (`activeRound` in
   `GET /w/config`) and new comments and bug reports are filed into it. The server also defaults new feedback to that
   round, so older widgets join it too. With no active round, or several, feedback joins none.
-- **By hand**: set or change an item's round in the inbox (`PATCH /api/feedback/:id { "roundId": "…" }`), or remove it
-  with `null`. An item can only join a round of its own project.
+- **Choosing the active round**: the project's **Widget** tab has a **Review round** card whose **Active round**
+  picker sets the round new feedback joins. Choosing one closes the project's other active rounds; **No round** closes
+  them all.
+- **By hand**: set or change an item's round with the **Review round** picker in its detail panel, or select several
+  items in the list and use **Round** in the bulk bar (`PATCH /api/feedback/:id { "roundId": "…" }`, or `null` to
+  remove it). An item can only join a round of its own project.
 
-List a round's items with the `roundId` filter of `GET /api/feedback` (or `/api/v1/feedback`), or save that filter
-as a [view](/docs/dashboard/saved-views).
+In the inbox, pick a project and use **Filter › Review round** to list a round's items (`?round=<id>`), and save
+that as a [view](/docs/dashboard/saved-views). Through the API it is the `roundId` filter of `GET /api/feedback` (or
+`/api/v1/feedback`).
 
 ## Export
 
@@ -41,7 +45,9 @@ Export a round to share with a client or attach to an invoice:
 | **CSV** | One row per item, for spreadsheets                                      |
 | **PDF** | A printable report, rendered on the server (no headless browser needed) |
 
-The export is `GET /api/rounds/:id/export?format=csv` or `?format=pdf` (CSV is the default).
+Both download as a file. The CSV is RFC 4180 with a byte-order mark (so Excel reads accents), and cells that look like
+formulas are prefixed with `'`; the PDF is a text-only A4 report. The export is
+`GET /api/rounds/:id/export?format=csv` or `?format=pdf` (CSV is the default).
 
 ## API
 

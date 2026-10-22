@@ -3,8 +3,6 @@ title: CLI
 description: "@pinwren/cli — add the widget to a project, check an instance and list open feedback from the terminal."
 ---
 
-<NewIn>The CLI is new in this release.</NewIn>
-
 `@pinwren/cli` (MIT) installs the `pinwren` command: one self-contained file with no dependencies. It needs
 Node 20 or newer. Run it with `npx`, or install it globally:
 
@@ -32,12 +30,13 @@ Prints the widget snippet for the project in the current folder — or, with `--
 - **URL and key.** It asks for your Pinwren URL and the project's public key (`pk_…`, from the project's
   **Install** tab) unless you pass `--url` / `--key` (or set `PINWREN_URL` / `PINWREN_KEY`). Outside an
   interactive terminal, a missing value is an error.
-- **Framework.** It reads `package.json` in the current folder: `next` in the dependencies means Next.js,
-  `vite` means Vite, anything else plain HTML. Override it with `--framework html|vite|next`.
+- **Framework.** It reads `package.json` in the current folder: `next` in the dependencies or devDependencies
+  means Next.js, `vite` means Vite, anything else plain HTML. Override it with `--framework html|vite|next`.
 - **`--write`.** For HTML and Vite it adds the script tag before `</body>` of `index.html` (or
   `public/index.html`, `src/index.html`); for Next.js it adds a `Script` element from `next/script` before `</body>`
   of `app/layout.tsx` (or `src/app/layout.tsx`, or the `.jsx` versions) and imports `next/script` once. Use
-  `--file` to choose another file. It never adds the widget twice.
+  `--file` to choose another file. It never adds the widget twice. Without `--write` it prints the snippet and the
+  `pinwren doctor` command to check it.
 
 ```bash
 pinwren init --url https://feedback.example.com --key pk_123… --write
@@ -61,7 +60,8 @@ Remember to add the site's origin (e.g. `localhost:5173` while you develop) to t
 
 ## `pinwren doctor`
 
-Checks a running instance and exits with `1` if anything fails:
+Checks a running instance and exits with `1` if anything fails. Without `--key` the widget config check is skipped
+(shown with `-`, not a failure):
 
 | Check           | What it does                                                                                                                                                   |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |

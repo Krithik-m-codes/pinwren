@@ -5,19 +5,21 @@ description: Add Pinwren to any website with one script tag, from npm, or as a R
 
 The widget is a single script, `widget.js`, served by your Pinwren server. It renders inside a closed Shadow
 DOM attached to its own `<pinwren-root>` element, so it can't be styled or broken by your page's CSS, and it
-never throws into your code. The core is about 26 KB gzip; the side panel, bug report form, screenshot engine,
+never throws into your code. The core is under 30 KB gzip (about 25 KB with brotli); the side panel, bug report form, screenshot engine,
 annotation editor and each language load only when a visitor needs them.
 
 <Callout title="Before you start">
-  Create a project in the dashboard and add your site to its **allowed origins** (for example `example.com`,
-  `*.example.com` or `localhost:5173`). The widget identifies itself with the project's public key (`pk_…`)
-  and the server only answers requests from those origins — no secret ever reaches the browser.
+  Create a project in the dashboard and add your site under **Allowed sites** on its **Install** tab (for
+  example `example.com`, `*.example.com` or `localhost:5173`). The widget identifies itself with the project's
+  public key (`pk_…`) and the server only answers requests from those origins — no secret ever reaches the
+  browser.
 </Callout>
 
 <Tabs items={["Script tag", "npm", "React"]}>
 <Tab value="Script tag">
 
-Paste the snippet from the project's **Install** tab before `</body>`:
+Paste the snippet from the project's **Install** tab before `</body>` (the tab also has Next.js and Google
+Tag Manager versions):
 
 ```html title="index.html"
 <script src="https://feedback.example.com/widget.js" data-project="pk_…" async></script>
@@ -43,12 +45,10 @@ identify({ name: "Ada Lovelace", email: "ada@example.com" });
 on("submit", ({ number }) => console.log(`Feedback #${number} sent`));
 ```
 
-<NewIn>
-  The npm entry is a tiny, typed loader: `init()` adds `<endpoint>/widget.js` — the build your Pinwren server
-  ships, so it always matches the server's API and chunks — and calls made before it has loaded are queued.
-  Importing it during server-side rendering is safe; nothing touches `window` until a function runs in the
-  browser.
-</NewIn>
+The npm entry is a tiny, typed loader: `init()` adds `<endpoint>/widget.js` — the build your Pinwren server
+ships, so it always matches the server's API and chunks — and calls made before it has loaded are queued.
+Importing it during server-side rendering is safe; nothing touches `window` until a function runs in the
+browser.
 
 The package is MIT-licensed and exports `init`, `open`, `close`, `on`, `identify`, `setPageScope`, `destroy` and
 `load`, plus TypeScript types for every option and event payload. Pass `nonce` to `init()` if your page uses
@@ -56,8 +56,6 @@ a CSP nonce.
 
 </Tab>
 <Tab value="React">
-
-<NewIn>The React package is new in this release.</NewIn>
 
 ```npm
 npm install @pinwren/react
@@ -117,16 +115,16 @@ The hook returns `{ ready, open, close, identify, setPageScope, on }`.
 
 ## Script attributes
 
-| Attribute                           | Required | What it does                                                                                                                                                                    |
-| ----------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `data-project`                      | Yes      | The project's public key (`pk_…`). Without it the script loads but does nothing, so you can start the widget yourself with `Pinwren.init()`.                                    |
-| `data-endpoint`                     | No       | Your Pinwren server's origin, e.g. `https://feedback.example.com`. Defaults to the origin the script was loaded from.                                                           |
-| `data-accent`                       | No       | Launcher colour as a hex value (`#5b5bd6`). Overrides the project's accent on this page only; anything that isn't a plain hex colour is ignored.                                |
-| `data-locale`                       | No       | UI language, e.g. `fr` or `pt-BR`. Otherwise the visitor's browser languages decide — see [Languages](/docs/widget/i18n).                                                       |
-| `data-force-show`                   | No       | Show the widget even where the project's [visibility rules](/docs/widget/visibility) would hide it. <sup>New in 0.1</sup>                                                       |
-| `data-url-pattern`                  | No       | Group this page's pins with every page that matches a pattern such as `/product/:id` — see [Visibility & page scope](/docs/widget/visibility#page-scope). <sup>New in 0.1</sup> |
-| `data-nonce`                        | No       | A CSP nonce the widget copies onto the chunk and locale scripts it adds (the script's own `nonce` works too). <sup>New in 0.1</sup>                                             |
-| `data-allow-replay-in-privacy-mode` | No       | Keep [session replay](/docs/widget/bug-reports#session-replay) on for a project in privacy mode; you take care of consent. <sup>New in 0.1</sup>                                |
+| Attribute                           | Required | What it does                                                                                                                                              |
+| ----------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `data-project`                      | Yes      | The project's public key (`pk_…`). Without it the script loads but does nothing, so you can start the widget yourself with `Pinwren.init()`.              |
+| `data-endpoint`                     | No       | Your Pinwren server's origin, e.g. `https://feedback.example.com`. Defaults to the origin the script was loaded from.                                     |
+| `data-accent`                       | No       | Launcher colour as a hex value (`#5b5bd6`). Overrides the project's accent on this page only; anything that isn't a plain hex colour is ignored.          |
+| `data-locale`                       | No       | UI language, e.g. `fr` or `pt-BR`. Otherwise the visitor's browser languages decide — see [Languages](/docs/widget/i18n).                                 |
+| `data-force-show`                   | No       | Show the widget even where the project's [visibility rules](/docs/widget/visibility) would hide it.                                                       |
+| `data-url-pattern`                  | No       | Group this page's pins with every page that matches a pattern such as `/product/:id` — see [Visibility & page scope](/docs/widget/visibility#page-scope). |
+| `data-nonce`                        | No       | A CSP nonce the widget copies onto the chunk and locale scripts it adds (the script's own `nonce` works too).                                             |
+| `data-allow-replay-in-privacy-mode` | No       | Keep [session replay](/docs/widget/bug-reports#session-replay) on for a project in privacy mode; you take care of consent.                                |
 
 ## Content Security Policy
 
@@ -145,7 +143,8 @@ Content-Security-Policy: script-src 'self' https://feedback.example.com; connect
 1. The script reads its attributes and waits for `DOMContentLoaded` if the page is still loading.
 2. It fetches `GET /w/config` with the project key: the project's launcher, modes, capture and privacy
    settings ([Configuration](/docs/widget/configuration)). If the key is unknown or the origin isn't allowed,
-   the widget logs `[pinwren] widget disabled: …` to the console and removes itself.
+   the widget logs `[pinwren] widget disabled: …` to the console and removes itself. If the project's
+   [visibility rules](/docs/widget/visibility) hide it on this host, it stops here too.
 3. It loads the visitor's language, places the pins of the current page and fires the `ready` event
    ([JavaScript API](/docs/widget/api)).
 4. Single-page apps work without extra code: when the URL changes, the widget reloads the pins of the new

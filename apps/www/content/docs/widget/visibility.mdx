@@ -5,23 +5,22 @@ description: Decide where the widget appears, who can act on it, and which pages
 
 ## Ways to limit the widget
 
-| Setting (project › Widget)    | Effect                                                                                     |
-| ----------------------------- | ------------------------------------------------------------------------------------------ |
-| `modes.comment` / `modes.bug` | Turn off comments or bug reports; the menu, shortcuts and `Pinwren.open()` follow.         |
-| `readOnly`                    | Visitors see pins and threads but can't comment, reply, report or resolve.                 |
-| Public read (`publicRead`)    | Off: visitors see no existing feedback — no pins, no panel — but can still send it.        |
-| `launcher.hidden`             | No launcher; open the widget from your own UI with the [JavaScript API](/docs/widget/api). |
-| Allowed origins               | The widget only works on the sites you list; anywhere else it removes itself.              |
-| `visibility` _(below)_        | Show the widget only outside production, or only on wide enough screens.                   |
+| Setting                                                                   | Effect                                                                                     |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Pinned comments / Bug reports (Widget tab, `modes.comment` / `modes.bug`) | Turn off comments or bug reports; the menu, shortcuts and `Pinwren.open()` follow.         |
+| Read-only (Widget tab, `readOnly`)                                        | Visitors see pins and threads but can't comment, reply, report or resolve.                 |
+| Show existing pins to visitors (Privacy & data tab, `publicRead`)         | Off: visitors see no existing feedback — no pins, no panel — but can still send it.        |
+| Hide the launcher (Widget tab, `launcher.hidden`)                         | No launcher; open the widget from your own UI with the [JavaScript API](/docs/widget/api). |
+| Allowed sites (Install tab)                                               | The widget only works on the sites you list; anywhere else it removes itself.              |
+| Where it shows (Widget tab, `visibility`) _(below)_                       | Show the widget only outside production, or only on wide enough screens.                   |
 
 You can also simply not load the script — for example render the snippet only for signed-in staff, or only on
 your staging deployment.
 
 ## Environments and screen width
 
-<NewIn>
-  Visibility rules are new in this release. They run in the browser only; the server just stores the setting.
-</NewIn>
+Set these on the project's **Widget** tab, in the **Where it shows** card: **Environments** (Everywhere / Not in
+production) and **Minimum screen width**. The rules run in the browser only; the server just stores the setting.
 
 <TypeTable
   type={{
@@ -67,8 +66,6 @@ Pinwren.init({ projectKey: "pk_…", endpoint: "https://feedback.example.com", f
 ```
 
 ## Page scope
-
-<NewIn>URL patterns are new in this release.</NewIn>
 
 By default pins belong to the exact page they were left on: its URL without the hash, with the query string
 sorted, so `?a=1&b=2` and `?b=2&a=1` are the same page. Pages built from one template — `/product/1`,

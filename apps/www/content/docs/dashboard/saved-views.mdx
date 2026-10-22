@@ -3,13 +3,19 @@ title: Saved views
 description: Save a set of inbox filters and a layout under a name, for yourself or the whole workspace.
 ---
 
-<NewIn>
-  Saved views are new in 0.1. The [API](#api) is in place; the inbox controls to create and open views are
-  still being built.
-</NewIn>
-
 A **saved view** is a named inbox: a set of filters plus the layout to show them in. Make "Urgent bugs", "Assigned
 to me" or "Client review 1" once and open it again instead of rebuilding the filter every morning.
+
+## Save and open a view
+
+Set up the inbox — project, status tab, filters, search, list or board — and click **Save view** in the toolbar. Give
+it a **Name** and turn on **Share with the team** if everyone should see it. The view appears under **Views** in the
+sidebar (a people icon marks shared ones) and in the `⌘K` command palette; clicking it opens the inbox with its
+filters and layout.
+
+When you change the filters of an open view, an **Update "_view name_"** button saves the change into it (for your own
+views, or shared ones if you're not a viewer). The **⋯** menu next to a view in the sidebar has **Edit** (rename,
+share or unshare) and **Delete**; deleting a view never deletes feedback.
 
 ## What a view stores
 
@@ -37,8 +43,9 @@ Filters a view can hold:
 ## Personal and shared views
 
 Personal views belong to you. Shared views appear for every member of the workspace — use them for the queues the
-whole team works from. A shared view can be changed or deleted by its owner and by workspace owners and admins;
-viewers can keep personal views but not share them.
+whole team works from. A shared view can be changed or deleted by its owner and by workspace owners and admins
+(`403` for anyone else); other members' personal views are invisible to you (`404`). Viewers can keep personal views
+but not share them.
 
 ## API
 

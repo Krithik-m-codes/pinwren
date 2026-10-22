@@ -39,10 +39,10 @@ any redesign. See [Anchoring](/docs/widget/anchoring).
 </Accordion>
 <Accordion title="How big is the widget?">
 
-The script tag loads `widget.js`: about **26 KB gzip** (76 KB minified). Everything else loads only when
-someone uses it: the side panel (~7 KB gzip), the bug-report form (~11 KB), the screenshot capture and editor
-(~95 KB, only when a screenshot is taken) and one ~3 KB file per non-English language. The core renders the
-launcher and pins and nothing more.
+The script tag loads `widget.js`: under **30 KB gzip** (about 82 KB minified). Everything else loads only when
+someone uses it: the side panel (~7 KB gzip), the bug-report form (~12 KB), the annotation editor (~3 KB), the
+screenshot capture (~92 KB, only when a screenshot is taken), the session recorder (~24 KB, only when a project turns
+replay on) and one ~3 KB file per non-English language. The core renders the launcher and pins and nothing more.
 
 </Accordion>
 <Accordion title="Will it break my site's styles or scripts?">
@@ -121,7 +121,8 @@ source. See [Editions & licensing](/docs/licensing).
 
 There is no importer for other tools' data yet. Most teams start fresh: install the widget on the sites you are
 reviewing and keep the old tool read-only until its open items are closed. Your data in Pinwren is never locked
-in — export it as CSV or JSON from the dashboard, or read it through the [REST API](/docs/api).
+in — export a page's comments, or every page's, as CSV or JSON from the widget's side panel, a review round as CSV
+or PDF from the dashboard, or read everything through the [REST API](/docs/api).
 
 </Accordion>
 <Accordion title="Do my clients need an account?">

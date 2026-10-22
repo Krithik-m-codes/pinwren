@@ -31,8 +31,8 @@ curl https://feedback.example.com/api/v1/feedback \
 
 A token acts as the member who created it, in the workspace it was created in: changes show that person in the
 timeline, marked "via API". It stops working when it expires, when it is revoked, or when its owner leaves the
-workspace. Tokens are stored as scrypt hashes; a lost token can't be recovered, only replaced. Each member manages
-their own tokens; workspace admins can revoke anyone's.
+workspace. Tokens are stored as scrypt hashes; a lost token can't be recovered, only replaced. Each member sees and
+manages only their own tokens in **Settings › API tokens**.
 
 A token never has more rights than its owner: a token created by a member with the **viewer** role can read but
 every write answers `403 READ_ONLY_ROLE`, whatever its scopes.
@@ -43,13 +43,19 @@ check a token.
 
 ## Endpoints
 
-| Method  | Path                            | Scope            |
-| ------- | ------------------------------- | ---------------- |
-| `GET`   | `/api/v1/token`                 | any              |
-| `GET`   | `/api/v1/feedback`              | `feedback:read`  |
-| `GET`   | `/api/v1/feedback/:id`          | `feedback:read`  |
-| `PATCH` | `/api/v1/feedback/:id`          | `feedback:write` |
-| `POST`  | `/api/v1/feedback/:id/comments` | `comments:write` |
+| Method  | Path                                | Scope            |
+| ------- | ----------------------------------- | ---------------- |
+| `GET`   | `/api/v1/token`                     | any              |
+| `GET`   | `/api/v1/projects`                  | `feedback:read`  |
+| `GET`   | `/api/v1/feedback`                  | `feedback:read`  |
+| `GET`   | `/api/v1/feedback/:id`              | `feedback:read`  |
+| `GET`   | `/api/v1/feedback/:id/reproduction` | `feedback:read`  |
+| `PATCH` | `/api/v1/feedback/:id`              | `feedback:write` |
+| `POST`  | `/api/v1/feedback/:id/comments`     | `comments:write` |
+| `GET`   | `/api/v1/assets/:id`                | `feedback:read`  |
+| `GET`   | `/api/v1/projects/:id/rounds`       | `feedback:read`  |
+| `GET`   | `/api/v1/rounds/:id`                | `feedback:read`  |
+| `PATCH` | `/api/v1/rounds/:id`                | `feedback:write` |
 
 ### List feedback
 
@@ -96,7 +102,9 @@ check a token.
       "projectId": "5b8c1d2e-3f4a-4b5c-8d9e-0f1a2b3c4d5e",
       "projectName": "Marketing site",
       "pageUrl": "https://example.com/checkout",
+      "roundId": null,
       "hasScreenshot": true,
+      "hasReplay": false,
       "attachmentCount": 0,
       "commentCount": 2
     }
@@ -113,25 +121,20 @@ curl -G https://feedback.example.com/api/v1/feedback \
   --data-urlencode "status=open" --data-urlencode "kind=bug" --data-urlencode "limit=100"
 ```
 
-<NewIn>
-  The `priority`, `assigneeId`, `roundId`, `page` and `since` filters are new in this release, and items now
-  carry `roundId` and `hasReplay`.
-</NewIn>
-
 ### Get one item
 
 `GET /api/v1/feedback/:id` returns everything the dashboard's detail panel shows:
 
-| Key                            | Contents                                                                                                                    |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `feedback`                     | The item: text, status, priority, assignees, reporter, page URL and title, `anchor`, `environment`, `metadata`, timestamps  |
-| `assignees`                    | `{ id, name, email, image }` for each assignee                                                                              |
-| `assets`                       | Screenshots, attachments and replays: `{ id, kind, contentType, bytes, name }` — fetch a file with `GET /api/v1/assets/:id` |
-| `comments`                     | Public and internal comments with `visibility`, author and `editedAt`                                                       |
-| `activity`                     | The timeline: `{ type, data, actorKind, actorName, createdAt }`                                                             |
-| `diagnostics`                  | `{ console, network }` captured with a bug report, or `null`                                                                |
-| `issues`                       | Linked GitHub / GitLab issues `{ provider, number, url, state }`                                                            |
-| `integrations`, `panelActions` | Trackers and panel actions available on this item                                                                           |
+| Key                            | Contents                                                                                                                                                                          |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `feedback`                     | The item: text, status, priority, assignees, reporter, page URL and title, `anchor`, `environment`, `metadata`, timestamps                                                        |
+| `assignees`                    | `{ id, name, email, image }` for each assignee                                                                                                                                    |
+| `assets`                       | Screenshots, attachments and replays: `{ id, kind, contentType, bytes, name, meta }` (a replay's `meta` is `{ durationMs, events }`) — fetch a file with `GET /api/v1/assets/:id` |
+| `comments`                     | Public and internal comments with `visibility`, `author` (team) or `authorGuest` (visitor) and `editedAt`                                                                         |
+| `activity`                     | The timeline: `{ type, data, actorKind, actorName, createdAt }`                                                                                                                   |
+| `diagnostics`                  | `{ console, network }` captured with a bug report, or `null`                                                                                                                      |
+| `issues`                       | Linked GitHub / GitLab issues `{ provider, number, url, state }`                                                                                                                  |
+| `integrations`, `panelActions` | Trackers and panel actions available on this item                                                                                                                                 |
 
 ### Update an item
 
@@ -149,6 +152,11 @@ curl -G https://feedback.example.com/api/v1/feedback \
       type: "string[]",
       description: "Up to 20 user ids, all members of the workspace (else `400 INVALID_ASSIGNEE`).",
     },
+    roundId: {
+      type: "uuid | null",
+      description:
+        "Move the item into a [review round](/docs/dashboard/review-rounds) of the same project (else `400 INVALID_ROUND`); `null` takes it out of its round.",
+    },
   }}
 />
 
@@ -159,13 +167,9 @@ curl -X PATCH https://feedback.example.com/api/v1/feedback/0f9e2a4c-8d1b-4c3a-b6
   -d '{ "status": "resolved", "priority": "high" }'
 ```
 
-The response is `{ "feedback": { … } }` with the updated item. Like a change in the dashboard, it writes the
+The response is `{ "feedback": { … } }` with the updated item (without the joined `projectName`, `projectSlug`,
+`pageUrl` and `pageTitle`). Like a change in the dashboard, it writes the
 timeline, sends notifications and webhooks, and closes a linked issue when the item closes.
-
-<NewIn>
-  `roundId` (a review round of the same project, or `null` to take it out of its round) is new in this
-  release.
-</NewIn>
 
 ### Comment
 
@@ -187,11 +191,11 @@ Returns `201 { "comment": { id, body, visibility, createdAt, … } }`.
 
 ### More endpoints
 
-<NewIn>These endpoints are new in this release; the SDK and MCP server use them.</NewIn>
+The SDK and MCP server use these too.
 
 | Method  | Path                                | Returns                                                                                                        |
 | ------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `GET`   | `/api/v1/projects`                  | `{ projects }` with `id`, `name`, `slug`, `publicKey`, `openCount`                                             |
+| `GET`   | `/api/v1/projects`                  | `{ projects }` with `id`, `name`, `slug`, `publicKey`, `openCount`, `createdAt` (archived projects left out)   |
 | `GET`   | `/api/v1/feedback/:id/reproduction` | `{ feedbackId, markdown, steps, failingRequests, errors, replay }` — what an agent needs to reproduce a report |
 | `GET`   | `/api/v1/projects/:id/rounds`       | `{ rounds }` — the project's [review rounds](/docs/dashboard/review-rounds) with their counts                  |
 | `GET`   | `/api/v1/rounds/:id`                | `{ round }`                                                                                                    |
@@ -217,6 +221,7 @@ application/problem+json`:
 | Status | `code`                               | Meaning                                           |
 | ------ | ------------------------------------ | ------------------------------------------------- |
 | 400    | `INVALID_CURSOR`, `INVALID_ASSIGNEE` | A bad cursor or assignee                          |
+| 400    | `INVALID_ROUND`                      | The round belongs to another project              |
 | 400    | —                                    | The body or query failed validation               |
 | 401    | `INVALID_TOKEN`                      | Missing, invalid, expired or revoked token        |
 | 403    | `INSUFFICIENT_SCOPE`                 | The token lacks the scope for this endpoint       |
@@ -224,7 +229,9 @@ application/problem+json`:
 | 404    | `NOT_FOUND`                          | No such item in the token's workspace             |
 | 500    | `INTERNAL_ERROR`                     | Something went wrong on the server (see its logs) |
 
-Branch on `code`, not on `title` — titles are for people and may change.
+Branch on `code`, not on `title` — titles are for people and may change. The one exception to the problem format is
+a body or query that fails validation: it answers `400` with the validator's result, `{ "success": false, "error": { … } }`,
+and no `code`.
 
 ## Widget endpoints
 
@@ -239,7 +246,9 @@ from a server with a spoofed `Origin` — use `/api/v1` instead.
 | `GET /w/feedback?url=<page>[&include=closed]` | Pins on a page (open, in progress and in review unless `include=closed`; max 100); `&urlPattern=` matches by [page scope](/docs/widget/visibility)                 |
 | `POST /w/feedback`                            | Send a comment or bug report → `201 { feedback: { id, number, reporterToken } }`; idempotent on `clientId`. Also takes `consent`, `replay` and a signed `reporter` |
 | `PATCH /w/feedback/:id`                       | `{ status: "resolved" \| "open" }` — with the `x-pinwren-reporter-token` header, or when visitors may resolve                                                      |
-| `GET` / `POST /w/feedback/:id/comments`       | Public thread; post `{ body, author?: { name?, email? } }`                                                                                                         |
+| `GET` / `POST /w/feedback/:id/comments`       | Public thread; post `{ body, author?: { name?, email?, externalId?, signature? } }`                                                                                |
 
-Reports and replies share a per-IP rate limit (`429 RATE_LIMITED`); a read-only project answers writes with
-`403 READ_ONLY`.
+Reports and replies are each rate-limited per IP and project — by default 10 a minute (`WIDGET_RATE_LIMIT_PER_MIN`,
+or the project's own limit) — and answer `429 RATE_LIMITED` beyond it; a read-only project answers writes with
+`403 READ_ONLY`. A missing or unknown key is `401 MISSING_PROJECT_KEY` / `401 INVALID_PROJECT_KEY`, a site not on the
+list `403 ORIGIN_NOT_ALLOWED`.

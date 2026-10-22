@@ -25,6 +25,9 @@ lifetime and the update check. The rule is the same for all of them:
   as read-only, and saving it is refused with `409 SETTING_LOCKED`.
 - Remove the variable and restart to hand the setting back to the dashboard.
 
+The Enterprise licence works the same way: with `PINWREN_LICENSE_FILE` set, the upload in **Settings ›
+Licence** is locked and refused with `409 LICENSE_LOCKED`.
+
 Use the environment for anything you manage as code; use the dashboard for anything you want admins to change
 without a redeploy.
 
@@ -54,7 +57,9 @@ passed to Pinwren itself.
 | `PINWREN_PORT`      | `3000`           | Host port the app is published on.                                                                            |
 | `PINWREN_BIND`      | `127.0.0.1`      | Host address the port is bound to. `0.0.0.0` exposes it on every interface (not recommended without a proxy). |
 
-The compose file also sets `PINWREN_TRUST_PROXY=1` by default, because it expects a reverse proxy in front.
+Besides the three required values, the compose file forwards `PINWREN_TRUST_PROXY`, `PINWREN_DISABLE_SIGNUP`,
+`PINWREN_WORKERS` and `PINWREN_LICENSE_FILE` (empty by default) from `docker/.env`. It sets
+`PINWREN_TRUST_PROXY=1` by default, because it expects a reverse proxy in front.
 Set `PINWREN_TRUST_PROXY=false` if clients reach the container directly — otherwise they could forge the
 `X-Forwarded-For` address the rate limits use.
 

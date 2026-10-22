@@ -35,7 +35,8 @@ Use **Test connection** to check that the token can see the project.
 <Step>
 
 **Add the webhook** so closing an issue updates Pinwren. Under **Two-way status** the tab shows a **URL**
-(`https://feedback.example.com/api/integrations/gitlab/webhook`) and a **secret**. In the GitLab project, open
+(`https://feedback.example.com/api/integrations/gitlab/webhook`); press **Reveal webhook secret** for the **secret**.
+In the GitLab project, open
 **Settings › Webhooks › Add new webhook**, paste the URL, put the secret in **Secret token** and tick **Issues
 events**.
 
@@ -72,7 +73,8 @@ Changes from GitLab appear in the timeline as the integration and are never push
   events with the `close` or `reopen` action change anything; others are acknowledged and ignored. Requests over
   1 MB are refused.
 - When several Pinwren projects sync one GitLab project, only the integration whose secret matches acts.
-- Rotate the webhook secret from the tab if it leaks, and paste the new one into GitLab.
+- If the webhook secret leaks, rotate it with `POST /api/integrations/:id/rotate-webhook-secret` (workspace admin
+  session; the tab has no button for it) and paste the new one into GitLab.
 
 ## Self-managed GitLab
 

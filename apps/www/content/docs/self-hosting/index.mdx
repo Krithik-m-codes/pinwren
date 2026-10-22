@@ -54,6 +54,7 @@ services:
       PINWREN_TRUST_PROXY: ${PINWREN_TRUST_PROXY:-1}
       PINWREN_DISABLE_SIGNUP: ${PINWREN_DISABLE_SIGNUP:-false}
       PINWREN_WORKERS: ${PINWREN_WORKERS:-2}
+      PINWREN_LICENSE_FILE: ${PINWREN_LICENSE_FILE:-}
     volumes:
       - pinwren-data:/data
     depends_on:
@@ -72,7 +73,8 @@ volumes:
 - **Port.** The app is published on `127.0.0.1:3000` only, so it is reachable through a reverse proxy on the
   same host but not from the internet. Change `PINWREN_BIND` (e.g. `0.0.0.0`) and `PINWREN_PORT` in
   `docker/.env` if you need to.
-- **Volumes.** `pinwren-db` holds Postgres; `pinwren-data` holds uploaded screenshots and attachments. Back up
+- **Volumes.** `pinwren-db` holds Postgres; `pinwren-data` holds uploaded screenshots, attachments and
+  session replays. Back up
   both — see [Backups](/docs/self-hosting/backups).
 - **Image or build.** Without `PINWREN_IMAGE` the file builds the image from your checkout (`--build`). Set
   `PINWREN_IMAGE=ghcr.io/krithik-m-codes/pinwren:<version>` to use a published release instead.
@@ -124,7 +126,7 @@ up in the dashboard instead (**Settings › Email**).
 
 <Cards>
   <Card title="Reverse proxy and HTTPS" href="/docs/self-hosting/reverse-proxy">
-    Caddy, nginx and Traefik, forwarded headers and upload sizes.
+    Caddy, nginx and Traefik: forwarded headers, upload sizes, brotli and the live stream.
   </Card>
   <Card title="Storage" href="/docs/self-hosting/storage">
     Keep files on the volume or move them to S3, R2 or MinIO.

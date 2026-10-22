@@ -36,7 +36,8 @@ Use **Test connection** to check that the token can see the repository.
 <Step>
 
 **Add the webhook** so closing an issue updates Pinwren. Under **Two-way status** the tab shows a **URL**
-(`https://feedback.example.com/api/integrations/github/webhook`) and a **secret** (`whsec_…`). In the repository, open
+(`https://feedback.example.com/api/integrations/github/webhook`); press **Reveal webhook secret** for the **secret**
+(`whsec_…`). In the repository, open
 **Settings › Webhooks › Add webhook**, paste both, set the content type to `application/json` and choose **Let me
 select individual events › Issues**.
 
@@ -53,7 +54,7 @@ A project can have one GitHub integration (and one GitLab integration).
 | **Bugs**        | Every new bug report opens an issue; other items can be sent by hand |
 | **Everything**  | Every new comment, bug, idea and question opens an issue             |
 
-**Send to GitHub** works for any member, creates the issue right away and links it on the item. Sending the same item
+**Send to GitHub** works for any member except viewers, creates the issue right away and links it on the item. Sending the same item
 again returns the existing issue. If the item is already closed, the new issue is closed too.
 
 Each issue has:
@@ -91,7 +92,8 @@ next success.
 
 The webhook is verified with `X-Hub-Signature-256` (HMAC-SHA256 of the raw body with the integration's secret). When
 several projects sync the same repository, only the integration whose secret verifies acts on it. Requests over 1 MB
-are refused. Rotate the secret from the tab if it leaks and paste the new one into GitHub.
+are refused. If the secret leaks, rotate it with `POST /api/integrations/:id/rotate-webhook-secret` (workspace
+admin session; the tab has no button for it) and paste the new one into GitHub.
 
 ## Tokens and people
 

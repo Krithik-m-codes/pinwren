@@ -18,10 +18,10 @@ bad argument or an internal error is logged as `[pinwren] …` and never thrown 
 | `Pinwren.on(event, handler)`       | Subscribe to an event. Returns a function that unsubscribes.                                                                                                                                         |
 | `Pinwren.identify(user, options?)` | Prefill the reporter's name and email; `{ id }` plus `{ signature }` makes a verified reporter — see [Identity](/docs/widget/identity).                                                              |
 | `Pinwren.destroy()`                | Full teardown: removes the DOM, every listener, the console/network wrappers and timers. `init()` can start it again.                                                                                |
-| `Pinwren.setPageScope(scope)`      | Group pins by a URL pattern — see [page scope](/docs/widget/visibility#page-scope). <sup>New in 0.1</sup>                                                                                            |
+| `Pinwren.setPageScope(scope)`      | Group pins by a URL pattern — see [page scope](/docs/widget/visibility#page-scope).                                                                                                                  |
 
 `open("comment")` and `open("bug")` do nothing when that mode is turned off for the project or the project is
-read-only.
+read-only, and `open()` does nothing while the [visibility rules](/docs/widget/visibility) hide the widget.
 
 ### `init` options
 
@@ -38,21 +38,19 @@ read-only.
     locale: { type: "string", description: "UI language, e.g. fr. Defaults to the browser's." },
     forceShow: {
       type: "boolean",
-      description: "Show the widget even where the project's visibility rules would hide it. New in 0.1.",
+      description: "Show the widget even where the project's visibility rules would hide it.",
     },
     urlPattern: {
       type: "string",
-      description: "Page scope for pins and new feedback, e.g. /product/:id. New in 0.1.",
+      description: "Page scope for pins and new feedback, e.g. /product/:id.",
     },
     nonce: {
       type: "string",
-      description:
-        "npm package only: CSP nonce for the widget.js script it adds (and its chunks). New in 0.1.",
+      description: "npm package only: CSP nonce for the widget.js script it adds (and its chunks).",
     },
     allowReplayInPrivacyMode: {
       type: "boolean",
-      description:
-        "Keep session replay on in privacy mode (all text is then masked; consent is up to you). New in 0.1.",
+      description: "Keep session replay on in privacy mode (all text is then masked; consent is up to you).",
     },
   }}
 />
@@ -104,7 +102,7 @@ Each entry is `[method, ...arguments]`. Unknown methods are skipped.
 
 ## Your own launcher
 
-Hide the built-in launcher (`launcher.hidden` in the project's widget settings) and open the widget from your
+Hide the built-in launcher (**Hide the launcher** on the project's **Widget** tab, `launcher.hidden`) and open the widget from your
 UI:
 
 ```html
@@ -120,7 +118,5 @@ Nothing to wire up: the widget watches the URL and reloads the pins of the new p
 framework replaces the whole document body, the widget survives — it is attached to `<html>`, not `<body>`.
 Call `Pinwren.destroy()` when you want it gone, for example on a route where feedback makes no sense.
 
-<NewIn>
-  The npm package ships TypeScript types for this API (`PinwrenApi`, `PinwrenOptions`, `PinwrenUser`, the
-  event payloads), and the React component wraps it — see [Install](/docs/widget).
-</NewIn>
+The npm package ships TypeScript types for this API (`PinwrenApi`, `PinwrenOptions`, `PinwrenUser`, the
+event payloads), and the React component wraps it — see [Install](/docs/widget).

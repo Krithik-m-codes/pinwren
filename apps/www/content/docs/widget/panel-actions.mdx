@@ -4,7 +4,7 @@ description: Add your own buttons to feedback threads — links that open your t
 ---
 
 Panel actions are up to **five** custom buttons a project adds to every feedback item: “Open in Linear”,
-“Send to agent”, “View in admin”. You define them in the dashboard (project › Widget › Panel actions).
+“Send to agent”, “View in admin”. You define them in the dashboard on the project's **Actions** tab (**Panel actions** card, **Add action**).
 
 | Kind        | Where it shows                                                      | What happens                                                             |
 | ----------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -98,8 +98,8 @@ timeout and without following redirects:
 
 It carries the same headers as [generic webhooks](/docs/integrations/webhooks) — `Pinwren-Event`,
 `Pinwren-Delivery`, `Pinwren-Timestamp` and `Pinwren-Signature: v1=<hex HMAC-SHA256(secret, timestamp + "." + body)>`
-— signed with the project's **action secret** (`whsec_…`), which organisation owners and admins can reveal and rotate in
-the dashboard.
+— signed with the project's **signing secret** (`whsec_…`), which organisation owners and admins can reveal and
+rotate in the **Signing secret** card on the same Actions tab.
 
 Answer with any `2xx` to mark the run as successful. A JSON body like `{ "message": "Queued for the agent" }`
 is shown to the team member as a toast (up to 200 characters). Every run is logged in the item's activity

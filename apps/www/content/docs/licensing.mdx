@@ -71,12 +71,9 @@ Nothing in Community calls into the commercial code to nag or degrade.
 
 ## Enterprise licence files
 
-<NewIn>
-  Licence files are new in 0.1. In this release the only feature they unlock is **white-label**: hiding
-  "Powered by Pinwren" in the widget and in emails (your own name, logo and colour stay free in every
-  edition). SSO, SCIM, audit log and the rest are planned. The **Settings › Licence** screen is still being
-  built; until it lands, use `PINWREN_LICENSE_FILE` or the admin API below.
-</NewIn>
+In this release the only feature a licence unlocks is **white-label**: hiding "Powered by Pinwren" in the widget and
+the Pinwren credit in emails (your own name, logo and colour stay free in every edition). SSO, SCIM, audit log and the
+rest arrive in later releases.
 
 An Enterprise licence is a single `.lic` text file: a JSON payload and an Ed25519 signature, each
 base64url-encoded and joined with a dot.
@@ -98,12 +95,20 @@ base64url-encoded and joined with a dot.
 }
 ```
 
-Install it either way:
+### Installing a licence
 
-- set `PINWREN_LICENSE_FILE` to the path of the file inside the container (mount it read-only), or
-- upload it as an instance admin: `POST /api/admin/license` with `{ "license": "<the file's text>" }`
-  (`GET` shows the current state, `DELETE` removes it). An invalid file answers `400 INVALID_LICENSE`; while
-  `PINWREN_LICENSE_FILE` is set, uploads answer `409 LICENSE_LOCKED`.
+Install it one of these ways:
+
+- **Settings › Licence** (instance admins): **Install a licence**, then drop the `.lic` file or paste its contents and
+  click **Install licence**. The page shows the edition and status (Community, Active, Grace period,
+  Expired · read-only or Not valid), the customer, contact, licence id, validity, grace period, seats, instance
+  binding and which Enterprise features are on. **Replace licence** installs a new one; **Remove licence** takes an
+  uploaded one off again.
+- Set `PINWREN_LICENSE_FILE` to the path of the file inside the container (mount it read-only). The Licence page
+  then shows "Set by `PINWREN_LICENSE_FILE`" and offers no upload or remove — replace the file to change it.
+- The admin API: `POST /api/admin/license` with `{ "license": "<the file's text>" }` (`GET` shows the current state,
+  `DELETE` removes it). An invalid file answers `400 INVALID_LICENSE`; while `PINWREN_LICENSE_FILE` is set, uploads
+  answer `409 LICENSE_LOCKED`.
 
 A licence with an `instance` binding only verifies on the server whose `PINWREN_INSTANCE_ID` matches it.
 

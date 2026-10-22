@@ -10,21 +10,28 @@ for a teammate.
 
 ## List and detail
 
-The list shows each item's status, kind (comment, bug, idea, question), number, title or first line, project, page
-path, assignee, comment count and whether it has a screenshot or attachments. Click a row (or press `Enter`) to open
-it in the detail panel beside the list; on narrow screens and in the board it opens as a sheet.
+The list shows each item's status, number, title or first line, kind (comment, bug, idea, question), project, page
+path, a check mark for a [verified reporter](/docs/widget/identity), priority, assignee, comment count, age, and
+icons for a screenshot, attachments and a session replay. Teammates who have the item open right now show as small
+avatars on the row. Click a row (or press `Enter`) to open it in the detail panel beside the list; on narrow screens
+and in the board it opens as a sheet. **Density** in the **Filter** menu switches between comfortable and compact
+rows (remembered per device).
 
 The detail panel holds:
 
-- **Status, priority and assignee** pickers.
+- **Status, priority and assignee** pickers, and a **review round** picker when the project has
+  [rounds](/docs/dashboard/review-rounds).
+- The reporter's name, with **Verified** when the identity was signed by your app, and avatars of teammates who have
+  the item open.
 - **Copy link** (a dashboard link to the item) and **Open on page** — the page URL with `?pinwren=<id>`, which opens
   the live page with the thread showing.
-- The screenshot (annotated, if the reporter drew on it) and up to three attachments.
-- Tabs for **Details** (page, browser, viewport, locale, reporter email), **Anchor** (element, selector, XPath, text
-  and position the pin is attached to), **Console** and **Network**.
+- The screenshot (annotated, if the reporter drew on it) and, for bug reports that carry one, the
+  [session replay](#session-replay) — as **Screenshot** and **Replay** tabs when there are both — and the attachments.
+- Tabs for **Details** (page, browser, viewport, locale, reporter email, user id, consent and custom metadata),
+  **Anchor** (element, selector, XPath, text and position the pin is attached to), **Console** and **Network**.
 - Panel actions and **Send to GitHub / GitLab** when the project has them — see
   [panel actions](/docs/widget/panel-actions) and [GitHub](/docs/integrations/github).
-- Comments and the activity timeline.
+- The activity timeline and the comment box.
 - **More actions**: copy the number or the page URL, and delete.
 
 Deleted items go to the trash and are purged, with their files, after 30 days.
@@ -43,30 +50,33 @@ items leave the page in the widget (visitors can still show resolved pins) and c
 ## Filters and search
 
 - **Active / Resolved / All** tabs filter by status.
+- **Filter** menu: **Kind**, **Priority**, **Assignee** (anyone, me, or a member), **Review round** (when one
+  project is chosen) and **Created** (last 24 hours, 7 days or 30 days). Each active filter shows as a chip under the
+  toolbar; remove one with its ×, or all with **Clear**.
 - **Search** (`/`) matches the title and text of every item (Postgres full-text search). Press `Enter` to apply.
 - **Project** — choose a project in the sidebar.
 
-<NewIn>
-  The list API also filters by priority, assignee, review round, page URL and creation date (`priority`,
-  `assigneeId`, `roundId`, `page`, `since`), which [saved views](/docs/dashboard/saved-views) store.
-</NewIn>
+The URL parameters are `project`, `status`, `kind`, `priority`, `assignee`, `round`, `page` (part of the page URL),
+`since` (ISO date), `q` and `layout=board`. **Save view** keeps the current filters and layout as a
+[saved view](/docs/dashboard/saved-views).
 
 ## Bulk edits and undo
 
 Tick rows with their checkbox or `x` (Shift-click or `Shift` + `x` selects a range). A bar appears at the bottom to
-set the status, assign or unassign, or delete the selection. Every change shows a toast with **Undo**, and `u` undoes
+set the status, assign or unassign, add the selection to an active review round or take it out (when one project is
+chosen), or delete it. Every change shows a toast with **Undo**, and `u` undoes
 the last change from anywhere in the inbox.
 
 ## Comments: internal or public
 
 The comment box has two modes:
 
-| Mode         | Who sees it                                                                                                                                             |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Internal** | Only your team, in the dashboard. Highlighted in amber. The default.                                                                                    |
-| **Public**   | Also the reporter and visitors, in the pin's thread on the page, with a team badge. Emails the reporter when the project has **Email the reporter** on. |
+| Mode             | Who sees it                                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Internal**     | Only your team, in the dashboard. Highlighted in amber. The default.                                                                                    |
+| **Public reply** | Also the reporter and visitors, in the pin's thread on the page, with a team badge. Emails the reporter when the project has **Email the reporter** on. |
 
-Visitors' replies from the page show up here as public comments. You can edit your own comments; authors and
+`Ctrl` + `Enter` (`⌘` + `Enter` on a Mac) sends. Visitors' replies from the page show up here as public comments. You can edit your own comments; authors and
 workspace admins can delete them, and the timeline keeps a note that a comment was deleted.
 
 ## Activity timeline
@@ -77,33 +87,39 @@ before and after values), comments, deleted comments, issue links and panel-acti
 
 ## Keyboard shortcuts
 
-Press `?` in the inbox for this list. Shortcuts are ignored while you type in a field.
+Press `?` in the inbox (or the keyboard button in its header) for this list. Shortcuts are ignored while you type in
+a field, and viewers' shortcuts don't change anything (`x`, `e`, `s`, `p`, `a`, `c` and `u` are off).
 
-| Key       | Action                                     |
-| --------- | ------------------------------------------ |
-| `j` / `k` | Next / previous item (also `↓` / `↑`)      |
-| `Enter`   | Open the focused item                      |
-| `Esc`     | Close the item, then clear the selection   |
-| `x`       | Select the open item (`Shift` for a range) |
-| `e`       | Resolve / reopen                           |
-| `s`       | Status menu                                |
-| `p`       | Priority menu                              |
-| `a`       | Assign menu                                |
-| `c`       | Comment                                    |
-| `u`       | Undo the last change                       |
-| `/`       | Search                                     |
-| `m`       | Move a board card to another column        |
-| `?`       | Show the shortcuts                         |
+| Key             | Action                                                 |
+| --------------- | ------------------------------------------------------ |
+| `⌘K` / `Ctrl K` | Command palette: go to a screen, project or saved view |
+| `j` / `k`       | Next / previous item (also `↓` / `↑`)                  |
+| `Enter`         | Open the focused item                                  |
+| `Esc`           | Close the item, then clear the selection               |
+| `x`             | Select the open item (`Shift` for a range)             |
+| `e`             | Resolve / reopen                                       |
+| `s`             | Status menu                                            |
+| `p`             | Priority menu                                          |
+| `a`             | Assign menu                                            |
+| `c`             | Comment                                                |
+| `u`             | Undo the last change                                   |
+| `/`             | Search                                                 |
+| `m`             | Move a board card to another column                    |
+| `?`             | Show the shortcuts                                     |
 
 ## Live updates
 
-The list refreshes itself every 20 seconds.
+The inbox is live. The dashboard keeps one Server-Sent Events connection to `GET /api/stream` open and applies
+changes as they happen: new items, status, priority and assignee changes, deletions and new comments, from teammates,
+the widget, the API and issue trackers alike. New items slide in at the top while the list is scrolled to the top;
+when you've scrolled down, an **N new** pill appears instead — click it to jump up and show them. If the connection
+drops, the dashboard reconnects with backoff and refetches the list so nothing is missed.
 
-<NewIn>
-  The server streams changes over Server-Sent Events from `GET /api/stream` (`feedback.created`,
-  `feedback.updated`, `feedback.deleted`, `comment.created`, `presence`, and a `ping` every 25 s; optional
-  `projectIds=` query). Presence is a heartbeat every 20 s (`POST /api/presence {feedbackId}`) that expires 45
-  s after the last one. The dashboard is being updated to use the stream — live updates and "who else is
-  looking" arrive with it. Behind a reverse proxy, turn response buffering off for `/api/stream` — see
-  [reverse proxy](/docs/self-hosting/reverse-proxy).
-</NewIn>
+**Presence**: while you have an item open, your avatar shows on that row and in the item's header for everyone else
+looking at the inbox, so two people don't triage the same report. The dashboard sends a heartbeat every 20 seconds
+(`POST /api/presence`); you disappear 45 seconds after the last one.
+
+The stream sends `feedback.created`, `feedback.updated`, `feedback.deleted`, `comment.created`, `presence` and a `ping`
+every 25 seconds (optional `projectIds=` query). It closes after 15 minutes so the session is checked again, and the
+browser reconnects with `Last-Event-ID`. Behind a reverse proxy, turn response buffering off for `/api/stream` — see
+[reverse proxy](/docs/self-hosting/reverse-proxy).

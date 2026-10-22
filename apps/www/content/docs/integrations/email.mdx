@@ -27,8 +27,9 @@ As an [instance admin](/docs/dashboard/settings#instance-settings), open **Setti
 | **Use TLS**      | On for implicit TLS (usually port 465); off uses STARTTLS when offered   |
 | **From address** | Sender, e.g. `Pinwren <feedback@example.com>` — required                 |
 
-Email is considered configured once **SMTP host** and **From address** are set. **Send test** sends a message to you (or the address
-you enter) right away and shows the SMTP server's error if it fails.
+Email is considered configured once **SMTP host** and **From address** are set. **Send test email** (in the **Send a
+test email** card) sends a message to you (or the address you enter) right away with the saved settings and shows the
+SMTP server's error if it fails.
 
 ## Configure with environment variables
 
@@ -55,7 +56,7 @@ EMAIL_FROM="Acme Feedback <feedback@acme.example>"
 ## Templates and branding
 
 Every email uses your workspace's product name, logo and accent from **Settings › Branding**, and each one has an
-editable Markdown template with a live preview and its own **Send test** — see
+editable Markdown template with a live preview and its own **Send me this email** button — see
 [email templates](/docs/dashboard/settings#email-templates). Untrusted text (feedback, names, URLs) is escaped, so it
 can't inject markup into an email.
 

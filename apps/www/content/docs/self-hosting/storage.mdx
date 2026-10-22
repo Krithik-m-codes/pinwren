@@ -3,9 +3,9 @@ title: File storage
 description: Keep screenshots and attachments on a local volume or in any S3-compatible bucket.
 ---
 
-Pinwren stores three kinds of files: bug-report **screenshots**, report **attachments** (images and PDFs) and
-**brand logos**. Everything else lives in Postgres. Two storage drivers are built in and both are free in
-every edition.
+Pinwren stores four kinds of files: bug-report **screenshots**, report **attachments** (images and PDFs),
+**session replays** (gzip files) and **brand logos**. Everything else lives in Postgres. Two storage drivers
+are built in and both are free in every edition.
 
 | Driver         | Set with                     | Files go to                                                              | Good for                                      |
 | -------------- | ---------------------------- | ------------------------------------------------------------------------ | --------------------------------------------- |
@@ -16,15 +16,17 @@ every edition.
 
 The browser never reads the bucket or the folder directly. Every file goes through the API:
 
-- Screenshots and attachments are served by `/api/assets/:id` to **signed-in workspace members only**.
-  Attachments get a `Content-Disposition` header (`attachment` for PDFs, `inline` for images).
+- Screenshots, attachments and replays are served by `/api/assets/:id` to **signed-in workspace members
+  only** (and by `/api/v1/assets/:id` to API tokens with `feedback:read`). Files get a `Content-Disposition`
+  header (`inline` for images, `attachment` for everything else).
 - Brand logos are public at `/api/brand-assets/:id` — emails and the widget on your customers' sites have to
   load them — but only by their random id.
 
 So the bucket can and should stay **private**: no public-read policy, no public URL.
 
 Uploads are checked before they are written: the declared type must match the file's first bytes (PNG, JPEG,
-WebP, GIF or PDF), screenshots are capped at 8 MB decoded and attachments at 5 MB each, three per report.
+WebP, GIF, PDF or gzip), screenshots are capped at 8 MB decoded, attachments at 5 MB each (three per report)
+and session replays at 10 MB. A replay is only stored when the project has session replay turned on.
 Storage keys are random (`<project id>/<uuid>.<ext>`) and never derived from user input.
 
 ## Use S3-compatible storage

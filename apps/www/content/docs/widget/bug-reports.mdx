@@ -39,20 +39,21 @@ share** or **Send without screenshot**.
 
 ## Annotation editor
 
-| Tool      | Key          | Notes                                                                              |
-| --------- | ------------ | ---------------------------------------------------------------------------------- |
-| Rectangle | <kbd>R</kbd> |                                                                                    |
-| Ellipse   | <kbd>O</kbd> |                                                                                    |
-| Arrow     | <kbd>A</kbd> |                                                                                    |
-| Pen       | <kbd>P</kbd> | Freehand strokes.                                                                  |
-| Text      | <kbd>T</kbd> | Click to place, type, click away to commit.                                        |
-| Hide      | <kbd>B</kbd> | Pixelates the area — irreversibly, unlike a blur, so it is safe for personal data. |
-| Crop      | <kbd>C</kbd> | Shown as a dimmed surround; pixels are cut when the report is sent.                |
+| Tool    | Key          | Notes                                                                                        |
+| ------- | ------------ | -------------------------------------------------------------------------------------------- |
+| Box     | <kbd>R</kbd> | A rectangle outline.                                                                         |
+| Ellipse | <kbd>O</kbd> |                                                                                              |
+| Arrow   | <kbd>A</kbd> |                                                                                              |
+| Draw    | <kbd>P</kbd> | Freehand strokes.                                                                            |
+| Text    | <kbd>T</kbd> | Click to place and type; <kbd>Enter</kbd> or clicking away commits, <kbd>Esc</kbd> discards. |
+| Hide    | <kbd>B</kbd> | Pixelates the area — irreversibly, unlike a blur, so it is safe for personal data.           |
+| Crop    | <kbd>C</kbd> | Shown as a dimmed surround; pixels are cut when the report is sent.                          |
 
-Five colours (red, amber, green, blue, near-black), three sizes, and undo / redo with
+Five colours (red, amber, green, blue, near-black), three sizes (small, medium, large), and undo / redo with
 
 <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd> and <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd>
-.
+(or
+<kbd>Ctrl</kbd> + <kbd>Y</kbd>).
 
 ## Attachments
 
@@ -100,18 +101,21 @@ time zone, referrer and timing are left out, and the console is capped at errors
 
 ## Session replay
 
-<NewIn>Session replay is new in this release and off by default (`capture.replay.enabled`).</NewIn>
-
-When enabled for a project, the widget lazily loads its replay chunk (rrweb's recorder) and keeps a rolling
+Session replay is off by default. Turn it on in the project's **Capture** tab (**Session replay** › **Record
+replays**, with a **Length** slider for 30–120 seconds); that sets `capture.replay.enabled` and
+`capture.replay.seconds`. When enabled, the widget lazily loads its replay chunk (rrweb's recorder) and keeps a rolling
 buffer of the last `capture.replay.seconds` (30–120, default 60) in memory. Nothing leaves the page unless a
 bug report is sent: the report form lists **Session replay · last 60 s** with a switch, so the reporter can
 leave it out. The recording is gzipped in the browser and stored with the report (up to 10 MB) — only when the
-project has replay turned on — as an asset you can download with `GET /api/v1/assets/:id`, and its steps feed the
-[reproduction context](/docs/api#more-endpoints) for AI agents. A player in the dashboard is still being built.
+project has replay turned on; anything that isn't gzip or is over 10 MB is refused with `400 INVALID_REPLAY`.
+The team watches it in the item's **Replay** tab in the dashboard, with console errors, warnings and failed
+requests marked on the timeline (click a marker to jump there). It can also be downloaded with
+`GET /api/v1/assets/:id`, and its steps feed the [reproduction context](/docs/api#more-endpoints) for AI agents.
 
 Replay masks every input, does not record the widget, `.pinwren-block` or `[data-pinwren-ignore]` elements,
 and replaces the text of `.pinwren-mask`, `[data-pinwren-mask]` and the project's mask selectors. Privacy mode
-turns replay off unless the page explicitly allows it with the `allowReplayInPrivacyMode` init option — then
+turns replay off unless the page explicitly allows it with the `allowReplayInPrivacyMode` init option (or
+`data-allow-replay-in-privacy-mode`) — then
 all text is masked, and handling consent is up to you.
 
 ## Drafts

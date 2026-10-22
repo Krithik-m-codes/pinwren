@@ -5,12 +5,12 @@ in front of it. Whatever proxy you use, it has to do five things:
 
 1. **Terminate TLS** and forward `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host`. Set
    `PINWREN_TRUST_PROXY=true` so Pinwren believes them (and `PINWREN_ENFORCE_HTTPS=true` to refuse plain HTTP).
-2. **Allow request bodies of at least 32 MB.** A bug report can carry a screenshot, three 5 MB attachments and a
+2. **Allow request bodies of at least 40 MB** (the limit Pinwren itself accepts). A bug report can carry a screenshot, three 5 MB attachments and a
    10 MB session replay, all base64 in one JSON body. Pinwren checks every limit itself.
 3. **Not buffer the real-time stream** (`/api/stream`, Server-Sent Events) and keep it open for at least 16
    minutes: Pinwren ends each stream after 15 minutes and the browser reconnects.
-4. **Compress the widget with brotli** (gzip as the fallback). Pinwren serves `/widget.js` and its chunks
-   uncompressed and leaves compression to the proxy, which can cache the compressed copies.
+4. **Compress the widget with brotli** (gzip as the fallback). Pinwren itself only gzips responses, so have the
+   proxy drop `Accept-Encoding` towards Pinwren and compress (and cache) the brotli copies itself.
 5. **Keep Pinwren's cache headers.** `/widget.js` is served with `Cache-Control: public, max-age=300` (its name
    never changes); its chunks `/widget-<name>.<10-hex-hash>.js` with `public, max-age=31536000, immutable`
    (their name changes with their content). Both carry `Access-Control-Allow-Origin: *` because customer sites
@@ -28,7 +28,7 @@ feedback.example.com {
 	encode br zstd gzip
 
 	request_body {
-		max_size 32MB
+		max_size 40MB
 	}
 
 	reverse_proxy pinwren:3000 {
@@ -59,7 +59,7 @@ server {
     ssl_certificate     /etc/letsencrypt/live/feedback.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/feedback.example.com/privkey.pem;
 
-    client_max_body_size 32m;
+    client_max_body_size 40m;
 
     brotli on;
     brotli_comp_level 6;
@@ -133,5 +133,5 @@ curl -sI -H 'Accept-Encoding: br' https://feedback.example.com/widget.js | grep 
 curl -N -H "Cookie: $COOKIE" https://feedback.example.com/api/stream
 ```
 
-`pinwren doctor https://feedback.example.com` (from `@pinwren/cli`) checks the health endpoint, the widget
+`pinwren doctor --url https://feedback.example.com` (from `@pinwren/cli`) checks the health endpoint, the widget
 script and a project's configuration from the outside.

@@ -15,3 +15,6 @@ packages/widget/playwright-report
 
 # Playwright screenshots are regenerated on every run
 **/e2e/__screenshots__/
+
+# Playwright run state
+**/test-results/

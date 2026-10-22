@@ -15,7 +15,7 @@ are sent by background jobs, so a slow or broken mail server never delays a repo
 | **Reply**          | People involved in the item — its assignees and team members who already commented. A visitor's reply on an item nobody is involved in yet goes to everyone who follows replies on the project |
 | **Status changed** | The item's assignees                                                                                                                                                                           |
 
-Nobody is notified about their own action. The bell in the sidebar shows unread notifications with the project,
+Nobody is notified about their own action. The bell in each page's header shows unread notifications with the project,
 number and title, links to the item, and has **Mark all read**. Read notifications are cleared after 90 days.
 
 ## Preferences
@@ -45,11 +45,11 @@ settings › **Privacy & data**, `notifyReporter`), they get an email when:
 Both emails use the "Reply to the reporter" and "Status update to the reporter" templates, which you can edit — see
 [settings](/docs/dashboard/settings#email-templates).
 
-<NewIn>
-  Reporter emails carry a signed one-click unsubscribe link (`/api/unsubscribe?token=…`) and
-  `List-Unsubscribe` headers. An address that unsubscribes goes on the workspace's suppression list, which
-  every reporter email checks before it is sent.
-</NewIn>
+Reporter emails carry an **Unsubscribe** link in the footer and `List-Unsubscribe` / `List-Unsubscribe-Post` headers,
+so mail clients can offer one-click unsubscribe. The link (`/api/unsubscribe?token=…`, signed) opens a confirmation
+page — opening it alone unsubscribes nobody, so link scanners can't — and the button on it, or the mail client's
+one-click request, does. An address that unsubscribes goes on the workspace's suppression list, which every reporter
+email checks when it is sent, so mail already queued is stopped too.
 
 ## API
 

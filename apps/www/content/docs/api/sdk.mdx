@@ -3,8 +3,6 @@ title: JavaScript SDK
 description: "@pinwren/sdk — a small, typed client for the REST API for Node, Deno, Bun and edge runtimes."
 ---
 
-<NewIn />
-
 `@pinwren/sdk` (MIT) wraps [`/api/v1`](/docs/api) with typed methods. Its types are generated from the same Zod
 schemas the server validates with, so the client and your instance agree on every field. It has no dependencies,
 ships ESM and CommonJS, and uses the global `fetch` (Node 20+).
@@ -97,19 +95,20 @@ const { contentType, bytes } = await pinwren.assets.get(assetId);
 | Method                           | Returns                                                      |
 | -------------------------------- | ------------------------------------------------------------ |
 | `comments.create(feedbackId, c)` | The comment (`comments:write`)                               |
-| `projects.list()`                | Projects with `openCount`                                    |
+| `projects.list()`                | An array of projects with `openCount`                        |
 | `rounds.list(projectId)`         | The project's [review rounds](/docs/dashboard/review-rounds) |
 | `rounds.get(id)`                 | One round, with its counts                                   |
 | `rounds.update(id, patch)`       | `{ name?, dueAt?, status? }` (`feedback:write`)              |
 | `assets.get(id)`                 | `{ contentType, bytes }`                                     |
 | `assets.url(id)`                 | The asset's URL (fetch it with the same Bearer token)        |
-| `request(method, path, init?)`   | Raw `Response` for any `/api/v1` path                        |
+| `request(method, path, init?)`   | Raw `Response` for any `/api/v1` path (throws on errors)     |
 
 ## Errors
 
 Every failure throws a `PinwrenError` with the HTTP `status`, the stable `code` from the
 [problem details](/docs/api#errors) and the server's message. A network failure or timeout has `status` 0 and code
-`NETWORK_ERROR`.
+`NETWORK_ERROR`; an error answer without a `code` (a failed validation, or a proxy's error page) has code
+`HTTP_ERROR`.
 
 ```ts
 import { PinwrenError } from "@pinwren/sdk";

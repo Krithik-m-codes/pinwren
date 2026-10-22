@@ -28,12 +28,6 @@ The visitor's own entries are remembered in their browser (`localStorage`) for n
 
 ## Signed identity
 
-<NewIn>
-  Signed identities are new in this release. The server verifies them and stores the result; the dashboard
-  screens that reveal the secret and show the verified badge are still being finished, so for now use the API
-  endpoints below.
-</NewIn>
-
 Pass your user's stable id and a signature your **server** computes with the project's identity secret:
 
 ```ts
@@ -45,7 +39,8 @@ Pinwren.identify(
 
 The widget sends the id (as `externalId`) and the signature with every comment, reply and bug report. The
 server recomputes the HMAC; when it matches, the reporter is stored as **verified** (`verified: true` on the
-reporter), and the widget's pins and threads carry `reporterVerified` / `authorVerified`. The signature itself is
+reporter) and the dashboard shows a **Verified** badge on the item and in the inbox list; the widget API's pin
+and reply lists carry `reporterVerified` / `authorVerified`. The signature itself is
 never stored. The id may be a string or a number (up to 200 characters); a signature that isn't 64 hex characters
 is dropped with a console warning.
 
@@ -54,11 +49,12 @@ is dropped with a console warning.
 
 ### Get the identity secret
 
-Each project has its own identity secret (it starts with `idsec_`), created the first time it is read. Workspace
-owners and admins read it with `GET /api/projects/:id/identity-secret` and replace it with
-`POST /api/projects/:id/identity-secret/rotate` (both answer `{ secret }`, with a dashboard session). Store it like
-any other server secret — never ship it to the browser. After a rotation, signatures made with the old secret no
-longer verify.
+Each project has its own identity secret (it starts with `idsec_`), created the first time it is read.
+Workspace owners and admins find it on the project's **Install** tab, in the **Verified identity** card, which
+can reveal, copy and rotate it and shows a signing example. The same is available over the API with a dashboard
+session: `GET /api/projects/:id/identity-secret` and `POST /api/projects/:id/identity-secret/rotate` (both
+answer `{ secret }`). Store it like any other server secret — never ship it to the browser. After a rotation,
+signatures made with the old secret stop verifying at once, so update your server straight away.
 
 </Step>
 <Step>

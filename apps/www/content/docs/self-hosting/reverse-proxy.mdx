@@ -1,19 +1,27 @@
 ---
 title: Reverse proxy and HTTPS
-description: Put Caddy, nginx or Traefik in front of Pinwren for TLS, with the forwarded headers and body sizes it needs.
+description: Put Caddy, nginx or Traefik in front of Pinwren for TLS, compression, the forwarded headers and the body sizes it needs.
 ---
 
-In production, run Pinwren behind a TLS-terminating reverse proxy. The compose file publishes the app on
-`127.0.0.1:3000` for exactly this: the proxy on the same host reaches it, the internet does not.
+In production, run Pinwren behind a TLS-terminating reverse proxy. Pinwren listens on plain HTTP (port `3000`
+in the image), and the compose file publishes it on `127.0.0.1:3000` for exactly this: the proxy on the same
+host reaches it, the internet does not.
 
 ## What the proxy must do
 
-| Requirement                         | Why                                                                                                                                                                                                                                                                                                 |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Terminate TLS                       | Widgets on HTTPS sites can only call an HTTPS server, and sessions should never travel in clear text.                                                                                                                                                                                               |
-| Set `X-Forwarded-For/-Proto/-Host`  | With `PINWREN_TRUST_PROXY=true`, Pinwren uses them for the client IP (rate limits) and the request's scheme and host (HTTPS enforcement).                                                                                                                                                           |
-| Allow large request bodies on `/w/` | A bug report is one JSON request: the screenshot (a data URL of up to 11 MB) plus up to three attachments of 5 MB each (about 7 MB each once base64-encoded). Session replay (new in 0.1) adds up to 10 MB more. Allow **at least 12 MB**, and **50 MB** if reporters attach files or replay is on. |
-| Don't buffer `/api/stream`          | The dashboard's live updates are a long-lived Server-Sent Events response.                                                                                                                                                                                                                          |
+| Requirement                                        | Why                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Terminate TLS                                      | Widgets on HTTPS sites can only call an HTTPS server, and sessions should never travel in clear text.                                                                                                                                                                                                                  |
+| Set `X-Forwarded-For/-Proto/-Host`                 | With `PINWREN_TRUST_PROXY=true`, Pinwren uses them for the client IP (rate limits) and the request's scheme and host (HTTPS enforcement).                                                                                                                                                                              |
+| Allow request bodies of **40 MB**                  | A bug report is one JSON request: a screenshot (up to 8 MB, about 11 MB as a base64 data URL), up to three 5 MB attachments (about 7 MB each once encoded) and a session replay of up to 10 MB (about 13.4 MB encoded). Pinwren itself accepts bodies up to 40 MB and checks every per-file limit on its own.          |
+| Don't buffer `/api/stream`                         | The dashboard's live updates are a long-lived Server-Sent Events response. Keep it open for at least 16 minutes: Pinwren ends each stream after 15 minutes and the browser reconnects.                                                                                                                                 |
+| Compress the widget with brotli (gzip as fallback) | `/widget.js` and its chunks are what your customers' visitors download. Let the proxy compress them (and cache the compressed copies).                                                                                                                                                                                 |
+| Keep Pinwren's cache headers                       | `/widget.js` is served with `Cache-Control: public, max-age=300` (its name never changes); its chunks `/widget-<name>.<10-hex-hash>.js` with `public, max-age=31536000, immutable` (their name changes with their content). Both carry `Access-Control-Allow-Origin: *` because customer sites load them cross-origin. |
+
+Pinwren's own server gzips responses when the client asks for gzip. For brotli, have the proxy request
+uncompressed responses from Pinwren (drop the `Accept-Encoding` header on the way upstream, as in the
+examples below) and compress them itself. The real-time stream is sent with `Cache-Control: no-cache,
+no-transform` and `X-Accel-Buffering: no`, so compressing proxies leave it alone.
 
 <Callout type="warn" title="Trust the proxy only when there is one">
   `PINWREN_TRUST_PROXY` makes Pinwren believe `X-Forwarded-*`. The compose file turns it on by default because
@@ -23,19 +31,43 @@ In production, run Pinwren behind a TLS-terminating reverse proxy. The compose f
 
 ## Caddy
 
-Caddy gets a certificate automatically, sets the forwarded headers, has no body-size limit by default and
-streams event-stream responses without buffering.
+Caddy gets a certificate automatically, sets the forwarded headers and streams Server-Sent Events without
+buffering. Brotli needs a Caddy build with an encoder plugin (for example
+`xcaddy build --with github.com/ueffel/caddy-brotli`); without it, use `encode zstd gzip`.
 
 ```text title="Caddyfile"
 feedback.example.com {
-	encode zstd gzip
-	reverse_proxy 127.0.0.1:3000
+	# Brotli first; gzip for older clients.
+	encode br zstd gzip
+
+	request_body {
+		max_size 40MB
+	}
+
+	reverse_proxy 127.0.0.1:3000 {
+		# Ask Pinwren for uncompressed responses; Caddy compresses them.
+		header_up -Accept-Encoding
+		# Server-Sent Events: write each event straight through.
+		flush_interval -1
+		transport http {
+			read_timeout 20m
+		}
+	}
 }
 ```
 
 ## nginx
 
+Brotli needs the [`ngx_brotli`](https://github.com/google/ngx_brotli) module (packaged as `libnginx-mod-brotli`
+on Debian/Ubuntu, built into the `fholzer/nginx-brotli` image). Without it, drop the `brotli` lines and keep
+gzip.
+
 ```nginx title="/etc/nginx/conf.d/pinwren.conf"
+upstream pinwren {
+    server 127.0.0.1:3000;
+    keepalive 16;
+}
+
 server {
     listen 443 ssl;
     http2 on;
@@ -44,49 +76,52 @@ server {
     ssl_certificate     /etc/letsencrypt/live/feedback.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/feedback.example.com/privkey.pem;
 
-    # Screenshots and attachments arrive as one JSON body.
-    client_max_body_size 50m;
+    # Screenshots, attachments and the session replay arrive as one JSON body.
+    client_max_body_size 40m;
 
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host  $host;
-    }
+    brotli on;
+    brotli_comp_level 6;
+    brotli_types text/javascript application/javascript application/json text/css image/svg+xml;
+    gzip on;
+    gzip_types text/javascript application/javascript application/json text/css image/svg+xml;
 
-    # Live updates (Server-Sent Events): no buffering, long read timeout.
-    location /api/stream {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host  $host;
-        proxy_set_header Connection        "";
+    proxy_http_version 1.1;
+    proxy_set_header Connection        "";
+    proxy_set_header Host              $host;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host  $host;
+    # Ask Pinwren for uncompressed responses; nginx compresses them.
+    proxy_set_header Accept-Encoding   "";
+
+    # Live updates (Server-Sent Events): no buffering, no compression, long reads.
+    location = /api/stream {
+        proxy_pass http://pinwren;
         proxy_buffering off;
         proxy_cache off;
-        proxy_read_timeout 1h;
+        gzip off;
+        brotli off;
+        proxy_read_timeout 20m;
+    }
+
+    location / {
+        proxy_pass http://pinwren;
     }
 }
 
 server {
     listen 80;
     server_name feedback.example.com;
-    return 301 https://$host$request_uri;
+    return 308 https://$host$request_uri;
 }
 ```
 
-<NewIn>
-  The live-update stream at `/api/stream` is new in 0.1. Older versions don't need the second `location`
-  block, but it does no harm.
-</NewIn>
-
 ## Traefik
 
-If Traefik already runs on the host, attach the app to its network with labels, in an override file next to
-the main compose file:
+If Traefik (v3) already runs on the host, attach the app to its network with labels, in an override file next
+to the main compose file. Traefik's `compress` middleware encodes brotli and gzip and skips
+`text/event-stream` responses, so the real-time stream is not buffered; the `buffering` middleware sets the
+body limit (40 MB = `41943040` bytes).
 
 ```yaml title="docker/compose.override.yml"
 services:
@@ -96,6 +131,11 @@ services:
       - traefik.http.routers.pinwren.rule=Host(`feedback.example.com`)
       - traefik.http.routers.pinwren.entrypoints=websecure
       - traefik.http.routers.pinwren.tls.certresolver=letsencrypt
+      - traefik.http.routers.pinwren.middlewares=pinwren-identity,pinwren-compress,pinwren-body
+      # An empty value removes the header: Pinwren answers uncompressed and Traefik compresses.
+      - traefik.http.middlewares.pinwren-identity.headers.customrequestheaders.Accept-Encoding=
+      - traefik.http.middlewares.pinwren-compress.compress.encodings=br,gzip
+      - traefik.http.middlewares.pinwren-body.buffering.maxRequestBodyBytes=41943040
       - traefik.http.services.pinwren.loadbalancer.server.port=3000
     networks: [default, traefik]
 networks:
@@ -103,9 +143,10 @@ networks:
     external: true
 ```
 
-Traefik sets the forwarded headers, imposes no body-size limit unless you add a buffering middleware, and
-passes event streams through unbuffered. The `entrypoints` and `certresolver` names are whatever your Traefik
-configuration defines.
+Traefik sets the forwarded headers. The `entrypoints` and `certresolver` names are whatever your Traefik
+configuration defines. For streams longer than Traefik's default timeouts, set
+`--entrypoints.websecure.transport.respondingTimeouts.readTimeout=20m` (and `idleTimeout`) on the Traefik
+command line.
 
 ## Enforce HTTPS
 
@@ -118,14 +159,20 @@ Once the proxy serves HTTPS, set `PINWREN_ENFORCE_HTTPS=true` (with `PINWREN_TRU
 - requests to `localhost`, `127.0.0.1` and `::1` are exempt, so health checks and local tools keep working.
 
 The rule covers every route — dashboard pages, `/api` and the widget's `/w`. It is environment-only on
-purpose: a dashboard switch could lock admins out.
+purpose: a dashboard switch could lock admins out. **Settings › Security** shows whether it is on.
 
 ## Check it
 
 ```bash
-curl -sI https://feedback.example.com/api/health
-curl -s  https://feedback.example.com/api/health   # {"ok":true}
+curl -s https://feedback.example.com/api/health   # {"ok":true,"version":"0.1.0"}
+# Brotli and the short cache on the loader:
+curl -sI -H 'Accept-Encoding: br' https://feedback.example.com/widget.js | grep -iE 'content-encoding|cache-control'
+# The stream stays open and prints a ping every 25 s (needs a session cookie):
+curl -N -H "Cookie: $COOKIE" https://feedback.example.com/api/stream
 ```
 
 Then load your site and open the project's **Install** tab: it shows **Connected** once a widget has called
 the server through the proxy.
+`pinwren doctor --url https://feedback.example.com --key <pk_…> --origin https://your-site.example` (from
+[`@pinwren/cli`](/docs/api/cli)) checks the health endpoint, the widget script and a project's configuration
+from the outside.

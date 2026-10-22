@@ -28,15 +28,18 @@ Hostnames are compared exactly, so `example.com` never matches `evil-example.com
 
 ### Project settings tabs
 
-| Tab                | What's in it                                                                                                                                                                     |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Install**        | The snippet for HTML, Next.js (`next/script`) and Google Tag Manager; the allowed sites; a live "Waiting for your site" / last-seen check that turns green once the widget loads |
-| **Widget**         | Launcher, modes, shortcuts, read-only mode and more — see [configuration](/docs/widget/configuration)                                                                            |
-| **Capture**        | Console and network capture, screenshot with every comment, masked selectors — see [bug reports](/docs/widget/bug-reports)                                                       |
-| **Actions**        | Custom buttons on threads — see [panel actions](/docs/widget/panel-actions)                                                                                                      |
-| **Issue trackers** | [GitHub](/docs/integrations/github) and [GitLab](/docs/integrations/gitlab) sync                                                                                                 |
-| **Privacy & data** | Privacy mode, showing pins to visitors, retention, emailing the reporter, the rate limit                                                                                         |
-| **Danger zone**    | Rotate the key, archive or restore the project                                                                                                                                   |
+| Tab                | What's in it                                                                                                                                                                                                                                                            |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Install**        | The snippet for HTML, Next.js (`next/script`) and Google Tag Manager; the allowed sites; a live "Waiting for your site" / last-seen check that turns green once the widget loads; the **Verified identity** secret — see [identity](/docs/widget/identity)              |
+| **Widget**         | Launcher, behaviour (modes, shortcuts, read-only), **Where it shows** (environments, minimum screen width), consent notice, widget branding and the active **Review round** — see [configuration](/docs/widget/configuration) and [visibility](/docs/widget/visibility) |
+| **Capture**        | Console and network capture, the screenshot-with-every-comment switch (not used by the widget yet), masked selectors, **Session replay** (on/off and length) — see [bug reports](/docs/widget/bug-reports)                                                              |
+| **Actions**        | Custom buttons on threads — see [panel actions](/docs/widget/panel-actions)                                                                                                                                                                                             |
+| **Issue trackers** | [GitHub](/docs/integrations/github) and [GitLab](/docs/integrations/gitlab) sync                                                                                                                                                                                        |
+| **Privacy & data** | Privacy mode, showing pins to visitors, retention, emailing the reporter, the rate limit                                                                                                                                                                                |
+| **Danger zone**    | Rotate the key, archive or restore the project (not shown to viewers)                                                                                                                                                                                                   |
+
+The project header also links to the project's **Rounds** ([review rounds](/docs/dashboard/review-rounds)), **Pages**
+([page review](/docs/dashboard/page-review)) and **Open inbox**. Viewers see every tab read-only.
 
 ### Privacy & data
 
@@ -57,23 +60,24 @@ Hostnames are compared exactly, so `example.com` never matches `evil-example.com
 
 ## Members and roles
 
-Your **workspace** holds the projects and the people who triage them. Invite people from **Settings › Members** by
-email; the invitation links to `/accept-invitation/<id>`, where they sign in or create an account. Pending
+Your **workspace** holds the projects and the people who triage them. Owners and admins invite people from
+**Settings › Members** (**Invite people**: email address and role, then **Send invite**); the invitation links to `/accept-invitation/<id>`, where they sign in or create an account. Pending
 invitations are listed until they are accepted, cancelled or expire.
 
 | Role       | Can                                                                                                     |
 | ---------- | ------------------------------------------------------------------------------------------------------- |
+| **Viewer** | Read everything, change nothing — for clients and stakeholders who follow progress without triaging     |
 | **Member** | Triage feedback and comment                                                                             |
 | **Admin**  | Also manage members, projects and integrations (webhooks, issue trackers), branding and email templates |
 | **Owner**  | Full control, including the workspace itself                                                            |
 
-<NewIn>
-  A **Viewer** role reads everything but changes nothing: mutating dashboard requests from a viewer are
-  answered `403 READ_ONLY_ROLE`. Viewers can still manage their own notifications, API tokens (whose writes
-  are refused too) and personal saved views. Use it for clients or stakeholders who should follow progress
-  without triaging. The server enforces the role; the Members screen doesn't offer it yet, so for now invite
-  with `role: "viewer"` through Better Auth's `POST /api/auth/organization/invite-member`.
-</NewIn>
+Invitations can be for **Viewer**, **Member** or **Admin**; only an owner can make someone an owner, by changing
+the role in the member list afterwards. Owners and admins change a member's role from the list and remove members
+from its **⋯** menu (**Remove from workspace**).
+
+Viewers get read-only screens, and the server enforces it: any change they try is answered `403 READ_ONLY_ROLE`.
+They can still mark notifications read, set their notification preferences, create their own API tokens (which are
+read-only too) and keep personal [saved views](/docs/dashboard/saved-views).
 
 The people who leave feedback through the widget are not members and need no account; they are unlimited.
 
@@ -93,7 +97,8 @@ project under **Widget**; see [configuration](/docs/widget/configuration).
 
 **Settings › Email** lets admins rewrite every email the workspace sends. Each template is a subject and a Markdown
 body with `{{variable}}` placeholders; raw HTML is shown as text, never rendered, and variables are escaped. Every
-template has a live preview, **Send test** and **Reset to default**.
+template has a live preview, **Send me this email** (a test to your own address) and **Reset to default**. Instance
+admins who aren't workspace admins see only the SMTP part of this page.
 
 | Template                          | Sent                                                 |
 | --------------------------------- | ---------------------------------------------------- |
@@ -121,13 +126,14 @@ A placeholder that isn't available in a template is rejected when you save.
 
 ## Instance settings
 
-Two pages belong to whoever runs the server — the **instance admins**: the addresses in `PINWREN_ADMIN_EMAILS`, or,
+Three pages belong to whoever runs the server — the **instance admins**: the addresses in `PINWREN_ADMIN_EMAILS`, or,
 when that is unset, the first person who signed up.
 
-- **Settings › Email** — the SMTP server, with **Send test**. See [email](/docs/integrations/email).
+- **Settings › Email** — the SMTP server, with **Send test email**. See [email](/docs/integrations/email).
 - **Settings › Security** — session lifetime (1–90 days, for new sign-ins), whether HTTPS is enforced and whether the
   server trusts a reverse proxy (both read-only, set by `PINWREN_ENFORCE_HTTPS` and `PINWREN_TRUST_PROXY`), and the
   daily update check with **Check now**.
+- **Settings › Licence** — install or remove an Enterprise licence. See [licensing](/docs/licensing#installing-a-licence).
 
 A field set by an environment variable is shown read-only, and changing it through the API returns
 `409 SETTING_LOCKED`.
@@ -138,4 +144,4 @@ Visitors and team members can export the comments of a page, or every page they 
 widget's side panel — see [comments](/docs/widget/comments). For scripts and other tools, use the
 [REST API](/docs/api).
 
-<NewIn>A [review round](/docs/dashboard/review-rounds) exports as CSV or PDF.</NewIn>
+A [review round](/docs/dashboard/review-rounds) exports as CSV or PDF.

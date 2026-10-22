@@ -237,12 +237,14 @@ first success clears it. Re-enabling starts a fresh three-day window.
 
 ## Delivery log, test and redeliver
 
-Each webhook has a log of the last 30 days, one row per attempt: event, attempt number, status (`pending`,
-`success`, `retrying`, `failed`), response code and body, error, duration and when the next retry is due.
+Each webhook keeps a log of the last 30 days, one row per attempt: event, attempt number, status (`pending`,
+`success`, `retrying`, `failed`), response code and body, error, duration and when the next retry is due. The
+webhook's **Recent deliveries** list in the dashboard shows the latest 50.
 
-- **Send test event** sends a `ping` event now and shows the result, even while the webhook is switched off.
+- **Send test event** sends a `ping` event now and shows the result. The dashboard offers it while the webhook is
+  active; `POST /api/webhooks/:id/test` also pings a paused one.
 - **Redeliver** re-sends any logged delivery immediately with the same `id`, so your de-duplication still works. The
-  webhook must be active.
+  webhook must be active (else `409 WEBHOOK_DISABLED`).
 
 ## API
 
@@ -253,9 +255,9 @@ Webhooks are managed under `/api` with an owner or admin session:
 | `GET /api/webhooks`                          | List                                                                               |
 | `POST /api/webhooks`                         | Create `{ name?, url, kind, events, projectId?, active? }` → `{ webhook, secret }` |
 | `GET` / `PATCH` / `DELETE /api/webhooks/:id` | Read, update, delete                                                               |
-| `POST /api/webhooks/:id/rotate-secret`       | `{ secret }`, generic webhooks only                                                |
+| `POST /api/webhooks/:id/rotate-secret`       | `{ secret }`, generic webhooks only (else `400 NO_SECRET`)                         |
 | `POST /api/webhooks/:id/test`                | Send a `ping` → `{ delivery }`                                                     |
-| `GET /api/webhooks/:id/deliveries?limit=`    | The log, newest first (up to 100)                                                  |
+| `GET /api/webhooks/:id/deliveries?limit=`    | The log, newest first (default 50, up to 100)                                      |
 | `POST /api/webhook-deliveries/:id/redeliver` | Re-send now → `{ delivery }`                                                       |
 
 `kind` is `generic` (default), `slack` or `discord`. Slack and Discord URLs come back masked

@@ -26,15 +26,16 @@ Pick a page to see:
   the capture on which the most threads can be placed (newest wins a tie).
 - **Threads on this page** — every item with its kind, status and number. Items whose anchor doesn't fit the chosen
   capture are listed as "not on this capture" instead of being drawn in the wrong place.
-- **Open / All** — show only open threads, or resolved ones too.
+- **Show: Open / All** — only open threads, or resolved ones too.
 - **Open page** — the live page, where the widget shows the same pins.
 
 Click a thread to open it in the [detail panel](/docs/dashboard#list-and-detail).
 
 <Callout title="No capture yet?">
-  Comments don't carry a screenshot by default — bug reports do. Turn on **Screenshot with every comment** in
-  the project's **Capture** settings (`capture.screenshotOnComment`) to get a capture for every comment and
-  see pins in place. See [bug reports & capture](/docs/widget/bug-reports).
+  Pins are drawn over screenshots, and only bug reports carry one — comments don't. Until a page has a bug
+  report with a screenshot, its threads are listed without a capture. The project's **Capture** tab has a
+  **Screenshot with every comment** switch (`capture.screenshotOnComment`), but the widget doesn't act on it
+  in this release. See [bug reports & capture](/docs/widget/bug-reports).
 </Callout>
 
 ## On the live page
