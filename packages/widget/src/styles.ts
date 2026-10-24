@@ -1,7 +1,7 @@
 // All widget CSS. It lives inside a closed shadow root, so nothing leaks in or out (blueprint 05 §3).
 // z-index ladder: shield < outline < areas < hover ring < pins < launcher < dial/panel < cards < modal < toast.
 const CURSOR =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M3 25V12a9 9 0 0 1 9-9h4a9 9 0 0 1 0 18H8z' fill='%235b5bd6' stroke='white' stroke-width='2'/%3E%3Cpath d='M14 8v8M10 12h8' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E\") 3 25, crosshair";
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M3 25V12a9 9 0 0 1 9-9h4a9 9 0 0 1 0 18H8z' fill='%23d63a1c' stroke='white' stroke-width='2'/%3E%3Cpath d='M14 8v8M10 12h8' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E\") 3 25, crosshair";
 
 export const STYLES = /* css */ `
 :host { all: initial; }
@@ -9,7 +9,7 @@ export const STYLES = /* css */ `
 [hidden] { display: none !important; }
 .root {
   --bg: #ffffff; --fg: #18181b; --muted: #6b6b76; --line: #e4e4e7; --soft: #f4f4f5;
-  --accent: var(--pinwren-accent, #5b5bd6); --accent-fg: #fff; --danger: #d93036; --ok: #218358; --warn: #ad5700;
+  --accent: var(--pinwren-accent, #d63a1c); --accent-fg: #fff; --danger: #d93036; --ok: #218358; --warn: #ad5700;
   --shadow: 0 12px 32px -12px rgba(0,0,0,.28), 0 2px 6px -2px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.06);
   font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--fg); -webkit-font-smoothing: antialiased; text-align: left; letter-spacing: normal;
@@ -56,7 +56,7 @@ textarea { min-height: 76px; field-sizing: content; max-height: 220px; }
 .launcher[aria-expanded=true] .lx { display: contents; }
 .launcher[aria-expanded=true] .lx svg { transform: rotate(90deg); }
 .launcher .count { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 6px;
-  border-radius: 999px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 700; line-height: 20px;
+  border-radius: 999px; background: #17243a; color: #fff; font-size: 11px; font-weight: 700; line-height: 20px;
   text-align: center; box-shadow: 0 0 0 2px var(--bg); }
 .launcher[data-tip]::after { content: attr(data-tip); position: absolute; white-space: nowrap; pointer-events: none;
   padding: 5px 9px; border-radius: 8px; background: var(--fg); color: var(--bg); font-size: 12px; font-weight: 500;
@@ -185,7 +185,7 @@ textarea { min-height: 76px; field-sizing: content; max-height: 220px; }
 .ib:hover { background: var(--soft); color: var(--fg); }
 
 /* Branding (wave-3 §2): dialogs may use their own accent; the text colour on it is picked for contrast. */
-.card, .modal, .panel { --accent: var(--pinwren-dialog-accent, var(--pinwren-accent, #5b5bd6)); --accent-fg: var(--pinwren-dialog-accent-fg, #fff); }
+.card, .modal, .panel { --accent: var(--pinwren-dialog-accent, var(--pinwren-accent, #d63a1c)); --accent-fg: var(--pinwren-dialog-accent-fg, #fff); }
 
 
 /* Comment on selection: highlighted quote on the page, the offer chip, the quote in cards */

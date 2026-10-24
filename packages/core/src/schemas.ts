@@ -672,7 +672,7 @@ export const apiCommentCreate = commentCreate;
 
 // --- Branding (F-094): organisation-level dashboard + email branding ---------------------------------
 
-const hex = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Use a hex colour like #5b5bd6");
+const hex = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Use a hex colour like #d63a1c");
 
 export const orgBrandingUpdate = z.object({
   /** Replaces "Pinwren" in the dashboard header and in emails. null = default. */

@@ -175,7 +175,7 @@ test("branding: no 'Powered by', dialog accent on primary buttons, logo in the r
   await expect(menu).not.toContainText("Powered by");
   // The launcher keeps its own accent; dialogs use the branding one.
   expect(await launcher(page).evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
-    "rgb(91, 91, 214)",
+    "rgb(214, 58, 28)",
   );
   await page.getByRole("menuitem", { name: /Create new annotation/ }).click();
   const h1 = await box(page.getByTestId("hero-title"));

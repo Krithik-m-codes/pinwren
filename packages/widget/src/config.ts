@@ -68,7 +68,7 @@ export const DEFAULT_CONFIG: WidgetConfig = {
     shape: "round",
     label: "Feedback",
     icon: "pin",
-    accent: "#5b5bd6",
+    accent: "#d63a1c",
     tooltip: "Give feedback",
     hidden: false,
   },

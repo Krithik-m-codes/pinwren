@@ -4,7 +4,7 @@ import { z } from "zod";
 // `widgetConfig.parse({})` is the complete default config and the stored JSON only holds what an
 // admin changed. `.prefault({})` (not `.default`) runs the inner defaults for a missing object.
 
-const hexColor = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Use a hex colour like #5b5bd6");
+const hexColor = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Use a hex colour like #d63a1c");
 
 export const LAUNCHER_POSITIONS = ["bottom-right", "bottom-left", "top-right", "top-left"] as const;
 export const LAUNCHER_SHAPES = ["round", "pill"] as const;
@@ -123,7 +123,7 @@ export const widgetConfig = z.object({
       shape: z.enum(LAUNCHER_SHAPES).default("round"),
       label: z.string().trim().max(40).nullable().default("Feedback"),
       icon: z.enum(LAUNCHER_ICONS).default("pin"),
-      accent: hexColor.default("#5b5bd6"),
+      accent: hexColor.default("#d63a1c"),
       tooltip: z.string().trim().max(80).nullable().default("Give feedback"),
       hidden: z.boolean().default(false),
     })

@@ -10,7 +10,7 @@ describe("resolveConfig", () => {
         shape: "round",
         label: "Feedback",
         icon: "pin",
-        accent: "#5b5bd6",
+        accent: "#d63a1c",
         tooltip: "Give feedback",
         hidden: false,
       },
@@ -92,7 +92,7 @@ describe("resolveConfig", () => {
   });
 
   it("only lets plain hex colours into the accent (it becomes a CSS variable)", () => {
-    expect(resolveConfig({ launcher: { accent: "red;}body{display:none" } }).launcher.accent).toBe("#5b5bd6");
+    expect(resolveConfig({ launcher: { accent: "red;}body{display:none" } }).launcher.accent).toBe("#d63a1c");
     expect(resolveConfig({ launcher: { accent: "#E11D48" } }).launcher.accent).toBe("#E11D48");
     expect(resolveConfig({}, "#0090ff").launcher.accent).toBe("#0090ff");
   });
@@ -187,7 +187,7 @@ describe("branding (wave-3 §2)", () => {
   });
 
   it("picks readable text for the accent", () => {
-    expect(readableOn("#5b5bd6")).toBe("#ffffff");
+    expect(readableOn("#d63a1c")).toBe("#ffffff");
     expect(readableOn("#0f766e")).toBe("#ffffff");
     expect(readableOn("#fde047")).toBe("#18181b");
     expect(readableOn("#fff")).toBe("#18181b");

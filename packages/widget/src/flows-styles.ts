@@ -8,7 +8,7 @@ export const FLOWS_CSS = /* css */ `
 .cfile button { display: grid; place-items: center; width: 20px; height: 20px; border: 0; border-radius: 50%;
   background: transparent; color: inherit; cursor: pointer; padding: 0; }
 .cfile button:hover { background: rgba(0, 0, 0, 0.08); }
-.cfile button:focus-visible { outline: 2px solid var(--pinwren-accent, #5b5bd6); outline-offset: 1px; }
+.cfile button:focus-visible { outline: 2px solid var(--pinwren-accent, #d63a1c); outline-offset: 1px; }
 .cfile svg, .repin svg { width: 14px; height: 14px; }
 .repin { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 2147483647;
   display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 24px); padding: 8px 8px 8px 14px;

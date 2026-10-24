@@ -104,9 +104,8 @@ const svg = (d: string) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 
 export const ICONS = {
-  logo: svg(
-    '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.2" fill="currentColor" stroke="none"/>',
-  ),
+  // The Pinwren mark as one filled shape (brand/pinwren-mark-small.svg): the bird-pin with its eye cut out.
+  logo: '<svg viewBox="150 128 560 560" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M159 156c2 56 17 74 81 102l90 43-37-8c-48-12-77-23-105-38l-9-5v3c0 10 5 28 12 41 13 27 38 40 99 52q34 6-12 5c-28 1-34 0-51-6l-9-2 3 11q10 29 38 68l169 237c2 0 152-213 159-223 21-31 36-66 39-93v-53q-3-1 10-10l59-44-80 5h-8l-6-9q-17-22-46-33c-28-11-66-12-95-2-26 9-37 18-73 54l-29 29-8-5-15-11-116-86-59-42zM542 245c-14 8-18 24-10 36 15 21 47 11 47-15 0-18-21-30-37-21"/></svg>',
   comment: svg('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
   bug: svg(
     '<path d="m8 2 1.9 1.9M16 2l-1.9 1.9M9 7.1V6a3 3 0 1 1 6 0v1.1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6Z"/><path d="M12 20v-9M6.5 13H3M21 13h-3.5M6 9 3 7M18 9l3-2M6 17l-3 2M18 17l3 2"/>',

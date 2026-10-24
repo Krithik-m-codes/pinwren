@@ -17,7 +17,7 @@ import { PinwrenWidget } from "./widget";
 
 // Script-tag entry:
 //   <script src="https://feedback.example.com/widget.js" data-project="pk_…" async></script>
-// Optional attributes: data-endpoint="https://…" (defaults to the script's origin), data-accent="#5b5bd6",
+// Optional attributes: data-endpoint="https://…" (defaults to the script's origin), data-accent="#d63a1c",
 // data-locale="fr" (otherwise the browser's language; English fallback), data-url-pattern="/product/:id"
 // (page scope), data-force-show (ignore the visibility rules), data-nonce="…" (CSP nonce for the chunks),
 // data-allow-replay-in-privacy-mode, data-theme="light" | "dark" (otherwise the visitor's system setting).

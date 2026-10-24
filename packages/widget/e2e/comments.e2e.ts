@@ -372,7 +372,7 @@ test("widget CSS survives a hostile page stylesheet", async ({ page }) => {
     const s = getComputedStyle(el);
     return { position: s.position, width: s.width, radius: s.borderRadius, bg: s.backgroundColor };
   });
-  expect(style).toEqual({ position: "fixed", width: "52px", radius: "999px", bg: "rgb(91, 91, 214)" });
+  expect(style).toEqual({ position: "fixed", width: "52px", radius: "999px", bg: "rgb(214, 58, 28)" });
   await launcher(page).click();
   await expect(page.getByRole("menuitem", { name: /Create new annotation/ })).toBeVisible();
   const item = await page
