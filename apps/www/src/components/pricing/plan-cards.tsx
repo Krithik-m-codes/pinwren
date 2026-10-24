@@ -130,7 +130,7 @@ export function PlanCards() {
             key={p.name}
             className={cn(
               "relative flex flex-col rounded-2xl border bg-card p-6 shadow-xs",
-              p.primary && "border-brand/50 shadow-brand/10 ring-brand/30 shadow-lg ring-1",
+              p.primary && "border-brand/50 shadow-lg ring-1 shadow-brand/10 ring-brand/30",
             )}
           >
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -140,7 +140,7 @@ export function PlanCards() {
                   {p.name === "Enterprise" ? "Coming soon" : "Cloud coming soon"}
                 </span>
               ) : (
-                <span className="bg-brand text-brand-foreground rounded-full px-2 py-0.5 text-[11px] font-medium">
+                <span className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-medium text-brand-foreground">
                   Available
                 </span>
               )}
@@ -172,7 +172,7 @@ export function PlanCards() {
               {p.cta && "href" in p.cta ? (
                 <ButtonLink
                   href={p.cta.href}
-                  className="bg-brand text-brand-foreground hover:bg-brand/90 h-9 w-full"
+                  className="h-9 w-full bg-brand text-brand-foreground hover:bg-brand/90"
                 >
                   {p.cta.label}
                 </ButtonLink>

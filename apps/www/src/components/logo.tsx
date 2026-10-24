@@ -1,34 +1,56 @@
+import {
+  GLYPH,
+  GLYPH_VIEWBOX,
+  LOGO_VIEWBOX,
+  MARK_BIRD,
+  MARK_DETAIL,
+  MARK_FACE,
+  MARK_VIEWBOX,
+  WORD_DOT,
+  WORD_LETTERS,
+} from "@/components/brand/paths";
 import { cn } from "@/lib/utils";
 
-/** The Pinwren mark: a map pin, the product's one idea — point at the page. */
-export function LogoMark({ className }: { className?: string | undefined }) {
+// Brand colours (brand/README.md). The mark keeps its own colours in both themes; the letters follow the text.
+const ORANGE = "#F04424";
+const NAVY = "#17243A";
+
+function MarkPaths() {
   return (
-    <span
-      className={cn(
-        "bg-brand text-brand-foreground grid size-7 shrink-0 place-items-center rounded-lg shadow-sm",
-        className,
-      )}
-    >
-      <svg
-        viewBox="0 0 24 24"
-        className="size-4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2.4}
-        aria-hidden
-      >
-        <path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z" />
-        <circle cx="12" cy="9.5" r="2.4" fill="currentColor" stroke="none" />
-      </svg>
-    </span>
+    <>
+      <path fill="#FFFFFF" d={MARK_FACE} />
+      <path fill={ORANGE} fillRule="evenodd" d={MARK_BIRD} />
+      <path fill={NAVY} d={MARK_DETAIL} />
+    </>
   );
 }
 
+/** The Pinwren mark: a wren inside a map pin, with a speech bubble on its chest. */
+export function LogoMark({ className }: { className?: string | undefined }) {
+  return (
+    <svg viewBox={MARK_VIEWBOX} className={cn("size-7 shrink-0", className)} aria-hidden>
+      <MarkPaths />
+    </svg>
+  );
+}
+
+/** Mark and wordmark. The letters use `currentColor`, so they are navy on light and white on dark. */
 export function Logo({ className }: { className?: string | undefined }) {
   return (
-    <span className={cn("flex items-center gap-2 text-[15px] font-semibold tracking-tight", className)}>
-      <LogoMark />
-      Pinwren
-    </span>
+    <svg viewBox={LOGO_VIEWBOX} className={cn("h-7 w-auto shrink-0 text-foreground", className)} role="img">
+      <title>Pinwren</title>
+      <MarkPaths />
+      <path fill="currentColor" fillRule="evenodd" d={WORD_LETTERS} />
+      <path fill={ORANGE} d={WORD_DOT} />
+    </svg>
+  );
+}
+
+/** The mark in one colour (`currentColor`), for launcher buttons and other small UI. */
+export function LogoGlyph({ className }: { className?: string | undefined }) {
+  return (
+    <svg viewBox={GLYPH_VIEWBOX} className={cn("size-5 shrink-0", className)} fill="currentColor" aria-hidden>
+      <path fillRule="evenodd" d={GLYPH} />
+    </svg>
   );
 }

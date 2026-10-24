@@ -56,7 +56,7 @@ export default function ChangelogPage() {
   return (
     <div className="container-page max-w-5xl py-16 sm:py-20">
       <header className="max-w-2xl">
-        <p className="text-brand text-sm font-semibold">Changelog</p>
+        <p className="text-sm font-semibold text-brand">Changelog</p>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight">What’s new in Pinwren</h1>
         <p className="mt-4 text-muted-foreground">
           Generated from <code className="font-mono text-sm">CHANGELOG.md</code>, which release-please keeps

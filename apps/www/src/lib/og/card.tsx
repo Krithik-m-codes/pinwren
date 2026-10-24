@@ -1,8 +1,21 @@
 import { ImageResponse } from "next/og";
+import {
+  LOGO_VIEWBOX,
+  MARK_BIRD,
+  MARK_DETAIL,
+  MARK_FACE,
+  WORD_DOT,
+  WORD_LETTERS,
+} from "@/components/brand/paths";
+import { SITE_URL } from "@/lib/site";
+
+// Brand palette (brand/README.md).
+const ORANGE = "#F04424";
+const NAVY = "#17243A";
 
 export const OG_SIZE = { width: 1200, height: 630 };
 
-/** The social card for every page: brand mark, eyebrow, title and a one-line description. */
+/** The social card for every page: the logo, eyebrow, title and a one-line description, on white. */
 export function ogCard({
   eyebrow,
   title,
@@ -21,30 +34,21 @@ export function ogCard({
         flexDirection: "column",
         justifyContent: "space-between",
         padding: "72px 80px",
-        background: "linear-gradient(135deg, #0f0f17 0%, #1b1b2e 55%, #2a2a5a 100%)",
-        color: "#f4f4f8",
+        background: "#ffffff",
+        borderBottom: `14px solid ${ORANGE}`,
+        color: NAVY,
         fontFamily: "sans-serif",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-        <div
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: 14,
-            background: "#5b5bd6",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4">
-            <path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z" />
-            <circle cx="12" cy="9.5" r="2.4" fill="#fff" stroke="none" />
-          </svg>
-        </div>
-        <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: -0.5 }}>Pinwren</div>
-        <div style={{ marginLeft: "auto", fontSize: 24, color: "#a5a5f0" }}>{eyebrow}</div>
+        <svg width="232" height="59" viewBox={LOGO_VIEWBOX}>
+          <path fill="#FFFFFF" d={MARK_FACE} />
+          <path fill={ORANGE} fillRule="evenodd" d={MARK_BIRD} />
+          <path fill={NAVY} d={MARK_DETAIL} />
+          <path fill={NAVY} fillRule="evenodd" d={WORD_LETTERS} />
+          <path fill={ORANGE} d={WORD_DOT} />
+        </svg>
+        <div style={{ marginLeft: "auto", fontSize: 24, color: "#D63A1C", fontWeight: 600 }}>{eyebrow}</div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
         <div
@@ -58,17 +62,17 @@ export function ogCard({
           {title}
         </div>
         {description && (
-          <div style={{ fontSize: 30, color: "#c4c4d4", lineHeight: 1.35, maxWidth: 980 }}>
+          <div style={{ fontSize: 30, color: "#4a5568", lineHeight: 1.35, maxWidth: 980 }}>
             {description.length > 140 ? `${description.slice(0, 137)}…` : description}
           </div>
         )}
       </div>
-      <div style={{ display: "flex", gap: 14, fontSize: 22, color: "#9a9ab0" }}>
+      <div style={{ display: "flex", gap: 14, fontSize: 22, color: "#5a6478" }}>
         <span>Open source</span>
         <span>·</span>
         <span>Self-hosted</span>
         <span>·</span>
-        <span>pinwren.xride-labs.in</span>
+        <span>{new URL(SITE_URL).host}</span>
       </div>
     </div>,
     OG_SIZE,

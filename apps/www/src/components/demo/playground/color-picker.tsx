@@ -50,7 +50,7 @@ export function AccentPicker({
   onChange: (hex: string) => void;
 }) {
   const [text, setText] = useState(value);
-  const [h, s0, l0] = hexToHsl(HEX.test(value) ? value : "#5b5bd6");
+  const [h, s0, l0] = hexToHsl(HEX.test(value) ? value : "#d63a1c");
   const s = Math.max(s0, 40);
   const l = Math.min(Math.max(l0, 35), 65);
   const gradient = [0, 60, 120, 180, 240, 300, 360].map((x) => hslToHex(x, s, l)).join(",");
@@ -109,7 +109,7 @@ export function AccentPicker({
               if (HEX.test(v)) onChange(v.toLowerCase());
             }}
           />
-          {!HEX.test(text) && <p className="text-xs text-destructive">Use a hex colour like #5b5bd6</p>}
+          {!HEX.test(text) && <p className="text-xs text-destructive">Use a hex colour like #d63a1c</p>}
         </div>
       </PopoverContent>
     </Popover>

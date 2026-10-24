@@ -41,11 +41,12 @@ export const LOCALES = [
 ] as const;
 
 export const ACCENTS = [
+  { value: "#d63a1c", label: "Pinwren orange" },
   { value: "#5b5bd6", label: "Indigo" },
   { value: "#7c3aed", label: "Violet" },
   { value: "#059669", label: "Emerald" },
   { value: "#e11d48", label: "Rose" },
-  { value: "#ea580c", label: "Orange" },
+  { value: "#17243a", label: "Navy" },
 ] as const;
 
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
@@ -54,7 +55,7 @@ export const playgroundSettings = z.object({
   theme: z.enum(["light", "dark", "auto"]).catch("auto"),
   locale: z.enum(["en", "es", "fr", "de", "pt-BR", "it", "ja", "hi", "nl", "zh", "ru"]).catch("en"),
   position: z.enum(["bottom-right", "bottom-left"]).catch("bottom-right"),
-  accent: z.string().regex(HEX).catch("#5b5bd6"),
+  accent: z.string().regex(HEX).catch("#d63a1c"),
   screenshots: z.boolean().catch(true),
   diagnostics: z.boolean().catch(true),
   rightClick: z.boolean().catch(true),

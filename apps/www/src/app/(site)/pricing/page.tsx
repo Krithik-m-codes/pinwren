@@ -87,7 +87,7 @@ export default function PricingPage() {
     <div className="pb-24">
       <section className="border-b py-16 text-center sm:py-20">
         <div className="container-page max-w-3xl">
-          <p className="text-brand text-sm font-semibold">Pricing</p>
+          <p className="text-sm font-semibold text-brand">Pricing</p>
           <h1 className="mt-2 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
             Free to self-host. Really.
           </h1>
@@ -194,7 +194,7 @@ export default function PricingPage() {
         <ButtonLink
           href="/docs/quickstart"
           size="lg"
-          className="bg-brand text-brand-foreground hover:bg-brand/90 mt-6 h-10 px-4"
+          className="mt-6 h-10 bg-brand px-4 text-brand-foreground hover:bg-brand/90"
         >
           Start self-hosting
         </ButtonLink>

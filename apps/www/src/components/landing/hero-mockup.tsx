@@ -1,4 +1,5 @@
 import { Bug, Check, CornerDownLeft, MessageSquare } from "lucide-react";
+import { LogoGlyph } from "@/components/logo";
 
 /**
  * A still of the widget at work, built from HTML so it stays crisp, themable and readable by screen readers
@@ -8,7 +9,7 @@ export function HeroMockup() {
   return (
     <figure className="relative mx-auto w-full max-w-[40rem]" aria-labelledby="hero-mockup-caption">
       <div className="absolute -inset-6 -z-10 rounded-[2rem] bg-[radial-gradient(60%_60%_at_50%_40%,color-mix(in_oklch,var(--brand)_22%,transparent),transparent)] blur-2xl" />
-      <div className="shadow-brand/10 overflow-hidden rounded-2xl border bg-card shadow-2xl ring-1 ring-black/5 dark:ring-white/5">
+      <div className="overflow-hidden rounded-2xl border bg-card shadow-2xl ring-1 shadow-brand/10 ring-black/5 dark:ring-white/5">
         {/* Browser chrome */}
         <div className="flex items-center gap-2 border-b bg-muted/50 px-3 py-2">
           <span className="flex gap-1.5" aria-hidden>
@@ -43,8 +44,8 @@ export function HeroMockup() {
             <div className="relative">
               <div className="aspect-[4/3] rounded-xl bg-[linear-gradient(135deg,#f6c38b,#d9805f_45%,#6f5b9a)] dark:opacity-90" />
               {/* Region selection */}
-              <div className="animate-region-draw border-brand bg-brand/10 absolute top-[14%] left-[10%] h-[58%] w-[72%] rounded-md border-2 border-dashed [animation-delay:400ms]" />
-              <span className="animate-pin-drop bg-brand text-brand-foreground absolute top-[14%] left-[82%] grid size-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full rounded-bl-none text-[11px] font-semibold shadow-lg ring-2 ring-background [animation-delay:1200ms]">
+              <div className="animate-region-draw absolute top-[14%] left-[10%] h-[58%] w-[72%] rounded-md border-2 border-dashed border-brand bg-brand/10 [animation-delay:400ms]" />
+              <span className="animate-pin-drop absolute top-[14%] left-[82%] grid size-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full rounded-bl-none bg-brand text-[11px] font-semibold text-brand-foreground shadow-lg ring-2 ring-background [animation-delay:1200ms]">
                 1
               </span>
             </div>
@@ -59,11 +60,8 @@ export function HeroMockup() {
           </div>
 
           {/* Launcher */}
-          <span className="bg-brand text-brand-foreground absolute right-4 bottom-4 grid size-10 place-items-center rounded-full shadow-lg">
-            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2.2}>
-              <path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z" />
-              <circle cx="12" cy="9.5" r="2.4" fill="currentColor" stroke="none" />
-            </svg>
+          <span className="absolute right-4 bottom-4 grid size-10 place-items-center rounded-full bg-brand text-brand-foreground shadow-lg">
+            <LogoGlyph />
           </span>
         </div>
       </div>
@@ -85,11 +83,11 @@ export function HeroMockup() {
         </p>
         <div className="mt-2.5 border-t pt-2.5">
           <div className="flex items-center gap-2">
-            <span className="bg-brand text-brand-foreground grid size-5 place-items-center rounded-full text-[9px] font-semibold">
+            <span className="grid size-5 place-items-center rounded-full bg-brand text-[9px] font-semibold text-brand-foreground">
               S
             </span>
             <span className="text-[12px] font-medium">Sam</span>
-            <span className="bg-brand-soft text-brand rounded px-1 text-[10px] font-medium">Team</span>
+            <span className="bg-brand-soft text-brand-ink rounded px-1 text-[10px] font-medium">Team</span>
           </div>
           <p className="mt-1 text-[12px] text-muted-foreground">On it — new photo in the next deploy.</p>
         </div>

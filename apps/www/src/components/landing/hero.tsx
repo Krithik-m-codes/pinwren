@@ -28,7 +28,7 @@ export function Hero() {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 rounded-full border bg-background/80 py-1 pr-3 pl-1 text-xs font-medium text-muted-foreground shadow-xs transition-colors hover:text-foreground"
           >
-            <span className="bg-brand text-brand-foreground rounded-full px-2 py-0.5">v{VERSION}</span>
+            <span className="rounded-full bg-brand px-2 py-0.5 text-brand-foreground">v{VERSION}</span>
             Open source · self-hosted
             <ArrowRight className="size-3" aria-hidden />
           </a>
@@ -45,7 +45,7 @@ export function Hero() {
             <ButtonLink
               href="/docs/quickstart"
               size="lg"
-              className="bg-brand text-brand-foreground hover:bg-brand/90 h-10 px-4"
+              className="h-10 bg-brand px-4 text-brand-foreground hover:bg-brand/90"
             >
               Self-host in 5 minutes
               <ArrowRight aria-hidden />

@@ -14,10 +14,10 @@ export function HowItWorks() {
     <section id="how-it-works" className="scroll-mt-20 border-b bg-muted/30 py-24">
       <div className="container-page">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-brand text-sm font-semibold">How it works</p>
+          <p className="text-brand-ink text-sm font-semibold">How it works</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
-            From <code className="text-brand font-mono text-[0.78em]">docker compose up</code> to the first
-            report in minutes
+            From <code className="text-brand-ink font-mono text-[0.78em]">docker compose up</code> to the
+            first report in minutes
           </h2>
         </div>
         <ol className="mt-14 grid gap-5 lg:grid-cols-3">
@@ -81,7 +81,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   return (
     <div>
       <div className="flex items-center gap-3">
-        <span className="bg-brand text-brand-foreground grid size-7 place-items-center rounded-full text-sm font-semibold">
+        <span className="grid size-7 place-items-center rounded-full bg-brand text-sm font-semibold text-brand-foreground">
           {n}
         </span>
         <h3 className="text-lg font-semibold">{title}</h3>

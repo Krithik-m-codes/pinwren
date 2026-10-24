@@ -68,7 +68,7 @@ export function Comparison() {
     <section id="compare" className="scroll-mt-20 border-b py-24">
       <div className="container-page">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-brand text-sm font-semibold">Compare</p>
+          <p className="text-sm font-semibold text-brand">Compare</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
             Why pay per seat for features you can run yourself?
           </h2>
@@ -102,7 +102,7 @@ export function Comparison() {
                     scope="col"
                     className={cn(
                       "px-3 py-3 text-center font-semibold",
-                      i === 0 && "bg-brand-soft text-brand",
+                      i === 0 && "bg-brand-soft text-brand-ink",
                     )}
                   >
                     {p}

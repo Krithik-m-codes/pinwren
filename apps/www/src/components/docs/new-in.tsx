@@ -10,9 +10,9 @@ export function NewIn({ version = "0.1", children }: { version?: string; childre
   return (
     <div
       role="note"
-      className="border-brand/30 bg-brand-soft my-5 flex items-start gap-2.5 rounded-lg border px-3.5 py-2.5 text-sm [&_p]:my-0 [&_p+p]:mt-1.5"
+      className="bg-brand-soft my-5 flex items-start gap-2.5 rounded-lg border border-brand/30 px-3.5 py-2.5 text-sm [&_p]:my-0 [&_p+p]:mt-1.5"
     >
-      <Sparkles className="text-brand mt-0.5 size-4 shrink-0" aria-hidden />
+      <Sparkles className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden />
       <div className="min-w-0 text-foreground/90">
         <span className="font-semibold text-foreground">New in {version}.</span>
         {children ? (

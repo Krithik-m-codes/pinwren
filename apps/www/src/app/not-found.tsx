@@ -11,7 +11,7 @@ export default function NotFound() {
         className="container-page grid min-h-[60vh] flex-1 place-items-center py-24 text-center"
       >
         <div>
-          <p className="text-brand font-mono text-sm">404</p>
+          <p className="font-mono text-sm text-brand">404</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">This page has no pin</h1>
           <p className="mt-3 text-muted-foreground">
             The link may be old, or the page moved. Try the docs or the home page.

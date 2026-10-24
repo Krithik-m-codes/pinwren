@@ -40,12 +40,12 @@ function Card({
       )}
     >
       <div className="flex items-center gap-2.5">
-        <span className="bg-brand-soft text-brand grid size-8 place-items-center rounded-lg">
+        <span className="bg-brand-soft text-brand-ink grid size-8 place-items-center rounded-lg">
           <Icon className="size-4" aria-hidden />
         </span>
         <h3 className="font-semibold">{title}</h3>
         {badge && (
-          <span className="border-brand/30 bg-brand-soft text-brand ml-auto rounded-full border px-2 py-0.5 text-[11px] font-medium">
+          <span className="bg-brand-soft text-brand-ink ml-auto rounded-full border border-brand/30 px-2 py-0.5 text-[11px] font-medium">
             {badge}
           </span>
         )}
@@ -79,7 +79,7 @@ function InboxVisual() {
           key={r.n}
           className={cn(
             "flex items-center gap-2.5 rounded-lg border bg-background px-2.5 py-2 text-[12px]",
-            i === 0 && "ring-brand/40 ring-2",
+            i === 0 && "ring-2 ring-brand/40",
           )}
         >
           <span className={cn("size-2 shrink-0 rounded-full", r.c)} />
@@ -132,7 +132,7 @@ export function Features() {
     <section id="features" className="scroll-mt-20 border-b py-24">
       <div className="container-page">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-brand text-sm font-semibold">Two jobs, one widget</p>
+          <p className="text-sm font-semibold text-brand">Two jobs, one widget</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
             Client review and developer-grade bug reports
           </h2>
@@ -152,8 +152,8 @@ export function Features() {
                 <div className="absolute top-5 left-6 h-3 w-40 rounded bg-foreground/80" />
                 <div className="absolute top-11 left-6 h-2 w-56 rounded bg-muted-foreground/30" />
                 <div className="absolute top-16 left-6 h-2 w-48 rounded bg-muted-foreground/30" />
-                <div className="border-brand bg-brand/10 absolute top-4 left-[18rem] h-24 w-44 rounded-lg border-2 border-dashed max-sm:left-[12rem]" />
-                <span className="bg-brand text-brand-foreground absolute top-2 left-[28.5rem] grid size-6 place-items-center rounded-full rounded-bl-none text-[11px] font-semibold shadow ring-2 ring-background max-sm:left-[22.5rem]">
+                <div className="absolute top-4 left-[18rem] h-24 w-44 rounded-lg border-2 border-dashed border-brand bg-brand/10 max-sm:left-[12rem]" />
+                <span className="absolute top-2 left-[28.5rem] grid size-6 place-items-center rounded-full rounded-bl-none bg-brand text-[11px] font-semibold text-brand-foreground shadow ring-2 ring-background max-sm:left-[22.5rem]">
                   2
                 </span>
                 <div className="absolute bottom-3 left-6 rounded-lg border bg-popover px-2.5 py-1.5 text-[12px] shadow">

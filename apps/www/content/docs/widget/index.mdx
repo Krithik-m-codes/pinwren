@@ -119,7 +119,7 @@ The hook returns `{ ready, open, close, identify, setPageScope, on }`.
 | ----------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `data-project`                      | Yes      | The project's public key (`pk_…`). Without it the script loads but does nothing, so you can start the widget yourself with `Pinwren.init()`.              |
 | `data-endpoint`                     | No       | Your Pinwren server's origin, e.g. `https://feedback.example.com`. Defaults to the origin the script was loaded from.                                     |
-| `data-accent`                       | No       | Launcher colour as a hex value (`#5b5bd6`). Overrides the project's accent on this page only; anything that isn't a plain hex colour is ignored.          |
+| `data-accent`                       | No       | Launcher colour as a hex value (`#d63a1c`). Overrides the project's accent on this page only; anything that isn't a plain hex colour is ignored.          |
 | `data-locale`                       | No       | UI language, e.g. `fr` or `pt-BR`. Otherwise the visitor's browser languages decide — see [Languages](/docs/widget/i18n).                                 |
 | `data-force-show`                   | No       | Show the widget even where the project's [visibility rules](/docs/widget/visibility) would hide it.                                                       |
 | `data-url-pattern`                  | No       | Group this page's pins with every page that matches a pattern such as `/product/:id` — see [Visibility & page scope](/docs/widget/visibility#page-scope). |

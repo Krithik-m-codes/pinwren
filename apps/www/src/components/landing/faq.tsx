@@ -128,7 +128,7 @@ export function Faq() {
     <section id="faq" className="scroll-mt-20 border-b py-24">
       <div className="container-page grid gap-10 lg:grid-cols-[1fr_1.6fr]">
         <div>
-          <p className="text-brand text-sm font-semibold">FAQ</p>
+          <p className="text-sm font-semibold text-brand">FAQ</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight">Questions, answered</h2>
           <p className="mt-4 text-muted-foreground">
             More in the{" "}

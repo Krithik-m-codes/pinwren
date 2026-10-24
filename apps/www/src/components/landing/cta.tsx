@@ -19,7 +19,7 @@ export function FinalCta() {
               <ButtonLink
                 href="/docs/quickstart"
                 size="lg"
-                className="bg-brand text-brand-foreground hover:bg-brand/90 h-10 px-4"
+                className="h-10 bg-brand px-4 text-brand-foreground hover:bg-brand/90"
               >
                 Self-host for free
                 <ArrowRight aria-hidden />

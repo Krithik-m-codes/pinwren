@@ -53,7 +53,7 @@ export function SiteHeader() {
           <ButtonLink
             href="/demo"
             size="sm"
-            className="bg-brand text-brand-foreground hover:bg-brand/90 ml-1 hidden sm:inline-flex"
+            className="ml-1 hidden bg-brand text-brand-foreground hover:bg-brand/90 sm:inline-flex"
           >
             Try the demo
           </ButtonLink>

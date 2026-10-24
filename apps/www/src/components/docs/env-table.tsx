@@ -67,7 +67,7 @@ export function EnvTable({ group }: { group?: string }) {
                     <td className="px-3 py-2.5">
                       <code className="font-mono text-[13px] font-medium whitespace-nowrap">{v.name}</code>
                       {v.required && (
-                        <span className="bg-brand-soft text-brand ml-1.5 rounded px-1.5 py-0.5 text-[11px] font-medium">
+                        <span className="bg-brand-soft text-brand-ink ml-1.5 rounded px-1.5 py-0.5 text-[11px] font-medium">
                           required
                         </span>
                       )}

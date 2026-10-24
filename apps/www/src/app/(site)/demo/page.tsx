@@ -38,7 +38,7 @@ export default function DemoPage() {
         <section className="border-b bg-background">
           <div className="container-page flex flex-col gap-6 py-8 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
-              <p className="text-brand text-sm font-semibold">Live demo</p>
+              <p className="text-sm font-semibold text-brand">Live demo</p>
               <h1 className="mt-1.5 text-3xl font-semibold tracking-tight sm:text-4xl">Widget playground</h1>
               <p className="mt-3 text-muted-foreground">
                 Below is a made-up agency site with the real Pinwren widget on it. In Server API mode your
@@ -55,7 +55,7 @@ export default function DemoPage() {
             <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {TIPS.map((t) => (
                 <li key={t.text} className="flex gap-3 rounded-xl border bg-card p-3.5 text-sm shadow-xs">
-                  <t.icon className="text-brand mt-0.5 size-4 shrink-0" aria-hidden />
+                  <t.icon className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden />
                   <span className="text-muted-foreground">{t.text}</span>
                 </li>
               ))}

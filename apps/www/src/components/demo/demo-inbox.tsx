@@ -178,7 +178,7 @@ export function DemoInbox() {
       <div className="border-b bg-background">
         <div className="container-page flex flex-wrap items-center gap-3 py-4">
           <div className="flex items-center gap-3">
-            <span className="bg-brand-soft text-brand grid size-9 place-items-center rounded-lg">
+            <span className="bg-brand-soft text-brand-ink grid size-9 place-items-center rounded-lg">
               <Inbox className="size-4.5" aria-hidden />
             </span>
             <div>
@@ -456,7 +456,7 @@ function Detail({ item }: { item: Item }) {
                     <p className="text-xs text-muted-foreground">
                       <span className="font-medium text-foreground">{r.authorName ?? "Guest"}</span>
                       {r.team && (
-                        <span className="bg-brand-soft text-brand ml-1.5 rounded px-1 text-[10px] font-medium">
+                        <span className="bg-brand-soft text-brand-ink ml-1.5 rounded px-1 text-[10px] font-medium">
                           Team
                         </span>
                       )}
