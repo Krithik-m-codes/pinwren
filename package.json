@@ -31,8 +31,9 @@
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "db:generate": "pnpm --filter @pinwren/db generate",
     "db:migrate": "pnpm --filter @pinwren/db migrate",
-    "db:up": "docker compose -f docker/compose.dev.yml up -d",
-    "codegen": "turbo run codegen"
+    "db:up": "docker compose up -d",
+    "codegen": "turbo run codegen",
+    "app:up": "docker compose --profile app up --build"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged",

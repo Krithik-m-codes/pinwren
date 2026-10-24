@@ -7,8 +7,8 @@ The full specification lives in `blueprint/` (files 00–14). `blueprint/14-feat
 ## Commands
 
 - `pnpm i` — install (also installs the git hooks: lint-staged on pre-commit, commitlint on commit-msg)
-- `pnpm db:up` — local Postgres on 127.0.0.1:5433 (`docker/compose.dev.yml`)
-- `pnpm --filter @pinwren/widget build` then `pnpm --filter @pinwren/web dev -- -p 3100` — dashboard + API (port 3000 is taken on the owner's machine)
+- `pnpm db:up` — local Postgres on 127.0.0.1:5433 (root `compose.yaml`; `pnpm app:up` runs the production build on :3000)
+- `pnpm --filter @pinwren/widget build` then `pnpm --filter @pinwren/web dev` — dashboard + API on :3100 (port 3000 is taken on the owner's machine)
 - `node scripts/smoke.mjs http://localhost:3100` — end-to-end API checks (327, incl. attack checks); start the server with `PINWREN_TRUST_PROXY=1 PINWREN_DISABLE_SIGNUP=false PINWREN_OUTBOUND_ALLOWLIST=127.0.0.1 GITHUB_API_URL=http://127.0.0.1:4790 PINWREN_ADMIN_EMAILS=smoke-admin@example.com,e2e-admin@example.com`
 - `docker compose -f docker/compose.yml --env-file docker/.env up -d --build` — self-host stack
 - `pnpm verify` — format:check + lint + typecheck + test + build (run before pushing)

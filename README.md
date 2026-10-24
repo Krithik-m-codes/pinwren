@@ -216,19 +216,22 @@ Decisions are recorded in [`docs/adr/`](docs/adr) and the
 | `packages/core`   | `@pinwren/core`   | AGPL-3.0 | Zod schemas and wire types, origin matching, security helpers                         |
 | `packages/db`     | `@pinwren/db`     | AGPL-3.0 | Drizzle schema and SQL migrations (Postgres)                                          |
 | `packages/widget` | `@pinwren/widget` | MIT      | The embeddable widget, on npm: `widget.js` (≈33 KB gzip) plus lazily loaded chunks    |
-| `docker`          | —                 | AGPL-3.0 | Dockerfile, self-host compose file, development database                              |
+| `docker`          | —                 | AGPL-3.0 | Dockerfile and the self-host compose file (development uses the root `compose.yaml`)  |
 | `loadtest`        | —                 | AGPL-3.0 | k6 scenario and sizing notes ([results](loadtest/README.md))                          |
 
 ## Development
 
 You need Node 22.12+, pnpm 12 (`corepack enable`) and Docker for the development database.
 
+Just want to click around? `docker compose --profile app up --build` (or `pnpm app:up`) builds this checkout and
+serves it on http://localhost:3000 with its own database — no Node needed. Sign up: the first account is the admin.
+
 ```bash
 pnpm install
-pnpm db:up                                   # Postgres on 127.0.0.1:5433
+pnpm db:up                                   # docker compose up -d: Postgres on 127.0.0.1:5433
 cp apps/web/.env.example apps/web/.env.local # then set PINWREN_SECRET
 pnpm --filter @pinwren/widget build          # widget.js into apps/web/public
-pnpm --filter @pinwren/web dev -- -p 3100    # dashboard + API; migrations run on start
+pnpm dev                                     # dashboard :3100, website :3200, widget rebuilds on save
 ```
 
 | Command                                        | What it does                                                          |

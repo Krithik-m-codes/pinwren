@@ -1,0 +1,64 @@
+# Local development. Two ways to run Pinwren from this checkout:
+#
+#   1. Hot-reload development (edit code, see it instantly):
+#        docker compose up -d      # Postgres on 127.0.0.1:5433
+#        pnpm dev                  # dashboard :3100, website :3200, widget rebuilds on save
+#
+#   2. Try the real thing without Node installed (production build of this checkout):
+#        docker compose --profile app up --build
+#        open http://localhost:3000 and sign up: the first account is the admin
+#
+# Self-hosting on a server uses docker/compose.yml instead (see docs/self-hosting/deploy.md).
+name: pinwren-dev
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: pinwren
+      POSTGRES_PASSWORD: pinwren
+      POSTGRES_DB: pinwren
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pinwren-dev-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pinwren"]
+      interval: 5s
+      retries: 10
+
+  # The app profile gets its own database, so trying it never touches your development data.
+  app-db:
+    profiles: [app]
+    image: postgres:17-alpine
+    environment:
+      PGPASSWORD: pinwren
+    command: >-
+      sh -c "psql -h db -U pinwren -d pinwren -tAc \"select 1 from pg_database where datname = 'pinwren_app'\" | grep -q 1
+      || psql -h db -U pinwren -d pinwren -c 'create database pinwren_app'"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      DATABASE_URL: postgres://pinwren:pinwren@db:5432/pinwren_app
+      PINWREN_URL: http://localhost:3000
+      # Local only. Generate a real one for a server: openssl rand -base64 48
+      PINWREN_SECRET: local-development-secret-change-me-0123456789
+      PINWREN_WORKERS: 1
+    volumes:
+      - pinwren-dev-data:/data
+    depends_on:
+      app-db:
+        condition: service_completed_successfully
+
+volumes:
+  pinwren-dev-db:
+  pinwren-dev-data:

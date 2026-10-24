@@ -32,7 +32,7 @@ pnpm install                                 # also installs the git hooks
 pnpm db:up                                   # Postgres 17 on 127.0.0.1:5433
 cp apps/web/.env.example apps/web/.env.local # set PINWREN_SECRET (openssl rand -base64 48)
 pnpm --filter @pinwren/widget build          # widget bundles into apps/web/public
-pnpm --filter @pinwren/web dev -- -p 3100    # dashboard + API on http://localhost:3100
+pnpm dev                                     # dashboard + API :3100, website :3200, widget watch
 ```
 
 Migrations run when the server starts. Sign up at `/sign-up`; the first account becomes the instance admin.
