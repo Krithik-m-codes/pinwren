@@ -5,7 +5,7 @@
 // public half (base64 SPKI DER) is committed. The private key lives in a secret store and is passed to
 // the signing tool through PINWREN_LICENSE_PRIVATE_KEY — never committed.
 export const PRODUCTION_KEYS: Readonly<Record<string, string>> = {
-  // "pinwren-2026": "MCowBQYDK2VwAyEA…",  ← added when the first production key is issued
+  "pinwren-2026": "MCowBQYDK2VwAyEAYNgbw+NwfzU70NQTEd4xBEg7knLq19zDb+dvLRmF/q8=",
 };
 
 /**

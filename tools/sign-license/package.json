@@ -5,6 +5,7 @@
   "description": "Sign Pinwren Enterprise licence files (Ed25519). Internal tool; the private key comes from the environment.",
   "license": "AGPL-3.0-only",
   "type": "module",
+  "main": "./index.mjs",
   "bin": {
     "pinwren-sign-license": "./index.mjs"
   },
