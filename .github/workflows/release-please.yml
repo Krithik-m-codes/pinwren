@@ -84,7 +84,10 @@ jobs:
         run: pnpm --filter @pinwren/widget build
       - name: Publish
         working-directory: packages/widget
-        run: pnpm publish --access public --provenance --no-git-checks
+        # Already on npm (e.g. the owner published this version by hand): nothing to do.
+        run: |
+          if npm view "$(node -p "require('./package.json').name")@$(node -p "require('./package.json').version")" version >/dev/null 2>&1; then echo "already published"; exit 0; fi
+          pnpm publish --access public --provenance --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -126,7 +129,8 @@ jobs:
       # pnpm publish (not npm) rewrites workspace: ranges. The SDK goes first: the MCP package depends on it.
       - name: Publish
         run: |
-          publish() { (cd "packages/$1" && pnpm publish --access public --provenance --no-git-checks); }
+          # A version that is already on npm (published by hand) is skipped.
+          publish() { (cd "packages/$1" && if npm view "$(node -p "require('./package.json').name")@$(node -p "require('./package.json').version")" version >/dev/null 2>&1; then echo "$1 already published"; else pnpm publish --access public --provenance --no-git-checks; fi); }
           if [ "$SDK" = "true" ]; then publish sdk; fi
           if [ "$MCP" = "true" ]; then publish mcp; fi
           if [ "$CLI" = "true" ]; then publish cli; fi

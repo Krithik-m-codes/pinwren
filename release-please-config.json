@@ -58,37 +58,43 @@
       "package-name": "pinwren",
       "include-component-in-tag": false,
       "changelog-path": "CHANGELOG.md",
-      "extra-files": ["packages/api/src/env.ts"]
+      "extra-files": ["packages/api/src/env.ts"],
+      "release-as": "0.1.0"
     },
     "packages/widget": {
       "release-type": "node",
       "component": "widget",
       "package-name": "@pinwren/widget",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "release-as": "0.1.0"
     },
     "packages/sdk": {
       "release-type": "node",
       "component": "sdk",
       "package-name": "@pinwren/sdk",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "release-as": "0.1.0"
     },
     "packages/mcp": {
       "release-type": "node",
       "component": "mcp",
       "package-name": "@pinwren/mcp",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "release-as": "0.1.0"
     },
     "packages/cli": {
       "release-type": "node",
       "component": "cli",
       "package-name": "@pinwren/cli",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "release-as": "0.1.0"
     },
     "packages/react": {
       "release-type": "node",
       "component": "react",
       "package-name": "@pinwren/react",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "release-as": "0.1.0"
     }
   }
 }
