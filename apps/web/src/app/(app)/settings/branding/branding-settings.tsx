@@ -18,7 +18,7 @@ import { errorMessage, useBrandingQuery, useMeQuery, useUpdateBrandingMutation }
 import { SectionTitle } from "../settings-shell";
 import { useSyncedState } from "@/lib/use-synced-state";
 
-const DEFAULT_ACCENT = "#5b5bd6";
+const DEFAULT_ACCENT = "#d63a1c";
 
 type Patch = Partial<Pick<OrgBranding, "productName" | "accent" | "logoAssetId">>;
 

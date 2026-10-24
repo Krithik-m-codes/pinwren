@@ -1,4 +1,9 @@
-import { BRAND_ASSET_TYPES, MAX_BRAND_ASSET_BYTES, type OrgBrandingUpdate } from "@pinwren/core";
+import {
+  BRAND_ASSET_TYPES,
+  MAX_BRAND_ASSET_BYTES,
+  type OrgBrandingUpdate,
+  trimTrailingSlashes,
+} from "@pinwren/core";
 import { brandAsset, getDb, orgSetting } from "@pinwren/db";
 import { and, eq } from "drizzle-orm";
 import { DEFAULT_BRAND, type EmailBrand } from "../email/templates";
@@ -42,19 +47,24 @@ export async function getOrgBranding(orgId: string): Promise<OrgBranding> {
 }
 
 /** Branding for emails; never throws (an unreadable setting falls back to the defaults). */
+/** Pinwren's own logo for emails (apps/web/public), used until a workspace uploads one or renames the product. */
+export const pinwrenEmailLogo = () => `${trimTrailingSlashes(env().PINWREN_URL)}/pinwren-logo-email.png`;
+
 export async function emailBrand(orgId: string | null | undefined): Promise<EmailBrand> {
-  if (!orgId) return DEFAULT_BRAND;
+  const fallback = () => ({ ...DEFAULT_BRAND, logoUrl: pinwrenEmailLogo() });
+  if (!orgId) return fallback();
   try {
     const [b, whiteLabel] = await Promise.all([getOrgBranding(orgId), hasFeature("white_label")]);
     return {
       productName: b.productName ?? DEFAULT_BRAND.productName,
       accent: b.accent ?? DEFAULT_BRAND.accent,
-      logoUrl: b.logoUrl,
+      // A renamed product without its own logo shows its name only, not Pinwren's bird.
+      logoUrl: b.logoUrl ?? (b.productName ? null : pinwrenEmailLogo()),
       // Custom email branding without a "Powered by Pinwren" footer is Enterprise white-label.
       poweredBy: !whiteLabel,
     };
   } catch {
-    return DEFAULT_BRAND;
+    return fallback();
   }
 }
 

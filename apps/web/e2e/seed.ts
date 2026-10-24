@@ -15,7 +15,7 @@ const SITE_HTML = `<!doctype html><html><head><style>
   .plan{background:#fff;border:1px solid #e4e4e7;border-radius:14px;padding:28px;height:330px}
   .plan h2{font-size:18px} .price{font-size:40px;font-weight:700;margin:14px 0} .plan li{color:#52525b;margin:8px 0 0 18px}
   .plan button{margin-top:26px;width:100%;height:44px;border:0;border-radius:10px;background:#18181b;color:#fff;font-size:15px}
-  .pro{border:2px solid #5b5bd6} .pro button{background:#5b5bd6}
+  .pro{border:2px solid #d63a1c} .pro button{background:#d63a1c}
 </style></head><body>
   <header><b>Acme</b><nav><a>Product</a><a>Pricing</a><a>Docs</a><a>Sign in</a></nav></header>
   <section class="hero"><h1 id="headline">Simple pricing for every team</h1><p>Start free. Upgrade when you grow.</p></section>

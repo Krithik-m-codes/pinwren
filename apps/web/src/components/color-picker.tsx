@@ -9,6 +9,7 @@ import { useSyncedState } from "@/lib/use-synced-state";
 import { sliderValue } from "@/lib/form";
 
 const SWATCHES = [
+  "#d63a1c",
   "#5b5bd6",
   "#3e63dd",
   "#0090ff",
@@ -156,7 +157,7 @@ export function ColorPicker({
               if (e.key === "Enter" && HEX.test(text)) onCommit(text.toLowerCase());
             }}
           />
-          {!HEX.test(text) && <p className="text-xs text-destructive">Use a hex colour like #5b5bd6</p>}
+          {!HEX.test(text) && <p className="text-xs text-destructive">Use a hex colour like #d63a1c</p>}
         </div>
       </PopoverContent>
     </Popover>

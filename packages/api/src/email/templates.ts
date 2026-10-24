@@ -15,7 +15,7 @@ export type Rendered = { subject: string; html: string; text: string };
  * footer — dropped only with the Enterprise `white_label` entitlement (wave-4 contract §6).
  */
 export type EmailBrand = { productName: string; accent: string; logoUrl: string | null; poweredBy?: boolean };
-export const DEFAULT_BRAND: EmailBrand = { productName: "Pinwren", accent: "#5b5bd6", logoUrl: null };
+export const DEFAULT_BRAND: EmailBrand = { productName: "Pinwren", accent: "#d63a1c", logoUrl: null };
 
 export type TemplateVariable = { name: string; description: string; sample: string };
 
@@ -398,10 +398,10 @@ function layout(
   const button = cta
     ? `<p style="margin:16px 0 0"><a href="${esc(cta.url)}" style="display:inline-block;background:${accent};color:${contrastText(accent)};text-decoration:none;padding:8px 14px;border-radius:6px;font-size:14px">${esc(cta.label)}</a></p>`
     : "";
-  return `<!doctype html><html><body style="margin:0;padding:24px;background:#f6f6f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1c1c24">
+  return `<!doctype html><html><body style="margin:0;padding:24px;background:#f6f6f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#17243a">
 <table role="presentation" width="100%" style="max-width:560px;margin:0 auto;background:#fff;border-radius:8px;padding:24px">
 <tr><td>
-${logo ? `<p style="margin:0 0 16px"><img src="${esc(logo)}" alt="${esc(brand.productName)}" height="28" style="height:28px;max-width:200px"></p>` : ""}
+${logo ? `<p style="margin:0 0 16px"><img src="${esc(logo)}" alt="${esc(brand.productName)}" height="28" style="height:28px;max-width:200px;border:0"></p>` : ""}
 ${content}
 ${details}${button}
 </td></tr></table>

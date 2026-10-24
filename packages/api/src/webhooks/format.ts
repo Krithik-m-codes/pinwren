@@ -171,7 +171,7 @@ export function discordBody(p: WebhookPayload): object {
         title: truncate(discordEscape(`${f.projectName} #${f.number}${f.title ? ` — ${f.title}` : ""}`), 250),
         ...(link ? { url: link } : {}),
         description: truncate(discordEscape(text || " "), 3900),
-        color: 0x5b5bd6,
+        color: 0xd63a1c,
         fields,
         timestamp: p.createdAt,
       },

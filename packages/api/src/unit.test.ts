@@ -146,7 +146,7 @@ describe("email templates", () => {
 
   it("pick readable button text", async () => {
     const { contrastText } = await import("./email/templates");
-    expect(contrastText("#5b5bd6")).toBe("#ffffff");
+    expect(contrastText("#d63a1c")).toBe("#ffffff");
     expect(contrastText("#ffe066")).toBe("#111118");
   });
 });
