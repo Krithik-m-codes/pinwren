@@ -8,7 +8,7 @@ import { z } from "zod";
  * Features a licence switches on in this version. The Licence page shows only these as entitlements;
  * the planned ones are listed under "Coming soon" until they ship (and move here).
  */
-export const IMPLEMENTED_LICENSE_FEATURES = ["white_label"] as const;
+export const IMPLEMENTED_LICENSE_FEATURES = ["white_label", "jira"] as const;
 
 /** Named in licence files already (so issued licences keep working) but not built yet. */
 export const PLANNED_LICENSE_FEATURES = [
@@ -16,7 +16,6 @@ export const PLANNED_LICENSE_FEATURES = [
   "scim",
   "audit_log",
   "custom_roles",
-  "jira",
   "legal_hold",
   "siem_stream",
   "priority_support",

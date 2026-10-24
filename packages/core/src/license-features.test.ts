@@ -16,6 +16,8 @@ describe("licence features", () => {
     );
     for (const f of IMPLEMENTED_LICENSE_FEATURES) expect(PLANNED_LICENSE_FEATURES).not.toContain(f);
     expect(isImplementedLicenseFeature("white_label")).toBe(true);
+    // Jira issue sync is built and gated on this feature (integrations/issues.ts).
+    expect(isImplementedLicenseFeature("jira")).toBe(true);
     expect(isImplementedLicenseFeature("sso")).toBe(false);
   });
 

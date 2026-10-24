@@ -14,7 +14,7 @@ The first public release, 0.1.0. Pinwren was developed privately as "Annota" and
 
 ### Added
 
-- **Widget** (`@pinwren/widget`, MIT): one script tag; closed Shadow DOM; core ≈28 KB gzip with the side
+- **Widget** (`@pinwren/widget`, MIT): one script tag; closed Shadow DOM; core ≈33 KB gzip with the side
   panel, report form, capture engine and each locale loaded on demand.
   - Comments pinned to elements or regions, anchored by CSS selector, XPath, test id, text and geometry;
     comments on selected text with the quote highlighted; threads with team replies; resolve and reopen;
@@ -63,7 +63,7 @@ The first public release, 0.1.0. Pinwren was developed privately as "Annota" and
 - "Email the reporter" moved to the project's Widget tab, next to a link to the reporter email settings.
 - The command palette lists every settings page you can open (same rules as the settings menu); the account
   menu has **Profile & settings**.
-- The Licence page shows what a licence switches on today (white-label) apart from the **Coming soon**
+- The Licence page shows what a licence switches on today (white-label and Jira Cloud sync) apart from the **Coming soon**
   Enterprise features; licences naming those keep working.
 - Docker: every variable in `docker/.env` now reaches the app (`env_file`, Compose v2.24+);
   `docker/.env.example` has commented blocks for SMTP, S3 storage and HTTPS. New

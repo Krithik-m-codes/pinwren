@@ -23,7 +23,7 @@ const MATRIX: { group: string; rows: { label: string; cells: Cell[] }[] }[] = [
       { label: "Guests (clients)", cells: ["Unlimited", "Unlimited", "Unlimited", "Unlimited", "Unlimited"] },
       { label: "Projects", cells: ["Unlimited", "1", "10", "Unlimited", "Unlimited"] },
       { label: "Reports / month", cells: ["Unlimited", "100", "2,000", "20,000", "Contract"] },
-      { label: "Retention", cells: ["You decide", "30 days", "1 year", "3 years", "Custom + legal hold"] },
+      { label: "Retention", cells: ["You decide", "30 days", "1 year", "3 years", "Custom"] },
     ],
   },
   {
@@ -37,8 +37,12 @@ const MATRIX: { group: string; rows: { label: string; cells: Cell[] }[] }[] = [
   {
     group: "Route",
     rows: [
-      { label: "Email, Slack, Discord, webhooks", cells: [true, "Email + 1 chat", true, true, true] },
-      { label: "GitHub and GitLab two-way sync", cells: [true, false, true, true, true] },
+      {
+        label: "Email, Slack, Discord, Teams, Telegram, ntfy, webhooks",
+        cells: [true, "Email + 1 chat", true, true, true],
+      },
+      { label: "GitHub, GitLab and Linear two-way sync", cells: [true, false, true, true, true] },
+      { label: "Jira Cloud two-way sync", cells: [false, false, false, false, true] },
       { label: "MCP server + REST API", cells: [true, "API read-only", true, true, true] },
       {
         label: "Storage",
@@ -53,8 +57,8 @@ const MATRIX: { group: string; rows: { label: string; cells: Cell[] }[] }[] = [
         label: "“Powered by Pinwren” removal / white-label",
         cells: [false, false, "Remove badge", "Full", true],
       },
-      { label: "Audit log", cells: [false, false, false, "30 days", "✓ + SIEM stream"] },
-      { label: "SSO (SAML/OIDC), SCIM", cells: [false, false, false, false, true] },
+      { label: "Audit log", cells: [false, false, false, "Planned", "Planned (+ SIEM stream)"] },
+      { label: "SSO (SAML/OIDC), SCIM", cells: [false, false, false, false, "Planned"] },
       { label: "Support", cells: ["Community", "Community", "Email", "Priority email", "SLA"] },
     ],
   },

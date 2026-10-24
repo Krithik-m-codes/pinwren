@@ -34,13 +34,21 @@ in a keyboard-first triage inbox you run yourself.
 
 **On your website (the widget)**
 
-- **Pinned comments** — click an element or drag a region. Pins are anchored to the element (CSS selector,
+- **A launcher like SitePing's** — one button that opens **Hide/Show markers**, **Create new annotation**,
+  **Comment on this page**, **Report a bug** and **Show sidebar**, with a badge counting open feedback.
+- **Pinned comments** — click an element or drag a region, pick **Question**, **Change**, **Bug** or **Other**
+  and press Ctrl+Enter. Numbered markers are coloured by type and preview their thread on hover. Pins are anchored to the element (CSS selector,
   XPath, test id, text and geometry), not to pixels, so they survive layout changes and redesigns. Comment
   on selected text and the quote is highlighted on the page.
 - **Threads** — replies under each pin, a team badge on your replies, resolve and reopen from the page,
-  deep links (`?pinwren=<id>`) that open the page with the thread showing.
+  deep links (`?pinwren=<id>`) that open the page with the thread showing, and re-pinning a moved pin.
+- **Feedback sidebar** — open / resolved / bug counts, search, type and status filters, this page or all
+  pages, **Mine**, sorting, grouping by page, select-all with bulk resolve or delete, and CSV/JSON export.
+- **Private by default** — on a public website visitors see only their own feedback and the team's replies to
+  it; review links and a "staging / client review" project show reviewers everyone's pins.
 - **Bug reports** — viewport, full-page, single-element or screen-share capture, then draw, box, arrow,
-  text, pixelate (irreversibly) and crop; drop, paste or browse up to three attachments.
+  text, highlight, numbered steps, pixelate (irreversibly) and crop; drop, paste or browse up to three
+  attachments. Optionally a screenshot with every comment, and a session replay of the last 30–120 seconds.
 - **Diagnostics** — console messages and failed or slow requests (URLs redacted), browser, OS, viewport,
   locale and page timing, each configurable per project.
 - **Never loses a report** — drafts survive reloads; reports sent while offline wait in an IndexedDB outbox
@@ -51,20 +59,32 @@ in a keyboard-first triage inbox you run yourself.
 - **Privacy mode** — masks every text field as a solid block in captures, drops timing data, truncates IP
   addresses and asks for consent. Password and card fields, and anything marked `data-pinwren-mask`, are
   always masked.
-- **11 languages**, a configurable launcher, white-label branding, read-only mode and a JS API
-  (`Pinwren.open()`, `Pinwren.on("submit", …)`, `Pinwren.identify()`, `Pinwren.destroy()`).
+- **11 languages**, a configurable launcher, white-label branding, read-only mode, visibility rules (always,
+  identified visitors, a query parameter, URL patterns or manual) and a JS API (`Pinwren.open()`,
+  `Pinwren.on("submit", …)`, `Pinwren.identify()`, `Pinwren.setMetadata()`, `Pinwren.show()`/`hide()`,
+  `Pinwren.destroy()`).
 
 **In the dashboard**
 
-- **Triage inbox** — list, detail and board views, filters and search, bulk edits with undo, and keyboard
-  shortcuts for everything (`j`/`k`, `e`, `s`, `p`, `a`, `x`, `u`, `/`).
+- **Triage inbox** — list, detail and board views, filters, search, sorting and paging, labels, due dates,
+  duplicates, a trash with restore, CSV/JSON/PDF export, bulk edits with undo, and keyboard shortcuts for
+  everything (`j`/`k`, `e`, `s`, `p`, `a`, `l`, `x`, `u`, `/`, `g m`).
 - **Page review** — every page with feedback, its pins laid over the captured screenshot.
-- **Workflow** — statuses, priorities, assignees, internal and public comments, an activity timeline, email
-  and in-app notifications.
-- **Integrations** — two-way GitHub and GitLab issue sync (token-based, works with GitHub Enterprise and
-  self-managed GitLab), signed webhooks with Slack and Discord formats plus a delivery log, scoped API
-  tokens for `/api/v1`, and custom panel actions such as "Send to agent".
-- **Team** — workspaces, invitations and roles, per-workspace branding (name, logo, accent), editable email
+- **Workflow** — statuses, priorities, assignees, internal and public comments with @mentions, following an
+  item, an activity timeline.
+- **Notifications, BugPin-style** — email through your own SMTP (**Settings › Email**, with a test send and
+  a delivery log that can resend), **Notifications › General** (who on the team gets new-report emails, plus
+  extra addresses), **Reporter** (confirmation, status, priority and assignment emails to the person who
+  reported) and **Email templates**; a live bell, a notifications page, desktop notifications and
+  hourly/daily digests.
+- **Integrations** — two-way GitHub, GitLab and Linear issue sync (GitHub Enterprise and self-managed GitLab
+  included; Jira Cloud with an Enterprise licence), Slack, Discord, Microsoft Teams, Telegram and ntfy
+  channels, signed webhooks with a delivery log, scoped API tokens for `/api/v1`, and custom panel actions
+  such as "Send to agent".
+- **Accounts** — the first account is the admin; **Users › Add user** with Admin, Editor or Viewer roles, or
+  invitations; password reset, email verification, two-factor sign-in, passkeys, email sign-in links and
+  Google/GitHub sign-in.
+- **Team** — several workspaces with a switcher, per-workspace branding (name, logo, accent), editable email
   templates, retention policies, CSV and JSON export, a full project export (JSON + files) and erasure of
   everything one reporter sent.
 - **Operations** — one container plus Postgres; files on disk or in any S3-compatible bucket; settings in
@@ -72,18 +92,18 @@ in a keyboard-first triage inbox you run yourself.
 
 ## How it compares
 
-|                                  | **Pinwren**              | Marker.io | BugHerd   | Userback  | BugPin            | SitePing               |
-| -------------------------------- | ------------------------ | --------- | --------- | --------- | ----------------- | ---------------------- |
-| Open source                      | ✅ AGPL-3.0, widget MIT  | —         | —         | —         | Open core, AGPL   | ✅ MIT                 |
-| Self-hosted                      | ✅ Docker + Postgres     | —         | —         | —         | ✅                | ✅ inside your own app |
-| Comments pinned to page elements | ✅                       | —         | ✅        | Partial   | —                 | ✅                     |
-| Annotated screenshot bug reports | ✅                       | ✅        | ✅        | ✅        | ✅                | Partial (area capture) |
-| Console and network capture      | ✅                       | ✅        | Partial   | ✅        | ✅                | ✅                     |
-| Session replay                   | Planned                  | ✅        | —         | ✅        | —                 | —                      |
-| Triage dashboard                 | ✅ built in              | ✅        | ✅        | ✅        | ✅                | ✅ React component     |
-| GitHub / GitLab issue sync       | ✅ two-way               | ✅        | ✅        | ✅        | GitHub            | ✅                     |
-| Jira, Linear and other trackers  | Via webhooks and actions | ✅        | ✅        | ✅        | Via webhooks      | —                      |
-| Price                            | Free to self-host        | Paid SaaS | Paid SaaS | Paid SaaS | Free to self-host | Free                   |
+|                                  | **Pinwren**               | Marker.io | BugHerd   | Userback  | BugPin            | SitePing               |
+| -------------------------------- | ------------------------- | --------- | --------- | --------- | ----------------- | ---------------------- |
+| Open source                      | ✅ AGPL-3.0, widget MIT   | —         | —         | —         | Open core, AGPL   | ✅ MIT                 |
+| Self-hosted                      | ✅ Docker + Postgres      | —         | —         | —         | ✅                | ✅ inside your own app |
+| Comments pinned to page elements | ✅                        | —         | ✅        | Partial   | —                 | ✅                     |
+| Annotated screenshot bug reports | ✅                        | ✅        | ✅        | ✅        | ✅                | Partial (area capture) |
+| Console and network capture      | ✅                        | ✅        | Partial   | ✅        | ✅                | ✅                     |
+| Session replay                   | ✅ new in 0.1             | ✅        | —         | ✅        | —                 | —                      |
+| Triage dashboard                 | ✅ built in               | ✅        | ✅        | ✅        | ✅                | ✅ React component     |
+| GitHub / GitLab issue sync       | ✅ two-way                | ✅        | ✅        | ✅        | GitHub            | ✅                     |
+| Jira, Linear and other trackers  | Linear; Jira (Enterprise) | ✅        | ✅        | ✅        | Via webhooks      | —                      |
+| Price                            | Free to self-host         | Paid SaaS | Paid SaaS | Paid SaaS | Free to self-host | Free                   |
 
 Competitor columns reflect their public documentation as of October 2026 and change often; if a cell is
 wrong, please [open an issue][issues]. "Partial" means the feature exists with notable limits or only on
@@ -116,10 +136,13 @@ Then, all in the browser:
    private) or a staging/client-review site (reviewers see each other's pins).
 4. **Add the widget** from the project's **Install** tab (below), send a test report from your site, and
    watch it arrive in the inbox, the bell and the team's email. A checklist on the inbox tracks these steps.
-5. **Add your team** under Settings › Members: create accounts directly or invite by email (Admin, Editor or
+5. **Add your team** under Settings › Users: create accounts directly or invite by email (Admin, Editor or
    Viewer).
 
 The full walkthrough is in [`docs/self-hosting/getting-started.md`](docs/self-hosting/getting-started.md).
+To put it on a VPS with a domain and HTTPS (Docker Compose or a Portainer stack, nginx + Let's Encrypt, backups,
+upgrades), follow [`docs/self-hosting/deploy.md`](docs/self-hosting/deploy.md); to host this project's website and docs,
+[`docs/self-hosting/website.md`](docs/self-hosting/website.md).
 In production, put a TLS reverse proxy (Caddy, Traefik, nginx) in front: allow request bodies of at least
 48 MB (screenshots, attachments and a 10 MB session replay) and let it compress the widget with brotli —
 ready-made configs are in [`docs/self-hosting/reverse-proxy.md`](docs/self-hosting/reverse-proxy.md). Data lives in two volumes: `pinwren-db` (Postgres) and `pinwren-data`

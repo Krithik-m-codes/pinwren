@@ -47,10 +47,11 @@ Feedback data, your website and the code of the sites the widget runs on are nev
 | Projects                                                   | Unlimited                 | 1                             | 10                | Unlimited           | Unlimited                      |
 | Reports per month                                          | Unlimited                 | 100                           | 2,000             | 20,000              | Per contract                   |
 | Pins, bug reports, annotation, console and network capture | ✓                         | ✓                             | ✓                 | ✓                   | ✓                              |
-| Integrations, webhooks, issue sync, API                    | ✓                         | Email + 1 chat, read-only API | ✓                 | ✓                   | ✓                              |
+| Integrations, webhooks, GitHub/GitLab/Linear sync, API     | ✓                         | Email + 1 chat, read-only API | ✓                 | ✓                   | ✓                              |
+| Jira Cloud issue sync                                      | —                         | —                             | —                 | —                   | ✓                              |
 | Storage                                                    | Disk or any S3 bucket     | Included                      | Included          | Included            | Customer bucket option         |
 | White-label                                                | —                         | —                             | Remove badge      | Full white-label    | ✓                              |
-| SSO, SCIM, audit log, custom roles                         | —                         | —                             | —                 | Audit log (30 days) | ✓                              |
+| SSO, SCIM, audit log, custom roles                         | —                         | —                             | —                 | Audit log (planned) | Planned                        |
 | Support                                                    | Community (GitHub)        | Community                     | Email             | Priority email      | SLA                            |
 
 The full proposal is on the [pricing page](/pricing).
@@ -71,9 +72,15 @@ Nothing in Community calls into the commercial code to nag or degrade.
 
 ## Enterprise licence files
 
-In this release the only feature a licence unlocks is **white-label**: hiding "Powered by Pinwren" in the widget and
-the Pinwren credit in emails (your own name, logo and colour stay free in every edition). SSO, SCIM, audit log and the
-rest arrive in later releases.
+In this release a licence unlocks two features:
+
+- **White-label** (`white_label`): hides "Powered by Pinwren" in the widget and the Pinwren credit in emails. Your own
+  name, logo and colour stay free in every edition.
+- **Jira Cloud** (`jira`): two-way issue sync with Jira, like the free GitHub, GitLab and Linear sync. See
+  [Jira](/docs/integrations/jira).
+
+SSO, SCIM, audit log, custom roles, legal hold and the SIEM stream are planned: licences may already name them, and
+Settings › Licence lists them under **Coming soon** until they ship.
 
 An Enterprise licence is a single `.lic` text file: a JSON payload and an Ed25519 signature, each
 base64url-encoded and joined with a dot.
@@ -86,7 +93,7 @@ base64url-encoded and joined with a dot.
   "customer": "Acme GmbH",
   "email": "it@acme.example",
   "edition": "enterprise",
-  "features": ["white_label"],
+  "features": ["white_label", "jira"],
   "limits": { "seats": 250 },
   "instance": null,
   "issuedAt": "2026-11-01T00:00:00Z",

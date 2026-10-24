@@ -1,0 +1,234 @@
+# Deploy on your server
+
+<!-- Mirrors apps/www/content/docs/self-hosting/deploy.mdx (the website page); keep them in step. -->
+
+Put Pinwren on a VPS from start to finish — DNS, Docker Compose or a Portainer stack, nginx with a Let's Encrypt certificate, the first account, email, backups and upgrades.
+
+This page takes a fresh Linux server to a working Pinwren at `https://feedback.example.com`. Replace that name with
+your own everywhere below. The [getting-started walkthrough](https://pinwren.dev/docs/self-hosting/getting-started) covers the same
+first run in more detail, and every step links to its reference page.
+
+## What you need
+
+- **A server** with Docker and Docker Compose v2.24 or later. 1–2 vCPU and 1 GB of memory carry thousands of daily
+  widget visitors; see the [sizing guide](https://pinwren.dev/docs/self-hosting/scaling#sizing-guide).
+- **A domain name** you can add a DNS record to.
+- **An SMTP account** for email (any provider: Brevo, Postmark, Amazon SES, Mailgun, your own server). You can
+  add it after the install.
+
+## 1. Point a name at the server
+
+Add an `A` record (and `AAAA` for IPv6) for `feedback.example.com` with your server's public address. Behind
+Cloudflare, either use **DNS only** or keep the proxy and set `PINWREN_TRUST_PROXY=2` (Cloudflare plus nginx);
+see [client addresses](https://pinwren.dev/docs/self-hosting/reverse-proxy#client-addresses).
+
+## 2. Start Pinwren
+
+### Docker Compose
+
+```bash
+git clone https://github.com/Krithik-m-codes/pinwren.git && cd pinwren
+cp docker/.env.example docker/.env
+```
+
+Edit `docker/.env` and set at least these three values:
+
+```bash title="docker/.env"
+PINWREN_URL=https://feedback.example.com
+PINWREN_SECRET=          # openssl rand -base64 48
+POSTGRES_PASSWORD=       # openssl rand -hex 24
+```
+
+Then start it, using the published image or building from source:
+
+```bash
+# Published image (set PINWREN_IMAGE=ghcr.io/krithik-m-codes/pinwren:0.1.0 in docker/.env first)
+docker compose -f docker/compose.yml --env-file docker/.env up -d
+
+# …or build the image on the server from the checked-out source
+docker compose -f docker/compose.yml --env-file docker/.env up -d --build
+```
+
+### Portainer stack
+
+In Portainer open **Stacks › Add stack**, name it `pinwren` and paste this into the web editor. It is
+[`docker/compose.yml`](https://github.com/Krithik-m-codes/pinwren/blob/main/docker/compose.yml) with the published image and
+no build section, because a web-editor stack has no source folder to build from.
+
+```yaml title="pinwren stack"
+services:
+  pinwren:
+    image: ${PINWREN_IMAGE:-ghcr.io/krithik-m-codes/pinwren:0.1.0}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      PINWREN_URL: ${PINWREN_URL}
+      PINWREN_SECRET: ${PINWREN_SECRET}
+      DATABASE_URL: postgres://pinwren:${POSTGRES_PASSWORD}@db:5432/pinwren
+      PINWREN_TRUST_PROXY: ${PINWREN_TRUST_PROXY:-1}
+      PINWREN_WORKERS: ${PINWREN_WORKERS:-2}
+    volumes:
+      - pinwren-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pinwren
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: pinwren
+    volumes:
+      - pinwren-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pinwren"]
+      interval: 5s
+      retries: 10
+volumes:
+  pinwren-data:
+  pinwren-db:
+```
+
+Under **Environment variables** add `PINWREN_URL`, `PINWREN_SECRET` (48 random bytes, base64) and
+`POSTGRES_PASSWORD`, then **Deploy the stack**. Any other [variable](https://pinwren.dev/docs/self-hosting/environment) — `SMTP_*`,
+`S3_*`, `PINWREN_ADMIN_EMAILS` — goes in the same list and, for the app to see it, also into the
+`environment:` block of the `pinwren` service.
+
+To build from source instead, create the stack from **Repository** with
+`https://github.com/Krithik-m-codes/pinwren` and the compose path `docker/compose.yml`.
+
+Either way the app now answers on `127.0.0.1:3000` on the server and nowhere else, and it runs the database
+migrations on its own the first time it starts. Check it:
+
+```bash
+curl -s http://127.0.0.1:3000/api/health
+# {"ok":true,"version":"0.1.0"}
+```
+
+## 3. HTTPS with nginx and Let's Encrypt
+
+On Debian or Ubuntu:
+
+```bash
+sudo apt install nginx certbot python3-certbot-nginx
+```
+
+Create `/etc/nginx/conf.d/pinwren.conf` with a plain-HTTP server first, so certbot can prove the name is yours:
+
+```nginx title="/etc/nginx/conf.d/pinwren.conf"
+server {
+    listen 80;
+    server_name feedback.example.com;
+
+    # Screenshots, attachments and the session replay arrive as one JSON body.
+    client_max_body_size 48m;
+
+    proxy_http_version 1.1;
+    proxy_set_header Connection        "";
+    proxy_set_header Host              $host;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host  $host;
+
+    # Live updates (Server-Sent Events): no buffering, long reads.
+    location = /api/stream {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 20m;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+    }
+}
+```
+
+Then get the certificate. certbot adds the `listen 443 ssl` lines, the redirect from HTTP and the automatic renewal:
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d feedback.example.com
+```
+
+The full nginx example with brotli compression for the widget is under
+[Reverse proxy › nginx](https://pinwren.dev/docs/self-hosting/reverse-proxy#nginx). On a server that already runs **Traefik** or
+**Caddy**, use [its section](https://pinwren.dev/docs/self-hosting/reverse-proxy) instead: Caddy gets the certificate by itself,
+and Traefik attaches the app through labels.
+
+Once HTTPS works, you may set `PINWREN_ENFORCE_HTTPS=true` to redirect plain HTTP and send HSTS
+([details](https://pinwren.dev/docs/self-hosting/reverse-proxy#enforce-https)).
+
+## 4. Create the admin account
+
+Open `https://feedback.example.com`. **The first account created on a new server is its administrator**, with
+no setup token, so do this straight away: until then anyone who reaches the page could claim it. After the first
+account, sign-up is closed except for people you add or invite.
+
+The onboarding then creates your workspace and first project and opens its **Install** tab.
+
+## 5. Email
+
+Open **Settings › Email**, pick your provider under **Provider** to fill in the host and port (or type them),
+add your login, then **Send test email**:
+
+| Field        | Example (Brevo)                                                         |
+| ------------ | ----------------------------------------------------------------------- |
+| SMTP host    | `smtp-relay.brevo.com`                                                  |
+| Port         | `587` with **Require STARTTLS** — or `465` with **Use TLS** switched on |
+| Username     | the SMTP login your provider shows                                      |
+| Password     | the SMTP key (not your account password)                                |
+| From address | `Pinwren <feedback@example.com>`                                        |
+
+The from address must be one your provider lets you send as. Who gets which email is set under
+**Settings › Notifications** (General, Reporter, Email templates); every attempt is listed under **Settings ›
+Email › Recent deliveries**. More in [Email](https://pinwren.dev/docs/integrations/email).
+
+## 6. Add the widget
+
+Copy the snippet from the project's **Install** tab into your site, before `</body>`:
+
+```html
+<script src="https://feedback.example.com/widget.js" data-project="pk_…" async></script>
+```
+
+The tab switches from **Waiting** to **Connected** when your site loads it. Send a report from your site and
+watch it arrive in the inbox, the bell and your mailbox. If the badge stays on Waiting, the tab lists any site it
+refused: add that address to the project's allowed sites.
+
+## Backups
+
+Run from the folder with `docker/compose.yml` (on Portainer, use the container names it shows):
+
+```bash
+docker compose -f docker/compose.yml exec -T db \
+  pg_dump -U pinwren -d pinwren -Fc > "pinwren-$(date +%F).dump"
+docker compose -f docker/compose.yml cp pinwren:/data "./pinwren-data-$(date +%F)"
+```
+
+Copy both off the server, keep several days, and practise a restore once: see
+[Backups](https://pinwren.dev/docs/self-hosting/backups).
+
+## Upgrades
+
+Back up, then point at the new version and restart. Migrations run automatically when the new version starts.
+
+```bash title="docker/.env"
+PINWREN_IMAGE=ghcr.io/krithik-m-codes/pinwren:0.2.0
+```
+
+```bash
+docker compose -f docker/compose.yml --env-file docker/.env pull pinwren
+docker compose -f docker/compose.yml --env-file docker/.env up -d
+```
+
+On Portainer, change the `PINWREN_IMAGE` variable and choose **Update the stack** with **Re-pull image**. Admins
+see **Update available** in the account menu when a release is out. More in [Upgrades](https://pinwren.dev/docs/self-hosting/upgrades).
+
+## Sizing
+
+The image runs `PINWREN_WORKERS` Node processes (default `2`); set it to about the number of CPU cores the
+container gets. See [Scaling](https://pinwren.dev/docs/self-hosting/scaling) for measured throughput and for splitting web and
+background jobs.

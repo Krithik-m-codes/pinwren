@@ -20,7 +20,7 @@ const ROWS: { label: string; cells: Cell[] }[] = [
   { label: "GitHub / GitLab issue sync", cells: ["Two-way", true, true, true, "GitHub", true] },
   {
     label: "Jira, Linear and other trackers",
-    cells: ["Via webhooks", true, true, true, "Via webhooks", false],
+    cells: ["Linear; Jira (Enterprise)", true, true, true, "Via webhooks", false],
   },
   {
     label: "Price (approx.)",

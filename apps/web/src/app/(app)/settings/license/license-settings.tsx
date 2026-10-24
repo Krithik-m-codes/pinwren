@@ -47,6 +47,7 @@ const FEATURE_NAMES: Record<LicenseFeature, string> = {
 /** What an implemented entitlement does, next to its name. */
 const FEATURE_HINTS: Record<(typeof IMPLEMENTED_LICENSE_FEATURES)[number], string> = {
   white_label: "hide “Powered by Pinwren” in the widget and emails",
+  jira: "two-way Jira Cloud issue sync in each project's Issue trackers tab",
 };
 
 const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" });

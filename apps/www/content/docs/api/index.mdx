@@ -89,7 +89,11 @@ script or server. Use them for automation rather than replaying a browser sessio
         "A status (`open`, `in_progress`, `in_review`, `resolved`, `wont_fix`, `duplicate`), `active` (the first three) or `all`.",
       default: '"active"',
     },
-    kind: { type: '"comment" | "bug" | "idea" | "question"', description: "Only this kind." },
+    kind: {
+      type: '"question" | "idea" | "bug" | "comment"',
+      description:
+        "Only this kind. The dashboard and widget call them Question, Change (`idea`), Bug and Other (`comment`).",
+    },
     q: { type: "string", description: "Full-text search over title and text (≤ 200 characters)." },
     priority: { type: '"none" | "low" | "medium" | "high" | "urgent"', description: "Only this priority." },
     assigneeId: { type: "string", description: "Only items assigned to this user." },
@@ -99,6 +103,21 @@ script or server. Use them for automation rather than replaying a browser sessio
       type: "ISO 8601",
       description: "Only items created at or after this instant (with a time zone offset).",
     },
+    labelId: { type: "uuid", description: "Only items carrying this label." },
+    reviewLinkId: { type: "uuid", description: "Only items sent through this review link." },
+    reporter: { type: "string", description: "Reporter name or email contains this text." },
+    hasReplay: {
+      type: "boolean",
+      description: "Only items with (`true`) or without (`false`) a session replay.",
+    },
+    browser: { type: "string", description: "Browser name contains this text, e.g. `Safari`." },
+    trash: {
+      type: "boolean",
+      description:
+        "Deleted items (the trash) instead of live ones. Workspace Admins only, else `403 FORBIDDEN_ROLE`.",
+    },
+    sort: { type: '"created" | "updated" | "priority"', description: "Sort column.", default: '"created"' },
+    order: { type: '"asc" | "desc"', description: "Sort direction.", default: '"desc"' },
     limit: { type: "number", description: "Page size, 1–100.", default: "50" },
     cursor: { type: "string", description: "The `nextCursor` of the previous page." },
   }}
@@ -128,11 +147,13 @@ script or server. Use them for automation rather than replaying a browser sessio
       "commentCount": 2
     }
   ],
-  "nextCursor": "2026-11-02T16:05:44.000Z"
+  "nextCursor": "eyJ0IjoiMjAyNi0xMS0wMlQxNjowNTo0NC4wMDBaIiwiaWQiOiIwZjllMmE0YyJ9",
+  "total": 214
 }
 ```
 
-**Pagination**: when `nextCursor` is not `null`, pass it as `cursor` to get the next page.
+**Pagination**: when `nextCursor` is not `null`, pass it unchanged as `cursor` (with the same filters and sort) to
+get the next page. The cursor is opaque. `total` counts every match of the filters.
 
 ```bash
 curl -G https://feedback.example.com/api/v1/feedback \
@@ -175,6 +196,21 @@ curl -G https://feedback.example.com/api/v1/feedback \
       type: "uuid | null",
       description:
         "Move the item into a [review round](/docs/dashboard/review-rounds) of the same project (else `400 INVALID_ROUND`); `null` takes it out of its round.",
+    },
+    labelIds: {
+      type: "uuid[]",
+      description:
+        "Replaces the item's labels: up to 20 labels of the item's project (else `400 INVALID_LABEL`).",
+    },
+    dueAt: { type: "ISO 8601 | null", description: "Due date (with a time zone offset); `null` clears it." },
+    duplicateOfId: {
+      type: "uuid | null",
+      description:
+        'Links the item as a duplicate of another live item of the same project (else `400 INVALID_DUPLICATE`); `null` unlinks it. Send `status: "duplicate"` with it, as the dashboard does.',
+    },
+    kind: {
+      type: '"question" | "idea" | "bug" | "comment"',
+      description: "Changes the type (Question, Change, Bug, Other).",
     },
   }}
 />

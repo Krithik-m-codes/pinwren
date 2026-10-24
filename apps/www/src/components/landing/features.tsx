@@ -103,7 +103,19 @@ function InboxVisual() {
 }
 
 function RoutingVisual() {
-  const targets = ["Email", "Slack", "Discord", "Webhooks", "GitHub", "GitLab"];
+  const targets = [
+    "Email",
+    "Slack",
+    "Discord",
+    "Teams",
+    "Telegram",
+    "ntfy",
+    "Webhooks",
+    "GitHub",
+    "GitLab",
+    "Linear",
+    "Jira",
+  ];
   return (
     <div className="flex flex-wrap gap-1.5">
       {targets.map((t) => (
@@ -170,12 +182,13 @@ export function Features() {
             errors, failed requests and the browser come along.
           </Card>
           <Card icon={Inbox} title="A triage inbox that keeps up" visual={<InboxVisual />}>
-            List, board and page review with pins over the screenshot. Statuses, priorities, assignees, bulk
-            edits with undo and a shortcut for everything.
+            List, board and page review with pins over the screenshot. Statuses, priorities, assignees,
+            labels, due dates, duplicates, trash and export, bulk edits with undo and a shortcut for
+            everything.
           </Card>
           <Card icon={Workflow} title="Routes where your team works" visual={<RoutingVisual />}>
-            Signed webhooks with Slack and Discord formats and a delivery log, email, and two-way GitHub and
-            GitLab issue sync — including GitHub Enterprise and self-managed GitLab.
+            Email through your own SMTP, Slack, Discord, Teams, Telegram, ntfy and signed webhooks with a
+            delivery log, and two-way GitHub, GitLab and Linear issue sync (Jira with an Enterprise licence).
           </Card>
           <Card
             icon={Bot}
@@ -187,7 +200,7 @@ export function Features() {
             resolve it. Plus a REST API, typed SDK and CLI.
           </Card>
           <Card icon={Shield} title="Safe on your site">
-            Closed Shadow DOM, no global CSS or JS, every error caught. The core is about 26 KB gzip; the
+            Closed Shadow DOM, no global CSS or JS, every error caught. The core is about 33 KB gzip; the
             panel, report form, capture engine and each language load only when needed.
           </Card>
           <Card icon={EyeOff} title="Privacy built in">

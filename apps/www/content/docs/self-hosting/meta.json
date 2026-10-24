@@ -3,11 +3,13 @@
   "pages": [
     "index",
     "getting-started",
+    "deploy",
     "environment",
     "reverse-proxy",
     "storage",
     "backups",
     "upgrades",
-    "scaling"
+    "scaling",
+    "website"
   ]
 }

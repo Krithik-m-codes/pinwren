@@ -23,12 +23,12 @@ const A = ({
 export const FAQ: { q: string; a: ReactNode; text: string }[] = [
   {
     q: "Is it really free?",
-    text: "Yes. The self-hosted Community edition has every collection, triage and routing feature, for unlimited projects, seats and reports. Paid plans will cover organisation-scale needs (SSO, audit, white-label) and the hosted Cloud.",
+    text: "Yes. The self-hosted Community edition has every collection, triage and routing feature, for unlimited projects, seats and reports. An Enterprise licence adds white-label and Jira Cloud sync today, with SSO and audit log planned; a hosted Cloud is coming.",
     a: (
       <>
         Yes. The self-hosted Community edition has every collection, triage and routing feature — for
-        unlimited projects, seats and reports. Paid plans will cover organisation-scale needs (SSO, audit,
-        white-label) and the hosted Cloud. See <A href="/pricing">pricing</A>.
+        unlimited projects, seats and reports. An Enterprise licence adds white-label and Jira Cloud sync
+        today, with SSO and audit log planned; a hosted Cloud is coming. See <A href="/pricing">pricing</A>.
       </>
     ),
   },
@@ -46,10 +46,10 @@ export const FAQ: { q: string; a: ReactNode; text: string }[] = [
   },
   {
     q: "Will the widget slow my site down?",
-    text: "The core is about 26 KB gzip and runs in a closed Shadow DOM with no global CSS or JS. The side panel, report form, screenshot engine, replay recorder and each language are separate files loaded only when a visitor needs them.",
+    text: "The core is about 33 KB gzip and runs in a closed Shadow DOM with no global CSS or JS. The side panel, report form, screenshot engine, replay recorder and each language are separate files loaded only when a visitor needs them.",
     a: (
       <>
-        The core is about 26 KB gzip and runs in a closed Shadow DOM with no global CSS or JS. The side panel,
+        The core is about 33 KB gzip and runs in a closed Shadow DOM with no global CSS or JS. The side panel,
         report form, screenshot engine, replay recorder and each language are separate files, loaded only when
         a visitor needs them.
       </>

@@ -55,7 +55,7 @@ Then name your **workspace** and create the **first project** — usually one pr
 Both choices can be changed later under the project's **Privacy & data** tab.
 
 Want more admins? Add their emails to `PINWREN_ADMIN_EMAILS` in `docker/.env` and restart. Sign-up is closed
-to strangers after the first account; everyone else is added from **Settings › Members** (step 7).
+to strangers after the first account; everyone else is added from **Settings › Users** (step 7).
 
 ## 3. Set up email
 
@@ -122,7 +122,7 @@ when they are all done (or when you hide it).
 
 ## 7. Add your team
 
-**Settings › Members**:
+**Settings › Users**:
 
 - **Add user** creates the account directly (name, email, password, role); tell them their password.
 - **Invite** sends an email invitation instead.
