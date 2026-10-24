@@ -1,6 +1,5 @@
 import {
   brandAssetUpload,
-  EMAIL_TEMPLATE_KEYS,
   type EmailTemplateKey,
   emailTemplatePreview,
   emailTemplateTest,
@@ -16,6 +15,7 @@ import { templateOverride } from "../email/render";
 import { sendEmail } from "../email/send";
 import {
   allowedVariables,
+  ORG_TEMPLATE_KEYS,
   renderTemplate,
   sampleVariables,
   TEMPLATES,
@@ -29,7 +29,7 @@ import { emailBrand, getOrgBranding, saveBrandAsset, updateOrgBranding } from ".
 const TEST_SENDS_PER_HOUR = 10;
 
 const templateKey = (k: string): EmailTemplateKey => {
-  if (!(EMAIL_TEMPLATE_KEYS as readonly string[]).includes(k)) throw notFound("Template");
+  if (!(ORG_TEMPLATE_KEYS as readonly string[]).includes(k)) throw notFound("Template");
   return k as EmailTemplateKey;
 };
 
@@ -95,7 +95,7 @@ export const branding = new Hono<{ Variables: SessionVars }>()
   )
 
   .get("/email-templates", requireOrgAdmin, async (c) =>
-    c.json({ templates: await Promise.all(EMAIL_TEMPLATE_KEYS.map((k) => templateOut(c.var.orgId, k))) }),
+    c.json({ templates: await Promise.all(ORG_TEMPLATE_KEYS.map((k) => templateOut(c.var.orgId, k))) }),
   )
 
   .get("/email-templates/:key", requireOrgAdmin, async (c) =>

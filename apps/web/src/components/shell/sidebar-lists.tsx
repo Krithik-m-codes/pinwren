@@ -135,12 +135,13 @@ function ProjectsGroup() {
   const projects = useProjectsQuery(undefined);
   const params = useSearchParams();
   const pathname = usePathname();
-  const { canWrite } = useViewer();
+  // Creating projects is an Admin permission (projects.manage, wave-5 §3.7).
+  const { isAdmin } = useViewer();
   const current = pathname === "/inbox" ? params.get("project") : null;
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Projects</SidebarGroupLabel>
-      {canWrite && (
+      {isAdmin && (
         <SidebarGroupAction title="New project" render={<Link href="/projects?new=1" />}>
           <Plus />
         </SidebarGroupAction>

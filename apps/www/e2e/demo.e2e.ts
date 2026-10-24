@@ -11,20 +11,21 @@ async function openDemo(page: Page) {
   await expect(launcher(page)).toBeVisible({ timeout: 20_000 });
 }
 
-test("seeded region comments are pinned on the sample page", async ({ page }) => {
+test("seeded feedback is pinned on the sample page, resolved items as checks", async ({ page }) => {
   const errors = collectErrors(page);
   await openDemo(page);
-  await expect(pins(page)).toHaveCount(4);
+  await expect(pins(page)).toHaveCount(6);
+  await expect(page.locator("pinwren-root .pin.resolved")).toHaveCount(2);
   expect(errors).toEqual([]);
 });
 
 test("drag a region, send a comment, find it in the demo inbox", async ({ page }) => {
   await openDemo(page);
-  await expect(pins(page)).toHaveCount(4);
+  await expect(pins(page)).toHaveCount(6);
   await launcher(page).click();
-  await page.getByRole("menuitem", { name: /Add a comment/ }).click();
+  await page.getByRole("menuitem", { name: /Create new annotation/ }).click();
 
-  const target = page.locator('[data-pinwren-anchor="demo-hero-image"]');
+  const target = page.locator('[data-pinwren-anchor="demo-services"]');
   await target.scrollIntoViewIfNeeded();
   const b = await target.boundingBox();
   if (!b) throw new Error("no box");
@@ -44,7 +45,7 @@ test("drag a region, send a comment, find it in the demo inbox", async ({ page }
   if (await name.isVisible()) await name.fill("Playwright");
   await composer.getByRole("button", { name: "Send" }).click();
   await expect(page.locator("pinwren-root .toast")).toHaveText(/#\d+ sent/);
-  await expect(pins(page)).toHaveCount(5);
+  await expect(pins(page)).toHaveCount(7);
 
   await page.getByRole("link", { name: "Open your inbox" }).click();
   await expect(page).toHaveURL(/\/demo\/inbox/);
@@ -83,6 +84,7 @@ test("each visitor gets a private sandbox, and reset starts over", async ({ brow
   expect(res.status()).toBe(201);
 
   await pa.goto("/demo/inbox");
+  // The inbox opens on active items: the 4 open seeds (2 more are resolved), plus A's report.
   await expect(feedbackRows(pa)).toHaveCount(5);
   await pb.goto("/demo/inbox");
   await expect(feedbackRows(pb)).toHaveCount(4);

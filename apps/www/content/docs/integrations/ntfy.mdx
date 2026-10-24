@@ -1,0 +1,52 @@
+---
+title: ntfy
+description: Push new feedback and changes to phones and desktops through ntfy.sh or a self-hosted ntfy server.
+---
+
+[ntfy](https://ntfy.sh) turns an HTTP request into a push notification on every phone or browser subscribed to a
+topic. It is a good fit for on-call alerts on new bug reports, and it can run on your own server next to Pinwren.
+
+## Set it up
+
+<Steps>
+<Step>
+
+Pick a **topic**. On ntfy.sh anyone who knows a topic name can read it, so choose a long, unguessable name
+(`pinwren-acme-7f3k2q`) — or use a protected topic on your own server with an **access token** (`tk_…`).
+
+</Step>
+<Step>
+
+In Pinwren, open **Settings › Integrations › Add webhook**, choose **ntfy** and enter the **topic URL**
+(`https://ntfy.sh/pinwren-acme-7f3k2q`, or `https://ntfy.example.com/bugs` on your own server). For a protected
+topic add the **access token** — a `tk_…` token, or `user:password`. Pick the events and projects.
+
+</Step>
+<Step>
+
+Subscribe to the topic in the ntfy app or web app, open the webhook in Pinwren and press **Send test event**.
+
+</Step>
+</Steps>
+
+## What a notification looks like
+
+| ntfy field | From Pinwren                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------ |
+| Title      | `New feedback · Marketing site #142` (with the new value for status and priority changes)  |
+| Message    | The title and text of the report (or comment), then kind, status, priority, reporter, page |
+| Priority   | urgent → 5 (max), high → 4, medium and none → 3, low → 2                                   |
+| Tags       | `bug` for bug reports, `speech_balloon` for comments                                       |
+| Click      | Opens the item in the dashboard (sign-in required)                                         |
+
+Pinwren publishes as JSON to the server's root (`POST https://ntfy.sh/` with `topic` in the body), so titles may
+contain any character. The message is plain text (`markdown: false`), so nothing in a report is interpreted.
+
+## Good to know
+
+- The topic URL and the access token are stored encrypted and shown masked. Paste a new URL in the webhook's
+  **Topic URL** row, replace the token in **Access token**, or **Remove** it for a public topic.
+- `tk_…` tokens are sent as `Authorization: Bearer`; `user:password` as Basic auth.
+- A self-hosted ntfy on a private network needs
+  [`PINWREN_OUTBOUND_ALLOWLIST`](/docs/self-hosting/environment#outbound-requests) (e.g. `ntfy.internal`).
+- Deliveries retry and are logged like [webhooks](/docs/integrations/webhooks#retries).

@@ -5,9 +5,12 @@ import {
   ellipseOf,
   History,
   isTiny,
+  nextStep,
   type Shape,
   sanitizeShapes,
+  stepRadius,
   strokeWidth,
+  vectorLayer,
   TOOL_KEYS,
   textSize,
 } from "./shapes";
@@ -68,10 +71,71 @@ describe("other shapes", () => {
       o: "ellipse",
       a: "arrow",
       p: "pen",
+      h: "highlighter",
       t: "text",
+      n: "step",
       b: "blur",
       c: "crop",
     });
+  });
+});
+
+describe("highlighter and step markers (wave 5)", () => {
+  it("numbers steps one past the highest and never calls them tiny", () => {
+    const step = (n: number): Shape => ({ tool: "step", color: "#e5484d", size: "m", at: { x: 5, y: 5 }, n });
+    expect(nextStep([])).toBe(1);
+    expect(nextStep([step(1), step(4)])).toBe(5);
+    expect(isTiny(step(1))).toBe(false);
+    expect(stepRadius(2400, "l")).toBeGreaterThan(stepRadius(2400, "s"));
+  });
+  it("keeps highlighter strokes and steps from a draft, and drops malformed ones", () => {
+    const ok = sanitizeShapes([
+      {
+        tool: "highlighter",
+        color: "#f5a524",
+        size: "m",
+        points: [
+          { x: 1, y: 1 },
+          { x: 2, y: 2 },
+        ],
+      },
+      { tool: "step", color: "#0090ff", size: "s", at: { x: 1, y: 1 }, n: 3 },
+      { tool: "step", color: "#0090ff", size: "s", at: { x: 1, y: 1 }, n: 0 },
+      { tool: "step", color: "#0090ff", size: "s", at: { x: 1, y: 1 }, n: 2.5 },
+    ]);
+    expect(ok.map((s) => s.tool)).toEqual(["highlighter", "step"]);
+  });
+});
+
+describe("vectorLayer (wave 5)", () => {
+  const shapes: Shape[] = [
+    { tool: "rect", color: "#e5484d", size: "m", a: { x: 110, y: 60 }, b: { x: 210, y: 160 } },
+    { tool: "blur", color: "#e5484d", size: "m", a: { x: 0, y: 0 }, b: { x: 50, y: 50 } },
+    { tool: "crop", color: "#e5484d", size: "m", a: { x: 100, y: 50 }, b: { x: 500, y: 450 } },
+    { tool: "step", color: "#0090ff", size: "m", at: { x: 300, y: 250 }, n: 1 },
+    { tool: "text", color: "#18181b", size: "m", at: { x: 120, y: 70 }, text: "Here", px: 20 },
+  ];
+  it("leaves out redactions and the crop, and moves the rest into the exported image", () => {
+    const layer = vectorLayer(shapes, { x: 100, y: 50, w: 400, h: 400 }, 200, 200, 0.5);
+    expect(layer).toEqual({
+      v: 1,
+      width: 200,
+      height: 200,
+      shapes: [
+        { tool: "rect", color: "#e5484d", size: "m", a: { x: 5, y: 5 }, b: { x: 55, y: 55 } },
+        { tool: "step", color: "#0090ff", size: "m", at: { x: 100, y: 100 }, n: 1 },
+        { tool: "text", color: "#18181b", size: "m", at: { x: 10, y: 10 }, text: "Here", px: 10 },
+      ],
+    });
+  });
+  it("is null when only redactions are drawn", () => {
+    expect(vectorLayer(shapes.slice(1, 3), null, 800, 600)).toBeNull();
+  });
+  it("thins out very long strokes to the server's point limit", () => {
+    const points = Array.from({ length: 5000 }, (_, i) => ({ x: i, y: i }));
+    const layer = vectorLayer([{ tool: "pen", color: "#e5484d", size: "m", points }], null, 6000, 6000);
+    const pen = layer?.shapes[0];
+    expect(pen && "points" in pen ? pen.points.length : 0).toBeLessThanOrEqual(2000);
   });
 });
 

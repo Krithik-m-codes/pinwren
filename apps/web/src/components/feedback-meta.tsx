@@ -1,15 +1,15 @@
-import type { FeedbackKind, FeedbackStatus, Priority } from "@pinwren/core";
+import { type FeedbackKind, type FeedbackStatus, KIND_LABELS, type Priority } from "@pinwren/core";
 import {
   Bug,
   CircleCheck,
   CircleDot,
   CircleSlash,
   Copy,
+  Ellipsis,
   Eye,
   HelpCircle,
-  Lightbulb,
   type LucideIcon,
-  MessageSquare,
+  PencilLine,
   Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,11 +23,12 @@ export const STATUS_META: Record<FeedbackStatus, { label: string; icon: LucideIc
   duplicate: { label: "Duplicate", icon: Copy, className: "text-muted-foreground" },
 };
 
+// Labels come from core so the dashboard reads like the widget: `idea` is "Change", `comment` is "Other".
 export const KIND_META: Record<FeedbackKind, { label: string; icon: LucideIcon }> = {
-  comment: { label: "Comment", icon: MessageSquare },
-  bug: { label: "Bug", icon: Bug },
-  idea: { label: "Idea", icon: Lightbulb },
-  question: { label: "Question", icon: HelpCircle },
+  comment: { label: KIND_LABELS.comment, icon: Ellipsis },
+  bug: { label: KIND_LABELS.bug, icon: Bug },
+  idea: { label: KIND_LABELS.idea, icon: PencilLine },
+  question: { label: KIND_LABELS.question, icon: HelpCircle },
 };
 
 export const PRIORITY_META: Record<Priority, { label: string; className: string; bars: number }> = {

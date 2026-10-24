@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderKanban, Inbox, Search, Settings } from "lucide-react";
+import { FolderKanban, Inbox, Search, Settings, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
@@ -44,6 +44,18 @@ export function NavLinks({ pathname = null }: { pathname?: string | null }) {
             <Icon />
             <span>{label}</span>
           </SidebarMenuButton>
+          {href === "/inbox" && (
+            // Items assigned to the signed-in member, every project (`g m` anywhere).
+            <SidebarMenuButton
+              render={<Link href="/inbox?assignee=me" />}
+              className="mt-0.5 text-muted-foreground"
+              aria-keyshortcuts="g m"
+              data-testid="my-work"
+            >
+              <UserRound />
+              <span>My work</span>
+            </SidebarMenuButton>
+          )}
         </SidebarMenuItem>
       ))}
     </SidebarMenu>

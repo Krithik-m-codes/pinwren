@@ -1,28 +1,56 @@
 "use client";
 
-import { isClosedStatus } from "@pinwren/core";
-import { ArrowLeft, ExternalLink, FileStack, ImageOff, Layers, MessageSquare, Settings } from "lucide-react";
+import { IGNORED_QUERY_PARAMS, isClosedStatus, roleCan, safeHref } from "@pinwren/core";
+import {
+  ArrowLeft,
+  Crosshair,
+  ExternalLink,
+  FileStack,
+  ImageOff,
+  Layers,
+  Loader2,
+  MessageSquare,
+  Plus,
+  Settings,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
+import { toast } from "sonner";
 import { ButtonLink } from "@/components/button-link";
-import { CaptureView, type Marker } from "@/components/capture-view";
+import { AnnotationsToggle, CaptureView, type Marker } from "@/components/capture-view";
 import { KIND_META, pathOf, StatusIcon, timeAgo } from "@/components/feedback-meta";
 import { PageHeader } from "@/components/page-header";
 import { Segmented } from "@/components/segmented";
 import { EmptyState, ErrorState } from "@/components/states";
 import { Thumb } from "@/components/thumb";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { assetUrl, type FeedbackDetail, type FeedbackRow, screenshotOf } from "@/lib/api";
 import {
+  errorMessage,
   useFeedbackDetailsQuery,
+  usePageLinkMutation,
   useProjectFeedbackQuery,
   useProjectQuery,
-  useThumbnailQuery,
+  useUpdateProjectMutation,
 } from "@/lib/store/api";
+import { useRegroupPagesMutation, useRepinLinkMutation } from "@/lib/store/api/page-review";
+import { useViewer } from "@/lib/viewer";
 import { type Capture, captureOf, isRegion, placeOn } from "@/lib/geometry";
 import { cn } from "@/lib/utils";
 import { FeedbackDetailPanel } from "../../../inbox/feedback-detail";
@@ -93,6 +121,9 @@ export function PagesView({ params }: { params: Promise<{ id: string }> }) {
           </span>
         }
       >
+        {!url && project.data && (
+          <UrlGrouping projectId={id} ignored={project.data.project.widgetConfig.ignoredQueryParams} />
+        )}
         {!url && (
           <ButtonLink href={`/projects/${id}`} size="sm" variant="ghost">
             <Settings /> <span className="hidden sm:inline">Settings</span>
@@ -181,7 +212,8 @@ function PageGrid({
 }
 
 function PageCard({ group: g, projectId }: { group: PageGroup; projectId: string }) {
-  const thumb = useThumbnailQuery(g.thumbItem?.id ?? "", { skip: !g.thumbItem });
+  // The list rows carry the thumbnail's asset id: no detail request per card.
+  const thumb = g.thumbItem?.screenshotAssetId ?? null;
   return (
     <li>
       <Link
@@ -190,10 +222,8 @@ function PageCard({ group: g, projectId }: { group: PageGroup; projectId: string
       >
         <Card className="gap-0 overflow-hidden py-0 transition-colors group-hover:border-foreground/20">
           <div className="relative aspect-[16/10] overflow-hidden border-b bg-muted">
-            {g.thumbItem && thumb.data ? (
-              <Thumb src={assetUrl(thumb.data)} />
-            ) : g.thumbItem && thumb.isLoading ? (
-              <Skeleton className="size-full rounded-none" />
+            {thumb ? (
+              <Thumb src={assetUrl(thumb)} />
             ) : (
               <div className="grid size-full place-items-center text-muted-foreground">
                 <ImageOff className="size-5" />
@@ -252,15 +282,15 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
   const reviewed: Reviewed[] = rows.map((row) => ({ row, detail: byId.get(row.id) }));
   const loading = details.isLoading;
 
-  // Captures that carry geometry: a screenshot plus the anchor taken with it.
-  const captures = reviewed.filter(
-    (r) => r.detail && screenshotOf(r.detail.assets) && r.detail.feedback.anchor,
-  );
+  // Captures that carry geometry: every screenshot taken with a bug report or comment (wave-5 §2), plus
+  // older ones whose anchor recorded the viewport.
+  const captures = reviewed.filter((r) => r.detail && geometryOf(r.detail));
   const [captureId, setCaptureId] = useState<string | null>(null);
+  const [showMarks, setShowMarks] = useState(true);
   // Default: the capture on which the most threads can be placed; newest wins a tie.
   const best = captures.reduce<{ c: Reviewed | undefined; n: number }>(
     (acc, c) => {
-      const cap = c.detail?.feedback.anchor ? captureOf(c.detail.feedback.anchor) : null;
+      const cap = c.detail ? geometryOf(c.detail) : null;
       const n = cap
         ? reviewed.filter((r) => r.detail?.feedback.anchor && placeOn(r.detail.feedback.anchor, cap)).length
         : 0;
@@ -270,9 +300,7 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
   ).c;
   const base = captures.find((c) => c.row.id === captureId) ?? best;
   const baseShot = base?.detail ? screenshotOf(base.detail.assets) : undefined;
-  const baseCapture: Capture | null = base?.detail?.feedback.anchor
-    ? captureOf(base.detail.feedback.anchor)
-    : null;
+  const baseCapture: Capture | null = base?.detail ? geometryOf(base.detail) : null;
 
   const visible = reviewed.filter(
     (r) => show === "all" || !isClosedStatus(r.detail?.feedback.status ?? r.row.status),
@@ -334,6 +362,8 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
               alt={`Capture of ${pathOf(group.url)} from #${base.row.number}`}
               markers={markers}
               className="shadow-sm"
+              annotations={baseShot.annotations}
+              showAnnotations={showMarks}
             />
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
@@ -347,6 +377,13 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
               </span>
               <span>
                 {markers.length} placed{offCapture > 0 && ` · ${offCapture} not on this capture`}
+              </span>
+              <span className="ml-auto">
+                <AnnotationsToggle
+                  layer={baseShot.annotations}
+                  pressed={showMarks}
+                  onPressedChange={setShowMarks}
+                />
               </span>
             </p>
             {captures.length > 1 && (
@@ -451,7 +488,8 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
                       </span>
                       {!placed && r.detail && (
                         <Badge variant="outline" className="mt-1.5 font-normal text-muted-foreground">
-                          {r.detail.feedback.anchor ? "Not on this capture" : "No position"}
+                          {/* No anchor: a bug report or a comment on the whole page (wave-5 §3.3). */}
+                          {r.detail.feedback.anchor ? "Not on this capture" : "Whole page"}
                         </Badge>
                       )}
                     </span>
@@ -474,10 +512,15 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
             {selected && (
               <>
                 <FeedbackDetailPanel key={selected} id={selected} onClose={() => open(null)} />
-                <div className="px-5 pb-5">
+                <div className="flex flex-wrap gap-2 px-5 pb-5">
                   <ButtonLink href={`/inbox?status=all&item=${selected}`} size="sm" variant="outline">
                     Open in inbox
                   </ButtonLink>
+                  <OnPageActions
+                    id={selected}
+                    anchored={!!byId.get(selected)?.feedback.anchor}
+                    hasPage={!!byId.get(selected)?.feedback.pageUrl}
+                  />
                 </div>
               </>
             )}
@@ -485,5 +528,211 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+/**
+ * Where a capture was taken (wave-5 §2): the screenshot's own geometry when the widget sent it (bug reports,
+ * "Screenshot with every comment"), else the viewport the item's anchor recorded (older items). An element
+ * capture shows no viewport, so nothing can be placed on it.
+ */
+function geometryOf(d: FeedbackDetail): Capture | null {
+  const shot = screenshotOf(d.assets);
+  if (!shot) return null;
+  const g = shot.capture;
+  if (g) return g.mode === "element" ? null : { vw: g.vw, vh: g.vh, scrollY: g.scrollY };
+  return d.feedback.anchor ? captureOf(d.feedback.anchor) : null;
+}
+
+/**
+ * "Open on page" (a signed link, so private pins open too) and, for Admins and Editors, "Re-pin on page": the
+ * widget opens in re-pin mode and the next click moves the pin (F-031, wave-5 §3.3).
+ */
+function OnPageActions({ id, anchored, hasPage }: { id: string; anchored: boolean; hasPage: boolean }) {
+  const { me } = useViewer();
+  const [pageLink, linking] = usePageLinkMutation();
+  const [repinLink, repinning] = useRepinLinkMutation();
+  if (!hasPage) return null;
+  const canRepin = !!me && roleCan(me.role, "feedback.update");
+  const go = (make: () => Promise<{ url: string }>, what: string) => {
+    // Open the tab inside the click so the browser doesn't block it, then point it at the link.
+    const tab = window.open("about:blank", "_blank");
+    if (tab) tab.opener = null;
+    make()
+      .then(({ url }) => {
+        const safe = safeHref(url);
+        if (!safe) throw new Error("The page address isn't a web link");
+        if (tab) tab.location.href = safe;
+        else window.open(safe, "_blank", "noopener");
+      })
+      .catch((e: unknown) => {
+        tab?.close();
+        toast.error(`Couldn't ${what}`, { description: errorMessage(e) });
+      });
+  };
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={linking.isLoading}
+        onClick={() => go(() => pageLink(id).unwrap(), "open the page")}
+        data-testid="review-open-on-page"
+      >
+        {linking.isLoading ? <Loader2 className="animate-spin" /> : <ExternalLink />} Open on page
+      </Button>
+      {canRepin && anchored && (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={repinning.isLoading}
+          onClick={() => go(() => repinLink(id).unwrap(), "start re-pinning")}
+          title="Opens the page with the widget in re-pin mode: click where this item belongs"
+          data-testid="review-repin"
+        >
+          {repinning.isLoading ? <Loader2 className="animate-spin" /> : <Crosshair />} Re-pin on page
+        </Button>
+      )}
+    </>
+  );
+}
+
+const PARAM = /^[A-Za-z0-9_.\-[\]]{1,63}\*?$/;
+
+/**
+ * Page Review › URL grouping (Admins): query parameters that don't identify a page on this site, on top of the
+ * built-in trackers. Saving re-groups the project's existing pages at once.
+ */
+function UrlGrouping({ projectId, ignored }: { projectId: string; ignored: string[] }) {
+  const { me } = useViewer();
+  const [open, setOpen] = useState(false);
+  const [list, setList] = useState<string[]>(ignored);
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [update, updating] = useUpdateProjectMutation();
+  const [regroup, regrouping] = useRegroupPagesMutation();
+  if (!me || !roleCan(me.role, "projects.manage")) return null;
+  const busy = updating.isLoading || regrouping.isLoading;
+
+  const add = () => {
+    const v = draft.trim();
+    if (!v) return;
+    if (!PARAM.test(v)) {
+      setError("Use a parameter name, optionally ending in * (for example sid or hsa_*)");
+      return;
+    }
+    if (list.length >= 30) {
+      setError("At most 30 parameters");
+      return;
+    }
+    if (!list.includes(v)) setList([...list, v]);
+    setDraft("");
+    setError(null);
+  };
+  const save = async () => {
+    try {
+      await update({ id: projectId, patch: { widgetConfig: { ignoredQueryParams: list } } }).unwrap();
+      const { merged } = await regroup(projectId).unwrap();
+      toast.success(merged ? `Saved · ${merged} page${merged === 1 ? "" : "s"} re-grouped` : "Saved");
+      setOpen(false);
+    } catch (e) {
+      toast.error("Not saved", { description: errorMessage(e) });
+    }
+  };
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => {
+          setList(ignored);
+          setDraft("");
+          setError(null);
+          setOpen(true);
+        }}
+        data-testid="url-grouping"
+      >
+        <SlidersHorizontal /> <span className="hidden sm:inline">URL grouping</span>
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>URL grouping</DialogTitle>
+            <DialogDescription>
+              Pages that differ only in these query parameters count as one page, so their pins and reviews
+              stay together. Campaign and tracking parameters (
+              {IGNORED_QUERY_PARAMS.filter((p) => !p.startsWith("pin") && p !== "pwt").join(", ")}, utm_*) and
+              a trailing slash are always ignored.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            {list.length > 0 ? (
+              <ul className="flex flex-wrap gap-2" aria-label="Ignored parameters">
+                {list.map((p) => (
+                  <li key={p}>
+                    <Badge variant="secondary" className="h-6 gap-1 pr-1 font-mono">
+                      {p}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${p}`}
+                        className="rounded p-0.5 hover:bg-foreground/10"
+                        onClick={() => setList(list.filter((x) => x !== p))}
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No extra parameters: only the built-in ones are ignored.
+              </p>
+            )}
+            <form
+              className="grid gap-1.5"
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                add();
+              }}
+            >
+              <div className="flex gap-2">
+                <Input
+                  id="ignored-param"
+                  value={draft}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder="sessionid or ab_*"
+                  aria-label="Add a parameter"
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? "ignored-param-error" : undefined}
+                  className="font-mono"
+                />
+                <Button type="submit" variant="outline" disabled={!draft.trim()}>
+                  <Plus /> Add
+                </Button>
+              </div>
+              {error && (
+                <p id="ignored-param-error" className="text-xs text-destructive">
+                  {error}
+                </p>
+              )}
+            </form>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button onClick={() => void save()} disabled={busy} data-testid="url-grouping-save">
+              {busy && <Loader2 className="animate-spin" />} Save and re-group
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

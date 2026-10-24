@@ -85,6 +85,7 @@ export const TAG_TYPES = [
   "License",
   "Round",
   "View",
+  "Label",
 ] as const;
 export type TagType = (typeof TAG_TYPES)[number];
 

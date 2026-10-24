@@ -7,7 +7,15 @@ import { publish } from "./bus";
 // or failing broadcast never delays or fails the request.
 
 export async function publishDomainEvent(e: Omit<DomainEvent, "at">): Promise<void> {
-  if (e.type !== "feedback.created" && e.type !== "feedback.updated" && e.type !== "comment.created") return;
+  if (
+    e.type !== "feedback.created" &&
+    e.type !== "feedback.updated" &&
+    e.type !== "comment.created" &&
+    e.type !== "comment.updated" &&
+    e.type !== "comment.deleted"
+  ) {
+    return;
+  }
   const db = getDb();
   const [f] = await db
     .select({
@@ -42,6 +50,15 @@ export async function publishDomainEvent(e: Omit<DomainEvent, "at">): Promise<vo
     return;
   }
   if (!e.commentId) return;
+  if (e.type === "comment.updated" || e.type === "comment.deleted") {
+    // Open details refetch the thread; a deleted comment's row is gone, so only ids travel.
+    await publish({
+      ...base,
+      event: e.type,
+      data: { id: e.commentId, feedbackId: f.id, projectId: f.projectId },
+    });
+    return;
+  }
   const [cm] = await db
     .select({
       id: comment.id,
@@ -66,7 +83,36 @@ export async function publishDomainEvent(e: Omit<DomainEvent, "at">): Promise<vo
   });
 }
 
-/** `feedback.deleted` has no domain event (nothing is notified), so routes call this directly. */
+/**
+ * The stream half of a delete. The `feedback.deleted` domain event fans out to notifications and webhooks
+ * through the queue; the stream event goes out here at once.
+ */
 export function publishDeleted(orgId: string, projectId: string, id: string): void {
   void publish({ t: "e", orgId, projectId, event: "feedback.deleted", data: { id, projectId } });
+}
+
+/** A restored item arrives in open inboxes as if it were new. */
+export function publishRestored(
+  orgId: string,
+  f: Pick<
+    typeof feedback.$inferSelect,
+    "id" | "projectId" | "number" | "kind" | "status" | "priority" | "title" | "createdAt"
+  >,
+): void {
+  void publish({
+    t: "e",
+    orgId,
+    projectId: f.projectId,
+    event: "feedback.created",
+    data: {
+      id: f.id,
+      projectId: f.projectId,
+      number: f.number,
+      kind: f.kind,
+      status: f.status,
+      priority: f.priority,
+      title: f.title,
+      createdAt: f.createdAt.toISOString(),
+    },
+  });
 }

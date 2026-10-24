@@ -1,17 +1,30 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { interceptWidgetFetch, LOCAL_BASE, SERVER_BASE } from "@/components/demo/playground/intercept";
+import { DEMO_IDENTITY, type PlaygroundSettings } from "@/components/demo/playground/settings";
 
-// Starts the real widget (built from packages/widget and served from /demo-api/) against the in-memory demo
-// API, with a project key that is this visitor's sandbox. The key lives in a cookie so /demo/inbox can show
-// the same sandbox; the widget itself never sends cookies.
+// Starts the real widget (built from packages/widget and served from /demo-api/) on the sample page, with a
+// project key that is this visitor's sandbox. The key lives in a cookie so /demo/inbox can show the same
+// sandbox; the widget itself never sends cookies. Every playground change takes the widget down and starts
+// it again with the new options, as a host page would after changing its embed.
 
 export const DEMO_COOKIE = "pinwren_demo";
 const SCRIPT_ID = "pinwren-demo-widget";
 
+type InitOptions = {
+  projectKey: string;
+  endpoint: string;
+  forceShow: boolean;
+  accent: string;
+  locale: string;
+  theme: PlaygroundSettings["theme"];
+};
 type PinwrenGlobal = {
-  init?: (o: { projectKey: string; endpoint: string; forceShow?: boolean }) => void;
+  init?: (o: InitOptions) => void;
+  identify?: (user: typeof DEMO_IDENTITY | null) => void;
   destroy?: () => void;
+  q?: unknown[][];
 };
 
 export function demoKey(): string {
@@ -31,30 +44,62 @@ export function demoKey(): string {
   return key;
 }
 
-export function DemoWidget() {
+const win = () => window as unknown as { Pinwren?: PinwrenGlobal };
+
+/** (Re)start the widget with the playground's options; queued if widget.js hasn't run yet. */
+function start(s: PlaygroundSettings) {
+  const opts: InitOptions = {
+    projectKey: demoKey(),
+    endpoint: `${location.origin}${s.mode === "local" ? LOCAL_BASE : SERVER_BASE}`,
+    forceShow: true,
+    accent: s.accent,
+    locale: s.locale,
+    theme: s.theme,
+  };
+  const identity = s.identity ? DEMO_IDENTITY : null;
+  const w = win();
+  if (typeof w.Pinwren?.init === "function") {
+    w.Pinwren.destroy?.();
+    w.Pinwren.identify?.(identity);
+    w.Pinwren.init(opts);
+    return;
+  }
+  // Queue the calls; widget.js replays `Pinwren.q` when it runs (blueprint 05 §8).
+  w.Pinwren = {
+    q: [
+      ["identify", identity],
+      ["init", opts],
+    ],
+  };
+  if (!document.getElementById(SCRIPT_ID)) {
+    const script = document.createElement("script");
+    script.id = SCRIPT_ID;
+    script.src = `${SERVER_BASE}/widget.js`;
+    script.async = true;
+    document.body.append(script);
+  }
+}
+
+export function DemoWidget({ settings }: { settings: PlaygroundSettings }) {
+  const current = useRef(settings);
+
+  // The fetch wrapper goes in before widget.js runs and comes out after the widget is down.
   useEffect(() => {
-    const opts = { projectKey: demoKey(), endpoint: `${location.origin}/demo-api`, forceShow: true };
-    const w = window as unknown as { Pinwren?: PinwrenGlobal & { q?: unknown[] } };
-    if (typeof w.Pinwren?.init === "function") {
-      // Loaded on an earlier visit to this page in the same session (client-side navigation).
-      w.Pinwren.init(opts);
-    } else {
-      // Queue the call; widget.js replays `Pinwren.q` when it runs (blueprint 05 §8).
-      w.Pinwren = { q: [["init", opts]] };
-      if (!document.getElementById(SCRIPT_ID)) {
-        const s = document.createElement("script");
-        s.id = SCRIPT_ID;
-        s.src = "/demo-api/widget.js";
-        s.async = true;
-        document.body.append(s);
-      }
-    }
-    // Leaving the demo page (e.g. for the inbox) takes the widget down completely — or, if it hasn't loaded
-    // yet, cancels the queued start.
+    const undo = interceptWidgetFetch({ settings: () => current.current });
     return () => {
+      // Leaving the demo page (e.g. for the inbox) takes the widget down completely — or, if it hasn't
+      // loaded yet, cancels the queued start.
+      const w = win();
       if (typeof w.Pinwren?.destroy === "function") w.Pinwren.destroy();
       else if (w.Pinwren?.q) w.Pinwren.q.length = 0;
+      undo();
     };
   }, []);
+
+  useEffect(() => {
+    current.current = settings;
+    start(settings);
+  }, [settings]);
+
   return null;
 }

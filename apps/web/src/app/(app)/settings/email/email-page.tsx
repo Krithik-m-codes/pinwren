@@ -1,37 +1,44 @@
 "use client";
 
-import { Mail } from "lucide-react";
+import { Mail, Server } from "lucide-react";
+import { ButtonLink } from "@/components/button-link";
 import { EmptyState } from "@/components/states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useMeQuery } from "@/lib/store/api";
 import { isAdminRole } from "@/lib/api";
+import { useMeQuery } from "@/lib/store/api";
 import { EmailSettingsForm } from "./email-settings";
-import { EmailTemplates } from "./email-templates";
 
-/** SMTP belongs to the instance admin; the wording of this workspace's emails to its admins. */
+/**
+ * Settings › Email: SMTP and the delivery log, for the instance admin (the first account, BugPin model).
+ * The wording of the emails lives in Settings › Notifications › Email templates; a workspace Admin who
+ * doesn't run the server is pointed there.
+ */
 export function EmailPageContent() {
   const me = useMeQuery(undefined);
   if (me.isLoading) return <Skeleton className="h-96 rounded-xl" />;
-  const instanceAdmin = !!me.data?.instanceAdmin;
+  if (me.data?.instanceAdmin) return <EmailSettingsForm />;
   const orgAdmin = isAdminRole(me.data?.role);
-  if (!instanceAdmin && !orgAdmin) {
-    return (
-      <Card>
-        <CardContent>
-          <EmptyState
-            icon={Mail}
-            title="Admins only"
-            description="Workspace admins edit email wording; the server's admin sets up delivery."
-          />
-        </CardContent>
-      </Card>
-    );
-  }
   return (
-    <div className="grid gap-4">
-      {instanceAdmin && <EmailSettingsForm />}
-      {orgAdmin && <EmailTemplates />}
-    </div>
+    <Card>
+      <CardContent>
+        <EmptyState
+          icon={orgAdmin ? Server : Mail}
+          title="Email delivery is set up by the server's admin"
+          description={
+            orgAdmin
+              ? "Whoever runs this Pinwren server configures SMTP. You can change what the emails say, who gets them and which emails reporters receive under Notifications."
+              : "Whoever runs this Pinwren server configures SMTP."
+          }
+          action={
+            orgAdmin ? (
+              <ButtonLink href="/settings/notifications?tab=templates" size="sm" variant="outline">
+                Email templates
+              </ButtonLink>
+            ) : undefined
+          }
+        />
+      </CardContent>
+    </Card>
   );
 }

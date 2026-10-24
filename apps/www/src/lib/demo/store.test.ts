@@ -137,3 +137,46 @@ describe("demo store global caps", () => {
     expect(store.storeStats()).toEqual({ sandboxes: 1, bytes: two });
   });
 });
+
+describe("wave 5: playground sandbox", () => {
+  it("starts over from the seed 10 minutes after it was made", () => {
+    vi.useFakeTimers();
+    try {
+      const v = store.visitor(key(1));
+      expect(v.items).toHaveLength(6);
+      expect(store.createFeedback(v, report()).ok).toBe(true);
+      expect(store.visitor(key(1)).items).toHaveLength(7);
+      vi.advanceTimersByTime(9 * 60_000);
+      expect(store.visitor(key(1)).items).toHaveLength(7);
+      vi.advanceTimersByTime(2 * 60_000);
+      expect(store.peekVisitor(key(1))).toBeUndefined();
+      expect(store.visitor(key(1)).items).toHaveLength(6);
+      vi.stubEnv("DEMO_RESET_MINUTES", "60");
+      expect(store.resetAfterMs()).toBe(3_600_000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("lists every page with its URL, and lets only the reporter delete", () => {
+    const v = store.visitor(key(2));
+    const made = store.createFeedback(v, report({ page: { url: "https://pinwren.dev/about" } }));
+    if (!made.ok) throw new Error("create failed");
+    const all = store.listPins(v, "", true, "http://localhost:3200");
+    expect(all).toHaveLength(7);
+    expect(all.find((p) => p.id === made.feedback.id)?.pageUrl).toBe("http://localhost:3200/about");
+    expect(store.listPins(v, "http://x.test/demo", false)).toHaveLength(4); // the open seeds
+
+    const item = store.findItem(v, made.feedback.id);
+    if (!item) throw new Error("missing");
+    const before = v.bytes;
+    expect(store.removeItem(v, item, "wrong")?.status).toBe(403);
+    expect(store.removeItem(v, item, null)?.code).toBe("DELETE_NOT_ALLOWED");
+    expect(store.removeItem(v, item, made.feedback.reporterToken ?? "")).toBeNull();
+    expect(store.findItem(v, made.feedback.id)).toBeUndefined();
+    expect(v.bytes).toBeLessThan(before);
+    // Seeded items have no reporter token: nobody deletes them from the page.
+    const seeded = v.items[0];
+    if (seeded) expect(store.removeItem(v, seeded, "anything")?.status).toBe(403);
+  });
+});

@@ -29,8 +29,12 @@ export type TrackerCreate = {
   token: string;
   repo: string;
   apiUrl: string | null;
+  /** Jira: the account email. */
+  email?: string;
   labels: string[];
   autoCreate: IssueIntegration["autoCreate"];
+  /** Linear: the signing secret Linear shows for its webhook. */
+  webhookSecret?: string;
 };
 
 /** The project as it will look once the API has merged `patch` (the API deep-merges partial configs). */

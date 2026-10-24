@@ -10,15 +10,17 @@ bad argument or an internal error is logged as `[pinwren] …` and never thrown 
 
 ## Methods
 
-| Method                             | What it does                                                                                                                                                                                         |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Pinwren.init(options)`            | Start the widget. Needed when the script tag has no `data-project`, or with the npm package. A second call is ignored — one widget per page.                                                         |
-| `Pinwren.open(mode?)`              | `"comment"` starts comment mode, `"bug"` opens a bug report, `"panel"` opens the side panel; no argument opens the launcher menu. Calls made before the widget is ready are kept and run once it is. |
-| `Pinwren.close()`                  | Close whatever is open: menu, comment mode, card, panel or bug report.                                                                                                                               |
-| `Pinwren.on(event, handler)`       | Subscribe to an event. Returns a function that unsubscribes.                                                                                                                                         |
-| `Pinwren.identify(user, options?)` | Prefill the reporter's name and email; `{ id }` plus `{ signature }` makes a verified reporter — see [Identity](/docs/widget/identity).                                                              |
-| `Pinwren.destroy()`                | Full teardown: removes the DOM, every listener, the console/network wrappers and timers. `init()` can start it again.                                                                                |
-| `Pinwren.setPageScope(scope)`      | Group pins by a URL pattern — see [page scope](/docs/widget/visibility#page-scope).                                                                                                                  |
+| Method                              | What it does                                                                                                                                                                                                                                                |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Pinwren.init(options)`             | Start the widget. Needed when the script tag has no `data-project`, or with the npm package. A second call is ignored — one widget per page.                                                                                                                |
+| `Pinwren.open(mode?)`               | `"comment"` starts comment mode, `"bug"` opens a bug report, `"panel"` opens the sidebar, `"page"` opens a comment on the whole page (no pin); no argument opens the launcher's actions. Calls made before the widget is ready are kept and run once it is. |
+| `Pinwren.close()`                   | Close whatever is open: menu, comment mode, card, panel or bug report.                                                                                                                                                                                      |
+| `Pinwren.on(event, handler)`        | Subscribe to an event. Returns a function that unsubscribes.                                                                                                                                                                                                |
+| `Pinwren.identify(user, options?)`  | Prefill the reporter's name and email; `{ id }` plus `{ signature }` makes a verified reporter — see [Identity](/docs/widget/identity).                                                                                                                     |
+| `Pinwren.destroy()`                 | Full teardown: removes the DOM, every listener, the console/network wrappers and timers. `init()` can start it again.                                                                                                                                       |
+| `Pinwren.setPageScope(scope)`       | Group pins by a URL pattern — see [page scope](/docs/widget/visibility#page-scope).                                                                                                                                                                         |
+| `Pinwren.setMetadata(object)`       | Context sent with every bug report and comment from now on — see [metadata](#metadata). `null` clears it.                                                                                                                                                   |
+| `Pinwren.show()` / `Pinwren.hide()` | Show or hide the whole widget, overriding the project's [visibility mode](/docs/widget/visibility#who-gets-the-widget) until the other one is called.                                                                                                       |
 
 `open("comment")` and `open("bug")` do nothing when that mode is turned off for the project or the project is
 read-only, and `open()` does nothing while the [visibility rules](/docs/widget/visibility) hide the widget.
@@ -36,6 +38,10 @@ read-only, and `open()` does nothing while the [visibility rules](/docs/widget/v
     },
     accent: { type: "string", description: "Launcher colour override (hex)." },
     locale: { type: "string", description: "UI language, e.g. fr. Defaults to the browser's." },
+    theme: {
+      type: '"light" | "dark" | "auto"',
+      description: "Light or dark widget UI. Defaults to auto: the visitor's system setting.",
+    },
     forceShow: {
       type: "boolean",
       description: "Show the widget even where the project's visibility rules would hide it.",
@@ -58,6 +64,22 @@ read-only, and `open()` does nothing while the [visibility rules](/docs/widget/v
 ```ts
 Pinwren.init({ projectKey: "pk_…", endpoint: "https://feedback.example.com", locale: "de" });
 ```
+
+## Metadata
+
+`Pinwren.setMetadata()` attaches your own context to everything the visitor sends — the plan they are on, an
+account id, the feature flags in effect — so the team doesn't have to ask. It shows on the item's **Details** in the
+dashboard and in the API (`feedback.metadata`).
+
+```ts
+Pinwren.setMetadata({ plan: "pro", accountId: "acc_42", flags: ["new-checkout"] });
+```
+
+It takes a plain JSON object of at most 14 KB (the whole `metadata` of a report is capped at 16 KB; the widget's
+own page timings use the rest). Anything else — an array, a class instance, an object with cycles, or too much
+data — is refused with a `[pinwren]` console warning and the previous value stays. Call it again whenever the
+context changes. Like `identify`, it may be called before the widget has loaded. With React, pass the
+`metadata` prop of `<Pinwren>` (compared by value) and `visible` to show or hide it.
 
 ## Events
 

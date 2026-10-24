@@ -62,6 +62,13 @@ match, while a selector that now points at a different element is rejected.
   closed tab), the pin is not drawn. It stays in the side panel marked **Not on page**, where its thread can
   still be read and replied to. Nothing is silently lost.
 
+### Re-pin
+
+A team member fixes a **Moved?** pin with **Re-pin on page** in the dashboard
+([Page review](/docs/dashboard/page-review#re-pin)): the page opens with the widget in re-pin mode, and the next
+click (or drag) records a new anchor. The previous anchor is kept in the item's activity history. The same is
+available to scripts as `PATCH /api/feedback/:id/anchor` with `{ "anchor": … }` (Admins and Editors).
+
 Pins re-resolve whenever the URL changes (SPA navigation) and re-position on scroll, resize and DOM changes. A
 pin whose element is hidden (`display: none`, zero size) hides with it and comes back when the element does.
 

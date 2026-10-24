@@ -66,9 +66,10 @@ const STATUS: Record<Status, { label: string; dot: string }> = {
   duplicate: { label: "Duplicate", dot: "bg-muted-foreground" },
 };
 const KIND: Record<Kind, { label: string; icon: LucideIcon }> = {
-  comment: { label: "Comment", icon: MessageSquare },
+  // Same words as the widget and the dashboard: Question / Change / Bug / Other.
+  comment: { label: "Other", icon: MessageSquare },
   bug: { label: "Bug", icon: Bug },
-  idea: { label: "Idea", icon: Lightbulb },
+  idea: { label: "Change", icon: Lightbulb },
   question: { label: "Question", icon: CircleHelp },
 };
 const PRIORITY: Record<Item["priority"], string> = {

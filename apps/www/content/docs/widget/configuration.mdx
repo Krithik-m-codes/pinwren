@@ -90,7 +90,7 @@ Mostly on the **Widget** tab (**Behaviour** and **Consent notice** cards); panel
   type={{
     "modes.comment": {
       type: "boolean",
-      description: "Offer “Add a comment” (pins, regions, text selections).",
+      description: "Offer “Create new annotation” (pins, regions, text selections).",
       default: "true",
     },
     "modes.bug": {
@@ -119,8 +119,8 @@ Mostly on the **Widget** tab (**Behaviour** and **Consent notice** cards); panel
     visitorsCanResolve: {
       type: "boolean",
       description:
-        "Any visitor may resolve and reopen pins. When off, only the browser that created a pin can.",
-      default: "true",
+        "Any visitor may resolve and reopen pins. When off, only the browser that created a pin can. Projects created before this default changed keep it on.",
+      default: "false",
     },
     "consent.enabled": {
       type: "boolean",
@@ -151,8 +151,8 @@ Mostly on the **Widget** tab (**Behaviour** and **Consent notice** cards); panel
   }}
 />
 
-The project's **Show existing pins to visitors** switch (Privacy & data tab; `publicRead`, on by default)
-decides whether visitors see existing feedback at all. When it is off, the widget shows no pins, no “View comments” entry and no side panel —
+The project's **Show existing pins to visitors** switch (Privacy & data tab; `publicRead`, off by default for new projects)
+decides whether visitors see existing feedback at all. When it is off, the widget shows no markers and the launcher offers no sidebar (beyond what this browser sent) —
 people can still send feedback.
 
 See [Panel actions](/docs/widget/panel-actions) and [Privacy & masking](/docs/widget/privacy) for those two

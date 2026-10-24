@@ -23,6 +23,27 @@ export type FeedbackKind = z.infer<typeof feedbackKind>;
 export type FeedbackStatus = z.infer<typeof feedbackStatus>;
 export type Priority = z.infer<typeof priority>;
 
+/**
+ * What people see for each kind everywhere (widget chips, dashboard, emails, webhooks, exports). The stored
+ * values stay `comment`/`idea` for compatibility, but they read as "Other" and "Change", as in the widget.
+ */
+export const KIND_LABELS: Record<FeedbackKind, string> = {
+  question: "Question",
+  idea: "Change",
+  bug: "Bug",
+  comment: "Other",
+};
+/** The kind as a noun in a sentence: "New bug report from Maria", "a change request". */
+export const KIND_NOUNS: Record<FeedbackKind, string> = {
+  question: "question",
+  idea: "change request",
+  bug: "bug report",
+  comment: "feedback",
+};
+export const kindLabel = (k: string): string => (KIND_LABELS as Partial<Record<string, string>>)[k] ?? k;
+export const kindNoun = (k: string): string =>
+  (KIND_NOUNS as Partial<Record<string, string>>)[k] ?? "feedback";
+
 export const CLOSED_STATUSES: readonly FeedbackStatus[] = ["resolved", "wont_fix", "duplicate"];
 export const isClosedStatus = (s: FeedbackStatus) => CLOSED_STATUSES.includes(s);
 
@@ -149,6 +170,70 @@ export const widgetReplay = z.object({
 });
 export type WidgetReplay = z.infer<typeof widgetReplay>;
 
+// --- Widget: annotation layer + capture geometry (wave-5 contract §1) ---------------------------------
+
+export const ANNOTATION_TOOLS = [
+  "rect",
+  "ellipse",
+  "arrow",
+  "pen",
+  "text",
+  "blur",
+  "crop",
+  "highlighter",
+  "step",
+] as const;
+export type AnnotationTool = (typeof ANNOTATION_TOOLS)[number];
+export const ANNOTATION_SIZES = ["s", "m", "l"] as const;
+/** Largest annotation layer, as serialised JSON. */
+export const MAX_ANNOTATION_BYTES = 65_536;
+
+const point = z.object({ x: z.number(), y: z.number() });
+const shapeBase = {
+  color: z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/),
+  size: z.enum(ANNOTATION_SIZES),
+};
+
+/** One shape in canvas pixels of the unflattened screenshot (mirrors `packages/widget/src/shapes.ts`). */
+export const annotationShape = z.union([
+  z.object({ tool: z.enum(["rect", "ellipse", "arrow", "blur", "crop"]), ...shapeBase, a: point, b: point }),
+  z.object({ tool: z.enum(["pen", "highlighter"]), ...shapeBase, points: z.array(point).min(1).max(2000) }),
+  z.object({
+    tool: z.literal("text"),
+    ...shapeBase,
+    at: point,
+    text: z.string().max(500),
+    px: z.number().positive().max(400),
+  }),
+  /** Numbered step marker. */
+  z.object({ tool: z.literal("step"), ...shapeBase, at: point, n: z.number().int().min(1).max(99) }),
+]);
+export type AnnotationShape = z.infer<typeof annotationShape>;
+
+/** The vector layer drawn over a screenshot; `width`/`height` are the canvas size the shapes refer to. */
+export const annotationLayer = z
+  .object({
+    v: z.literal(1),
+    width: z.number().int().min(1).max(32_767),
+    height: z.number().int().min(1).max(32_767),
+    shapes: z.array(annotationShape).max(200),
+  })
+  .refine((l) => JSON.stringify(l).length <= MAX_ANNOTATION_BYTES, {
+    message: `annotations must be at most ${MAX_ANNOTATION_BYTES} bytes of JSON`,
+  });
+export type AnnotationLayer = z.infer<typeof annotationLayer>;
+
+export const CAPTURE_MODES = ["visible", "full", "element", "screen"] as const;
+
+/** Where a screenshot was taken, independent of any anchor: Page Review places it with this. */
+export const captureGeometry = z.object({
+  vw: z.number().int().min(1).max(20_000),
+  vh: z.number().int().min(1).max(20_000),
+  scrollY: z.number().min(0),
+  mode: z.enum(CAPTURE_MODES),
+});
+export type CaptureGeometry = z.infer<typeof captureGeometry>;
+
 // --- Widget: create feedback (blueprint 04 §2) ------------------------------------------------------
 
 /** Largest `metadata` object a report may carry, as serialised JSON. */
@@ -210,6 +295,10 @@ export const widgetFeedbackCreate = z.object({
   consent: widgetConsent.optional(),
   /** Session replay (F-007): gzip of a JSON array of rrweb events, ≤ 10 MB decoded. */
   replay: widgetReplay.optional(),
+  /** Vector shapes over `screenshot` (which is then the unflattened capture). Stored on the screenshot asset. */
+  annotations: annotationLayer.optional(),
+  /** The viewport `screenshot` was taken in. Stored on the screenshot asset. */
+  capture: captureGeometry.optional(),
 });
 export type WidgetFeedbackCreate = z.infer<typeof widgetFeedbackCreate>;
 
@@ -242,6 +331,30 @@ export const projectUpdate = z.object({
 });
 export type ProjectUpdate = z.infer<typeof projectUpdate>;
 
+/** A refused widget origin recorded on the project (`project.rejected_origins`, newest first, ≤ 10). */
+export const rejectedOrigin = z.object({
+  origin: z.string().max(300),
+  /** Last refusal, ISO 8601. */
+  at: z.string(),
+  /** Refusals counted (throttled writes: at most one per minute per origin). */
+  count: z.number().int().min(1),
+});
+export type RejectedOrigin = z.infer<typeof rejectedOrigin>;
+export const MAX_REJECTED_ORIGINS = 10;
+
+// --- Labels (F-051, wave-5 contract §2) --------------------------------------------------------------
+
+export const MAX_LABELS_PER_PROJECT = 100;
+export const MAX_LABELS_PER_ITEM = 20;
+
+export const labelCreate = z.object({
+  name: z.string().trim().min(1, "Give the label a name").max(40),
+  color: z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Use a hex colour like #e5484d"),
+});
+export type LabelCreate = z.infer<typeof labelCreate>;
+export const labelUpdate = labelCreate.partial();
+export type LabelUpdate = z.infer<typeof labelUpdate>;
+
 export const feedbackUpdate = z.object({
   status: feedbackStatus.optional(),
   priority: priority.optional(),
@@ -249,8 +362,23 @@ export const feedbackUpdate = z.object({
   assigneeIds: z.array(z.string()).max(20).optional(),
   /** Move into a review round of the same project, or out of any (null). */
   roundId: z.uuid().nullable().optional(),
+  /** Replaces the item's labels (labels of the same project). */
+  labelIds: z.array(z.uuid()).max(MAX_LABELS_PER_ITEM).optional(),
+  dueAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  /** The item this one duplicates (same project, not itself); set it together with status `duplicate`. */
+  duplicateOfId: z.uuid().nullable().optional(),
+  /** Convert between comment / bug / idea / question. */
+  kind: feedbackKind.optional(),
 });
 export type FeedbackUpdate = z.infer<typeof feedbackUpdate>;
+
+export const FEEDBACK_SORTS = ["created", "updated", "priority"] as const;
+export const SORT_ORDERS = ["asc", "desc"] as const;
+
+/** A query-string boolean: `true`/`1` or `false`/`0` (JSON callers may send a real boolean). */
+const queryBool = z
+  .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
+  .transform((v) => v === true || v === "true" || v === "1");
 
 export const feedbackListQuery = z.object({
   projectId: z.uuid().optional(),
@@ -266,15 +394,33 @@ export const feedbackListQuery = z.object({
   page: z.string().trim().max(2000).optional(),
   /** Only items created at or after this instant (ISO 8601). */
   since: z.iso.datetime({ offset: true }).optional(),
+  /** Only items carrying this label. */
+  labelId: z.uuid().optional(),
+  /** Only items sent by guests who came through this review link. */
+  reviewLinkId: z.uuid().optional(),
+  /** Reporter name or email contains this text. */
+  reporter: z.string().trim().max(254).optional(),
+  /** Only items with (true) or without (false) a session replay. */
+  hasReplay: queryBool.optional(),
+  /** Browser name contains this text (from the captured environment), e.g. `Safari`. */
+  browser: z.string().trim().max(60).optional(),
+  /** Deleted items (the trash) instead of live ones. Org admins only; others get 403. */
+  trash: queryBool.optional(),
+  sort: z.enum(FEEDBACK_SORTS).default("created"),
+  order: z.enum(SORT_ORDERS).default("desc"),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 export type FeedbackListQuery = z.infer<typeof feedbackListQuery>;
 export type FeedbackListQueryInput = z.input<typeof feedbackListQuery>;
 
+export const MAX_MENTIONS = 20;
+
 export const commentCreate = z.object({
   body: z.string().trim().min(1).max(10_000),
   visibility: z.enum(COMMENT_VISIBILITIES).default("internal"),
+  /** Member user ids @mentioned in the body (the composer resolves names); others are refused (400). */
+  mentions: z.array(z.string().min(1).max(100)).max(MAX_MENTIONS).optional(),
 });
 
 export const commentUpdate = z.object({
@@ -302,6 +448,14 @@ export const widgetFeedbackStatusUpdate = z.object({
   status: z.enum(["resolved", "open"]),
 });
 export const REPORTER_TOKEN_HEADER = "x-pinwren-reporter-token";
+/** `GET /w/mine`: the reporter tokens the widget holds for this project, comma-separated (≤ 50). */
+export const REPORTER_TOKENS_HEADER = "x-pinwren-reporter-tokens";
+export const MAX_REPORTER_TOKENS = 50;
+/** Deep-link query parameters: `?pinwren=<feedbackId>&pwt=<page-link token>` (wave-5 contract §3). */
+export const DEEP_LINK_PARAM = "pinwren";
+export const PAGE_LINK_TOKEN_PARAM = "pwt";
+/** `GET /w/feedback/:id` sends the `pwt` token in this header. */
+export const PAGE_LINK_TOKEN_HEADER = "x-pinwren-link-token";
 
 // --- Notifications ---------------------------------------------------------------------------------
 
@@ -309,16 +463,24 @@ export const NOTIFICATION_TYPES = [
   "feedback.created",
   "feedback.assigned",
   "feedback.status_changed",
+  "feedback.priority_changed",
+  "feedback.deleted",
   "comment.created",
+  "comment.mentioned",
+  "webhook.disabled",
 ] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 export const notificationPreferenceInput = z.object({
   projectId: z.uuid(),
   newFeedback: z.boolean().optional(),
   assigned: z.boolean().optional(),
-  /** Mentions and replies on feedback you are involved in. */
+  /** Replies on feedback you are involved in or follow. */
   replies: z.boolean().optional(),
   statusChanges: z.boolean().optional(),
+  /** Someone @mentioned you. */
+  mentioned: z.boolean().optional(),
+  priorityChanges: z.boolean().optional(),
   /** Also send email (in-app notifications are always written). */
   email: z.boolean().optional(),
 });
@@ -326,8 +488,52 @@ export type NotificationPreferenceInput = z.infer<typeof notificationPreferenceI
 
 export const notificationsRead = z.union([
   z.object({ ids: z.array(z.uuid()).min(1).max(200) }),
+  /** Every unread notification about one item (sent when the detail pane opens it). */
+  z.object({ feedbackId: z.uuid() }),
   z.object({ all: z.literal(true) }),
 ]);
+
+export const EMAIL_DIGEST_FREQUENCIES = ["off", "hourly", "daily"] as const;
+export type EmailDigestFrequency = (typeof EMAIL_DIGEST_FREQUENCIES)[number];
+
+/** `PATCH /api/me/preferences`: account-wide email settings (`user_preference`). */
+export const userPreferenceUpdate = z.object({
+  emailDigest: z.enum(EMAIL_DIGEST_FREQUENCIES).optional(),
+  emailPaused: z.boolean().optional(),
+});
+export type UserPreferenceUpdate = z.infer<typeof userPreferenceUpdate>;
+
+/**
+ * Notifications › General and › Reporter for one project (BugPin model, wave-5 contract §3.2):
+ * `GET`/`PATCH /api/projects/:id/notifications`. Stored on `project` (`notify_member_ids`, `notify_emails`,
+ * `notify_reporter`, `reporter_email_*`).
+ */
+export const MAX_NOTIFY_EMAILS = 20;
+export const projectNotifications = z.object({
+  /** Members who get new-report notifications; null = every member (each filtered by their own preferences). */
+  memberIds: z.array(z.string().min(1).max(100)).max(200).nullable(),
+  /** Extra addresses (people without an account) that get every new-report email. */
+  emails: z.array(z.email().max(254)).max(MAX_NOTIFY_EMAILS),
+  reporter: z.object({
+    /** Master switch (`project.notify_reporter`): no reporter email at all when off. Public replies go out when on. */
+    enabled: z.boolean(),
+    /** "We received your report" right after it is sent. */
+    received: z.boolean(),
+    statusChanged: z.boolean(),
+    priorityChanged: z.boolean(),
+    /** Someone on the team was assigned to their report. */
+    assigned: z.boolean(),
+  }),
+});
+export type ProjectNotifications = z.infer<typeof projectNotifications>;
+
+/** `PATCH /api/projects/:id/notifications`: any subset; `reporter` merges field by field. */
+export const projectNotificationsUpdate = z.object({
+  memberIds: projectNotifications.shape.memberIds.optional(),
+  emails: projectNotifications.shape.emails.optional(),
+  reporter: projectNotifications.shape.reporter.partial().optional(),
+});
+export type ProjectNotificationsUpdate = z.infer<typeof projectNotificationsUpdate>;
 
 // --- Instance settings: email ------------------------------------------------------------------------
 
@@ -339,10 +545,21 @@ export const emailSettingsUpdate = z.object({
   password: z.string().max(500).nullable().optional(),
   secure: z.boolean().nullable().optional(),
   from: z.string().trim().max(320).nullable().optional(),
+  /** Refuse to send unless the server upgrades with STARTTLS (ports 587/25). */
+  requireTls: z.boolean().nullable().optional(),
+  /** Accept a self-signed or otherwise unverifiable server certificate. */
+  allowSelfSigned: z.boolean().nullable().optional(),
 });
 export type EmailSettingsUpdate = z.infer<typeof emailSettingsUpdate>;
 
-export const emailTest = z.object({ to: z.email().optional() });
+export const emailTest = z.object({
+  to: z.email().optional(),
+  /** Unsaved form values to test instead of the saved ones (omitted password = the saved one). */
+  config: emailSettingsUpdate.optional(),
+});
+
+export const EMAIL_DELIVERY_STATUSES = ["sent", "skipped", "failed"] as const;
+export type EmailDeliveryStatus = (typeof EMAIL_DELIVERY_STATUSES)[number];
 
 // --- Webhooks ----------------------------------------------------------------------------------------
 
@@ -351,30 +568,92 @@ export const WEBHOOK_EVENTS = [
   "feedback.updated",
   "feedback.status_changed",
   "feedback.assigned",
+  "feedback.priority_changed",
+  "feedback.labels_changed",
+  "feedback.deleted",
   "comment.created",
+  "comment.updated",
+  "comment.deleted",
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
-export const WEBHOOK_KINDS = ["generic", "slack", "discord"] as const;
+/**
+ * generic: signed JSON. slack / discord / teams: the chat's incoming-webhook URL (Teams: a Workflows
+ * "post to a channel when a webhook request is received" URL). telegram: a bot token + chat id. ntfy: a
+ * topic URL plus an optional access token. Every kind except generic stores its URL encrypted.
+ */
+export const WEBHOOK_KINDS = ["generic", "slack", "discord", "teams", "telegram", "ntfy"] as const;
+export type WebhookKind = (typeof WEBHOOK_KINDS)[number];
 
-export const webhookCreate = z.object({
-  name: z.string().trim().min(1).max(80).optional(),
-  url: z.url({ protocol: /^https?$/ }).max(2000),
-  kind: z.enum(WEBHOOK_KINDS).default("generic"),
-  events: z.array(z.enum(WEBHOOK_EVENTS)).min(1).max(WEBHOOK_EVENTS.length),
-  /** Limit to one project; omitted = every project in the organisation. */
-  projectId: z.uuid().nullable().optional(),
-  active: z.boolean().default(true),
-});
+/** A Telegram bot token as @BotFather issues it: `<bot id>:<secret>`. */
+export const TELEGRAM_BOT_TOKEN = /^\d{3,20}:[A-Za-z0-9_-]{30,100}$/;
+/** A chat id (`-100…` for channels and supergroups) or a public `@channelname`. */
+export const TELEGRAM_CHAT_ID = /^(-?\d{1,20}|@[A-Za-z][A-Za-z0-9_]{4,31})$/;
+
+const webhookUrl = z.url({ protocol: /^https?$/ }).max(2000);
+const telegramBotToken = z.string().trim().regex(TELEGRAM_BOT_TOKEN, "A bot token looks like 123456789:AA…");
+const telegramChatId = z
+  .string()
+  .trim()
+  .regex(TELEGRAM_CHAT_ID, "A numeric chat id (e.g. -1001234567890) or @channelname");
+/** ntfy access token (`tk_…`) or `user:password`; sent as Bearer / Basic auth. */
+const ntfyAccessToken = z.string().trim().min(4).max(200);
+
+export const webhookCreate = z
+  .object({
+    name: z.string().trim().min(1).max(80).optional(),
+    /** Every kind except telegram (which is built from `botToken` + `chatId`). */
+    url: webhookUrl.optional(),
+    kind: z.enum(WEBHOOK_KINDS).default("generic"),
+    events: z.array(z.enum(WEBHOOK_EVENTS)).min(1).max(WEBHOOK_EVENTS.length),
+    /** Limit to one project; omitted = every project in the organisation. */
+    projectId: z.uuid().nullable().optional(),
+    active: z.boolean().default(true),
+    /** telegram only. Stored encrypted, never returned. */
+    botToken: telegramBotToken.optional(),
+    /** telegram only. */
+    chatId: telegramChatId.optional(),
+    /** ntfy only, optional (protected topics). Stored encrypted, never returned. */
+    accessToken: ntfyAccessToken.optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.kind === "telegram") {
+      if (!v.botToken) ctx.addIssue({ code: "custom", path: ["botToken"], message: "Paste the bot token" });
+      if (!v.chatId) ctx.addIssue({ code: "custom", path: ["chatId"], message: "Enter the chat id" });
+    } else if (!v.url) {
+      ctx.addIssue({ code: "custom", path: ["url"], message: "Enter the URL" });
+    }
+    if (v.kind !== "telegram" && (v.botToken !== undefined || v.chatId !== undefined)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["botToken"],
+        message: "Only Telegram webhooks take a bot token",
+      });
+    }
+    if (v.kind !== "ntfy" && v.accessToken !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["accessToken"],
+        message: "Only ntfy webhooks take an access token",
+      });
+    }
+  });
+export type WebhookCreate = z.infer<typeof webhookCreate>;
+
+/** Kind-specific fields are checked against the stored kind by the route. */
 export const webhookUpdate = z.object({
   name: z.string().trim().min(1).max(80).optional(),
-  url: z
-    .url({ protocol: /^https?$/ })
-    .max(2000)
-    .optional(),
+  url: webhookUrl.optional(),
   events: z.array(z.enum(WEBHOOK_EVENTS)).min(1).max(WEBHOOK_EVENTS.length).optional(),
   projectId: z.uuid().nullable().optional(),
   active: z.boolean().optional(),
+  /** telegram: replace the bot token (the chat id is kept unless sent too). */
+  botToken: telegramBotToken.optional(),
+  /** telegram: move to another chat (the bot token is kept). */
+  chatId: telegramChatId.optional(),
+  /** ntfy: set or (null) remove the access token. */
+  accessToken: ntfyAccessToken.nullable().optional(),
 });
+export type WebhookUpdate = z.infer<typeof webhookUpdate>;
 
 // --- API tokens + public API ----------------------------------------------------------------------------
 
@@ -425,6 +704,18 @@ export const EMAIL_TEMPLATE_KEYS = [
   "status_changed",
   "reporter_reply",
   "reporter_status",
+  "password_reset",
+  "verify_email",
+  "change_email",
+  "magic_link",
+  "mentioned",
+  "priority_changed",
+  "feedback_deleted",
+  "digest",
+  "reporter_received",
+  "reporter_priority",
+  "reporter_assigned",
+  "webhook_disabled",
 ] as const;
 export type EmailTemplateKey = (typeof EMAIL_TEMPLATE_KEYS)[number];
 
@@ -443,50 +734,110 @@ export const emailTemplatePreview = z.object({
 
 export const emailTemplateTest = emailTemplatePreview.extend({ to: z.email().optional() });
 
-// --- Issue trackers (F-076 GitHub, F-077 GitLab) ------------------------------------------------------
+// --- Issue trackers (F-076 GitHub, F-077 GitLab, F-078 Linear, F-079 Jira Cloud) ------------------------
 
-export const ISSUE_PROVIDERS = ["github", "gitlab"] as const;
+export const ISSUE_PROVIDERS = ["github", "gitlab", "linear", "jira"] as const;
 export type IssueProvider = (typeof ISSUE_PROVIDERS)[number];
 /** Which new feedback opens an issue on its own; "manual" = only the "Send to …" button. */
 export const ISSUE_AUTO_CREATE = ["manual", "bugs", "all"] as const;
 
 const repoPattern = /^[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)+$/;
+/** A Linear team key (`ENG`) or a Jira project key (`WEB`). */
+const keyPattern = /^[A-Za-z][A-Za-z0-9_]{0,9}$/;
+
+/**
+ * What `repo` holds for each provider, and why a value is refused (null = valid). GitHub: `owner/name`;
+ * GitLab: `group/subgroup/project`; Linear: the team key; Jira: the project key.
+ */
+export function trackerRepoError(provider: IssueProvider, repo: string): string | null {
+  if (provider === "linear" || provider === "jira") {
+    return keyPattern.test(repo)
+      ? null
+      : provider === "linear"
+        ? "Use the team key, like ENG"
+        : "Use the project key, like WEB";
+  }
+  if (!repoPattern.test(repo)) return "Use owner/name (GitLab: group/project)";
+  if (provider === "github" && repo.split("/").length !== 2) return "GitHub repositories are owner/name";
+  return null;
+}
+
+/** Linear team keys and Jira project keys are upper case; repository paths are kept as typed. */
+export const normalizeTrackerRepo = (provider: IssueProvider, repo: string): string =>
+  provider === "linear" || provider === "jira" ? repo.trim().toUpperCase() : repo.trim();
+
+const trackerUrl = z.url({ protocol: /^https?$/ }).max(500);
+/** Inbound webhook signing secret supplied by the tracker (Linear generates its own). */
+const trackerWebhookSecret = z.string().trim().min(16).max(200);
 
 export const issueIntegrationCreate = z
   .object({
     provider: z.enum(ISSUE_PROVIDERS),
-    /** Personal / project access token. Stored encrypted, never returned. */
+    /** Personal / project access token, Linear API key or Jira API token. Stored encrypted, never returned. */
     token: z.string().trim().min(8).max(500),
-    /** GitHub `owner/name`; GitLab `group/subgroup/project`. */
-    repo: z.string().trim().max(300).regex(repoPattern, "Use owner/name (GitLab: group/project)"),
-    /** GitHub Enterprise API or self-managed GitLab base URL. null = GITHUB_API_URL / GITLAB_URL. */
-    apiUrl: z
-      .url({ protocol: /^https?$/ })
-      .max(500)
-      .nullable()
-      .optional(),
+    /** GitHub `owner/name`; GitLab `group/subgroup/project`; Linear team key; Jira project key. */
+    repo: z.string().trim().min(1).max(300),
+    /**
+     * GitHub Enterprise API or self-managed GitLab base URL (null = GITHUB_API_URL / GITLAB_URL). Jira: the
+     * site URL, required (`https://acme.atlassian.net`). Linear: unused.
+     */
+    apiUrl: trackerUrl.nullable().optional(),
+    /** Jira only: the Atlassian account email the API token belongs to. */
+    email: z.email().max(254).optional(),
     labels: z.array(z.string().trim().min(1).max(50)).max(10).default([]),
     autoCreate: z.enum(ISSUE_AUTO_CREATE).default("manual"),
+    /** Linear: the signing secret Linear shows for the webhook. Others: generated by Pinwren. */
+    webhookSecret: trackerWebhookSecret.optional(),
   })
-  .refine((v) => v.provider !== "github" || v.repo.split("/").length === 2, {
-    path: ["repo"],
-    message: "GitHub repositories are owner/name",
+  .superRefine((v, ctx) => {
+    const repoError = trackerRepoError(v.provider, v.repo);
+    if (repoError) ctx.addIssue({ code: "custom", path: ["repo"], message: repoError });
+    if (v.provider === "jira") {
+      if (!v.apiUrl) ctx.addIssue({ code: "custom", path: ["apiUrl"], message: "Enter your Jira site URL" });
+      if (!v.email) ctx.addIssue({ code: "custom", path: ["email"], message: "Enter the account email" });
+    } else if (v.email !== undefined) {
+      ctx.addIssue({ code: "custom", path: ["email"], message: "Only Jira takes an account email" });
+    }
+    if (v.provider === "linear" && v.apiUrl) {
+      ctx.addIssue({ code: "custom", path: ["apiUrl"], message: "Linear has no self-hosted URL" });
+    }
   });
 
+/** `repo` and `email` are checked against the stored provider by the route. */
 export const issueIntegrationUpdate = z.object({
   token: z.string().trim().min(8).max(500).optional(),
-  repo: z.string().trim().max(300).regex(repoPattern, "Use owner/name (GitLab: group/project)").optional(),
-  apiUrl: z
-    .url({ protocol: /^https?$/ })
-    .max(500)
-    .nullable()
-    .optional(),
+  repo: z.string().trim().min(1).max(300).optional(),
+  apiUrl: trackerUrl.nullable().optional(),
+  email: z.email().max(254).optional(),
   labels: z.array(z.string().trim().min(1).max(50)).max(10).optional(),
   autoCreate: z.enum(ISSUE_AUTO_CREATE).optional(),
   active: z.boolean().optional(),
+  /** Replace the inbound webhook secret with the one the tracker shows (Linear). */
+  webhookSecret: trackerWebhookSecret.optional(),
 });
 
 export const issueCreate = z.object({ integrationId: z.uuid() });
+
+// --- Review links (F-012, wave-5 contract §3) ----------------------------------------------------------
+
+/** Query parameter a review link adds to the site URL; the widget shows itself when it carries a valid token. */
+export const REVIEW_LINK_PARAM = "pinwren_review";
+/**
+ * The widget sends a review link's token in this header: `GET /w/review-link` checks it, and reports sent with
+ * a valid one record the link as their source.
+ */
+export const REVIEW_TOKEN_HEADER = "x-pinwren-review-token";
+/** A review token as handed out (`pwr_` + 32 base64url characters); anything else is refused unchecked. */
+export const REVIEW_TOKEN_RE = /^pwr_[\w-]{16,100}$/;
+
+export const reviewLinkCreate = z.object({
+  label: z.string().trim().min(1, "Give the link a name").max(80),
+  /** The site page the link opens (an allowed origin of the project). */
+  url: z.url({ protocol: /^https?$/ }).max(2000),
+  /** Days until it stops working; omitted = never expires (revoke it instead). */
+  expiresInDays: z.number().int().min(1).max(365).optional(),
+});
+export type ReviewLinkCreate = z.infer<typeof reviewLinkCreate>;
 
 // --- Instance security settings ----------------------------------------------------------------------
 

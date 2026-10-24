@@ -1,4 +1,13 @@
 {
   "title": "Self-hosting",
-  "pages": ["index", "environment", "reverse-proxy", "storage", "backups", "upgrades", "scaling"]
+  "pages": [
+    "index",
+    "getting-started",
+    "environment",
+    "reverse-proxy",
+    "storage",
+    "backups",
+    "upgrades",
+    "scaling"
+  ]
 }

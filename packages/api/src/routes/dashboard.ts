@@ -6,52 +6,65 @@ import {
   feedbackListQuery,
   feedbackUpdate,
   mergeConfig,
-  notificationPreferenceInput,
-  notificationsRead,
   parseCaptureConfig,
   parseWidgetBranding,
   panelActionsFor,
   parseWidgetConfig,
-  projectCreate,
+  appRoleOf,
   projectUpdate,
+  roleCan,
   widgetBranding,
   widgetConfig,
 } from "@pinwren/core";
-import {
-  activity,
-  comment,
-  feedback,
-  getDb,
-  invitation,
-  member,
-  notification,
-  notificationPreference,
-  project,
-  user,
-} from "@pinwren/db";
+import { activity, comment, feedback, getDb, project, user } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
-import { and, asc, count, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import type { z } from "zod";
 import { isInstanceAdmin, isOrgAdmin, requireOrgAdmin, requireSession, type SessionVars } from "../context";
 import { ApiError, forbidden, notFound } from "../errors";
 import { assertFeatureWritable, publicEntitlements, resolveEntitlements } from "../license";
-import { audienceOf, forbidViewerWrites } from "../permissions";
-import { publishDeleted } from "../realtime/publish";
+import { env } from "../env";
+import { audienceOf, forbidViewerWrites, requirePermission } from "../permissions";
 import { ensureActionSecret, rotateActionSecret, runPanelAction } from "../services/actions";
 import { assetResponse } from "../services/assets";
 import { ensureIdentitySecret, rotateIdentitySecret } from "../services/identity";
-import { addTeamComment, getFeedbackDetail, listFeedback, updateFeedback } from "../services/feedback";
+import { presetValues, projectCreateWithPreset, pruneRejected } from "../services/project-setup";
+import { emit } from "../events";
+import { exportFeedback, feedbackExportQuery } from "../export/feedback";
+import {
+  addTeamComment,
+  getFeedbackDetail,
+  listFeedback,
+  purgeTrashed,
+  restoreFeedback,
+  trashFeedback,
+  updateFeedback,
+} from "../services/feedback";
+import { reproductionContext } from "../services/reproduction";
 import { getSecuritySettings } from "../settings/instance";
+import { resolveSmtp } from "../email/config";
+import { setupNeeded, signupOpen } from "../services/setup";
 import { admin } from "./admin";
 import { branding } from "./branding";
 import { integrations } from "./integrations";
+import { labels } from "./labels";
+import { notifications } from "./notifications";
+import { projectNotifications } from "./project-notifications";
 import { realtime } from "./realtime";
 import { rounds } from "./rounds";
 import { tokens } from "./tokens";
 import { webhooks } from "./webhooks";
 
 export { ACTIVE_STATUSES } from "../services/feedback";
+
+/** Same refusal as `requirePermission`, for checks that depend on the request (e.g. `?trash=1`). */
+const forbiddenRole = () =>
+  new ApiError(403, "FORBIDDEN_ROLE", "Your role doesn't allow this. Ask a workspace Admin.");
+
+/** `assigneeId=me` ("My work", `/inbox?assignee=me`) is the signed-in member. */
+const forCaller = <Q extends { assigneeId?: string | undefined }>(q: Q, userId: string): Q =>
+  q.assigneeId === "me" ? { ...q, assigneeId: userId } : q;
 
 export function newPublicKey() {
   return `pk_${randomBytes(18).toString("base64url")}`;
@@ -92,6 +105,8 @@ const projectOut = ({ actionSecret, identitySecret, ...p }: ProjectRow, role: st
     widgetBranding: parseWidgetBranding(p.widgetBranding),
     hasActionSecret: actionSecret !== null,
     hasIdentitySecret: identitySecret !== null,
+    // The configured public URL (PINWREN_URL): install snippets use it, not the browser's address.
+    publicUrl: env().PINWREN_URL.replace(/\/+$/, ""),
   };
 };
 
@@ -117,8 +132,6 @@ function mergeAndValidate<S extends z.ZodType>(
   return parsed.data;
 }
 
-const PREF_DEFAULTS = { newFeedback: true, assigned: true, replies: true, statusChanges: true, email: true };
-
 export const dashboard = new Hono<{ Variables: SessionVars }>()
   .use(requireSession)
   // Viewers (wave-4 contract §4) are refused every write before validation or any lookup runs.
@@ -127,17 +140,34 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
   // --- Me -----------------------------------------------------------------------------------------
   .get("/me", async (c) => {
     const [u] = await getDb()
-      .select({ id: user.id, name: user.name, email: user.email, image: user.image })
+      .select({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        image: user.image,
+        emailVerified: user.emailVerified,
+        twoFactorEnabled: user.twoFactorEnabled,
+      })
       .from(user)
       .where(eq(user.id, c.var.userId));
     // Instance admins also learn whether a newer release exists ("Update available").
-    const instanceAdmin = await isInstanceAdmin(c.var.userId);
+    const [instanceAdmin, needed, smtp, open] = await Promise.all([
+      isInstanceAdmin(c.var.userId),
+      setupNeeded(),
+      resolveSmtp(),
+      signupOpen(),
+    ]);
     const update = instanceAdmin ? (await getSecuritySettings()).update : null;
     return c.json({
       user: u,
       orgId: c.var.orgId,
       role: c.var.role,
+      // Wave-5 §3.1: the BugPin role (Admin / Editor / Viewer) for `roleCan` in the dashboard.
+      appRole: appRoleOf(c.var.role),
       instanceAdmin,
+      setupNeeded: needed,
+      emailConfigured: smtp !== null,
+      signupOpen: open,
       update: update?.available ? { latest: update.latest, url: update.url } : null,
     });
   })
@@ -145,40 +175,7 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
   /** Licence state and the Enterprise features in force (F-098). Every member may read it. */
   .get("/me/entitlements", async (c) => c.json(publicEntitlements(await resolveEntitlements())))
 
-  .get("/members", async (c) => {
-    const rows = await getDb()
-      .select({ id: user.id, name: user.name, email: user.email, image: user.image, role: member.role })
-      .from(member)
-      .innerJoin(user, eq(user.id, member.userId))
-      .where(eq(member.organizationId, c.var.orgId))
-      .orderBy(asc(user.name));
-    return c.json({ members: rows });
-  })
-
-  /** Pending, unexpired invitations of the active organisation. Create/cancel via Better Auth. */
-  .get("/invitations", async (c) => {
-    const rows = await getDb()
-      .select({
-        id: invitation.id,
-        email: invitation.email,
-        role: invitation.role,
-        status: invitation.status,
-        expiresAt: invitation.expiresAt,
-        createdAt: invitation.createdAt,
-        inviter: { id: user.id, name: user.name, email: user.email },
-      })
-      .from(invitation)
-      .leftJoin(user, eq(user.id, invitation.inviterId))
-      .where(
-        and(
-          eq(invitation.organizationId, c.var.orgId),
-          eq(invitation.status, "pending"),
-          gt(invitation.expiresAt, new Date()),
-        ),
-      )
-      .orderBy(desc(invitation.createdAt));
-    return c.json({ invitations: rows });
-  })
+  // Members and invitations: routes/members.ts (wave 5).
 
   // --- Projects ------------------------------------------------------------------------------------
   .get("/projects", async (c) => {
@@ -202,27 +199,37 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
     return c.json({ projects: rows });
   })
 
-  .post("/projects", zValidator("json", projectCreate), async (c) => {
-    const body = c.req.valid("json");
-    const db = getDb();
-    const base = slugify(body.name);
-    const [{ n } = { n: 0 }] = await db
-      .select({ n: count() })
-      .from(project)
-      .where(and(eq(project.orgId, c.var.orgId), sql`${project.slug} like ${`${base}%`}`));
-    const [created] = await db
-      .insert(project)
-      .values({
-        orgId: c.var.orgId,
-        name: body.name,
-        slug: n ? `${base}-${n + 1}` : base,
-        publicKey: newPublicKey(),
-        allowedOrigins: body.allowedOrigins,
-      })
-      .returning();
-    if (!created) throw new Error("project insert failed");
-    return c.json({ project: projectOut(created, c.var.role) }, 201);
-  })
+  // Creating a project is an Admin's job (wave-5 contract §3.7). `preset` answers "what is this site
+  // for?" and picks the visibility defaults (services/project-setup.ts).
+  .post(
+    "/projects",
+    requirePermission("projects.manage"),
+    zValidator("json", projectCreateWithPreset),
+    async (c) => {
+      const { preset, ...body } = c.req.valid("json");
+      const defaults = presetValues(preset);
+      const db = getDb();
+      const base = slugify(body.name);
+      const [{ n } = { n: 0 }] = await db
+        .select({ n: count() })
+        .from(project)
+        .where(and(eq(project.orgId, c.var.orgId), sql`${project.slug} like ${`${base}%`}`));
+      const [created] = await db
+        .insert(project)
+        .values({
+          orgId: c.var.orgId,
+          name: body.name,
+          slug: n ? `${base}-${n + 1}` : base,
+          publicKey: newPublicKey(),
+          allowedOrigins: body.allowedOrigins,
+          publicRead: defaults.publicRead,
+          widgetConfig: defaults.widgetConfig,
+        })
+        .returning();
+      if (!created) throw new Error("project insert failed");
+      return c.json({ project: projectOut(created, c.var.role) }, 201);
+    },
+  )
 
   .get("/projects/:id", async (c) => {
     const [p] = await getDb()
@@ -251,6 +258,11 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       const [current] = await tx.select().from(project).where(where).for("update");
       if (!current) throw notFound("Project");
       const set: Partial<typeof project.$inferInsert> = withoutUndefined(rest);
+      // "Allow" on a refused origin is this same PATCH: what the new list lets through leaves the list.
+      if (rest.allowedOrigins) {
+        const pruned = pruneRejected(current.rejectedOrigins, rest.allowedOrigins);
+        if (pruned.length !== current.rejectedOrigins.length) set.rejectedOrigins = pruned;
+      }
       if (archived !== undefined) set.archivedAt = archived ? (current.archivedAt ?? new Date()) : null;
       if (widgetPatch) {
         const before = parseWidgetConfig(current.widgetConfig);
@@ -340,32 +352,65 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
   })
 
   // --- Feedback ------------------------------------------------------------------------------------
-  .get("/feedback", zValidator("query", feedbackListQuery), async (c) =>
-    c.json(await listFeedback(c.var.orgId, c.req.valid("query"))),
-  )
-
-  .get("/feedback/:id", async (c) =>
-    c.json(await getFeedbackDetail(c.var.orgId, c.req.param("id"), audienceOf(c.var.role))),
-  )
-
-  .patch("/feedback/:id", zValidator("json", feedbackUpdate), async (c) => {
-    const updated = await updateFeedback(
-      c.var.orgId,
-      { kind: "user", userId: c.var.userId },
-      c.req.param("id"),
-      c.req.valid("json"),
-    );
-    return c.json({ feedback: updated });
+  // `?trash=1` lists the trash (Admins only, wave-5 contract §3.7).
+  .get("/feedback", zValidator("query", feedbackListQuery), async (c) => {
+    const q = c.req.valid("query");
+    if (q.trash && !roleCan(c.var.role, "feedback.restore")) throw forbiddenRole();
+    return c.json(await listFeedback(c.var.orgId, forCaller(q, c.var.userId)));
   })
 
-  .delete("/feedback/:id", async (c) => {
-    const [f] = await getDb()
-      .update(feedback)
-      .set({ deletedAt: new Date() })
-      .where(and(eq(feedback.id, c.req.param("id")), eq(feedback.orgId, c.var.orgId)))
-      .returning({ id: feedback.id, projectId: feedback.projectId });
-    if (!f) throw notFound("Feedback");
-    publishDeleted(c.var.orgId, f.projectId, f.id);
+  /** Every item matching the inbox filters (or `ids`), as CSV / JSON (streamed) or PDF. Before `/:id`. */
+  .get("/feedback/export", zValidator("query", feedbackExportQuery), async (c) => {
+    const q = c.req.valid("query");
+    if (q.trash && !roleCan(c.var.role, "feedback.restore")) throw forbiddenRole();
+    return exportFeedback(c.var.orgId, forCaller(q, c.var.userId));
+  })
+
+  .get("/feedback/:id", async (c) =>
+    c.json(
+      await getFeedbackDetail(c.var.orgId, c.req.param("id"), audienceOf(c.var.role), {
+        userId: c.var.userId,
+        // Admins can open an item in the trash (to restore it); for everyone else it's gone.
+        includeDeleted: roleCan(c.var.role, "feedback.restore"),
+      }),
+    ),
+  )
+
+  /** "Copy as Markdown": the reproduction context the API and MCP serve, for the signed-in team. */
+  .get("/feedback/:id/reproduction", async (c) =>
+    c.json(await reproductionContext(c.var.orgId, c.req.param("id"))),
+  )
+
+  .patch(
+    "/feedback/:id",
+    requirePermission("feedback.update"),
+    zValidator("json", feedbackUpdate),
+    async (c) => {
+      const updated = await updateFeedback(
+        c.var.orgId,
+        { kind: "user", userId: c.var.userId },
+        c.req.param("id"),
+        c.req.valid("json"),
+      );
+      return c.json({ feedback: updated });
+    },
+  )
+
+  /** Move to the trash (Admins): activity row, `feedback.deleted` event, gone from open inboxes. */
+  .delete("/feedback/:id", requirePermission("feedback.delete"), async (c) => {
+    await trashFeedback(c.var.orgId, { kind: "user", userId: c.var.userId }, c.req.param("id"));
+    return c.body(null, 204);
+  })
+
+  .post("/feedback/:id/restore", requirePermission("feedback.restore"), async (c) =>
+    c.json({
+      feedback: await restoreFeedback(c.var.orgId, { kind: "user", userId: c.var.userId }, c.req.param("id")),
+    }),
+  )
+
+  /** Delete forever, with its files: only items already in the trash. */
+  .delete("/feedback/:id/forever", requirePermission("feedback.delete"), async (c) => {
+    await purgeTrashed(c.var.orgId, c.req.param("id"));
     return c.body(null, 204);
   })
 
@@ -374,15 +419,20 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
     c.json(await runPanelAction(c.var.orgId, c.var.userId, c.req.param("id"), c.req.param("actionId"))),
   )
 
-  .post("/feedback/:id/comments", zValidator("json", commentCreate), async (c) => {
-    const created = await addTeamComment(
-      c.var.orgId,
-      { kind: "user", userId: c.var.userId },
-      c.req.param("id"),
-      c.req.valid("json"),
-    );
-    return c.json({ comment: created }, 201);
-  })
+  .post(
+    "/feedback/:id/comments",
+    requirePermission("feedback.comment"),
+    zValidator("json", commentCreate),
+    async (c) => {
+      const created = await addTeamComment(
+        c.var.orgId,
+        { kind: "user", userId: c.var.userId },
+        c.req.param("id"),
+        c.req.valid("json"),
+      );
+      return c.json({ comment: created }, 201);
+    },
+  )
 
   // --- Comments: edit (author only) / delete (author or org admin) ----------------------------------
   .patch("/comments/:id", zValidator("json", commentUpdate), async (c) => {
@@ -394,11 +444,23 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       .where(and(eq(comment.id, id), eq(comment.orgId, c.var.orgId)));
     if (!cm) throw notFound("Comment");
     if (cm.authorId !== c.var.userId) throw forbidden("Only the author can edit a comment");
+    const body = c.req.valid("json").body;
     const [updated] = await db
       .update(comment)
-      .set({ body: c.req.valid("json").body, editedAt: new Date() })
+      .set({ body, editedAt: new Date() })
       .where(eq(comment.id, id))
       .returning();
+    // Webhooks, and open details elsewhere (stream `comment.updated`).
+    if (body !== cm.body) {
+      emit({
+        type: "comment.updated",
+        orgId: c.var.orgId,
+        feedbackId: cm.feedbackId,
+        commentId: id,
+        actor: { kind: "user", id: c.var.userId },
+        changes: { body: { from: cm.body, to: body } },
+      });
+    }
     return c.json({ comment: updated });
   })
 
@@ -423,117 +485,26 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
         data: { commentId: id, visibility: cm.visibility },
       });
     });
+    // The row is gone, so the event carries what it was (wave-5 contract §3.4).
+    emit({
+      type: "comment.deleted",
+      orgId: c.var.orgId,
+      feedbackId: cm.feedbackId,
+      commentId: id,
+      actor: { kind: "user", id: c.var.userId },
+      changes: { comment: { from: { id, body: cm.body, visibility: cm.visibility }, to: null } },
+    });
     return c.body(null, 204);
   })
 
   // --- Assets (screenshots, attachments, replays: gzip JSON of rrweb events) ----------------------
   .get("/assets/:id", (c) => assetResponse(c.var.orgId, c.req.param("id")))
 
-  // --- Notifications -------------------------------------------------------------------------------
-  .get("/notifications", async (c) => {
-    const db = getDb();
-    const unreadOnly = c.req.query("unread") === "1" || c.req.query("unread") === "true";
-    const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 50) || 50, 1), 100);
-    const mine = and(eq(notification.userId, c.var.userId), eq(notification.orgId, c.var.orgId));
-    const [items, [unread]] = await Promise.all([
-      db
-        .select({
-          id: notification.id,
-          type: notification.type,
-          feedbackId: notification.feedbackId,
-          data: notification.data,
-          readAt: notification.readAt,
-          createdAt: notification.createdAt,
-        })
-        .from(notification)
-        .where(unreadOnly ? and(mine, isNull(notification.readAt)) : mine)
-        .orderBy(desc(notification.createdAt))
-        .limit(limit),
-      db
-        .select({ n: count() })
-        .from(notification)
-        .where(and(mine, isNull(notification.readAt))),
-    ]);
-    return c.json({ items, unreadCount: unread?.n ?? 0 });
-  })
-
-  .post("/notifications/read", zValidator("json", notificationsRead), async (c) => {
-    const body = c.req.valid("json");
-    const mine = and(eq(notification.userId, c.var.userId), isNull(notification.readAt));
-    const rows = await getDb()
-      .update(notification)
-      .set({ readAt: new Date() })
-      .where("ids" in body ? and(mine, inArray(notification.id, body.ids)) : mine)
-      .returning({ id: notification.id });
-    return c.json({ updated: rows.length });
-  })
-
-  .get("/notification-preferences", async (c) => {
-    const rows = await getDb()
-      .select({
-        projectId: project.id,
-        projectName: project.name,
-        newFeedback: notificationPreference.newFeedback,
-        assigned: notificationPreference.assigned,
-        replies: notificationPreference.replies,
-        statusChanges: notificationPreference.statusChanges,
-        email: notificationPreference.email,
-      })
-      .from(project)
-      .leftJoin(
-        notificationPreference,
-        and(
-          eq(notificationPreference.projectId, project.id),
-          eq(notificationPreference.userId, c.var.userId),
-        ),
-      )
-      .where(and(eq(project.orgId, c.var.orgId), isNull(project.archivedAt)))
-      .orderBy(asc(project.name));
-    return c.json({
-      preferences: rows.map((r) => ({
-        projectId: r.projectId,
-        projectName: r.projectName,
-        newFeedback: r.newFeedback ?? PREF_DEFAULTS.newFeedback,
-        assigned: r.assigned ?? PREF_DEFAULTS.assigned,
-        replies: r.replies ?? PREF_DEFAULTS.replies,
-        statusChanges: r.statusChanges ?? PREF_DEFAULTS.statusChanges,
-        email: r.email ?? PREF_DEFAULTS.email,
-      })),
-    });
-  })
-
-  .put("/notification-preferences", zValidator("json", notificationPreferenceInput), async (c) => {
-    const { projectId, ...patch } = c.req.valid("json");
-    const db = getDb();
-    const [p] = await db
-      .select({ id: project.id })
-      .from(project)
-      .where(and(eq(project.id, projectId), eq(project.orgId, c.var.orgId)));
-    if (!p) throw notFound("Project");
-    const set = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
-    const [row] = await db
-      .insert(notificationPreference)
-      .values({ orgId: c.var.orgId, userId: c.var.userId, projectId, ...PREF_DEFAULTS, ...set })
-      .onConflictDoUpdate({
-        target: [notificationPreference.userId, notificationPreference.projectId],
-        set: Object.keys(set).length ? set : { updatedAt: new Date() },
-      })
-      .returning();
-    if (!row) throw new Error("preference upsert failed");
-    return c.json({
-      preference: {
-        projectId: row.projectId,
-        newFeedback: row.newFeedback,
-        assigned: row.assigned,
-        replies: row.replies,
-        statusChanges: row.statusChanges,
-        email: row.email,
-      },
-    });
-  })
-
   .route("/", realtime)
+  .route("/", notifications)
+  .route("/", projectNotifications)
   .route("/", rounds)
+  .route("/", labels)
   .route("/", webhooks)
   .route("/", tokens)
   .route("/", integrations)

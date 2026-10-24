@@ -1,1 +1,17 @@
-{ "title": "Integrations", "pages": ["index", "email", "webhooks", "slack", "discord", "github", "gitlab"] }
+{
+  "title": "Integrations",
+  "pages": [
+    "index",
+    "email",
+    "webhooks",
+    "slack",
+    "discord",
+    "teams",
+    "telegram",
+    "ntfy",
+    "github",
+    "gitlab",
+    "linear",
+    "jira"
+  ]
+}

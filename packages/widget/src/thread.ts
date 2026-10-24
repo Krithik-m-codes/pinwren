@@ -178,7 +178,10 @@ export function threadCard(
       h("span", { class: "muted" }, `#${pin.number}`),
       closed && h("span", { class: "chip ok" }, t("resolved")),
       where.moved && h("span", { class: "chip warn", title: t("movedTip") }, t("moved")),
-      !where.onPage && h("span", { class: "chip warn" }, t("notOnPage")),
+      // No anchor: a comment on the whole page or a bug report — not a pin that went missing (wave-5 §3.3).
+      !pin.anchor
+        ? h("span", { class: "chip" }, t("wholePage"))
+        : !where.onPage && h("span", { class: "chip warn" }, t("notOnPage")),
       h("span", { class: "grow" }),
       resolve,
       copy,

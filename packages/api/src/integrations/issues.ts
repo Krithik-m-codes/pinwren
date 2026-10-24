@@ -1,4 +1,4 @@
-import { CLOSED_STATUSES, type FeedbackStatus, isClosedStatus } from "@pinwren/core";
+import { CLOSED_STATUSES, type FeedbackStatus, isClosedStatus, kindLabel } from "@pinwren/core";
 import { activity, feedback, getDb, issueIntegration, issueLink } from "@pinwren/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { decryptSecret } from "../crypto";
@@ -8,11 +8,21 @@ import { emit } from "../events";
 import { enqueue, QUEUES } from "../jobs/boss";
 import { emailBrand } from "../services/branding";
 import { type FeedbackContext, feedbackLink, loadFeedbackContext } from "../services/feedback-payload";
-import { createIssue, mdEscape, setIssueState, type TrackerConfig, TrackerError } from "./trackers";
+import { hasFeature } from "../license";
+import {
+  adfText,
+  createIssue,
+  mdEscape,
+  PROVIDER_NAMES,
+  setIssueState,
+  type TrackerConfig,
+  TrackerError,
+} from "./trackers";
 
-// Issue sync (F-076 GitHub, F-077 GitLab). Creating an issue and pushing a state change are jobs
-// (retried with backoff) — a tracker outage never blocks ingest or triage. The inbound side lives in
-// `routes/inbound.ts`.
+// Issue sync (F-076 GitHub, F-077 GitLab, F-078 Linear, F-079 Jira Cloud). Creating an issue and pushing a
+// state change are jobs (retried with backoff) — a tracker outage never blocks ingest or triage. The
+// inbound side lives in `routes/inbound.ts`. Jira is an Enterprise feature (blueprint 07): without the
+// `jira` licence feature a Jira integration can't be added and an existing one does nothing.
 
 type Integration = typeof issueIntegration.$inferSelect;
 type Link = typeof issueLink.$inferSelect;
@@ -21,7 +31,15 @@ export type IssueJob =
   | { type: "create"; feedbackId: string; integrationId: string }
   | { type: "state"; linkId: string; state: "open" | "closed" };
 
-export const PROVIDER_NAMES = { github: "GitHub", gitlab: "GitLab" } as const;
+export { PROVIDER_NAMES };
+
+/** Jira stores `email:apiToken` in one encrypted value (the email can't hold a colon here; tokens never do). */
+export const jiraCredential = (email: string, token: string) => `${email}:${token}`;
+
+export function splitJiraCredential(stored: string): { email: string; token: string } {
+  const at = stored.lastIndexOf(":");
+  return at < 0 ? { email: "", token: stored } : { email: stored.slice(0, at), token: stored.slice(at + 1) };
+}
 
 export function trackerConfig(i: Integration): TrackerConfig {
   let token: string;
@@ -33,7 +51,16 @@ export function trackerConfig(i: Integration): TrackerConfig {
       null,
     );
   }
+  if (i.provider === "jira") {
+    const c = splitJiraCredential(token);
+    return { provider: i.provider, token: c.token, email: c.email, repo: i.repo, apiUrl: i.apiUrl };
+  }
   return { provider: i.provider, token, repo: i.repo, apiUrl: i.apiUrl };
+}
+
+/** Jira without the licence feature: kept configured, but inert (ADR 0019). */
+export async function providerLicensed(provider: Integration["provider"]): Promise<boolean> {
+  return provider !== "jira" || (await hasFeature("jira"));
 }
 
 export const webhookUrlFor = (provider: Integration["provider"]) =>
@@ -59,37 +86,92 @@ export type IssueBodyInput = {
   productName: string;
 };
 
+/** The facts every issue lists, unescaped (each format escapes them its own way). */
+function issueFacts(f: IssueBodyInput): [string, string][] {
+  const e = f.environment;
+  return [
+    ["Project", f.projectName],
+    ["Kind", kindLabel(f.kind)],
+    ["Page", f.pageUrl ? truncate(f.pageUrl, 500) : "—"],
+    ["Browser", [e?.browser, e?.os].filter(Boolean).join(" · ") || "—"],
+    ["Viewport", e?.viewport ? `${Math.round(e.viewport.w)} × ${Math.round(e.viewport.h)}` : "—"],
+    ["Reporter", f.reporterName ? truncate(f.reporterName, 120) : "anonymous visitor"],
+  ];
+}
+
 /**
  * Issue body: the reporter's text quoted and escaped, the environment, and a link to the item in the
  * dashboard. Screenshots and diagnostics stay behind the dashboard's sign-in — no public or signed
- * asset URL is ever put in an issue.
+ * asset URL is ever put in an issue. GitHub and GitLab get a table; Linear (no HTML) a list.
  */
-export function issueBody(f: IssueBodyInput): string {
+export function issueBody(f: IssueBodyInput, flavor: "github" | "linear" = "github"): string {
   const quoted = truncate(f.body, 6000)
     .split(/\r?\n/)
     .map((l) => `> ${mdEscape(l)}`)
     .join("\n");
-  const e = f.environment;
-  const rows: [string, string][] = [
-    ["Project", mdEscape(f.projectName)],
-    ["Kind", mdEscape(f.kind)],
-    ["Page", f.pageUrl ? mdEscape(truncate(f.pageUrl, 500)) : "—"],
-    ["Browser", mdEscape([e?.browser, e?.os].filter(Boolean).join(" · ") || "—")],
-    ["Viewport", e?.viewport ? `${Math.round(e.viewport.w)} × ${Math.round(e.viewport.h)}` : "—"],
-    ["Reporter", f.reporterName ? mdEscape(truncate(f.reporterName, 120)) : "anonymous visitor"],
-  ];
+  const facts = issueFacts(f).map(([k, v]): [string, string] => [k, k === "Viewport" ? v : mdEscape(v)]);
   const product = mdEscape(f.productName);
+  const open = `**[Open #${f.number} in ${product}](${f.link})** — screenshot, console and network details are there (sign-in required).`;
+  if (flavor === "linear") {
+    return [
+      quoted,
+      "",
+      ...facts.map(([k, v]) => `- **${k}:** ${v}`),
+      "",
+      open,
+      "",
+      `_Created by ${product}. Completing or reopening this issue updates the item._`,
+    ].join("\n");
+  }
   return [
     quoted,
     "",
     "| | |",
     "|---|---|",
-    ...rows.map(([k, v]) => `| **${k}** | ${v} |`),
+    ...facts.map(([k, v]) => `| **${k}** | ${v} |`),
     "",
-    `**[Open #${f.number} in ${product}](${f.link})** — screenshot, console and network details are there (sign-in required).`,
+    open,
     "",
     `<sub>Created by ${product}. Closing or reopening this issue updates the item.</sub>`,
   ].join("\n");
+}
+
+const adfPara = (...content: object[]) => ({ type: "paragraph", content });
+const adfStr = (text: string, marks?: object[]) => ({ type: "text", text, ...(marks ? { marks } : {}) });
+
+/**
+ * The same issue as an Atlassian Document Format document for Jira. ADF text nodes are never parsed as
+ * markup, so the reporter's text needs no escaping; links exist only where we add a link mark.
+ */
+export function issueAdf(f: IssueBodyInput): object {
+  const quote = adfText(truncate(f.body, 6000)) as { content: object[] };
+  return {
+    type: "doc",
+    version: 1,
+    content: [
+      { type: "blockquote", content: quote.content },
+      {
+        type: "bulletList",
+        content: issueFacts(f).map(([k, v]) => ({
+          type: "listItem",
+          content: [adfPara(adfStr(`${k}: `, [{ type: "strong" }]), adfStr(v))],
+        })),
+      },
+      adfPara(
+        adfStr(`Open #${f.number} in ${f.productName}`, [
+          { type: "strong" },
+          { type: "link", attrs: { href: f.link } },
+        ]),
+        adfStr(" — screenshot, console and network details are there (sign-in required)."),
+      ),
+      adfPara(
+        adfStr(
+          `Created by ${f.productName}. Moving this issue to Done or back reopens or resolves the item.`,
+          [{ type: "em" }],
+        ),
+      ),
+    ],
+  };
 }
 
 async function integrationFor(id: string): Promise<Integration | null> {
@@ -127,24 +209,33 @@ export async function createIssueFor(feedbackId: string, integrationId: string):
     .select({ environment: feedback.environment, status: feedback.status })
     .from(feedback)
     .where(eq(feedback.id, feedbackId));
+  if (!(await providerLicensed(i.provider))) {
+    throw new TrackerError(
+      "Jira is an Enterprise feature: install a licence with it (Settings › Licence)",
+      null,
+    );
+  }
   const brand = await emailBrand(i.orgId);
   const f = ctx.payload;
+  const input: IssueBodyInput = {
+    number: f.number,
+    kind: f.kind,
+    projectName: f.projectName,
+    body: f.body,
+    pageUrl: f.pageUrl,
+    reporterName: f.reporterName,
+    environment: row?.environment ?? null,
+    link: feedbackLink(ctx.orgId, f.id),
+    productName: brand.productName,
+  };
   let ref: Awaited<ReturnType<typeof createIssue>>;
   try {
     ref = await createIssue(trackerConfig(i), {
       title: issueTitle(f),
-      body: issueBody({
-        number: f.number,
-        kind: f.kind,
-        projectName: f.projectName,
-        body: f.body,
-        pageUrl: f.pageUrl,
-        reporterName: f.reporterName,
-        environment: row?.environment ?? null,
-        link: feedbackLink(f.id),
-        productName: brand.productName,
-      }),
+      body: issueBody(input, i.provider === "linear" ? "linear" : "github"),
       labels: i.labels,
+      kind: f.kind,
+      ...(i.provider === "jira" ? { adf: issueAdf(input) } : {}),
     });
   } catch (err) {
     await recordError(i, err);
@@ -180,7 +271,13 @@ export async function createIssueFor(feedbackId: string, integrationId: string):
     feedbackId,
     actorKind: "integration",
     type: "issue_linked",
-    data: { provider: i.provider, number: ref.number, url: ref.url, via: i.provider },
+    data: {
+      provider: i.provider,
+      number: ref.number,
+      url: ref.url,
+      via: i.provider,
+      ...(ref.key ? { key: ref.key } : {}),
+    },
   });
   // Already closed in Pinwren (e.g. sent after resolving): close the new issue too.
   if (row && isClosedStatus(row.status)) {
@@ -192,10 +289,15 @@ export async function createIssueFor(feedbackId: string, integrationId: string):
 /** On `feedback.created`: queue issue creation for integrations set to auto-create. */
 export async function autoCreateIssues(ctx: FeedbackContext): Promise<void> {
   const rows = await getDb()
-    .select({ id: issueIntegration.id, autoCreate: issueIntegration.autoCreate })
+    .select({
+      id: issueIntegration.id,
+      autoCreate: issueIntegration.autoCreate,
+      provider: issueIntegration.provider,
+    })
     .from(issueIntegration)
     .where(and(eq(issueIntegration.projectId, ctx.payload.projectId), eq(issueIntegration.active, true)));
   for (const r of rows) {
+    if (!(await providerLicensed(r.provider))) continue;
     if (r.autoCreate === "all" || (r.autoCreate === "bugs" && ctx.payload.kind === "bug")) {
       await enqueue(QUEUES.issues, {
         type: "create",
@@ -225,7 +327,7 @@ export async function syncIssueState(feedbackId: string, status: string): Promis
 export async function runIssueJob(job: IssueJob): Promise<void> {
   if (job.type === "create") {
     const i = await integrationFor(job.integrationId);
-    if (!i?.active) return;
+    if (!i?.active || !(await providerLicensed(i.provider))) return;
     await createIssueFor(job.feedbackId, job.integrationId);
     return;
   }
@@ -235,7 +337,7 @@ export async function runIssueJob(job: IssueJob): Promise<void> {
     .from(issueLink)
     .innerJoin(issueIntegration, eq(issueIntegration.id, issueLink.integrationId))
     .where(eq(issueLink.id, job.linkId));
-  if (!row?.i.active || row.l.state === job.state) return;
+  if (!row?.i.active || row.l.state === job.state || !(await providerLicensed(row.i.provider))) return;
   try {
     await setIssueState(trackerConfig(row.i), row.l.number, job.state);
   } catch (err) {
@@ -292,7 +394,7 @@ export async function applyInboundState(
   return { feedbackId: f.id, status: to };
 }
 
-/** Synchronous "Send to GitHub/GitLab" from the dashboard. */
+/** Synchronous "Send to GitHub/GitLab/Linear/Jira" from the dashboard. */
 export async function sendToTracker(orgId: string, feedbackId: string, integrationId: string): Promise<Link> {
   const db = getDb();
   const [i] = await db
@@ -313,6 +415,9 @@ export async function sendToTracker(orgId: string, feedbackId: string, integrati
     );
   if (!f) throw notFound("Feedback");
   if (!i.active) throw new ApiError(409, "INTEGRATION_DISABLED", "This integration is switched off");
+  if (!(await providerLicensed(i.provider))) {
+    throw new ApiError(403, "LICENSE_REQUIRED", "Jira is an Enterprise feature: install a licence with it");
+  }
   try {
     return await createIssueFor(feedbackId, integrationId);
   } catch (err) {

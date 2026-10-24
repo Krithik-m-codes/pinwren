@@ -11,7 +11,7 @@ import { and, asc, eq, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { isOrgAdmin, type SessionVars } from "../context";
 import { forbidden, notFound } from "../errors";
-import { isReadOnlyRole, readOnlyError } from "../permissions";
+import { isReadOnlyRole, readOnlyError, requirePermission } from "../permissions";
 import { createRound, deleteRound, exportRound, getRound, listRounds, updateRound } from "../services/rounds";
 
 type ViewRow = typeof savedView.$inferSelect;
@@ -43,7 +43,8 @@ export const rounds = new Hono<{ Variables: SessionVars }>()
   .patch("/rounds/:id", zValidator("json", reviewRoundUpdate), async (c) =>
     c.json({ round: await updateRound(c.var.orgId, c.req.param("id"), c.req.valid("json")) }),
   )
-  .delete("/rounds/:id", async (c) => {
+  // Deleting is Admin-only (wave-5 contract §3.7); the round's items stay, outside any round.
+  .delete("/rounds/:id", requirePermission("feedback.delete"), async (c) => {
     await deleteRound(c.var.orgId, c.req.param("id"));
     return c.body(null, 204);
   })

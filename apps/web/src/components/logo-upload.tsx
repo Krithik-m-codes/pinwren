@@ -12,7 +12,7 @@ const MAX_BYTES = 512 * 1024;
 
 export type UploadedLogo = { id: string; url: string };
 
-function readAsDataUrl(file: File): Promise<string> {
+export function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(typeof r.result === "string" ? r.result : "");

@@ -14,20 +14,8 @@ import { type ApiError, baseApi, LIST, fulfilled } from "./base";
 
 export type NotificationsResponse = { items: NotificationItem[]; unreadCount: number };
 export type BrandingPatch = Partial<Pick<OrgBranding, "productName" | "accent" | "logoAssetId">>;
+/** A Better Auth organisation role (`member.role`); the dashboard shows Admin / Editor / Viewer. */
 export type OrgRole = "owner" | "admin" | "member" | "viewer";
-
-/** Better Auth's full organisation (members with their users), for Settings › Members. */
-export type FullOrg = {
-  id: string;
-  name: string;
-  members: {
-    id: string;
-    role: string;
-    userId: string;
-    createdAt: string | Date;
-    user: { name: string; email: string; image?: string | null };
-  }[];
-};
 
 type AuthResult<T> = { data: T | null; error: { message?: string | undefined; status?: number } | null };
 
@@ -76,10 +64,6 @@ export const accountApi = baseApi.injectEndpoints({
       query: () => "/members",
       providesTags: [{ type: "Member", id: LIST }],
     }),
-    fullOrg: build.query<FullOrg, undefined>({
-      queryFn: () => auth((c) => c.organization.getFullOrganization() as Promise<AuthResult<FullOrg>>),
-      providesTags: ["Org"],
-    }),
     invitations: build.query<{ invitations: Invitation[] }, undefined>({
       query: () => "/invitations",
       providesTags: [{ type: "Invitation", id: LIST }],
@@ -98,28 +82,15 @@ export const accountApi = baseApi.injectEndpoints({
         auth((c) => c.organization.cancelInvitation({ invitationId }) as Promise<AuthResult<unknown>>),
       invalidatesTags: [{ type: "Invitation", id: LIST }],
     }),
-    updateMemberRole: build.mutation<unknown, { memberId: string; role: OrgRole }>({
-      queryFn: ({ memberId, role }) =>
-        auth((c) => c.organization.updateMemberRole({ memberId, role }) as Promise<AuthResult<unknown>>),
-      invalidatesTags: ["Org", { type: "Member", id: LIST }],
-    }),
-    removeMember: build.mutation<unknown, string>({
-      queryFn: (memberId) =>
-        auth(
-          (c) => c.organization.removeMember({ memberIdOrEmail: memberId }) as Promise<AuthResult<unknown>>,
-        ),
-      invalidatesTags: ["Org", { type: "Member", id: LIST }],
-    }),
-    updateProfile: build.mutation<unknown, { name: string }>({
-      queryFn: ({ name }) => auth((c) => c.updateUser({ name }) as Promise<AuthResult<unknown>>),
-      invalidatesTags: ["Me", { type: "Member", id: LIST }, "Org"],
-    }),
 
     notifications: build.query<NotificationsResponse, undefined>({
       query: () => "/notifications?limit=30",
       providesTags: ["Notification"],
     }),
-    markNotificationsRead: build.mutation<{ updated: number }, { ids: string[] } | { all: true }>({
+    markNotificationsRead: build.mutation<
+      { updated: number },
+      { ids: string[] } | { feedbackId: string } | { all: true }
+    >({
       query: (body) => ({ url: "/notifications/read", method: "POST", body }),
       // The bell clears at once; the server's answer (or a rollback) follows.
       async onQueryStarted(body, { dispatch, queryFulfilled }) {
@@ -127,13 +98,14 @@ export const accountApi = baseApi.injectEndpoints({
         const patch = dispatch(
           accountApi.util.updateQueryData("notifications", undefined, (draft) => {
             const ids = "ids" in body ? new Set(body.ids) : null;
+            const item = "feedbackId" in body ? body.feedbackId : null;
             let cleared = 0;
             for (const n of draft.items) {
-              if (n.readAt || (ids && !ids.has(n.id))) continue;
+              if (n.readAt || (ids && !ids.has(n.id)) || (item && n.feedbackId !== item)) continue;
               n.readAt = now;
               cleared++;
             }
-            draft.unreadCount = ids ? Math.max(0, draft.unreadCount - cleared) : 0;
+            draft.unreadCount = ids || item ? Math.max(0, draft.unreadCount - cleared) : 0;
           }),
         );
         try {
@@ -144,7 +116,11 @@ export const accountApi = baseApi.injectEndpoints({
       },
       invalidatesTags: ["Notification"],
     }),
-    notificationPrefs: build.query<{ preferences: NotificationPreference[] }, undefined>({
+    /** `emailConfigured`: SMTP is set up on the server (else only the bell notifies). */
+    notificationPrefs: build.query<
+      { preferences: NotificationPreference[]; emailConfigured: boolean },
+      undefined
+    >({
       query: () => "/notification-preferences",
       providesTags: ["NotificationPrefs"],
     }),

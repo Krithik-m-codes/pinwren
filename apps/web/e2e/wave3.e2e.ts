@@ -167,7 +167,8 @@ test.describe("wave 3", () => {
       await expect(issue).toHaveAttribute("href", /https:\/\/github\.example\/acme\/site\/issues\/\d+/);
       await expect(actions.getByRole("button", { name: "Send to GitHub" })).toHaveCount(0);
       const created = gh.seen.find((s) => s.method === "POST");
-      expect(created?.body).toContain(`/inbox?status=all&item=${items.pin.id}`);
+      // The link names the workspace too, so it opens there (wave-5 contract, deep links with ?org=).
+      expect(created?.body).toContain(`/inbox?status=all&org=${seed().orgId}&item=${items.pin.id}`);
       await shoot(page, "inbox-github-issue");
     } finally {
       await gh.close();
@@ -249,8 +250,8 @@ test.describe("wave 3", () => {
   });
 
   test("email templates: edit, preview, reset", async ({ page }) => {
-    await page.goto("/settings/email");
-    await expect(page.getByText("Email templates")).toBeVisible();
+    await page.goto("/settings/notifications?tab=templates");
+    await expect(page.getByRole("tab", { name: "Email templates" })).toHaveAttribute("aria-selected", "true");
     await page.getByRole("combobox", { name: "Template" }).click();
     await page.getByRole("option", { name: "New feedback" }).click();
     // The preview is a sandboxed frame (no scripts): assert on what it is given, not inside it.

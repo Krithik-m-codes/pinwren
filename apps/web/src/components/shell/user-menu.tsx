@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowUpCircle, Eye, LogOut, Monitor, Moon, Sun } from "lucide-react";
+import { ArrowUpCircle, Eye, LogOut, Monitor, Moon, Settings, Sun } from "lucide-react";
+import Link from "next/link";
 import { useTheme } from "next-themes";
 import { safeHref } from "@pinwren/core";
 import {
@@ -78,6 +79,10 @@ export function UserMenu({
           }
         />
         <DropdownMenuContent side="top" align="start" className="w-56">
+          <DropdownMenuItem render={<Link href="/settings" />} data-testid="profile-settings">
+            <Settings /> Profile &amp; settings
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuLabel>Theme</DropdownMenuLabel>
             <DropdownMenuItem onClick={() => setTheme("light")}>

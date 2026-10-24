@@ -61,8 +61,17 @@ describe("inbox slice", () => {
   it("keeps the open picker, the last change and preferences", () => {
     let s = inbox(initialInboxState, menuChanged("priority"));
     expect(s.menu).toBe("priority");
-    s = inbox(s, changeRecorded({ ids: ["a"], patch: { status: "open" }, label: "Resolved" }));
-    expect(s.lastChange?.patch).toEqual({ status: "open" });
+    s = inbox(
+      s,
+      changeRecorded({
+        each: [
+          { id: "a", patch: { status: "open" } },
+          { id: "b", patch: { status: "in_review" } },
+        ],
+        label: "Resolved",
+      }),
+    );
+    expect(s.lastChange?.each.map((c) => c.patch.status)).toEqual(["open", "in_review"]);
     expect(inbox(s, densityChanged("compact")).prefs.density).toBe("compact");
   });
 });

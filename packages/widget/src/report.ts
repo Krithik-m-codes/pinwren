@@ -2,11 +2,19 @@ import type { Created } from "./api";
 import { type Attachment, MAX_FILES, readFile, sanitizeAttachments, validateFiles } from "./attachments";
 import type { CaptureMode, CaptureModule } from "./capture";
 import { loadChunk } from "./chunks";
-import type { Branding, CaptureCfg, FeedbackPayload, ReplayPayload, WidgetConfig } from "./config";
+import {
+  type Branding,
+  type CaptureCfg,
+  type FeedbackPayload,
+  mergeMetadata,
+  type ReplayPayload,
+  type WidgetConfig,
+} from "./config";
 import { diagnosticsSummary, performanceTiming, snapshotDiagnostics } from "./diagnostics";
 import { adoptStyle, h, ICONS, icon, trapFocus } from "./dom";
 import type { Editor, EditorModule } from "./editor";
 import { environment, errText, uuid } from "./env";
+import { cleanPageUrl } from "./export";
 import { consentBlock, identityFields } from "./form";
 import { addEnglish, t, tn } from "./i18n";
 import * as I from "./icons";
@@ -40,8 +48,12 @@ export type ReportCtx = {
   /** Where focus goes back to when the report closes. */
   opener: Element | null;
   identity: Identity;
+  /** Came through a review link: the guest must give a name (wave-5 §3.5). */
+  reviewGuest: boolean;
   /** Page scope sent as `page.urlPattern` (wave-4 §4). */
   urlPattern: string | undefined;
+  /** Host context from `Pinwren.setMetadata` (wave-5 §3.3), read when the report is sent. */
+  metadata: () => Record<string, unknown> | null;
   replay: ReplayOffer | null;
   submit: (p: FeedbackPayload) => Promise<Created>;
   queue: (clientId: string, p: FeedbackPayload) => Promise<void>;
@@ -127,6 +139,20 @@ async function readDraft(project: string): Promise<Draft | null> {
   };
 }
 
+/** Where a screenshot of `mode` is taken from, read just before the capture starts (wave-5 §2). */
+function geometryOf(mode: Mode): NonNullable<FeedbackPayload["capture"]> {
+  const vw = Math.max(1, Math.min(20_000, Math.round(innerWidth)));
+  const vh = Math.max(1, Math.min(20_000, Math.round(innerHeight)));
+  if (mode === "full")
+    return {
+      vw,
+      vh: Math.max(1, Math.min(20_000, document.documentElement.scrollHeight)),
+      scrollY: 0,
+      mode,
+    };
+  return { vw, vh, scrollY: Math.max(0, Math.round(scrollY)), mode };
+}
+
 const fmtSize = (n: number) =>
   n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1)} MB`;
 
@@ -161,6 +187,8 @@ export class BugReport {
   private baseUrl: string | null = null;
   private editor: Editor | null = null;
   private mode: Mode = "visible";
+  /** The viewport the current screenshot shows (wave-5 §2), for Page Review; null when unknown (a draft). */
+  private geometry: FeedbackPayload["capture"] | null = null;
   private state: "capturing" | "ready" | "failed" | "none" = "capturing";
   private picker: Picker | null = null;
   private saveTimer = 0;
@@ -186,7 +214,9 @@ export class BugReport {
     const editor = this.loadEd();
     try {
       this.mod = await loadModule(this.ctx.assets);
+      const at = geometryOf("visible");
       this.base = await timeout(this.mod.capture("visible", this.ctx.capture.maskSelectors), CAPTURE_TIMEOUT);
+      this.geometry = at;
       await editor;
       this.state = "ready";
     } catch (err) {
@@ -274,7 +304,7 @@ export class BugReport {
 
   private build(shapes: Shape[] = []) {
     const { ctx } = this;
-    const ident = identityFields(ctx.identity);
+    const ident = identityFields(ctx.identity, { requireName: ctx.reviewGuest });
     const consent = consentBlock(ctx.cfg.consent, ctx.project);
     const send = h("button", { class: "btn primary" }, consent.need ? t("agreeSend") : t("sendReport"));
 
@@ -331,8 +361,8 @@ export class BugReport {
       }
       const bad = ident.invalid();
       if (bad) {
-        this.error.textContent = t("badEmail");
-        bad.focus();
+        this.error.textContent = bad.message;
+        bad.el.focus();
         return;
       }
       consent.accept();
@@ -563,7 +593,9 @@ export class BugReport {
       ["ellipse", I.ellipse, t("toolEllipse"), "O"],
       ["arrow", I.arrow, t("toolArrow"), "A"],
       ["pen", I.pen, t("toolPen"), "P"],
+      ["highlighter", I.highlighter, t("toolHighlighter"), "H"],
       ["text", I.text, t("toolText"), "T"],
+      ["step", I.step, t("toolStep"), "N"],
       ["blur", I.blur, t("toolBlur"), "B"],
       ["crop", I.crop, t("toolCrop"), "C"],
     ];
@@ -679,6 +711,7 @@ export class BugReport {
     if (mode === "screen") {
       const root = this.ctx.root;
       try {
+        const at = geometryOf("screen");
         this.base = await m.screenShare(
           () => {
             root.style.visibility = "hidden";
@@ -689,6 +722,7 @@ export class BugReport {
           this.ctx.capture.maskSelectors,
         );
         this.mode = mode;
+        this.geometry = at;
         this.baseUrl = null;
         this.setShot("ready");
         this.saveSoon();
@@ -705,8 +739,10 @@ export class BugReport {
     }
     this.setShot("capturing");
     try {
+      const at = geometryOf(mode);
       this.base = await timeout(m.capture(mode, this.ctx.capture.maskSelectors, el), CAPTURE_TIMEOUT);
       this.mode = mode;
+      this.geometry = at;
       this.baseUrl = null;
       if (!this.closed) this.setShot("ready");
       this.saveSoon();
@@ -899,6 +935,7 @@ export class BugReport {
             return null;
           })
         : null;
+    const shot = this.state === "ready" ? this.editor?.exportLayered() : undefined;
     const payload: FeedbackPayload = {
       clientId: this.clientId,
       kind: "bug",
@@ -906,7 +943,7 @@ export class BugReport {
       body,
       priority: PRIORITY[this.severity],
       page: {
-        url: location.href,
+        url: cleanPageUrl(location.href),
         title: document.title.slice(0, 300),
         ...(this.ctx.urlPattern ? { urlPattern: this.ctx.urlPattern } : {}),
       },
@@ -916,8 +953,15 @@ export class BugReport {
       replay: replay ?? undefined,
       diagnostics: snapshotDiagnostics(),
       // Privacy mode (wave-3 §3) sends no page-timing metadata.
-      metadata: this.ctx.cfg.privacyMode ? undefined : { performance: performanceTiming() },
-      screenshot: this.state === "ready" ? this.editor?.export() : undefined,
+      metadata: mergeMetadata(
+        this.ctx.metadata(),
+        this.ctx.cfg.privacyMode ? undefined : { performance: performanceTiming() },
+      ),
+      // Annotations travel as vectors over the (redacted, cropped) capture; the dashboard can hide them.
+      screenshot: shot?.screenshot,
+      annotations: shot?.annotations ?? undefined,
+      // A cropped image no longer shows the whole viewport, so it can't be placed on Page Review.
+      capture: shot && !shot.cropped && this.geometry ? this.geometry : undefined,
       attachments: this.attachments.length
         ? (this.attachments.map((a) => ({
             name: a.name,

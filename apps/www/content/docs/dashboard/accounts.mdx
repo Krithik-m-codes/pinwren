@@ -1,0 +1,147 @@
+---
+title: Accounts, users and workspaces
+description: The first account, adding users, Admin / Editor / Viewer roles, password reset, two-factor sign-in, passkeys, email sign-in links, Google and GitHub, your profile, and switching, renaming, handing over or deleting a workspace.
+---
+
+## The first account
+
+On a new server, the first account anyone creates is the server's **instance administrator**. Open
+`PINWREN_URL`, and the sign-in page sends you to **Create the administrator account**. Onboarding then asks for a
+workspace and a first project. **Settings › Email** (SMTP), **Settings › Security** and **Settings › Licence** are
+open to you straight away. There is no setup token and nothing to copy from the server log.
+
+Keep a new server private until you have signed up: whoever creates the first account administers it. The Docker
+compose file only listens on `127.0.0.1` for that reason. `PINWREN_ADMIN_EMAILS` names more administrators from the
+environment; while it lists anyone, nobody becomes an administrator just by signing up first.
+
+Instance administrators are listed in **Settings › Security › Instance administrators**. An administrator can make
+someone from the workspace an administrator, or remove one. People listed in `PINWREN_ADMIN_EMAILS` show a lock and
+are changed in the environment. The server never removes its last administrator.
+
+## Users and roles
+
+**Settings › Users** lists everyone in the workspace. Admins add people in one of two ways:
+
+- **Add user** creates the account at once: name, email, a password (at least 8 characters; **Generate** makes
+  one) and a role. Then copy the sign-in details and send them. No email is needed, so this works before SMTP is
+  set up. If the address already has an account, the dialog offers to invite it instead.
+- **Invite by email** sends a link to join; the person chooses their own password. Without SMTP the dashboard says
+  so and copies the invitation link for you to send. Pending invitations can be copied or revoked, and expire
+  after 7 days.
+
+| Role       | Can                                                                                                                     |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Admin**  | Everything: projects, users, integrations, branding, email templates, notification recipients and the workspace itself  |
+| **Editor** | View, edit, assign and bulk-update reports, comment, and add reports by hand. No deleting, no settings, no new projects |
+| **Viewer** | Read everything, change nothing. For clients and stakeholders who follow progress                                       |
+
+Admins change someone's role from the list and remove them from the **⋯** menu. Your own role is changed by another
+Admin, and the workspace **owner** (the Admin who created it, shown with an **Owner** badge) can't be demoted or
+removed; ownership is handed over in **Settings › Workspace**. The server enforces every role: a request a role
+doesn't allow is answered `403 FORBIDDEN_ROLE` (or `403 READ_ONLY_ROLE` for Viewers), and the dashboard hides those
+controls.
+
+Everyone, whatever their role, manages their own profile, password, two-factor sign-in and notification settings.
+
+## Signing in
+
+- **Forgot password?** on the sign-in page emails a link to choose a new password (it works for an hour). A reset
+  signs you out on every device.
+- **Without SMTP** nothing can be emailed, so the page says to ask an administrator. An instance administrator opens
+  **Settings › Users**, picks **Copy password reset link** from the person's **⋯** menu and sends it; the link
+  works once, for 24 hours.
+- **Links into the dashboard** (from an email, for instance) survive signing in: you land on the page you opened.
+  A link to an item in another of your workspaces switches to that workspace first.
+- **Two-factor authentication**: after the password, sign-in asks for the code from your authenticator app, or one
+  of your backup codes. **Trust this device for 30 days** skips the code on that browser.
+- If the page warns that the server is set up for another address, open Pinwren at the address it names, or change
+  `PINWREN_URL` to the address you use.
+
+## Other ways to sign in
+
+Under the password form, the sign-in page offers whatever the server has turned on. An instance administrator
+chooses in **Settings › Security › Sign-in methods**.
+
+- **Sign in with a passkey**: your fingerprint, face, screen lock or a security key, once you have added a passkey
+  in **Settings › Profile**. On by default.
+- **Email me a sign-in link**: a link that signs you in, valid once for 10 minutes. It is offered only when SMTP is
+  set up (Settings › Email), and an administrator can switch it off. The page always says a link is on its way, so
+  it never reveals who has an account. An address that may not sign up gets no link.
+- **Continue with Google** and **Continue with GitHub**: shown once the server's operator has configured them
+  (`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`, see
+  [Environment](/docs/self-hosting/environment#sign-in-with-google-or-github)). They are on the sign-up page too.
+
+**Sign-up rules apply to every method.** Google, GitHub and email links create a new account only when a password
+sign-up would be allowed: for the first account on the server, for an address with a pending invitation, or when
+sign-up is open (`PINWREN_DISABLE_SIGNUP=false`). Anyone else is sent back to the sign-in page with "accounts on this
+server are by invitation". The first account always becomes the instance administrator, whichever method created
+it. A new account goes to onboarding, which offers pending invitations first.
+
+**Existing accounts.** Signing in with Google or GitHub joins your existing account when the provider has
+verified the address and your Pinwren address is verified (confirmed by email, or added by an Admin). Otherwise the
+page says to sign in with your password and connect the provider in **Settings › Profile**.
+
+Two-factor authentication asks for its code after a password. A passkey already proves you have your device, and
+Google and GitHub run their own two-step checks, so those methods don't ask again.
+
+## Your profile
+
+**Settings › Profile**:
+
+- **Picture**: upload a PNG, JPEG or WebP (up to 512 KB), or remove it. Teammates see it on comments and
+  assignments.
+- **Name** and **email**. With SMTP, a new address gets a confirmation link (a confirmed address approves the change
+  first) and changes once confirmed. Without SMTP you confirm the change with your password. **Verified** shows
+  whether the address has been confirmed; an unconfirmed one can ask for the link again. Confirming is never
+  required to sign in.
+- **Password**: changing it signs you out everywhere else.
+- **Two-factor authentication**: **Turn on**, enter your password, add Pinwren to your authenticator app (open the
+  setup link on your phone, or type the key), enter the code it shows, then save the 10 backup codes. **New backup
+  codes** replaces them; **Turn off** asks for your password.
+- **Passkeys**: **Add a passkey**, name it, and your browser asks where to save it (your password manager, this
+  device or a security key). Rename or remove passkeys from the list; removing one here doesn't delete it from
+  your password manager. Adding a passkey needs a sign-in from the last 24 hours; if it is older, sign out and back
+  in first.
+- **Connected accounts** (when the server offers Google or GitHub): **Connect** signs you in there and links that
+  account to yours; its address may differ from your Pinwren email. **Disconnect** removes it. Pinwren keeps at
+  least one way in, so your only sign-in method can't be disconnected. An account created with Google, GitHub or an
+  email link has no password; to add one, use **Forgot password?** on the sign-in page.
+- **Where you're signed in**: every browser and device with an open session. Sign one out, or **Sign out all other
+  devices**.
+- **Delete account**: asks for your password. Your comments stay without your name. A workspace only you are in is
+  deleted with the account; one you own with other people has to be handed over first.
+
+## Workspaces
+
+A workspace holds a team, its projects and settings. You can belong to several.
+
+- **Switch** from the workspace name at the top of the sidebar. The menu lists your workspaces and has
+  **Create workspace** (you become its owner) and **Workspace settings**.
+- **Invitations**: if someone invited your address and you signed up without their link, onboarding shows the
+  invitation with **Join** before offering to create a workspace.
+- **Settings › Workspace**:
+  - **Name**: Admins rename the workspace.
+  - **Leave workspace**: for everyone but the owner.
+  - **Transfer ownership** (owner): pick a member. They become the owner and you stay an Admin.
+  - **Delete workspace** (owner): type the workspace's name to confirm. Every project, report, screenshot,
+    comment and integration in it is deleted, with the stored files.
+
+## API
+
+| Endpoint                                                                        | What it does                                                                |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `GET /api/setup`                                                                | Public: whether an account exists, sign-up policy, whether email can go out |
+| `GET /api/members`                                                              | Everyone in the workspace, with `appRole`                                   |
+| `POST /api/members`                                                             | Add user (Admins): `{ name, email, password, role }`                        |
+| `PATCH /api/members/:userId`, `DELETE /api/members/:userId`                     | Change a role, remove someone (Admins)                                      |
+| `POST /api/members/:userId/reset-link`                                          | A password reset link (instance administrators)                             |
+| `PATCH /api/me/profile`, `POST/DELETE /api/me/avatar`                           | Your name and picture                                                       |
+| `POST /api/me/email`                                                            | Change your email with your password (servers without SMTP)                 |
+| `GET /api/me/invitations`                                                       | Invitations waiting for your address                                        |
+| `PATCH /api/workspace`, `POST /api/workspace/transfer`, `DELETE /api/workspace` | Rename, hand over, delete (owner for the last two)                          |
+| `GET/POST /api/admin/instance-admins`, `DELETE …/:userId`                       | Instance administrators                                                     |
+| `GET /api/sign-in-methods`                                                      | Public: which sign-in methods the sign-in page offers                       |
+| `GET/PATCH /api/admin/settings/sign-in`                                         | Email-link and passkey switches, provider status (instance administrators)  |
+
+Sign-in, password reset, email verification, two-factor authentication, passkeys, email links, Google / GitHub,
+connected accounts and sessions use the authentication endpoints under `/api/auth`.

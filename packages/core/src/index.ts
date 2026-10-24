@@ -3,6 +3,7 @@ export * from "./config";
 export * from "./license";
 export * from "./origins";
 export * from "./realtime";
+export * from "./roles";
 export * from "./rounds";
 export * from "./schemas";
 export * from "./security";

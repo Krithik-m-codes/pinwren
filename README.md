@@ -15,7 +15,7 @@ in a keyboard-first triage inbox you run yourself.
 [![CodeQL][badge-codeql]][codeql]
 [![Licence: AGPL-3.0][badge-agpl]](#licence)
 [![npm: @pinwren/widget][badge-npm]][npm]
-[![Widget core: 26 KB gzip][badge-size]](#packages)
+[![Widget core: 33 KB gzip][badge-size]](#packages)
 [![TypeScript: strict][badge-ts]](tsconfig.base.json)
 [![PRs welcome][badge-prs]](CONTRIBUTING.md)
 
@@ -46,7 +46,7 @@ in a keyboard-first triage inbox you run yourself.
 - **Never loses a report** — drafts survive reloads; reports sent while offline wait in an IndexedDB outbox
   and are retried with backoff.
 - **Safe on your site** — closed Shadow DOM, no global CSS or JS, focus traps that give focus back, every
-  error caught and logged. The core is about 26 KB gzip; the side panel, report form, capture engine and
+  error caught and logged. The core is about 33 KB gzip; the side panel, report form, capture engine and
   each language load only when needed.
 - **Privacy mode** — masks every text field as a solid block in captures, drops timing data, truncates IP
   addresses and asks for consent. Password and card fields, and anything marked `data-pinwren-mask`, are
@@ -65,7 +65,8 @@ in a keyboard-first triage inbox you run yourself.
   self-managed GitLab), signed webhooks with Slack and Discord formats plus a delivery log, scoped API
   tokens for `/api/v1`, and custom panel actions such as "Send to agent".
 - **Team** — workspaces, invitations and roles, per-workspace branding (name, logo, accent), editable email
-  templates, retention policies, CSV and JSON export.
+  templates, retention policies, CSV and JSON export, a full project export (JSON + files) and erasure of
+  everything one reporter sent.
 - **Operations** — one container plus Postgres; files on disk or in any S3-compatible bucket; settings in
   the UI that environment variables can override and lock; HTTPS enforcement; an update check.
 
@@ -103,16 +104,34 @@ docker compose -f docker/compose.yml --env-file docker/.env up -d --build
 Each release also publishes a multi-arch image (amd64, arm64) to `ghcr.io/krithik-m-codes/pinwren`: set
 `PINWREN_IMAGE=ghcr.io/krithik-m-codes/pinwren:<version>` in `docker/.env` and leave out `--build`.
 
-Open `PINWREN_URL`, create your account and workspace, and add a project for your site with its allowed
-origins. In production, put a TLS reverse proxy (Caddy, Traefik, nginx) in front: allow request bodies of at
-least 32 MB (screenshots, attachments and a 10 MB session replay) and let it compress the widget with brotli —
+Then, all in the browser:
+
+1. **Create the admin account.** Open `PINWREN_URL` and sign up. The first account on a new server is its
+   administrator — there is no setup token to dig out of the logs. Keep the server private until you have
+   done this (it listens on 127.0.0.1 by default).
+2. **Set up email.** Settings › Email: enter your SMTP server (host, port, security, user, password, from
+   address) and click **Send test email**. Environment variables (`SMTP_*`, `EMAIL_FROM` in
+   `docker/.env`) still work and lock the fields they set.
+3. **Create a project** for your site: its domain, and whether it is a public website (bug reports stay
+   private) or a staging/client-review site (reviewers see each other's pins).
+4. **Add the widget** from the project's **Install** tab (below), send a test report from your site, and
+   watch it arrive in the inbox, the bell and the team's email. A checklist on the inbox tracks these steps.
+5. **Add your team** under Settings › Members: create accounts directly or invite by email (Admin, Editor or
+   Viewer).
+
+The full walkthrough is in [`docs/self-hosting/getting-started.md`](docs/self-hosting/getting-started.md).
+In production, put a TLS reverse proxy (Caddy, Traefik, nginx) in front: allow request bodies of at least
+48 MB (screenshots, attachments and a 10 MB session replay) and let it compress the widget with brotli —
 ready-made configs are in [`docs/self-hosting/reverse-proxy.md`](docs/self-hosting/reverse-proxy.md). Data lives in two volumes: `pinwren-db` (Postgres) and `pinwren-data`
-(uploaded files). Every setting is documented in [`apps/web/.env.example`](apps/web/.env.example) and
+(uploaded files). Every variable in `docker/.env` reaches the app; each is described in
+[`docker/.env.example`](docker/.env.example), [`apps/web/.env.example`](apps/web/.env.example) and
 [`blueprint/08-self-hosting.md`](blueprint/08-self-hosting.md).
 
 ### Add the widget to your site
 
-Paste the snippet from the project's **Install** tab before `</body>`:
+Paste the snippet from the project's **Install** tab before `</body>` (the tab also has Next.js, Google Tag
+Manager, npm and React versions, prefilled with your key and server address, and a `npx pinwren doctor`
+command that checks the setup from your terminal):
 
 ```html
 <script src="https://feedback.example.com/widget.js" data-project="pk_…" async></script>
@@ -127,12 +146,15 @@ npm install @pinwren/widget
 ```
 
 ```js
-import "@pinwren/widget"; // browser only: defines window.Pinwren
+import { identify, init, on } from "@pinwren/widget"; // a tiny loader: the widget comes from your server
 
-Pinwren.init({ projectKey: "pk_…", endpoint: "https://feedback.example.com" });
-Pinwren.identify({ name: "Ada Lovelace", email: "ada@example.com" });
-Pinwren.on("submit", ({ number }) => console.log(`Feedback #${number} sent`));
+init({ projectKey: "pk_…", endpoint: "https://feedback.example.com" });
+identify({ name: "Ada Lovelace", email: "ada@example.com" });
+on("submit", ({ number }) => console.log(`Feedback #${number} sent`));
 ```
+
+In React, `npm install @pinwren/react` and render `<Pinwren projectKey="pk_…" endpoint="https://feedback.example.com" />`
+once near the root of your app.
 
 ## Architecture
 
@@ -170,7 +192,7 @@ Decisions are recorded in [`docs/adr/`](docs/adr) and the
 | `packages/api`    | `@pinwren/api`    | AGPL-3.0 | Hono API: auth, dashboard and widget routes, jobs, email, webhooks, trackers, storage |
 | `packages/core`   | `@pinwren/core`   | AGPL-3.0 | Zod schemas and wire types, origin matching, security helpers                         |
 | `packages/db`     | `@pinwren/db`     | AGPL-3.0 | Drizzle schema and SQL migrations (Postgres)                                          |
-| `packages/widget` | `@pinwren/widget` | MIT      | The embeddable widget, on npm: `widget.js` (≈26 KB gzip) plus lazily loaded chunks    |
+| `packages/widget` | `@pinwren/widget` | MIT      | The embeddable widget, on npm: `widget.js` (≈33 KB gzip) plus lazily loaded chunks    |
 | `docker`          | —                 | AGPL-3.0 | Dockerfile, self-host compose file, development database                              |
 | `loadtest`        | —                 | AGPL-3.0 | k6 scenario and sizing notes ([results](loadtest/README.md))                          |
 
@@ -249,6 +271,6 @@ Pinwren uses two licences:
 [badge-codeql]: https://github.com/Krithik-m-codes/pinwren/actions/workflows/codeql.yml/badge.svg?branch=main
 [badge-agpl]: https://img.shields.io/badge/licence-AGPL--3.0-blue
 [badge-npm]: https://img.shields.io/npm/v/@pinwren/widget?label=%40pinwren%2Fwidget
-[badge-size]: https://img.shields.io/badge/widget%20core-26%20KB%20gzip-informational
+[badge-size]: https://img.shields.io/badge/widget%20core-33%20KB%20gzip-informational
 [badge-ts]: https://img.shields.io/badge/TypeScript-strict-3178c6
 [badge-prs]: https://img.shields.io/badge/PRs-welcome-brightgreen

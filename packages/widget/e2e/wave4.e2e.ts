@@ -71,6 +71,7 @@ test("hashed chunks: the manifest in widget.js names every file, within the size
     [
       "capture",
       "editor",
+      "flows",
       "panel",
       "replay",
       "report",
@@ -84,11 +85,12 @@ test("hashed chunks: the manifest in widget.js names every file, within the size
   }
   const gz = (key: string) =>
     (key === "widget" ? m.files["widget.js"] : m.files[m.chunks[key] ?? ""])?.gzip ?? 0;
-  expect(gz("widget")).toBeLessThanOrEqual(30 * 1024);
+  expect(gz("widget")).toBeLessThanOrEqual(35 * 1024); // blueprint 05 §2: the speed dial and markers grew the core (wave 5)
   expect(gz("panel")).toBeLessThanOrEqual(15 * 1024);
   expect(gz("report")).toBeLessThanOrEqual(15 * 1024);
   expect(gz("editor")).toBeLessThanOrEqual(30 * 1024);
   expect(gz("replay")).toBeLessThanOrEqual(60 * 1024);
+  expect(gz("flows")).toBeLessThanOrEqual(10 * 1024);
   // SnapDOM alone is ~88 KB gzip; this guards against the editor (or anything else) creeping back in.
   expect(gz("capture")).toBeLessThanOrEqual(92 * 1024);
   // The editor lives only in its own chunk.

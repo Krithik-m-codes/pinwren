@@ -15,7 +15,8 @@ export type StorageDriver = {
 };
 
 // `<projectId>/<uuid>.<ext>` — random, generated server-side; never derived from user input.
-const KEY_PATTERN = /^[a-z0-9-]+\/[a-z0-9-]+\.(png|jpe?g|webp|gif|pdf|gz)$/;
+// `.zip`: project data exports (services/project-export.ts).
+const KEY_PATTERN = /^[a-z0-9-]+\/[a-z0-9-]+\.(png|jpe?g|webp|gif|pdf|gz|zip)$/;
 function assertKey(key: string) {
   if (!KEY_PATTERN.test(key)) throw new Error(`refusing storage key ${key}`);
 }

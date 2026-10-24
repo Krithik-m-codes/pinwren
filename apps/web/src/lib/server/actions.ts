@@ -1,7 +1,7 @@
 "use server";
 
 import { updateTag } from "next/cache";
-import { brandingTag } from "./org-data";
+import { brandingTag, workspaceTag } from "./org-data";
 import { getAuth } from "@pinwren/api";
 import { headers } from "next/headers";
 
@@ -14,4 +14,11 @@ export async function refreshBranding(): Promise<void> {
   const s = await getAuth().api.getSession({ headers: await headers() });
   const orgId = s?.session.activeOrganizationId;
   if (orgId) updateTag(brandingTag(orgId));
+}
+
+/** After renaming the workspace through the API: expire the cached name the sidebar shows. */
+export async function refreshWorkspace(): Promise<void> {
+  const s = await getAuth().api.getSession({ headers: await headers() });
+  const orgId = s?.session.activeOrganizationId;
+  if (orgId) updateTag(workspaceTag(orgId));
 }

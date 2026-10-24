@@ -1,0 +1,65 @@
+---
+title: Telegram
+description: Send new feedback, status changes and comments to a Telegram group, channel or chat through your own bot.
+---
+
+Pinwren posts to Telegram with the Bot API, using a bot you create. Messages go to one group, channel or chat per
+webhook.
+
+## Set it up
+
+<Steps>
+<Step>
+
+**Create a bot.** In Telegram, message **@BotFather**, send `/newbot` and follow the prompts. It answers with a
+**bot token** like `123456789:AAH…`.
+
+</Step>
+<Step>
+
+**Add the bot** to the group or channel (in a channel, as an administrator that can post), and find the **chat id**:
+
+- a group or supergroup: a negative number starting with `-100…` — add **@RawDataBot** to the group for a moment, or
+  open `https://api.telegram.org/bot<token>/getUpdates` after posting a message and read `chat.id`;
+- a public channel: its `@name` works too;
+- a direct chat: your numeric user id (start a chat with the bot first).
+
+</Step>
+<Step>
+
+In Pinwren, open **Settings › Integrations › Add webhook**, choose **Telegram**, paste the **bot token**, enter the
+**chat id** and pick the events and projects. Then open the webhook and press **Send test event**.
+
+</Step>
+</Steps>
+
+## What a message looks like
+
+```text
+New feedback · Marketing site #142
+Checkout button does nothing
+
+The button under the cart does nothing on Safari.
+
+bug · open · high · from Ada · https://example.com/cart
+```
+
+The project and number link to the item in the dashboard (sign-in required). Link previews are switched off.
+
+## Safe with untrusted text
+
+- Messages use Telegram's HTML mode. Everything from a report is entity-escaped (`&`, `<`, `>`), so only Pinwren's
+  own bold text and link are markup.
+- In groups a plain `@username` notifies that person, so `@` in reports is broken with a zero-width space.
+- Text is cut to fit Telegram's 4,096-character limit.
+
+## Good to know
+
+- The bot token is a credential: Pinwren stores it encrypted and never shows it again (the webhook shows the bot id
+  and the last four characters, `https://api.telegram.org/bot123456789:…abcd`). The chat id is shown so you can tell
+  webhooks apart.
+- To move a webhook to another chat, enter the new id in the webhook's **Chat** row; to replace a leaked token,
+  revoke it with @BotFather (`/revoke`) and paste the new one in **Bot token**.
+- Deliveries retry and are logged like [webhooks](/docs/integrations/webhooks#retries). A wrong chat id or a bot
+  that isn't in the chat shows as `HTTP 400` or `HTTP 403` in the log.
+- `comment.created` includes **internal notes**; leave it out for chats outside your team.

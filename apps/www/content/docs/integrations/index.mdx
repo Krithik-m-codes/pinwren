@@ -18,16 +18,31 @@ Pinwren sends what happens in your workspace to the tools you already use:
   <Card title="Discord" href="/docs/integrations/discord">
     Embeds in a channel through a Discord webhook.
   </Card>
+  <Card title="Microsoft Teams" href="/docs/integrations/teams">
+    Adaptive Cards in a channel through a Teams workflow.
+  </Card>
+  <Card title="Telegram" href="/docs/integrations/telegram">
+    Messages from your own bot in a group, channel or chat.
+  </Card>
+  <Card title="ntfy" href="/docs/integrations/ntfy">
+    Push notifications to phones and desktops through ntfy.sh or your own server.
+  </Card>
   <Card title="GitHub" href="/docs/integrations/github">
     One issue per item, closed and reopened in both directions.
   </Card>
   <Card title="GitLab" href="/docs/integrations/gitlab">
     The same, for gitlab.com and self-managed GitLab.
   </Card>
+  <Card title="Linear" href="/docs/integrations/linear">
+    One Linear issue per item; completing it resolves the item.
+  </Card>
+  <Card title="Jira Cloud" href="/docs/integrations/jira">
+    One Jira issue per item, synced through Done (Enterprise).
+  </Card>
 </Cards>
 
-For everything else — Jira, Linear, an AI agent, your own dashboard — use [webhooks](/docs/integrations/webhooks),
-the [REST API](/docs/api), [panel actions](/docs/widget/panel-actions) or the [MCP server](/docs/api/mcp).
+For everything else — an AI agent, your own dashboard — use [webhooks](/docs/integrations/webhooks), the
+[REST API](/docs/api), [panel actions](/docs/widget/panel-actions) or the [MCP server](/docs/api/mcp).
 
 ## How delivery works
 
@@ -39,7 +54,8 @@ and email, in that order, so a broken mail server never holds back a webhook.
   afterwards. A tracker or chat outage never loses or delays a report.
 - **Everything retries.** Webhooks retry six times over about 21 hours; issue sync and email retry with backoff.
 - **Failures are visible.** Each webhook has a delivery log with every attempt, its status code, error category
-  and duration (never the receiver's response body); a GitHub or GitLab integration shows its last error.
+  and duration (never the receiver's response body); an issue tracker integration shows its last error. A webhook
+  that keeps failing for three days is switched off, and every workspace Admin is notified in the bell and by email.
 - **Only public targets.** Webhooks, chat channels and custom tracker URLs can't reach private or internal
   addresses unless the operator allows them with
   [`PINWREN_OUTBOUND_ALLOWLIST`](/docs/self-hosting/environment#outbound-requests), and redirects are never
@@ -49,19 +65,25 @@ and email, in that order, so a broken mail server never holds back a webhook.
 
 ## Events
 
-| Event                     | When                                                     |
-| ------------------------- | -------------------------------------------------------- |
-| `feedback.created`        | A comment or bug report arrives                          |
-| `feedback.updated`        | Status, priority, title, assignees or round change       |
-| `feedback.status_changed` | The status changes (sent alongside `feedback.updated`)   |
-| `feedback.assigned`       | The assignees change (sent alongside `feedback.updated`) |
-| `comment.created`         | Someone comments — a visitor, a teammate or the API      |
+| Event                       | When                                                            |
+| --------------------------- | --------------------------------------------------------------- |
+| `feedback.created`          | A comment or bug report arrives                                 |
+| `feedback.updated`          | Status, priority, title, assignees, labels, due date or round   |
+| `feedback.status_changed`   | The status changes (sent alongside `feedback.updated`)          |
+| `feedback.assigned`         | The assignees change (sent alongside `feedback.updated`)        |
+| `feedback.priority_changed` | The priority changes (sent alongside `feedback.updated`)        |
+| `feedback.labels_changed`   | Labels are added or removed (sent alongside `feedback.updated`) |
+| `feedback.deleted`          | An item is moved to the trash                                   |
+| `comment.created`           | Someone comments — a visitor, a teammate or the API             |
+| `comment.updated`           | A comment is edited                                             |
+| `comment.deleted`           | A comment is deleted                                            |
 
-Webhooks (generic, Slack and Discord) subscribe to any of these, for every project or for one.
+Webhooks and chat channels (Slack, Discord, Teams, Telegram, ntfy) subscribe to any of these, for every project or
+for one. Each event has one `id`, shared by every endpoint and every retry, so receivers can de-duplicate on it.
 
 ## Who can set them up
 
-Webhooks and issue trackers are configured by workspace **owners and admins** (**Settings › Integrations** and the
-project's **Issue trackers** tab). Any member except a viewer can then send an item to a connected tracker from the
-inbox. SMTP is set
-by the **instance admin** or by environment variables.
+Webhooks, chat channels and issue trackers are configured by workspace **Admins** (**Settings › Integrations** and
+the project's **Issue trackers** tab). Admins and Editors can then send an item to a connected tracker from the inbox;
+Viewers can't. SMTP is set by the **instance admin** (the first account on the instance) under **Settings › Email**,
+or by environment variables.

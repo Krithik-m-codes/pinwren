@@ -10,7 +10,7 @@ for a teammate.
 
 ## List and detail
 
-The list shows each item's status, number, title or first line, kind (comment, bug, idea, question), project, page
+The list shows each item's status, number, title or first line, kind (Question, Change, Bug or Other), project, page
 path, a check mark for a [verified reporter](/docs/widget/identity), priority, assignee, comment count, age, and
 icons for a screenshot, attachments and a session replay. Teammates who have the item open right now show as small
 avatars on the row. Click a row (or press `Enter`) to open it in the detail panel beside the list; on narrow screens
@@ -19,76 +19,115 @@ rows (remembered per device).
 
 The detail panel holds:
 
-- **Status, priority and assignee** pickers, and a **review round** picker when the project has
+- The **title**: click it (or press `r`) to rename the item; `Enter` saves, `Esc` cancels, an empty title falls back
+  to the first line of the report.
+- **Status, priority, assignees** (any number of teammates), **labels** (`l`), a **due date** (overdue dates show in
+  red while the item is open), and a **review round** picker when the project has
   [rounds](/docs/dashboard/review-rounds).
 - The reporter's name, with **Verified** when the identity was signed by your app, and avatars of teammates who have
   the item open.
-- **Copy link** (a dashboard link to the item) and **Open on page** — the page URL with `?pinwren=<id>`, which opens
-  the live page with the thread showing.
+- **Follow** / **Unfollow**: followers get the item's status, priority and reply notifications.
+- **Copy link** (a dashboard link to the item) and **Open on page**, which opens the live page with the thread
+  showing. The link is signed and works for 7 days, so it opens the thread even when pins are private on the project.
+- **Duplicate of #12** under the title when the item is a duplicate, and **Duplicates: #14, #20** on the original.
 - The screenshot (annotated, if the reporter drew on it) and, for bug reports that carry one, the
   [session replay](#session-replay) — as **Screenshot** and **Replay** tabs when there are both — and the attachments.
-- Tabs for **Details** (page, browser, viewport, locale, reporter email, user id, consent and custom metadata),
+- Tabs for **Details** (page, browser, viewport, locale, reporter email, user id, consent, and **From your site**:
+  the metadata your page attached with `Pinwren.setMetadata()`),
   **Anchor** (element, selector, XPath, text and position the pin is attached to), **Console** and **Network**.
 - Panel actions and **Send to GitHub / GitLab** when the project has them — see
   [panel actions](/docs/widget/panel-actions) and [GitHub](/docs/integrations/github).
 - The activity timeline and the comment box.
-- **More actions**: copy the number or the page URL, and delete.
+- **More actions**: copy the number or the page URL, **Copy as Markdown** (a reproduction write-up: page,
+  environment, element, steps from the replay, failing requests and console errors, ready for an issue or an AI
+  agent), **Rename**, **Change kind**, **Mark duplicate of…** (search by number or words; sets the status to
+  Duplicate), and, for Admins, **Move to trash**.
 
-Deleted items go to the trash and are purged, with their files, after 30 days.
+Opening an item marks its notifications in the bell as read.
+
+## Trash
+
+Only Admins delete. A deleted item moves to the trash and the toast offers **Undo**. Admins open the trash with the
+**Trash** button in the inbox header (`/inbox?trash=1`): items show when they were deleted, and **Restore** or
+**Delete forever** work on one item (from its detail) or on a selection. Items are purged with their files 30 days
+after they were deleted. Restoring puts the item back in everyone's inbox and is recorded in its timeline.
 
 ## Statuses, priorities, kinds
 
-| Field    | Values                                                           |
-| -------- | ---------------------------------------------------------------- |
-| Status   | Open, In progress, In review, Resolved, Won't fix, Duplicate     |
-| Priority | No priority, Low, Medium, High, Urgent                           |
-| Kind     | Comment, Bug, Idea, Question (set by the reporter in the widget) |
+| Field    | Values                                                                             |
+| -------- | ---------------------------------------------------------------------------------- |
+| Status   | Open, In progress, In review, Resolved, Won't fix, Duplicate                       |
+| Priority | No priority, Low, Medium, High, Urgent                                             |
+| Kind     | Question, Change, Bug or Other (set by the reporter; change it under More actions) |
 
 Open, In progress and In review are the **active** statuses; Resolved, Won't fix and Duplicate are **closed**. Closed
-items leave the page in the widget (visitors can still show resolved pins) and close a linked GitHub or GitLab issue.
+items leave the page in the widget (visitors can still show resolved pins) and close a linked GitHub, GitLab, Linear or Jira issue.
 
 ## Filters and search
 
 - **Active / Resolved / All** tabs filter by status.
-- **Filter** menu: **Kind**, **Priority**, **Assignee** (anyone, me, or a member), **Review round** (when one
-  project is chosen) and **Created** (last 24 hours, 7 days or 30 days). Each active filter shows as a chip under the
+- **Filter** menu: **Kind**, **Priority**, **Assignee** (anyone, me, or a member), **Label**, **Review round** and
+  **Review link** (when one project is chosen; review links for admins) and **Created** (last 24 hours, 7 days or 30 days). Each active filter shows as a chip under the
   toolbar; remove one with its ×, or all with **Clear**.
-- **Search** (`/`) matches the title and text of every item (Postgres full-text search). Press `Enter` to apply.
+- **Search** (`/`) matches the beginning of words in the title and text, an item number (`#12`), the reporter's
+  name or email, and part of the page URL. Press `Enter` to apply. When nothing in the current tab matches,
+  **Search all statuses** looks in closed items too; when filters hide everything, **Clear filters** brings it back.
+- **Sort**: newest or oldest first, recently updated, highest or lowest priority.
+- **My work** in the sidebar (or `g` then `m`) shows the items assigned to you in every project.
+- The list loads more items as you scroll and shows how many match (**Showing 50 of 312**).
 - **Project** — choose a project in the sidebar.
 
 The URL parameters are `project`, `status`, `kind`, `priority`, `assignee`, `round`, `page` (part of the page URL),
-`since` (ISO date), `q` and `layout=board`. **Save view** keeps the current filters and layout as a
+`since` (ISO date), `label`, `reporter`, `review` (a [review link](/docs/dashboard/settings#review-links) id), `sort` (`created`, `updated`, `priority`), `order` (`asc`, `desc`), `q`,
+`trash=1` and `layout=board`; `assignee=me` is whoever opens the link. **Save view** keeps the current filters and layout as a
 [saved view](/docs/dashboard/saved-views).
 
 ## Bulk edits and undo
 
 Tick rows with their checkbox or `x` (Shift-click or `Shift` + `x` selects a range). A bar appears at the bottom to
-set the status, assign or unassign, add the selection to an active review round or take it out (when one project is
-chosen), or delete it. Every change shows a toast with **Undo**, and `u` undoes
-the last change from anywhere in the inbox.
+set the status or priority, assign or unassign, add or remove labels (items of one project), add the selection to an
+active review round or take it out (when one project is chosen), **Export** it, or (Admins) delete it. Every change
+shows a toast with **Undo**, and `u` undoes the last change from anywhere in the inbox: each item goes back to its
+own previous value.
+
+## Export
+
+**Export** in the toolbar downloads every item matching the current filters and sort, all pages, as **CSV** (opens in
+Excel and Google Sheets), **JSON** or **PDF** (the first 1,000). The bulk bar's **Export** downloads only the selected
+items. Each row has the number, project, kind, status, priority, title, text, reporter, page, labels, assignees,
+created, updated and due dates, and a link to the item. The API is `GET /api/feedback/export?format=csv|json|pdf`
+with the list filters, or `ids=<id>,<id>`.
+
+## Labels
+
+Labels belong to a project. Manage them in **Project settings › Labels** (name, colour, how many items carry each),
+or create one straight from the label picker on an item by typing a new name. Admins and Editors manage labels;
+Viewers see them. Deleting a label removes it from its items.
 
 ## Comments: internal or public
 
 The comment box has two modes:
 
-| Mode             | Who sees it                                                                                                                                             |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Internal**     | Only your team, in the dashboard. Highlighted in amber. The default.                                                                                    |
-| **Public reply** | Also the reporter and visitors, in the pin's thread on the page, with a team badge. Emails the reporter when the project has **Email the reporter** on. |
+| Mode             | Who sees it                                                                                                                            |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **Internal**     | Only your team, in the dashboard. Highlighted in amber. The default.                                                                   |
+| **Public reply** | The reporter: in the pin's thread on the page when pins are public, and by email when reporter emails are on and they left an address. |
 
-`Ctrl` + `Enter` (`⌘` + `Enter` on a Mac) sends. Visitors' replies from the page show up here as public comments. You can edit your own comments; authors and
+Under **Public reply** a line says where the reply will go (on the page, by email, or **Not delivered** with a link
+to the project setting). Type `@` to mention a teammate and pick them from the list (arrows and `Enter`): they get a
+notification and an email. `Ctrl` + `Enter` (`⌘` + `Enter` on a Mac) sends. Visitors' replies from the page show up here as public comments. You can edit your own comments; authors and
 workspace admins can delete them, and the timeline keeps a note that a comment was deleted.
 
 ## Activity timeline
 
-Every item records who did what: created (from the widget), status, priority, title and assignee changes (with the
-before and after values), comments, deleted comments, issue links and panel-action runs. Changes made through the
-[API](/docs/api) show the token's owner with "via API"; changes from GitHub or GitLab show the tracker.
+Every item records who did what: created (from the widget), status, priority, title, kind, label, due date,
+duplicate and assignee changes (with the before and after values), moves to and from the trash, comments, deleted comments, issue links and panel-action runs. Changes made through the
+[API](/docs/api) show the token's owner with "via API"; changes from GitHub, GitLab, Linear or Jira show the tracker.
 
 ## Keyboard shortcuts
 
 Press `?` in the inbox (or the keyboard button in its header) for this list. Shortcuts are ignored while you type in
-a field, and viewers' shortcuts don't change anything (`x`, `e`, `s`, `p`, `a`, `c` and `u` are off).
+a field, and viewers' shortcuts don't change anything (`x`, `e`, `s`, `p`, `a`, `l`, `r`, `c` and `u` are off).
 
 | Key             | Action                                                 |
 | --------------- | ------------------------------------------------------ |
@@ -101,6 +140,9 @@ a field, and viewers' shortcuts don't change anything (`x`, `e`, `s`, `p`, `a`, 
 | `s`             | Status menu                                            |
 | `p`             | Priority menu                                          |
 | `a`             | Assign menu                                            |
+| `l`             | Labels menu                                            |
+| `r`             | Rename the item                                        |
+| `g` `m`         | My work (items assigned to you)                        |
 | `c`             | Comment                                                |
 | `u`             | Undo the last change                                   |
 | `/`             | Search                                                 |
@@ -110,7 +152,8 @@ a field, and viewers' shortcuts don't change anything (`x`, `e`, `s`, `p`, `a`, 
 ## Live updates
 
 The inbox is live. The dashboard keeps one Server-Sent Events connection to `GET /api/stream` open and applies
-changes as they happen: new items, status, priority and assignee changes, deletions and new comments, from teammates,
+changes as they happen: new items, status, priority and assignee changes, deletions and restores, and new, edited
+and deleted comments; an item that a change moves out of the current filter leaves the list, from teammates,
 the widget, the API and issue trackers alike. New items slide in at the top while the list is scrolled to the top;
 when you've scrolled down, an **N new** pill appears instead — click it to jump up and show them. If the connection
 drops, the dashboard reconnects with backoff and refetches the list so nothing is missed.
@@ -119,7 +162,8 @@ drops, the dashboard reconnects with backoff and refetches the list so nothing i
 looking at the inbox, so two people don't triage the same report. The dashboard sends a heartbeat every 20 seconds
 (`POST /api/presence`); you disappear 45 seconds after the last one.
 
-The stream sends `feedback.created`, `feedback.updated`, `feedback.deleted`, `comment.created`, `presence` and a `ping`
+The stream sends `feedback.created`, `feedback.updated`, `feedback.deleted`, `comment.created`, `comment.updated`,
+`comment.deleted`, `presence` and a `ping`
 every 25 seconds (optional `projectIds=` query). It closes after 15 minutes so the session is checked again, and the
 browser reconnects with `Last-Event-ID`. Behind a reverse proxy, turn response buffering off for `/api/stream` — see
 [reverse proxy](/docs/self-hosting/reverse-proxy).

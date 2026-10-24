@@ -1,10 +1,12 @@
 import {
   PRESENCE_HEARTBEAT_MS,
   STREAM_EVENTS,
+  streamCommentChanged,
   streamCommentCreated,
   streamFeedbackCreated,
   streamFeedbackDeleted,
   streamFeedbackUpdated,
+  streamNotificationCreated,
   streamPresence,
 } from "@pinwren/core";
 import {
@@ -13,9 +15,14 @@ import {
   type ThunkDispatch,
   type UnknownAction,
 } from "@reduxjs/toolkit";
+import { showDesktopNotification } from "@/lib/desktop-notifications";
+import { notificationHref, notificationSubject, notificationText } from "@/lib/notification-text";
+import type { NotificationItem } from "@/lib/api";
 import { api } from "./api";
+import type { FeedbackListArgs } from "@/lib/inbox-filters";
 import type { StoreExtra } from "./api/base";
 import { type FeedbackFields, patchCachedFeedback, removeCachedFeedback } from "./api/feedback";
+import { onboardingApi } from "./api/onboarding";
 import { densityChanged, type InboxState } from "./slices/inbox";
 import {
   eventIdSeen,
@@ -134,7 +141,7 @@ function refreshDetail(l: Listener, id: string) {
   void l.dispatch(api.endpoints.feedbackDetail.initiate(id, { subscribe: false, forceRefetch: true }));
 }
 
-const PATCHABLE = ["status", "priority", "assigneeIds", "title", "roundId"] as const;
+const PATCHABLE = ["status", "priority", "assigneeIds", "title", "roundId", "kind", "dueAt"] as const;
 
 /** `changes` is field → `{ from, to }` (values dropped above the size cap, `truncated: true`). */
 export function fieldsFromChanges(changes: Record<string, unknown>): FeedbackFields {
@@ -144,6 +151,35 @@ export function fieldsFromChanges(changes: Record<string, unknown>): FeedbackFie
     if (c && typeof c === "object" && "to" in c) out[k] = c.to;
   }
   return out;
+}
+
+/**
+ * Whether a change to `fields` can move an item into or out of a list with these filters, or reorder it
+ * (e.g. a status change on the "Active" tab, an assignment on "My work", any change when sorted by update).
+ */
+export function listDependsOn(args: FeedbackListArgs, fields: readonly string[]): boolean {
+  const f = new Set(fields);
+  return (
+    args.sort === "updated" ||
+    (f.has("status") && args.status !== "all") ||
+    (f.has("assigneeIds") && !!args.assigneeId) ||
+    (f.has("roundId") && !!args.roundId) ||
+    (f.has("priority") && (!!args.priority || args.sort === "priority")) ||
+    (f.has("kind") && !!args.kind) ||
+    (f.has("labelIds") && !!args.labelId) ||
+    (f.has("title") && !!args.q) ||
+    f.has("deletedAt")
+  );
+}
+
+/** Refetch the cached lists a remote change can reshape; patching rows in place can't add or drop rows. */
+function refreshListsFor(l: Listener, fields: readonly string[]) {
+  const affected = Object.values(l.getState().api.queries).some(
+    (q) =>
+      q?.endpointName === "listFeedback" &&
+      listDependsOn(q.originalArgs as unknown as FeedbackListArgs, fields),
+  );
+  if (affected) l.dispatch(api.util.invalidateTags([{ type: "Feedback", id: "LIST" }]));
 }
 
 /** One stream event → RTK Query cache updates and real-time state. */
@@ -157,9 +193,10 @@ export function applyStreamEvent(l: Listener, event: string, data: unknown) {
         api.util.invalidateTags([
           { type: "Project", id: "LIST" },
           { type: "Round", id: "LIST" },
-          "Notification",
         ]),
       );
+      // "Widget connected" and "First report received" on the inbox's setup checklist.
+      l.dispatch(onboardingApi.util.invalidateTags(["SetupChecklist"]));
       if (l.getState().realtime.follow) {
         l.dispatch(api.util.invalidateTags([{ type: "Feedback", id: "LIST" }]));
         l.dispatch(itemsArrived([f.id]));
@@ -174,6 +211,11 @@ export function applyStreamEvent(l: Listener, event: string, data: unknown) {
       const fields = fieldsFromChanges(p.data.changes);
       if (Object.keys(fields).length)
         patchCachedFeedback(l.dispatch, () => l.getState(), [p.data.id], fields);
+      // Labels travel as ids (the rows show names and colours): refetch what shows the item.
+      if ("labelIds" in p.data.changes) {
+        l.dispatch(api.util.invalidateTags([{ type: "Feedback", id: p.data.id }]));
+      }
+      refreshListsFor(l, Object.keys(p.data.changes));
       refreshDetail(l, p.data.id);
       if ("status" in fields || "roundId" in fields) {
         l.dispatch(
@@ -210,7 +252,42 @@ export function applyStreamEvent(l: Listener, event: string, data: unknown) {
         },
       );
       refreshDetail(l, p.data.feedbackId);
+      return;
+    }
+    case "comment.updated":
+    case "comment.deleted": {
+      const p = streamCommentChanged.safeParse(data);
+      if (!p.success) return;
+      if (event === "comment.deleted") {
+        patchCachedFeedback(
+          l.dispatch,
+          () => l.getState(),
+          [p.data.feedbackId],
+          (row) => {
+            row.commentCount = Math.max(0, row.commentCount - 1);
+          },
+        );
+      }
+      refreshDetail(l, p.data.feedbackId);
+      return;
+    }
+    case "notification.created": {
+      // Sent per person by the dispatch job after the row exists (no race with the insert); the bell and the
+      // notifications page refetch, and a background tab may show a desktop notification.
+      const p = streamNotificationCreated.safeParse(data);
+      if (!p.success) return;
       l.dispatch(api.util.invalidateTags(["Notification"]));
+      const n = { type: p.data.type, feedbackId: p.data.feedbackId, data: p.data.data } as Pick<
+        NotificationItem,
+        "type" | "feedbackId" | "data"
+      >;
+      const project = typeof n.data.projectName === "string" ? ` · ${n.data.projectName}` : "";
+      showDesktopNotification({
+        id: p.data.id,
+        title: `${notificationText(n)}${project}`,
+        body: notificationSubject(n),
+        href: notificationHref(n, p.data.orgId),
+      });
       return;
     }
     case "presence": {

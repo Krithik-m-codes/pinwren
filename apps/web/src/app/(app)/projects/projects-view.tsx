@@ -20,7 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { controlProps, Field, FormError, useZodForm } from "@/components/form";
 import { createProjectForm } from "@/lib/form-schemas";
-import { errorMessage, useCreateProjectMutation, useProjectsQuery } from "@/lib/store/api";
+import { Controller } from "react-hook-form";
+import { ProjectPresetPicker } from "@/components/project-preset-picker";
+import { errorMessage, useProjectsQuery } from "@/lib/store/api";
+import { useCreateProjectWithPresetMutation } from "@/lib/store/api/onboarding";
 import { useViewer } from "@/lib/viewer";
 import { here } from "@/lib/routes";
 
@@ -29,14 +32,15 @@ export function ProjectsView() {
   const router = useRouter();
   const pathname = usePathname();
   const projects = useProjectsQuery(undefined);
-  const { canWrite } = useViewer();
-  const creating = canWrite && params.get("new") === "1";
+  // Creating projects is an Admin permission (projects.manage, wave-5 §3.7).
+  const { isAdmin: canCreate } = useViewer();
+  const creating = canCreate && params.get("new") === "1";
   const setCreating = (open: boolean) => router.replace(here(pathname, open ? "new=1" : undefined));
 
   return (
     <>
       <PageHeader title="Projects">
-        {canWrite && (
+        {canCreate && (
           <Button size="sm" onClick={() => setCreating(true)}>
             <FolderPlus /> New project
           </Button>
@@ -85,7 +89,7 @@ export function ProjectsView() {
               <p className="max-w-sm text-sm text-muted-foreground">
                 A project is one website. You&apos;ll get a script tag to add the feedback widget to it.
               </p>
-              {canWrite && (
+              {canCreate && (
                 <Button size="sm" onClick={() => setCreating(true)}>
                   New project
                 </Button>
@@ -109,13 +113,16 @@ function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
 function CreateProjectForm({ onCancel }: { onCancel: () => void }) {
   const router = useRouter();
-  const [create] = useCreateProjectMutation();
-  const form = useZodForm(createProjectForm, { defaultValues: { name: "", site: "" } });
+  const [create] = useCreateProjectWithPresetMutation();
+  const form = useZodForm(createProjectForm, {
+    defaultValues: { name: "", site: "", preset: "public-site" },
+  });
   const { errors, isSubmitting } = form.formState;
-  const submit = form.handleSubmit(async ({ name, site }) => {
+  const submit = form.handleSubmit(async ({ name, site, preset }) => {
     try {
-      const { project } = await create({ name, allowedOrigins: site ? [site] : [] }).unwrap();
-      router.push(`/projects/${project.id}`);
+      const { project } = await create({ name, allowedOrigins: site ? [site] : [], preset }).unwrap();
+      // Straight to the Install tab: the snippet is the next thing to do.
+      router.push(`/projects/${project.id}?tab=install`);
     } catch (e) {
       form.setError("root", { message: errorMessage(e) });
     }
@@ -141,6 +148,19 @@ function CreateProjectForm({ onCancel }: { onCancel: () => void }) {
           {...controlProps("p-site", errors.site?.message)}
           {...form.register("site")}
           placeholder="www.example.com"
+        />
+      </Field>
+      <Field
+        id="p-preset"
+        label="What is this site for?"
+        help="You can change this later under Privacy & data."
+      >
+        <Controller
+          control={form.control}
+          name="preset"
+          render={({ field }) => (
+            <ProjectPresetPicker id="p-preset" value={field.value} onChange={field.onChange} />
+          )}
         />
       </Field>
       <FormError message={errors.root?.message} />

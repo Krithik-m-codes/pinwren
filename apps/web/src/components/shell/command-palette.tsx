@@ -1,19 +1,6 @@
 "use client";
 
-import {
-  Bell,
-  Bookmark,
-  FolderKanban,
-  FolderPlus,
-  Inbox,
-  KeyRound,
-  Monitor,
-  Moon,
-  Palette,
-  Settings,
-  Sun,
-  Users,
-} from "lucide-react";
+import { Bookmark, FolderKanban, FolderPlus, Inbox, Monitor, Moon, Sun } from "lucide-react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -32,16 +19,12 @@ import { useProjectsQuery, useViewsQuery } from "@/lib/store/api";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { paletteToggled } from "@/lib/store/slices/ui";
 import { useViewer } from "@/lib/viewer";
+import { visibleSettingsPages } from "@/lib/settings-nav";
 import { viewHref } from "./sidebar-lists";
 
 const PAGES: { href: Route; label: string; icon: typeof Inbox; keywords?: string[] }[] = [
   { href: "/inbox", label: "Inbox", icon: Inbox, keywords: ["feedback", "triage"] },
-  { href: "/projects", label: "Projects", icon: FolderKanban },
-  { href: "/settings", label: "Profile", icon: Settings, keywords: ["account", "password"] },
-  { href: "/settings/members", label: "Members", icon: Users, keywords: ["team", "invite", "roles"] },
-  { href: "/settings/notifications", label: "Notifications", icon: Bell },
-  { href: "/settings/tokens", label: "API tokens", icon: KeyRound },
-  { href: "/settings/branding", label: "Branding", icon: Palette },
+  { href: "/projects", label: "Projects", icon: FolderKanban, keywords: ["sites", "install", "widget"] },
 ];
 
 /** ⌘K / Ctrl+K: jump to any screen, project or saved view, and run a few app-wide actions (blueprint 06 §5). */
@@ -50,7 +33,9 @@ export function CommandPalette() {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const { setTheme } = useTheme();
-  const { canWrite } = useViewer();
+  const { isAdmin, role, instanceAdmin } = useViewer();
+  // Settings pages with the same access filter as the settings rail (lib/settings-nav).
+  const settings = visibleSettingsPages({ role, instanceAdmin });
   const projects = useProjectsQuery(undefined, { skip: !open });
   const views = useViewsQuery(undefined, { skip: !open });
 
@@ -94,6 +79,18 @@ export function CommandPalette() {
                 </CommandItem>
               ))}
             </CommandGroup>
+            <CommandGroup heading="Settings">
+              {settings.map((p) => (
+                <CommandItem
+                  key={p.href}
+                  value={`settings ${p.label}`}
+                  keywords={p.keywords ?? []}
+                  onSelect={() => run(() => router.push(p.href))}
+                >
+                  <p.icon /> {p.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
             {!!views.data?.views.length && (
               <CommandGroup heading="Views">
                 {views.data.views.map((v) => (
@@ -122,7 +119,7 @@ export function CommandPalette() {
             )}
             <CommandSeparator />
             <CommandGroup heading="Actions">
-              {canWrite && (
+              {isAdmin && (
                 <CommandItem value="New project" onSelect={() => run(() => router.push("/projects?new=1"))}>
                   <FolderPlus /> New project
                 </CommandItem>

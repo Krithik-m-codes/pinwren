@@ -1,0 +1,124 @@
+---
+title: Getting started
+description: From a fresh server to the first bug report in your inbox, your bell and your email — every screen, in order.
+---
+
+This walks through a new self-hosted Pinwren the way you will use it: install the server, create the admin
+account, set up email, create a project, add the widget, report a bug and watch it arrive. Everything after the
+first step happens in the browser.
+
+<Steps>
+<Step>
+
+### Install
+
+You need Docker with the Compose plugin (v2.24 or later) and a hostname such as `feedback.example.com`.
+
+```bash
+git clone https://github.com/Krithik-m-codes/pinwren.git && cd pinwren
+cp docker/.env.example docker/.env
+```
+
+```bash title="docker/.env"
+PINWREN_URL=https://feedback.example.com   # the address people and the widget use
+PINWREN_SECRET=                            # openssl rand -base64 48
+POSTGRES_PASSWORD=                         # openssl rand -hex 24
+```
+
+Everything else in `docker/.env.example` is optional. Whatever you add to `docker/.env` reaches the app, but you
+don't need SMTP or storage variables to get going: email is set up in the dashboard.
+
+```bash
+docker compose -f docker/compose.yml --env-file docker/.env up -d --build
+```
+
+Put a TLS [reverse proxy](/docs/self-hosting/reverse-proxy) in front that allows 48 MB request bodies.
+
+<Callout type="warn" title="Keep the server private until you have signed up">
+  The first account created on a new server becomes its administrator. The compose file listens on `127.0.0.1`
+  only, so nobody reaches it before your proxy does — create your account before you expose it any other way.
+</Callout>
+
+</Step>
+<Step>
+
+### Create the admin account
+
+Open `PINWREN_URL`. A new server asks you to **create the admin account** (name, email, a password of 8
+characters or more). That account is the **instance admin** — email, security and licence settings are open to
+it at once. There is no setup token to find in the logs. More admins: list their emails in
+`PINWREN_ADMIN_EMAILS`.
+
+Then name your **workspace** and create the **first project** (usually one per website):
+
+- **Website domain** — the site that will load the widget.
+- **What is this site for?** A **public website** keeps bug reports private (visitors see no pins and can't
+  resolve anything). A **staging or client review** site shows reviewers each other's pins and replies.
+
+Both can be changed later on the project's **Privacy & data** tab.
+
+</Step>
+<Step>
+
+### Set up email
+
+**Settings › Email**: host, port (587 with STARTTLS or 465 with TLS), security, user, password and the from
+address. Click **Send test email**. Provider examples are on the [Email](/docs/integrations/email) page.
+`SMTP_*` and `EMAIL_FROM` in `docker/.env` still work and lock the fields they set.
+
+</Step>
+<Step>
+
+### Add the widget
+
+The project's **Install** tab has the snippet for **HTML**, **Next.js**, **Tag Manager**, **npm**
+(`@pinwren/widget`) and **React** (`@pinwren/react`), all prefilled with the project key and `PINWREN_URL`.
+Deploy your site; the badge turns from **Waiting for your site** to **Connected**.
+
+If it doesn't:
+
+- **Allowed sites** lists any site the widget refused — "Blocked a request from https://www.example.com, 2 min
+  ago" — with an **Allow** button, and warns while the list is empty.
+- **Verify from your terminal** gives you a ready `npx pinwren doctor --url … --key … --origin …` command.
+- If you opened the dashboard on another address than `PINWREN_URL`, the tab says so; the snippets always use
+  `PINWREN_URL`.
+
+</Step>
+<Step>
+
+### Report a bug and see it arrive
+
+On your site, click the feedback button, choose **Report a bug**, add your email as a visitor would, and send.
+
+- The report lands in the **inbox** with its screenshot, page, browser and console errors.
+- Members get a **bell** notification.
+- The team gets an **email** with the screenshot, page, browser, priority and a link to the item. Who gets it
+  is set per project under **Settings › Notifications › General**.
+- You, as the reporter, get a confirmation email. Reporter emails are chosen under **Settings › Notifications ›
+  Reporter**; the master switch, **Email the reporter**, is on the project's **Widget** tab.
+
+A **Get started** checklist on the inbox ticks these steps off from the server's real state and disappears when
+they are done (or when you hide it).
+
+</Step>
+<Step>
+
+### Add your team
+
+**Settings › Users** — **Add user** creates an account directly (name, email, password, role); **Invite**
+emails an invitation instead. Roles are **Admin** (everything), **Editor** (work on reports; no deleting or
+settings) and **Viewer** (read only).
+
+</Step>
+</Steps>
+
+## Next steps
+
+<Cards>
+  <Card title="Integrations" href="/docs/integrations/github">
+    GitHub and GitLab issues, Slack and Discord messages, signed webhooks.
+  </Card>
+  <Card title="Backups" href="/docs/self-hosting/backups">
+    Dump Postgres and copy the files volume. Single projects export from Privacy & data.
+  </Card>
+</Cards>

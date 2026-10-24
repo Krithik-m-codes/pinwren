@@ -1,4 +1,5 @@
 import { setNonce } from "./chunks";
+import { hostMetadata } from "./config";
 import { identityOf, urlPatternOf } from "./identity";
 import * as lib from "./lib";
 import type { Identity } from "./store";
@@ -18,9 +19,10 @@ import { PinwrenWidget } from "./widget";
 // Optional attributes: data-endpoint="https://…" (defaults to the script's origin), data-accent="#5b5bd6",
 // data-locale="fr" (otherwise the browser's language; English fallback), data-url-pattern="/product/:id"
 // (page scope), data-force-show (ignore the visibility rules), data-nonce="…" (CSP nonce for the chunks),
-// data-allow-replay-in-privacy-mode.
+// data-allow-replay-in-privacy-mode, data-theme="light" | "dark" (otherwise the visitor's system setting).
 //
-// Public API (blueprint 05 §8): Pinwren.init / open / close / on / identify / setPageScope / destroy. Calls
+// Public API (blueprint 05 §8): Pinwren.init / open / close / on / identify / setPageScope / setMetadata /
+// show / hide / destroy. Calls
 // made before this script loads can be queued as `window.Pinwren = { q: [["open", "comment"], …] }` — the npm
 // entry (loader.ts) and @pinwren/react do exactly that. Events: open, close, submit, error, ready. A `ready`
 // handler added after the widget is ready still runs.
@@ -48,6 +50,9 @@ setNonce(script?.nonce || script?.dataset.nonce || undefined);
 
 const handlers = new Map<WidgetEvent, Set<Handler>>();
 let identity: Identity = {};
+// Set before init (or kept across destroy → init), like the identity.
+let metadata: Record<string, unknown> | null = null;
+let shown: "show" | "hide" | null = null;
 let pendingOpen: [Mode | undefined] | null = null;
 let isReady = false;
 
@@ -96,8 +101,11 @@ const init = safe((o: PinwrenOptions) => {
     forceShow: o.forceShow === true,
     urlPattern: scope,
     allowReplayInPrivacyMode: o.allowReplayInPrivacyMode === true,
+    theme: o.theme,
     emit,
     identity,
+    metadata,
+    shown,
   });
   g.__pinwrenInstance = w;
   void w.start().catch((err: unknown) => console.warn("[pinwren]", err));
@@ -134,6 +142,23 @@ const api: PinwrenApi = {
     identity = identityOf(user, opts);
     g.__pinwrenInstance?.identify(identity);
   }, undefined),
+  setMetadata: safe((m: Record<string, unknown> | null) => {
+    const r = hostMetadata(m);
+    if (r.error) {
+      console.warn(`[pinwren] ${r.error}; ignored`);
+      return;
+    }
+    metadata = r.ok;
+    g.__pinwrenInstance?.setMetadata(metadata);
+  }, undefined),
+  show: safe(() => {
+    shown = "show";
+    g.__pinwrenInstance?.setShown("show");
+  }, undefined),
+  hide: safe(() => {
+    shown = "hide";
+    g.__pinwrenInstance?.setShown("hide");
+  }, undefined),
   setPageScope: safe((s: PageScope | null) => {
     scope = urlPatternOf(s?.urlPattern);
     g.__pinwrenInstance?.setPageScope(scope);
@@ -167,6 +192,7 @@ if (script && key) {
       urlPattern: d.urlPattern,
       forceShow: flag(d.forceShow),
       allowReplayInPrivacyMode: flag(d.allowReplayInPrivacyMode),
+      theme: d.theme === "light" || d.theme === "dark" ? d.theme : undefined,
     });
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });

@@ -77,6 +77,13 @@ const schema = z.object({
   /** Optional: licences with an `instance` binding only verify on the instance with this id. */
   PINWREN_INSTANCE_ID: optionalString,
 
+  // Sign-in with Google / GitHub (Settings › Security › Sign-in methods). A provider is offered only when
+  // both its id and secret are set; the callback is PINWREN_URL/api/auth/callback/<google|github>.
+  GOOGLE_CLIENT_ID: optionalString,
+  GOOGLE_CLIENT_SECRET: optionalString,
+  GITHUB_CLIENT_ID: optionalString,
+  GITHUB_CLIENT_SECRET: optionalString,
+
   // Issue trackers (F-076/F-077). Per-integration base URLs override these (GHES, self-managed GitLab).
   GITHUB_API_URL: z.url().default("https://api.github.com"),
   GITLAB_URL: z.url().default("https://gitlab.com"),
@@ -87,6 +94,16 @@ const schema = z.object({
   SMTP_USER: optionalString,
   SMTP_PASSWORD: optionalString,
   SMTP_SECURE: z
+    .enum(["0", "1", "true", "false"])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "1" || v === "true")),
+  /** Refuse to send unless the server upgrades with STARTTLS. */
+  SMTP_REQUIRE_TLS: z
+    .enum(["0", "1", "true", "false"])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "1" || v === "true")),
+  /** `false` accepts a self-signed server certificate (the admin UI's "Allow self-signed certificate"). */
+  SMTP_TLS_REJECT_UNAUTHORIZED: z
     .enum(["0", "1", "true", "false"])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === "1" || v === "true")),
@@ -121,6 +138,16 @@ export function env(): Env {
     if (missing.length) {
       throw new Error(`Invalid Pinwren configuration:\n  - STORAGE_DRIVER=s3 needs ${missing.join(", ")}`);
     }
+  }
+  const halfSet = (
+    [
+      ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+      ["GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"],
+    ] as const
+  ).filter(([id, secret]) => !e[id] !== !e[secret]);
+  if (halfSet.length) {
+    const lines = halfSet.map(([id, secret]) => `  - set both ${id} and ${secret}, or neither`);
+    throw new Error(`Invalid Pinwren configuration:\n${lines.join("\n")}`);
   }
   cached = e;
   return cached;

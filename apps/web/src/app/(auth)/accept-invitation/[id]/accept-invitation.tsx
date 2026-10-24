@@ -1,5 +1,6 @@
 "use client";
 
+import { appRoleOf } from "@pinwren/core";
 import { CircleAlert, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -10,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { authClient, signIn, signOut, signUp } from "@/lib/auth-client";
 import { signInForm, signUpForm } from "@/lib/form-schemas";
+import { useNextPath } from "../../auth-shared";
 
 /** Signed out: sign in or create an account with the invited address; the server then renders the next step. */
 export function AuthFirst() {
@@ -131,6 +133,8 @@ function SignInStep() {
   );
 }
 
+const ROLE_PHRASE = { admin: "an Admin", editor: "an Editor", viewer: "a Viewer" } as const;
+
 export type InvitationSummary = {
   organizationId: string;
   organizationName: string;
@@ -150,6 +154,7 @@ export function Accept({
   invitation: InvitationSummary;
 }) {
   const router = useRouter();
+  const next = useNextPath();
   const [pending, setPending] = useState<"accept" | "decline" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -163,7 +168,8 @@ export function Accept({
       return;
     }
     await authClient.organization.setActive({ organizationId: inv.organizationId });
-    router.replace("/inbox");
+    // A full load: the app's server components read the new active workspace from the session.
+    window.location.assign(new URL(next, window.location.href).href);
   }
 
   async function decline() {
@@ -178,7 +184,7 @@ export function Accept({
         <CardTitle className="text-xl">Join {inv.organizationName}</CardTitle>
         <CardDescription>
           {inv.inviterEmail} invited <span className="font-medium text-foreground">{inv.email}</span> as{" "}
-          {inv.role === "admin" ? "an admin" : `a ${inv.role}`}.
+          {ROLE_PHRASE[appRoleOf(inv.role)]}.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">

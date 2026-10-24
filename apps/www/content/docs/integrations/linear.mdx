@@ -1,0 +1,67 @@
+---
+title: Linear
+description: Open a Linear issue for each feedback item, and keep its state in sync in both directions.
+---
+
+The Linear integration works like [GitHub](/docs/integrations/github): one issue per feedback item, created
+automatically or with a button, and finishing either side finishes the other. It uses a personal API key, so it needs
+no OAuth app.
+
+## Connect a project
+
+<Steps>
+<Step>
+
+**Create an API key** in Linear under **Settings › Account › Security & access › Personal API keys**, for an account
+that can create issues in the team. Issues are opened as that account.
+
+</Step>
+<Step>
+
+**Connect.** As a workspace Admin, open the Pinwren project's **Issue trackers** tab and connect Linear:
+
+| Field               | Notes                                                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **API key**         | Stored encrypted; only its last four characters are ever shown                                                  |
+| **Team key**        | The prefix of the team's issue ids, e.g. `ENG` for `ENG-123`                                                    |
+| **Labels**          | Names of **existing** Linear labels (workspace or team), comma-separated; names Linear doesn't know are skipped |
+| **Open issues for** | **Manually**, **Bugs** or **Everything**                                                                        |
+
+Use **Test connection** to check that the key can see the team.
+
+</Step>
+<Step>
+
+**Add the webhook** so finishing an issue in Linear updates Pinwren. Under **Two-way status** the tab shows a **URL**
+(`https://feedback.example.com/api/integrations/linear/webhook`). In Linear open **Settings › API › Webhooks › New
+webhook**, paste the URL, choose the team, tick **Issues** and save. Linear then shows a **signing secret**: paste it
+into **Signing secret from Linear** in Pinwren and save.
+
+</Step>
+</Steps>
+
+## Creating issues
+
+Issues get the title `#142 Checkout button does nothing`, the report quoted and escaped, a list with project, kind,
+page, browser, viewport and reporter, and a link to the item in the dashboard. Screenshots, logs and reporter emails
+are never put in an issue. In the inbox the link shows the Linear id (`Linear ENG-123`).
+
+## Two-way state
+
+| You do                                           | Pinwren does                                                           |
+| ------------------------------------------------ | ---------------------------------------------------------------------- |
+| Move an item to Resolved, Won't fix or Duplicate | Moves the issue to the team's first **completed** state                |
+| Reopen the item                                  | Moves the issue to the team's first **unstarted** (else backlog) state |
+| Complete or cancel the issue in Linear           | Moves an open item to **Resolved**                                     |
+| Move the issue back to any other state           | Moves a closed item back to **Open**                                   |
+
+Changes from Linear appear in the timeline as the integration and are never pushed back, so nothing loops.
+
+## Reliability and security
+
+- Issue creation and state changes are retried background jobs; a Linear outage never blocks a report. The last error
+  (Linear's own message, e.g. `Authentication required`) shows on the integration until the next success.
+- The webhook is verified with the `Linear-Signature` header (HMAC-SHA256 of the raw body with the signing secret),
+  deliveries whose `webhookTimestamp` is more than 5 minutes off are refused, and each `Linear-Delivery` id is acted
+  on once (remembered for 7 days). Only issue updates that change the workflow state do anything.
+- All requests go to `https://api.linear.app/graphql` through Pinwren's outbound guard.

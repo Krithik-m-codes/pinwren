@@ -30,6 +30,14 @@ export type FeedbackListQuery = {
   assigneeId?: string | undefined;
   page?: string | undefined;
   since?: string | undefined;
+  labelId?: string | undefined;
+  reviewLinkId?: string | undefined;
+  reporter?: string | undefined;
+  hasReplay?: boolean | "0" | "1" | "true" | "false" | undefined;
+  browser?: string | undefined;
+  trash?: boolean | "0" | "1" | "true" | "false" | undefined;
+  sort?: "created" | "updated" | "priority" | undefined;
+  order?: "asc" | "desc" | undefined;
   cursor?: string | undefined;
   limit?: number | undefined;
 };
@@ -41,12 +49,17 @@ export type FeedbackUpdate = {
   title?: string | null | undefined;
   assigneeIds?: string[] | undefined;
   roundId?: string | null | undefined;
+  labelIds?: string[] | undefined;
+  dueAt?: string | null | undefined;
+  duplicateOfId?: string | null | undefined;
+  kind?: "comment" | "bug" | "idea" | "question" | undefined;
 };
 
 /** A team comment (internal by default). */
 export type CommentCreate = {
   body: string;
   visibility?: "public" | "internal" | undefined;
+  mentions?: string[] | undefined;
 };
 
 /** Fields `rounds.update` can change. */

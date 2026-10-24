@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FeedbackList, FeedbackRow } from "@/lib/api";
 import { listArgs } from "@/lib/inbox-filters";
 import { api } from "./api";
-import { backoffMs, fieldsFromChanges, streamUrl } from "./listeners";
+import { backoffMs, fieldsFromChanges, listDependsOn, streamUrl } from "./listeners";
 import {
   followChanged,
   newItemsShown,
@@ -32,9 +32,15 @@ const row = (id: string): FeedbackRow => ({
   roundId: null,
   hasScreenshot: false,
   hasReplay: false,
+  screenshotAssetId: null,
   attachmentCount: 0,
   commentCount: 0,
+  labels: [],
+  dueAt: null,
+  updatedAt: "2026-10-01T00:00:00Z",
+  deletedAt: null,
 });
+const rowsOf = (data: { pages: FeedbackList[] } | undefined) => data?.pages.flatMap((p) => p.items);
 
 let lists = 0;
 beforeEach(() => {
@@ -63,6 +69,15 @@ describe("helpers", () => {
   it("builds the stream URL with project filter and last event id", () => {
     expect(streamUrl(API, undefined, null)).toBe(`${API}/stream`);
     expect(streamUrl(API, ["a", "b"], "w1.42")).toBe(`${API}/stream?projectIds=a%2Cb&lastEventId=w1.42`);
+  });
+  it("knows which list filters a change can reshape", () => {
+    const active = listArgs({}, "list");
+    expect(listDependsOn(active, ["status"])).toBe(true);
+    expect(listDependsOn(active, ["priority"])).toBe(false);
+    expect(listDependsOn(listArgs({ status: "all" }, "list"), ["status"])).toBe(false);
+    expect(listDependsOn(listArgs({ assigneeId: "u1", status: "all" }, "list"), ["assigneeIds"])).toBe(true);
+    expect(listDependsOn(listArgs({ sort: "priority", status: "all" }, "list"), ["priority"])).toBe(true);
+    expect(listDependsOn(listArgs({ status: "all" }, "list"), ["deletedAt"])).toBe(true);
   });
   it("backs off exponentially up to 30 s", () => {
     expect([0, 1, 2, 10].map(backoffMs)).toEqual([1000, 2000, 4000, 30_000]);
@@ -145,7 +160,9 @@ describe("real-time stream → RTK Query cache", () => {
       changes: { priority: { from: "none", to: "urgent" } },
     });
     await flush();
-    expect(api.endpoints.listFeedback.select(args)(store.getState()).data?.items[0]?.priority).toBe("urgent");
+    expect(rowsOf(api.endpoints.listFeedback.select(args)(store.getState()).data)?.[0]?.priority).toBe(
+      "urgent",
+    );
     sub.unsubscribe();
   });
 
@@ -164,10 +181,13 @@ describe("real-time stream → RTK Query cache", () => {
       authorName: "Dana",
     });
     await flush();
-    expect(api.endpoints.listFeedback.select(args)(store.getState()).data?.items[0]?.commentCount).toBe(1);
+    expect(rowsOf(api.endpoints.listFeedback.select(args)(store.getState()).data)?.[0]?.commentCount).toBe(1);
+    source().emit("comment.deleted", { id: F, feedbackId: F, projectId: P });
+    await flush();
+    expect(rowsOf(api.endpoints.listFeedback.select(args)(store.getState()).data)?.[0]?.commentCount).toBe(0);
     source().emit("feedback.deleted", { id: F, projectId: P });
     await flush();
-    expect(api.endpoints.listFeedback.select(args)(store.getState()).data?.items).toEqual([]);
+    expect(rowsOf(api.endpoints.listFeedback.select(args)(store.getState()).data)).toEqual([]);
     sub.unsubscribe();
   });
 

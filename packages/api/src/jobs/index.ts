@@ -1,11 +1,14 @@
-import { type EmailMessage, sendEmail } from "../email/send";
+import { deliverEmail } from "../email/deliveries";
+import type { EmailMessage } from "../email/send";
 import { env } from "../env";
 import type { DomainEvent } from "../events";
 import { type IssueJob, runIssueJob } from "../integrations/issues";
+import { type ProjectExportJob, runProjectExport } from "../services/project-export";
 import { runUpdateCheck } from "../settings/instance";
 import { runDelivery } from "../webhooks/deliver";
 import { getBoss, QUEUES } from "./boss";
 import { dispatchEvent } from "./dispatch";
+import { runDigest } from "./digest";
 import { applyRetention, cleanupTrash } from "./maintenance";
 
 export { enqueue, getBoss, QUEUES } from "./boss";
@@ -32,14 +35,22 @@ export function startJobs(): Promise<void> {
     );
     // Several local workers: a burst of reports fans out to many emails, and one SMTP round trip at a
     // time let replies to reporters wait behind minutes of team notifications.
+    // Each email records its outcome in the delivery log; `retryCount` tells the last attempt apart.
     await boss.work<EmailMessage>(
       QUEUES.email,
       { pollingIntervalSeconds: 1, localConcurrency: 4 },
-      each(sendEmail),
+      async (jobs) => {
+        for (const job of jobs) await deliverEmail(job.data, job.retryCount);
+      },
+    );
+    await boss.work(
+      QUEUES.digest,
+      each(() => runDigest()),
     );
     await boss.work<{ deliveryId: string }>(
       QUEUES.webhook,
-      { batchSize: 5, pollingIntervalSeconds: 1 },
+      // Several at once: a receiver that times out holds its slot for up to the request timeout.
+      { batchSize: 5, pollingIntervalSeconds: 1, localConcurrency: 4 },
       each((d) => runDelivery(d.deliveryId)),
     );
     await boss.work(QUEUES.retention, each(applyRetention));
@@ -51,8 +62,15 @@ export function startJobs(): Promise<void> {
       QUEUES.update,
       each(() => runUpdateCheck()),
     );
+    // One export at a time per process: each one holds its archive in memory.
+    await boss.work<ProjectExportJob>(
+      QUEUES.projectExport,
+      { pollingIntervalSeconds: 2 },
+      each(runProjectExport),
+    );
     // Cron schedules are stored in Postgres; pg-boss creates each occurrence once across processes.
     await boss.schedule(QUEUES.retention, "15 3 * * *");
+    await boss.schedule(QUEUES.digest, "5 * * * *");
     await boss.schedule(QUEUES.cleanup, "45 3 * * *");
     await boss.schedule(QUEUES.update, "30 4 * * *");
     console.log("[pinwren] job workers started");

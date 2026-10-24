@@ -1,12 +1,15 @@
-import { randomUUID } from "node:crypto";
 import type { AnchorBundle } from "@pinwren/core";
 import type { DemoItem } from "./store";
 
-// What every new demo visitor finds on /demo: a short client review round already in progress. Anchors use
-// the sample page's `data-pinwren-anchor` attributes (the widget's most reliable strategy), so the pins land
-// on the right elements at any viewport size.
+// What every new demo visitor finds on /demo: a short client review round already in progress on the sample
+// agency site. Anchors use the page's `data-pinwren-anchor` attributes (the widget's most reliable strategy),
+// so the markers land on the right elements at any viewport size. Shared by the server sandbox (store.ts) and
+// the playground's "Local" mode, which keeps its copy in the browser — so no Node-only imports here.
 
 export const DEMO_PATH = "/demo";
+export const DEMO_PAGE_TITLE = "Brightline Studio — digital product agency";
+
+const uuid = () => globalThis.crypto.randomUUID();
 
 function anchor(
   id: string,
@@ -34,64 +37,84 @@ type Seed = Pick<DemoItem, "kind" | "status" | "priority" | "title" | "body"> & 
   replies?: { body: string; authorName: string; team: boolean; minutesAgo: number }[];
 };
 
+const HERO = "We craft digital experiences that matter.";
+
 const SEEDS: Seed[] = [
   {
-    kind: "comment",
+    kind: "bug",
+    status: "open",
+    priority: "high",
+    title: null,
+    body: "The email field in the contact form won't let me type anything — is it disabled on purpose?",
+    anchor: anchor("demo-contact-email", "label", "Work email", { xPct: 92, yPct: 70 }),
+    reporter: "Leo Brandt",
+    minutesAgo: 27,
+  },
+  {
+    kind: "idea",
     status: "open",
     priority: "medium",
     title: null,
-    body: "Can we try a shorter headline? On my laptop this wraps onto three lines.",
-    anchor: anchor("demo-hero-title", "h1", "Gear for the long way round", {
-      xPct: 2,
-      yPct: 4,
-      wPct: 70,
-      hPct: 92,
-    }),
+    body: "Can we try “digital products that ship.” instead of “that matter.”? Feels more us.",
+    anchor: anchor("demo-hero-title", "h1", HERO, { xPct: 78, yPct: 62 }),
     reporter: "Maya Okafor",
-    minutesAgo: 95,
+    minutesAgo: 120,
     replies: [
       {
-        body: "Good catch — we'll test “Built for the long way round” next round.",
-        authorName: "Sam (Studio)",
+        body: "Love it — we'll put both in front of the client on Thursday.",
+        authorName: "Sam (Brightline)",
         team: true,
-        minutesAgo: 80,
+        minutesAgo: 95,
       },
     ],
   },
   {
     kind: "comment",
     status: "open",
-    priority: "low",
+    priority: "none",
     title: null,
-    body: "Please swap this for the autumn shot from the shoot — this one feels too summery for the launch.",
-    anchor: anchor("demo-hero-image", "div", "", { xPct: 18, yPct: 20, wPct: 62, hPct: 55 }),
-    reporter: "Maya Okafor",
-    minutesAgo: 70,
+    body: "No changes — just wanted to say this is looking great. Huge step up from the old site!",
+    anchor: anchor("demo-hero-title", "h1", HERO, { xPct: 0, yPct: 0, wPct: 100, hPct: 100 }),
+    reporter: "Priya Shah",
+    minutesAgo: 180,
   },
   {
     kind: "bug",
-    status: "in_progress",
-    priority: "high",
-    title: "Price flickers to $0.00",
-    body: "When I switch the currency to EUR the price on this card shows $0.00 for a second.",
-    anchor: anchor("demo-product-pack", "article", "Ridgeline 38L pack", {
-      xPct: 6,
-      yPct: 62,
-      wPct: 60,
-      hPct: 20,
-    }),
+    status: "open",
+    priority: "medium",
+    title: null,
+    body: "Clicking the Vertex SaaS card does nothing — shouldn't it open the case study page?",
+    anchor: anchor("demo-work-vertex", "article", "Vertex SaaS", { xPct: 50, yPct: 40 }),
     reporter: "Leo Brandt",
-    minutesAgo: 42,
+    minutesAgo: 240,
   },
   {
     kind: "question",
-    status: "open",
-    priority: "none",
+    status: "resolved",
+    priority: "low",
     title: null,
-    body: "Do we need a short privacy note under the sign-up field?",
-    anchor: anchor("demo-newsletter", "form", "Get trail notes", { xPct: 50, yPct: 70 }),
+    body: "Are these numbers live, or placeholders until launch?",
+    anchor: anchor("demo-stats", "section", "120+ products shipped", { xPct: 12, yPct: 30 }),
+    reporter: "Maya Okafor",
+    minutesAgo: 320,
+    replies: [
+      {
+        body: "Real numbers from our 2026 report — signed off by the client.",
+        authorName: "Sam (Brightline)",
+        team: true,
+        minutesAgo: 300,
+      },
+    ],
+  },
+  {
+    kind: "idea",
+    status: "resolved",
+    priority: "low",
+    title: null,
+    body: "The services cards would scan faster with a small icon each.",
+    anchor: anchor("demo-services", "div", "Product design", { xPct: 3, yPct: 6, wPct: 94, hPct: 88 }),
     reporter: "Priya Shah",
-    minutesAgo: 18,
+    minutesAgo: 420,
   },
 ];
 
@@ -99,22 +122,22 @@ export function seedFor(): DemoItem[] {
   const t = Date.now();
   const at = (m: number) => new Date(t - m * 60_000).toISOString();
   return SEEDS.map((s, i) => ({
-    id: randomUUID(),
+    id: uuid(),
     number: i + 1,
-    clientId: randomUUID(),
+    clientId: uuid(),
     kind: s.kind,
     status: s.status,
     priority: s.priority,
     title: s.title,
     body: s.body,
     anchor: s.anchor,
-    page: { url: `https://demo.invalid${DEMO_PATH}`, path: DEMO_PATH, title: "Harbor & Pine — outdoor gear" },
+    page: { url: `https://demo.invalid${DEMO_PATH}`, path: DEMO_PATH, title: DEMO_PAGE_TITLE },
     environment: null,
     diagnostics: { console: 0, network: 0, errors: [], failed: [] },
     reporter: { name: s.reporter, email: null },
     assets: [],
     replies: (s.replies ?? []).map((r) => ({
-      id: randomUUID(),
+      id: uuid(),
       body: r.body,
       createdAt: at(r.minutesAgo),
       authorName: r.authorName,

@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Pinwren, usePinwren } from "./index";
 
 type Fn = ReturnType<typeof vi.fn>;
-type FakeApi = Record<"init" | "open" | "close" | "identify" | "setPageScope" | "destroy", Fn> & {
+type FakeApi = Record<
+  "init" | "open" | "close" | "identify" | "setPageScope" | "setMetadata" | "show" | "hide" | "destroy",
+  Fn
+> & {
   on: Fn;
   emit: (event: string, data?: unknown) => void;
 };
@@ -18,6 +21,9 @@ function fakeApi(): FakeApi {
     close: vi.fn(),
     identify: vi.fn(),
     setPageScope: vi.fn(),
+    setMetadata: vi.fn(),
+    show: vi.fn(),
+    hide: vi.fn(),
     destroy: vi.fn(),
     on: vi.fn((event: string, cb: (d?: unknown) => void) => {
       const set = handlers.get(event) ?? new Set();
@@ -169,5 +175,36 @@ describe("before widget.js has loaded", () => {
     expect(added[0]?.nonce).toBe("n1");
     const q = (window as unknown as { Pinwren: { q: unknown[][] } }).Pinwren.q;
     expect(q.map((c) => c[0])).toEqual(["on", "on", "on", "on", "on", "setPageScope", "identify", "init"]);
+  });
+});
+
+describe("metadata and visibility (wave 5)", () => {
+  it("sets metadata before init, by value, and shows or hides on demand", () => {
+    const { rerender } = render(
+      <Pinwren projectKey="pk_1" endpoint="https://fb.example.com" metadata={{ plan: "pro" }} visible />,
+    );
+    expect(api.setMetadata).toHaveBeenCalledWith({ plan: "pro" });
+    expect(api.show).toHaveBeenCalledTimes(1);
+    const order = (fn: Fn) => fn.mock.invocationCallOrder[0] ?? 0;
+    expect(order(api.setMetadata)).toBeLessThan(order(api.init));
+    // A new object with the same content changes nothing.
+    rerender(
+      <Pinwren projectKey="pk_1" endpoint="https://fb.example.com" metadata={{ plan: "pro" }} visible />,
+    );
+    expect(api.setMetadata).toHaveBeenCalledTimes(1);
+    rerender(<Pinwren projectKey="pk_1" endpoint="https://fb.example.com" metadata={null} visible={false} />);
+    expect(api.setMetadata).toHaveBeenLastCalledWith(null);
+    expect(api.hide).toHaveBeenCalledTimes(1);
+    expect(api.init).toHaveBeenCalledTimes(1);
+  });
+
+  it("exposes setMetadata, show and hide from usePinwren", () => {
+    const { result } = renderHook(() => usePinwren());
+    result.current.setMetadata({ a: 1 });
+    result.current.show();
+    result.current.hide();
+    expect(api.setMetadata).toHaveBeenCalledWith({ a: 1 });
+    expect(api.show).toHaveBeenCalled();
+    expect(api.hide).toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 import { feedback, feedbackAsset, getDb, notification, project, rateLimit } from "@pinwren/db";
 import { and, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { storage } from "../storage";
+import { pruneDeliveries as pruneEmailDeliveries } from "../email/deliveries";
 import { pruneDeliveries } from "../webhooks/deliver";
 
 const BATCH = 500;
@@ -27,7 +28,7 @@ export async function purgeFeedback(ids: string[]): Promise<number> {
 }
 
 /** `retention.apply`: per-project retention, plus pruning of delivery logs and stale rows. */
-export async function applyRetention(): Promise<{ feedback: number; deliveries: number }> {
+export async function applyRetention(): Promise<{ feedback: number; deliveries: number; emails: number }> {
   const db = getDb();
   let total = 0;
   for (;;) {
@@ -47,11 +48,16 @@ export async function applyRetention(): Promise<{ feedback: number; deliveries: 
     if (rows.length < BATCH) break;
   }
   const deliveries = await pruneDeliveries();
+  // The email delivery log (Settings › Email › Recent deliveries) keeps 30 days.
+  const emails = await pruneEmailDeliveries();
   await db.delete(notification).where(sql`${notification.readAt} < now() - interval '90 days'`);
   await db.delete(rateLimit).where(lt(rateLimit.resetAt, sql`now() - interval '1 hour'`));
-  if (total || deliveries)
-    console.info(`[pinwren] retention: ${total} feedback, ${deliveries} deliveries removed`);
-  return { feedback: total, deliveries };
+  if (total || deliveries || emails) {
+    console.info(
+      `[pinwren] retention: ${total} feedback, ${deliveries} webhook deliveries, ${emails} email log rows removed`,
+    );
+  }
+  return { feedback: total, deliveries, emails };
 }
 
 /** `assets.cleanup`: purge feedback that has sat in the trash longer than TRASH_DAYS. */

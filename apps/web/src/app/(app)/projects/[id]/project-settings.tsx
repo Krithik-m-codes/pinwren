@@ -11,7 +11,9 @@ import { ActionsTab } from "./actions-tab";
 import { CaptureTab } from "./capture-tab";
 import { DangerTab } from "./danger-tab";
 import { InstallTab } from "./install-tab";
+import { LabelsTab } from "./labels-tab";
 import { PrivacyTab } from "./privacy-tab";
+import { ReviewLinksTab } from "./review-links-tab";
 import { TrackersTab } from "./trackers-tab";
 import { useProject } from "./use-project";
 import { WidgetTab } from "./widget-tab";
@@ -22,13 +24,17 @@ import { ReadOnly } from "@/components/read-only";
 const TABS = [
   { value: "install", label: "Install" },
   { value: "widget", label: "Widget" },
+  { value: "review", label: "Review links" },
   { value: "capture", label: "Capture" },
   { value: "actions", label: "Actions" },
   { value: "trackers", label: "Issue trackers" },
+  { value: "labels", label: "Labels" },
   { value: "privacy", label: "Privacy & data" },
   { value: "danger", label: "Danger zone" },
 ] as const;
 type Tab = (typeof TABS)[number]["value"];
+/** Tabs only organisation admins see (the API refuses everyone else). */
+const ADMIN_ONLY = new Set<Tab>(["review", "danger"]);
 
 export function ProjectSettings({ id }: { id: string }) {
   // Project settings are configuration: organisation admins only (ADR 0021). Members and viewers see
@@ -102,7 +108,7 @@ export function ProjectSettings({ id }: { id: string }) {
         >
           <div className="-mx-4 overflow-x-auto px-4 pb-1">
             <TabsList variant="line" className="w-full justify-start border-b">
-              {TABS.filter((t) => canWrite || t.value !== "danger").map((t) => (
+              {TABS.filter((t) => canWrite || !ADMIN_ONLY.has(t.value)).map((t) => (
                 <TabsTrigger key={t.value} value={t.value} className="flex-none px-2.5">
                   {t.label}
                 </TabsTrigger>
@@ -129,11 +135,20 @@ export function ProjectSettings({ id }: { id: string }) {
               <PrivacyTab project={p} />
             </TabsContent>
             {canWrite && (
+              <TabsContent value="review" className="pt-3">
+                <ReviewLinksTab project={p} />
+              </TabsContent>
+            )}
+            {canWrite && (
               <TabsContent value="danger" className="pt-3">
                 <DangerTab project={p} />
               </TabsContent>
             )}
           </ReadOnly>
+          {/* Outside ReadOnly: Editors manage labels too (`labels.manage`); the tab checks the role. */}
+          <TabsContent value="labels" className="pt-3">
+            <LabelsTab project={p} />
+          </TabsContent>
         </Tabs>
       </div>
     </>

@@ -4,7 +4,8 @@ import type { WidgetFeedbackCreate } from "@pinwren/core";
 import { seedFor } from "./seed";
 
 // The in-memory backend behind /demo: one sandbox per visitor, keyed by the visitor's demo project key
-// (`pk_demo_<id>`, minted in the browser and kept in a cookie). No database; everything is bounded and
+// (`pk_demo_<id>`, minted in the browser and kept in a cookie). No database; everything is bounded, a
+// sandbox starts over from the seed 10 minutes after it was made (`DEMO_RESET_MINUTES`), and idle ones are
 // forgotten after a few hours, so the demo can run on any single Node process.
 //
 // Memory is bounded three ways: every byte a sandbox keeps (item text, metadata, replies, screenshot and
@@ -14,6 +15,8 @@ import { seedFor } from "./seed";
 
 export const DEMO_KEY = /^pk_demo_[A-Za-z0-9_-]{16,40}$/;
 const VISITOR_TTL_MS = 6 * 60 * 60 * 1000;
+/** A sandbox's lifetime before it is re-seeded (the playground says "resets every 10 minutes"). */
+export const resetAfterMs = () => envInt("DEMO_RESET_MINUTES", 10) * 60_000;
 const MAX_ITEMS = 60;
 const MAX_REPLIES = 40;
 /** Fixed bookkeeping per sandbox (the map entry, counters), on top of what it stores. */
@@ -85,7 +88,14 @@ export type DemoItem = {
   seeded: boolean;
 };
 
-type Visitor = { key: string; counter: number; items: DemoItem[]; bytes: number; seenAt: number };
+type Visitor = {
+  key: string;
+  counter: number;
+  items: DemoItem[];
+  bytes: number;
+  seenAt: number;
+  bornAt: number;
+};
 
 type DemoState = { visitors: Map<string, Visitor>; bytes: number };
 const g = globalThis as unknown as { __pinwrenDemo?: DemoState };
@@ -131,9 +141,15 @@ function drop(key: string) {
   state.visitors.delete(key);
 }
 
-/** The visitor's sandbox, created (and seeded with a few comments) on first use. */
+const expired = (v: Visitor) => Date.now() - v.bornAt > resetAfterMs();
+
+/** The visitor's sandbox, created (and seeded with a few comments) on first use and again after a reset. */
 export function visitor(key: string): Visitor {
   let v = state.visitors.get(key);
+  if (v && expired(v)) {
+    drop(key);
+    v = undefined;
+  }
   if (v) {
     state.visitors.delete(key);
     v.seenAt = Date.now();
@@ -142,14 +158,15 @@ export function visitor(key: string): Visitor {
   }
   evict(1);
   const items = seedFor();
-  v = { key, counter: items.length, items, bytes: 0, seenAt: Date.now() };
+  v = { key, counter: items.length, items, bytes: 0, seenAt: Date.now(), bornAt: Date.now() };
   state.visitors.set(key, v);
   charge(v, VISITOR_OVERHEAD_BYTES + key.length + sizeOf(items));
   return v;
 }
 
 export function peekVisitor(key: string): Visitor | undefined {
-  return state.visitors.get(key);
+  const v = state.visitors.get(key);
+  return v && !expired(v) ? v : undefined;
 }
 
 export function resetVisitor(key: string) {
@@ -171,7 +188,8 @@ export function pagePath(raw: string): string {
 
 const OPEN = new Set(["open", "in_progress", "in_review"]);
 
-export function listPins(v: Visitor, url: string | null, includeClosed: boolean) {
+/** Pins of one page (or of every page without `url`); `origin` turns stored paths into page URLs. */
+export function listPins(v: Visitor, url: string | null, includeClosed: boolean, origin = "") {
   const path = url ? pagePath(url) : null;
   return v.items
     .filter((i) => (includeClosed || OPEN.has(i.status)) && (!path || i.page.path === path))
@@ -190,6 +208,7 @@ export function listPins(v: Visitor, url: string | null, includeClosed: boolean)
       createdAt: i.createdAt,
       reporterName: i.reporter.name,
       replyCount: i.replies.filter((r) => r.body).length,
+      pageUrl: `${origin}${i.page.path}`,
     }));
 }
 
@@ -309,6 +328,24 @@ export function addReply(v: Visitor, item: DemoItem, body: string, authorName: s
   item.updatedAt = now();
   charge(v, bytes);
   return { ok: true, reply };
+}
+
+/** The reporter deletes their own item (the widget sidebar's Delete): only with its reporter token. */
+export function removeItem(v: Visitor, item: DemoItem, token: string | null): Refusal | null {
+  if (!token || !item.reporterTokenHash || sha256(token) !== item.reporterTokenHash) {
+    return {
+      ok: false,
+      status: 403,
+      code: "DELETE_NOT_ALLOWED",
+      title: "Only the person who sent this feedback can delete it",
+    };
+  }
+  // What the item holds now (text, assets, replies), give or take what it was charged when it came in.
+  const bytes = Math.min(sizeOf(item), v.bytes);
+  v.items = v.items.filter((i) => i !== item);
+  v.bytes -= bytes;
+  state.bytes -= bytes;
+  return null;
 }
 
 export function setStatus(item: DemoItem, status: "resolved" | "open") {

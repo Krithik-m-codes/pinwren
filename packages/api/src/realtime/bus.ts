@@ -35,12 +35,32 @@ export type BusPresence = {
   feedbackId: string | null;
   user: PresenceUser;
 };
-export type BusMessage = BusEvent | BusPresence;
+/**
+ * A new bell entry for one person (wave-5 contract §3.2): published by the dispatch job after it inserts
+ * the notification row, so the client refetches only once the row exists. Delivered only to that user's
+ * streams in that workspace, never stored in the replay ring (the bell refetches on reconnect).
+ */
+export type BusNotification = {
+  t: "n";
+  orgId: string;
+  userId: string;
+  data: {
+    id: string;
+    type: string;
+    feedbackId: string | null;
+    orgId: string;
+    data: Record<string, unknown>;
+    createdAt: string;
+  };
+};
+export type BusMessage = BusEvent | BusPresence | BusNotification;
 
 export type Delivered = { id: string | null; event: StreamEventName; data: Record<string, unknown> };
 
 export type Subscriber = {
   orgId: string;
+  /** Who is listening: `notification.created` reaches only their own streams. */
+  userId?: string;
   /** null = every project of the organisation. */
   projectIds: ReadonlySet<string> | null;
   send: (msg: Delivered) => void;
@@ -134,6 +154,11 @@ function broadcastPresence(orgId: string, projectId: string, feedbackId: string)
 /** Apply one message received from the channel (exported for tests). */
 export function receive(msg: BusMessage): void {
   const st = state();
+  if (msg.t === "n") {
+    const out: Delivered = { id: null, event: "notification.created", data: msg.data };
+    for (const s of st.subscribers) if (s.orgId === msg.orgId && s.userId === msg.userId) s.send(out);
+    return;
+  }
   if (msg.t === "e") {
     const stored: Stored = {
       id: msg.id ?? `${st.bootId}.${++st.seq}`,

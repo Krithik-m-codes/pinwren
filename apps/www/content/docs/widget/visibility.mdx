@@ -13,6 +13,7 @@ description: Decide where the widget appears, who can act on it, and which pages
 | Hide the launcher (Widget tab, `launcher.hidden`)                         | No launcher; open the widget from your own UI with the [JavaScript API](/docs/widget/api). |
 | Allowed sites (Install tab)                                               | The widget only works on the sites you list; anywhere else it removes itself.              |
 | Where it shows (Widget tab, `visibility`) _(below)_                       | Show the widget only outside production, or only on wide enough screens.                   |
+| Who gets it (Widget tab, `visibility.mode`) _(below)_                     | Everyone, signed-in users only, people with a link, some pages, or only when you say so.   |
 
 You can also simply not load the script — for example render the snippet only for signed-in staff, or only on
 your staging deployment.
@@ -65,10 +66,35 @@ production, or to show the widget on a phone despite `minViewportWidth`:
 Pinwren.init({ projectKey: "pk_…", endpoint: "https://feedback.example.com", forceShow: true });
 ```
 
+## Who gets the widget
+
+`visibility.mode` decides who sees the widget at all. Like the rules above it runs in the browser; while a mode
+hides the widget, it makes no requests for pins.
+
+| Mode          | The widget shows                                                                                                       |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `always`      | For everyone (the default).                                                                                            |
+| `identified`  | After your code calls `Pinwren.identify()` with a user `id` or `email` — e.g. only for signed-in customers.            |
+| `queryParam`  | When the page was opened with `?<queryParam>` (default `?pinwren`); remembered until the browser tab closes.           |
+| `urlPatterns` | On pages whose path matches one of `urlPatterns` (up to 50, the [page scope](#page-scope) syntax: `/app/*`, `/p/:id`). |
+| `manual`      | Only after your code calls `Pinwren.show()`.                                                                           |
+
+Whatever the mode, `Pinwren.show()` and `Pinwren.hide()` override it until the other one is called, `forceShow`
+shows the widget, and so do a valid [review link](/docs/dashboard/settings#review-links) (`?pinwren_review=<token>`)
+and a signed "Open on page" link. A review link is remembered until the browser tab closes, asks the guest for
+their name before they send anything, and marks what they send with the link's name.
+
+```ts
+// mode "manual": show the widget to your own staff only
+if (user.isStaff) Pinwren.show();
+```
+
 ## Page scope
 
-By default pins belong to the exact page they were left on: its URL without the hash, with the query string
-sorted, so `?a=1&b=2` and `?b=2&a=1` are the same page. Pages built from one template — `/product/1`,
+By default pins belong to the page they were left on. Page addresses are grouped as described in
+[Page review](/docs/dashboard/page-review#how-pages-are-grouped): no hash, no trailing slash, no tracking
+parameters, the query string sorted — so `?a=1&b=2`, `?b=2&a=1&utm_source=x` and the same with a trailing slash
+are one page. Pages built from one template — `/product/1`,
 `/product/2`, … — therefore each have their own pins.
 
 To review the template once and see the same pins on every instance, give the page a **URL pattern**:

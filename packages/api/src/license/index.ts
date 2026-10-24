@@ -8,8 +8,8 @@ import { trustedKeys } from "./keys";
 import { licenseTimeState, verifyLicense } from "./verify";
 
 // Entitlements (F-098, wave-4 contract §6), resolved on the server from the licence in force:
-// PINWREN_LICENSE_FILE (locks the upload) or the newest uploaded file. Nothing phones home. In v1 only
-// `white_label` gates anything; Community never calls into Enterprise code to nag or degrade.
+// PINWREN_LICENSE_FILE (locks the upload) or the newest uploaded file. Nothing phones home. Only
+// `white_label` and `jira` gate anything; Community never calls into Enterprise code to nag or degrade.
 
 export type LicenseSource = "file" | "upload" | null;
 export type Resolved = Entitlements & { source: LicenseSource; payload: LicensePayload | null };

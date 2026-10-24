@@ -133,7 +133,7 @@ test("panel action link opens the substituted, URL-encoded URL in a new tab with
     items: [seed({ number: 7, anchor: anchorFor("hero-title", "h1", HERO, { xPct: 60, yPct: 40 }) })],
   });
   await ready(page, "/?pinwren=fb_7");
-  const thread = page.getByRole("dialog", { name: "Comment #7" });
+  const thread = page.getByRole("dialog", { name: "Other #7" });
   await expect(thread).toBeVisible();
   // The card's stylesheet comes with the lazy chunk even when the side panel was never opened.
   expect(await thread.locator(".head").evaluate((el) => getComputedStyle(el).display)).toBe("flex");
@@ -177,7 +177,7 @@ test("branding: no 'Powered by', dialog accent on primary buttons, logo in the r
   expect(await launcher(page).evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
     "rgb(91, 91, 214)",
   );
-  await page.getByRole("menuitem", { name: /Add a comment/ }).click();
+  await page.getByRole("menuitem", { name: /Create new annotation/ }).click();
   const h1 = await box(page.getByTestId("hero-title"));
   await page.mouse.click(h1.x + 40, h1.y + 20);
   const send = composer(page).getByRole("button", { name: "Send" });
@@ -321,9 +321,9 @@ test("panel export downloads CSV (BOM, escaping, formula-safe) and JSON", async 
   });
   await ready(page);
   await launcher(page).click();
-  await page.getByRole("menuitem", { name: /View comments/ }).click();
-  const panel = page.getByRole("complementary", { name: "Comments on this page" });
-  await expect(panel.locator(".item")).toHaveCount(2);
+  await page.getByRole("menuitem", { name: /Show sidebar/ }).click();
+  const panel = page.getByRole("complementary", { name: "Feedback sidebar" });
+  await expect(panel.locator(".fcard")).toHaveCount(2);
   await panel.getByRole("button", { name: "Export" }).click();
   await expect(panel.getByRole("menu", { name: "Export" })).toBeVisible();
   await shot(page, "34-export-menu");
@@ -359,7 +359,7 @@ test("panel export downloads CSV (BOM, escaping, formula-safe) and JSON", async 
   expect(data[0]?.deepLink).toBe("http://localhost:5180/?pinwren=fb_2");
 
   // Export follows the list: a search that matches nothing exports nothing.
-  await panel.getByLabel("Search comments").fill("zzz");
+  await panel.getByLabel("Search feedback").fill("zzz");
   await panel.getByRole("button", { name: "Export" }).click();
   await panel.getByRole("menuitem", { name: "JSON" }).click();
   await expect(toast(page)).toHaveText("Nothing to export");
@@ -388,15 +388,17 @@ test("Russian UI with its plural forms, lazy-loaded", async ({ page }) => {
   expect(requested.some((p) => /^\/widget-i18n-ru\.[0-9a-f]{10}\.js$/.test(p))).toBe(true);
   await expect(launcher(page)).toHaveAttribute("aria-label", "Оставить отзыв");
   await launcher(page).click();
-  await expect(page.getByRole("menuitem", { name: /Добавить комментарий/ })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: /Комментарии/ })).toContainText(
-    "Открытых на этой странице: 2",
-  );
-  await page.getByRole("menuitem", { name: /Комментарии/ }).click();
-  const panel = page.getByRole("complementary", { name: "Комментарии на этой странице" });
+  await expect(page.getByRole("menuitem", { name: /Создать заметку/ })).toBeVisible();
+  // "Show sidebar" carries the open count (2 on this page).
+  const sidebar = page.getByRole("menuitem", { name: /Показать боковую панель/ });
+  await expect(sidebar).toContainText("2");
+  await sidebar.click();
+  const panel = page.getByRole("complementary", { name: "Панель отзывов" });
+  // Plural forms: 3 → "ответа" (few), 5 → "ответов" (many).
   await expect(panel).toContainText("3 ответа");
   await expect(panel).toContainText("5 ответов");
   await expect(panel.getByRole("button", { name: "Мои", exact: true })).toBeVisible();
+  await expect(panel.getByLabel("Поиск по отзывам")).toBeVisible();
   await shot(page, "35-panel-ru");
   await page.keyboard.press("Escape");
   await page.keyboard.press("b");
@@ -461,8 +463,8 @@ test("comment on selection: offer, quote, textRange, and the quote highlighted o
   await page.reload();
   await expect(launcher(page)).toBeVisible();
   await expect(page.locator("pinwren-root .hl").first()).toBeVisible();
-  await page.getByRole("button", { name: /Comment 1 by/ }).click();
-  const thread = page.getByRole("dialog", { name: "Comment #1" });
+  await page.getByRole("button", { name: /Other 1 by/ }).click();
+  const thread = page.getByRole("dialog", { name: "Other #1" });
   await expect(thread.getByLabel("Selected text")).toHaveText("roasted every Monday");
   await shot(page, "38-selection-thread");
 });
@@ -483,7 +485,7 @@ test("a quote that is no longer on the page is not highlighted; right-click offe
     ],
   });
   await ready(page);
-  await expect(page.getByRole("button", { name: /Comment 1 by/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Other 1 by/ })).toBeVisible();
   await expect(page.locator("pinwren-root .hl")).toHaveCount(0);
 
   await page.evaluate(() =>
@@ -507,10 +509,10 @@ test("focus is trapped in the thread card and returns to the pin; Esc closes", a
     items: [seed({ number: 1, anchor: anchorFor("hero-title", "h1", HERO, { xPct: 50, yPct: 50 }) })],
   });
   await ready(page);
-  const pin = page.getByRole("button", { name: /Comment 1 by/ });
+  const pin = page.getByRole("button", { name: /Other 1 by/ });
   await pin.focus();
   await page.keyboard.press("Enter");
-  const thread = page.getByRole("dialog", { name: "Comment #1" });
+  const thread = page.getByRole("dialog", { name: "Other #1" });
   await expect(thread).toBeVisible();
   await expect.poll(() => focusIn(page, ".thread")).toBe(true);
   for (let i = 0; i < 8; i++) {
@@ -523,7 +525,7 @@ test("focus is trapped in the thread card and returns to the pin; Esc closes", a
   }
   await page.keyboard.press("Escape");
   await expect(thread).toBeHidden();
-  expect(await active(page)).toMatch(/^button\|Comment 1 by Sarah Miller/);
+  expect(await active(page)).toMatch(/^button\|Other 1 by Sarah Miller/);
 });
 
 test("bug report modal traps focus and gives it back to the launcher", async ({ page }) => {
@@ -531,12 +533,18 @@ test("bug report modal traps focus and gives it back to the launcher", async ({ 
   await ready(page);
   await launcher(page).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("menuitem", { name: /Add a comment/ })).toBeFocused();
+  // The speed dial opens with focus on its first action (the markers toggle at the top).
+  await expect(page.getByRole("menu").locator(".act").first()).toBeFocused();
   // Esc on the menu returns to the launcher.
   await page.keyboard.press("Escape");
   expect(await active(page)).toMatch(/^button\|Give feedback/);
   await page.keyboard.press("Enter");
-  await page.keyboard.press("ArrowDown");
+  // Arrow keys move through the actions (wrapping); stop on "Report a bug".
+  const bug = page.getByRole("menuitem", { name: /Report a bug/ });
+  for (let i = 0; i < 8 && !(await bug.evaluate((el) => el.matches(":focus"))); i++) {
+    await page.keyboard.press("ArrowDown");
+  }
+  await expect(bug).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(report(page)).toBeVisible();
   await expect(canvas(page)).toBeVisible();
@@ -570,8 +578,8 @@ test("a host-page focus trap can't steal focus from the widget", async ({ page }
     );
     document.getElementById("hm")?.focus();
   });
-  await page.getByRole("button", { name: /Comment 1 by/ }).click();
-  const reply = page.getByRole("dialog", { name: "Comment #1" }).getByLabel("Reply", { exact: true });
+  await page.getByRole("button", { name: /Other 1 by/ }).click();
+  const reply = page.getByRole("dialog", { name: "Other #1" }).getByLabel("Reply", { exact: true });
   await reply.click();
   await page.keyboard.type("typed into the widget");
   await expect(reply).toHaveValue("typed into the widget");
@@ -609,7 +617,7 @@ test("ready event (queued before load and added late) and destroy() restores con
   expect(late).toBe(true);
   // Open lazy parts so their listeners exist, then tear everything down.
   await launcher(page).click();
-  await page.getByRole("menuitem", { name: /View comments/ }).click();
+  await page.getByRole("menuitem", { name: /Show sidebar/ }).click();
   await page.getByRole("button", { name: "Export" }).click();
   await page.evaluate(() => (window as unknown as { Pinwren: { destroy(): void } }).Pinwren.destroy());
   await expect(page.locator("pinwren-root")).toHaveCount(0);

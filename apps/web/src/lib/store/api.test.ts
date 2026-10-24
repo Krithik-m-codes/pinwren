@@ -24,11 +24,17 @@ const row = (id: string, over: Partial<FeedbackRow> = {}): FeedbackRow => ({
   roundId: null,
   hasScreenshot: false,
   hasReplay: false,
+  screenshotAssetId: null,
   attachmentCount: 0,
   commentCount: 0,
+  labels: [],
+  dueAt: null,
+  updatedAt: "2026-10-01T00:00:00Z",
+  deletedAt: null,
   ...over,
 });
-const list = (...items: FeedbackRow[]): FeedbackList => ({ items, nextCursor: null });
+const list = (...items: FeedbackRow[]): FeedbackList => ({ items, nextCursor: null, total: items.length });
+const rowsOf = (data: { pages: FeedbackList[] } | undefined) => data?.pages.flatMap((p) => p.items);
 
 describe("RTK Query endpoints", () => {
   it("lists feedback with the filters as a sorted query string", async () => {
@@ -36,9 +42,9 @@ describe("RTK Query endpoints", () => {
     const store = testStore();
     const args = listArgs({ projectId: "11111111-1111-4111-8111-111111111111", priority: "high" }, "list");
     const res = await store.dispatch(api.endpoints.listFeedback.initiate(args));
-    expect(res.data?.items[0]?.id).toBe("f1");
+    expect(rowsOf(res.data)?.[0]?.id).toBe("f1");
     expect(calls[0]?.path).toBe(
-      "/feedback?limit=100&priority=high&projectId=11111111-1111-4111-8111-111111111111&status=active",
+      "/feedback?limit=50&priority=high&projectId=11111111-1111-4111-8111-111111111111&status=active",
     );
   });
 
@@ -68,9 +74,9 @@ describe("RTK Query endpoints", () => {
       api.endpoints.updateFeedback.initiate({ ids: ["f1"], patch: { status: "resolved" } }),
     );
     await flush();
-    const now = api.endpoints.listFeedback.select(args)(store.getState()).data;
-    expect(now?.items.find((i) => i.id === "f1")?.status).toBe("resolved");
-    expect(now?.items.find((i) => i.id === "f2")?.status).toBe("open");
+    const now = rowsOf(api.endpoints.listFeedback.select(args)(store.getState()).data);
+    expect(now?.find((i) => i.id === "f1")?.status).toBe("resolved");
+    expect(now?.find((i) => i.id === "f2")?.status).toBe("open");
     release(json({ feedback: { id: "f1" } }));
     await pending;
   });
@@ -86,7 +92,9 @@ describe("RTK Query endpoints", () => {
       api.endpoints.updateFeedback.initiate({ ids: ["f1"], patch: { priority: "urgent" } }),
     );
     await flush();
-    expect(api.endpoints.listFeedback.select(args)(store.getState()).data?.items[0]?.priority).toBe("none");
+    expect(rowsOf(api.endpoints.listFeedback.select(args)(store.getState()).data)?.[0]?.priority).toBe(
+      "none",
+    );
   });
 
   it("sends one PATCH per item for bulk changes and refetches the lists afterwards", async () => {
@@ -118,11 +126,70 @@ describe("RTK Query endpoints", () => {
     await store.dispatch(api.endpoints.listFeedback.initiate(args));
     const n = await store.dispatch(api.endpoints.deleteFeedback.initiate(["a"])).unwrap();
     expect(n).toBe(1);
-    expect(
-      api.endpoints.listFeedback
-        .select(args)(store.getState())
-        .data?.items.map((i) => i.id),
-    ).toEqual(["b"]);
+    const after = api.endpoints.listFeedback.select(args)(store.getState()).data;
+    expect(rowsOf(after)?.map((i) => i.id)).toEqual(["b"]);
+    expect(after?.pages[0]?.total).toBe(1);
+  });
+
+  it("loads the next page with the cursor and keeps every page", async () => {
+    const { calls } = mockFetch((_req, url) =>
+      json(
+        url.searchParams.get("cursor") === "c1"
+          ? list(row("c"))
+          : { ...list(row("a"), row("b")), nextCursor: "c1", total: 3 },
+      ),
+    );
+    const store = testStore();
+    const args = listArgs({}, "list");
+    const sub = store.dispatch(api.endpoints.listFeedback.initiate(args));
+    await sub;
+    await store.dispatch(api.endpoints.listFeedback.initiate(args, { direction: "forward" }));
+    const data = api.endpoints.listFeedback.select(args)(store.getState()).data;
+    expect(rowsOf(data)?.map((i) => i.id)).toEqual(["a", "b", "c"]);
+    expect(calls.map((c) => c.path)).toEqual([
+      "/feedback?limit=50&status=active",
+      "/feedback?cursor=c1&limit=50&status=active",
+    ]);
+    sub.unsubscribe();
+  });
+
+  it("gives every item its own patch (bulk undo)", async () => {
+    const { calls } = mockFetch((req) =>
+      req.method === "PATCH" ? json({}) : json(list(row("a"), row("b", { priority: "high" }))),
+    );
+    const store = testStore();
+    const args = listArgs({}, "list");
+    await store.dispatch(api.endpoints.listFeedback.initiate(args));
+    await store.dispatch(
+      api.endpoints.updateFeedback.initiate({
+        each: [
+          { id: "a", patch: { priority: "low" } },
+          { id: "b", patch: { priority: "urgent" } },
+        ],
+      }),
+    );
+    expect(calls.filter((c) => c.method === "PATCH").map((c) => [c.path, c.body])).toEqual([
+      ["/feedback/a", { priority: "low" }],
+      ["/feedback/b", { priority: "urgent" }],
+    ]);
+  });
+
+  it("restores from the trash and deletes forever, one request per item", async () => {
+    const { calls } = mockFetch((req) =>
+      req.method === "GET"
+        ? json(list(row("a")))
+        : req.method === "DELETE"
+          ? new Response(null, { status: 204 })
+          : json({ feedback: {} }),
+    );
+    const store = testStore();
+    expect(await store.dispatch(api.endpoints.restoreFeedback.initiate(["a", "b"])).unwrap()).toBe(2);
+    expect(await store.dispatch(api.endpoints.purgeFeedback.initiate(["c"])).unwrap()).toBe(1);
+    expect(calls.filter((c) => c.method !== "GET").map((c) => `${c.method} ${c.path}`)).toEqual([
+      "POST /feedback/a/restore",
+      "POST /feedback/b/restore",
+      "DELETE /feedback/c/forever",
+    ]);
   });
 
   it("marks notifications read at once and keeps the count right", async () => {

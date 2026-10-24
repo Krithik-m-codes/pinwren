@@ -7,7 +7,10 @@ export function GET(req: Request) {
   const g = widgetGuard(req);
   if (!g.ok) return g.res;
   const params = new URL(req.url).searchParams;
-  return json({ items: listPins(visitor(g.key), params.get("url"), params.get("include") === "closed") });
+  const origin = new URL(req.url).origin;
+  return json({
+    items: listPins(visitor(g.key), params.get("url"), params.get("include") === "closed", origin),
+  });
 }
 
 // POST /w/feedback — a comment or bug report (wave-1 contract §2), validated with the real schema.

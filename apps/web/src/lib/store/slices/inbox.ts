@@ -1,7 +1,8 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { FeedbackPatch } from "../api/feedback";
+import type { ItemChange } from "../api/feedback";
 
-export type DetailMenu = "status" | "priority" | "assignee" | "round" | null;
+/** The open item's picker the keyboard opened (`s` `p` `a` `l`), or its title being edited (`r`). */
+export type DetailMenu = "status" | "priority" | "assignee" | "round" | "labels" | "title" | null;
 export type Density = "comfortable" | "compact";
 
 export type InboxState = {
@@ -11,8 +12,8 @@ export type InboxState = {
   anchor: string | null;
   /** Which picker of the open item is open — the `s` / `p` / `a` keys open them. */
   menu: DetailMenu;
-  /** The last change, so `u` can put it back. */
-  lastChange: { ids: string[]; patch: FeedbackPatch; label: string } | null;
+  /** The last change as each item's previous values, so `u` puts every item back as it was. */
+  lastChange: { each: ItemChange[]; label: string } | null;
   /** Per-device preferences (saved in localStorage by the listener middleware). */
   prefs: { density: Density };
 };

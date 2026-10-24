@@ -54,6 +54,13 @@ Docker. The SDK/MCP/CLI section runs from the host only (`SMOKE_SKIP_PACKAGES=1`
 - **CSP allows inline scripts** (no third-party scripts): Next's nonces don't work with prerendered static
   shells — ADR 0021.
 - **S3 storage** was tested against a simulated S3, not a real bucket — try your bucket before relying on it.
+- **Project export is built in memory** (one job at a time per process): files beyond 512 MB in all are left out
+  and counted in the zip's `README.txt`. Exports are kept 7 days; a new export replaces the old file.
+- **`env_file` in `docker/compose.yml` needs Docker Compose v2.24+** (the optional-file syntax). Older Compose
+  refuses the file; upgrade Compose or delete the `env_file` block and pass variables as before.
+- **First account = instance admin** (BugPin model, ADR 0021 amendment): a server reachable from the internet
+  before its owner signs up can be claimed by someone else. The compose file binds to 127.0.0.1 and the docs
+  say to keep it private until the first account exists.
 - **Dependabot** may not support the pnpm 12 lockfile yet.
 - **Competitor comparison** cells on the site and README are from public pages as of Oct 2026 — re-check before
   launch posts.

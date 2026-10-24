@@ -9,6 +9,8 @@ const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3100";
 export default defineConfig({
   testDir: "./e2e",
   testMatch: "*.e2e.ts",
+  // The fresh-install journey wipes and restarts its own server: run it with -c playwright.journey.config.ts.
+  testIgnore: "journey.e2e.ts",
   timeout: 60_000,
   expect: { timeout: 10_000 },
   // One workspace is shared, and some flows (board moves, bulk edits) change the same items.

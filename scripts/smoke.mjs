@@ -109,6 +109,19 @@ r = await call("/api/projects", {
 });
 check("create project", r.status === 201, r.status);
 const { id: projectId, publicKey } = r.body.project;
+// Wave 5: new projects keep pins private (publicRead false) and email reporters (notifyReporter true).
+check(
+  "new project defaults: private pins, reporter emails on",
+  r.body.project.publicRead === false && r.body.project.notifyReporter === true,
+  JSON.stringify({ publicRead: r.body.project.publicRead, notifyReporter: r.body.project.notifyReporter }),
+);
+// The widget checks below read pins and public replies: opt this project in.
+r = await call(`/api/projects/${projectId}`, { method: "PATCH", json: { publicRead: true } });
+check(
+  "opt the test project into public pins",
+  r.status === 200 && r.body.project.publicRead === true,
+  r.status,
+);
 
 const site = "http://localhost:5173";
 const W = (path, opts = {}) =>
@@ -203,7 +216,7 @@ check(
   cfg.widget?.launcher?.position === "bottom-right" &&
     cfg.widget?.launcher?.offset?.x === 20 &&
     cfg.widget?.modes?.bug === true &&
-    cfg.widget?.visitorsCanResolve === true &&
+    cfg.widget?.visitorsCanResolve === false &&
     cfg.capture?.console === "warnings" &&
     Array.isArray(cfg.capture?.maskSelectors),
 );
@@ -618,6 +631,10 @@ try {
   );
   r = await call(`/api/webhooks/${failId}`, { method: "DELETE" });
   check("delete webhook", r.status === 204);
+  // The receiver closes below; endpoints left behind would retry against it for days.
+  for (const w of (await call("/api/webhooks")).body.webhooks ?? []) {
+    await call(`/api/webhooks/${w.id}`, { method: "DELETE" });
+  }
 } finally {
   receiver.close();
 }
@@ -1024,7 +1041,9 @@ try {
   check(
     "templates listed with their variables",
     r.status === 200 &&
-      r.body.templates.length === 7 &&
+      ["feedback_created", "reporter_received", "mentioned", "digest"].every((k) =>
+        r.body.templates.some((t) => t.key === k),
+      ) &&
       tpl?.variables?.some((v) => v.name === "reporterName") &&
       tpl.customized === false,
   );
@@ -1241,7 +1260,8 @@ try {
       !ghIssue.body.includes("<script>") &&
       !ghIssue.body.includes("<img") &&
       !ghIssue.body.includes("@everyone") &&
-      ghIssue.body.includes(`/inbox?status=all&item=${bugId}`) &&
+      ghIssue.body.includes(`/inbox?status=all&org=`) &&
+      ghIssue.body.includes(`&item=${bugId}`) &&
       !ghIssue.body.includes("/api/assets/") &&
       ghIssue.labels?.[0] === "feedback",
   );
@@ -2387,6 +2407,11 @@ if (r.status !== 200) {
       jar: adminJar,
     });
     await call(`/api/projects/${projectId}`, { method: "PATCH", json: { notifyReporter: true } });
+    // Only replies here: the "report received" confirmation would add one email per reporter.
+    await call(`/api/projects/${projectId}/notifications`, {
+      method: "PATCH",
+      json: { reporter: { received: false } },
+    });
     const stamp = Date.now();
     const leaver = `leaver+${stamp}@example.com`;
     const stayer = `stayer+${stamp}@example.com`;
@@ -2444,7 +2469,11 @@ if (r.status !== 200) {
       json: { host: null, port: null, secure: null, from: null },
       jar: adminJar,
     });
-    await call(`/api/projects/${projectId}`, { method: "PATCH", json: { notifyReporter: false } });
+    // Back to the defaults (reporter emails on since wave 5); later sections read them.
+    await call(`/api/projects/${projectId}/notifications`, {
+      method: "PATCH",
+      json: { reporter: { received: true } },
+    });
     smtp.close();
   }
 }
@@ -2857,12 +2886,20 @@ console.log("\n— security (ADR 0021)");
         .status;
     }
     check("template test sends are rate-limited", mailStatus === 429, mailStatus);
+    // A throwaway workspace takes the flood: the limit is per organisation, and later sections still
+    // invite from the main one.
+    const floodOrg = (
+      await call("/api/auth/organization/create", {
+        method: "POST",
+        json: { name: "Invite flood", slug: `flood-${Date.now()}`, keepCurrentActiveOrganization: true },
+      })
+    ).body?.id;
     let inviteStatus = 0;
     for (let i = 0; i < 35 && inviteStatus !== 429; i++) {
       inviteStatus = (
         await call("/api/auth/organization/invite-member", {
           method: "POST",
-          json: { email: `flood-${i}-${Date.now()}@example.com`, role: "member" },
+          json: { email: `flood-${i}-${Date.now()}@example.com`, role: "member", organizationId: floodOrg },
         })
       ).status;
     }
@@ -2872,7 +2909,8 @@ console.log("\n— security (ADR 0021)");
     r = await call("/api/setup");
     check("setup is not open on a configured instance", r.status === 200 && r.body.needed === false);
     r = await call("/api/setup/claim", { method: "POST", json: { token: `pws_${"x".repeat(40)}` } });
-    check("setup claim refused once administrators exist", r.status === 409, r.status);
+    // Wave 5 (ADR 0021 amendment): the first account is the administrator; the token claim is gone.
+    check("setup-token claim is gone", r.status === 410 && r.body.code === "SETUP_TOKEN_REMOVED", r.status);
 
     // LOW — page URLs are http(s) only; deleted items' threads vanish from the page.
     r = await SW("/w/feedback", {
@@ -2948,6 +2986,1987 @@ console.log("\n— security (ADR 0021)");
   } finally {
     secServer.closeAllConnections();
     secServer.close();
+  }
+}
+
+// =============================================================================================
+// Wave 5 foundation (docs/contracts/wave-5.md): shared schema + update paths
+// =============================================================================================
+{
+  console.log("\n— wave 5: foundation");
+  const mk = await W("/w/feedback", {
+    method: "POST",
+    json: { ...report, clientId: crypto.randomUUID(), screenshot: undefined },
+  });
+  const a = mk.body.feedback?.id;
+  const mk2 = await W("/w/feedback", {
+    method: "POST",
+    json: { ...report, clientId: crypto.randomUUID(), screenshot: undefined },
+  });
+  const b = mk2.body.feedback?.id;
+  check("wave-5 items created", typeof a === "string" && typeof b === "string", `${mk.status} ${mk2.status}`);
+
+  r = await call(`/api/feedback/${a}`, {
+    method: "PATCH",
+    json: { dueAt: "2030-01-15T09:00:00+01:00", kind: "idea" },
+  });
+  check(
+    "PATCH sets a due date and converts the kind",
+    r.status === 200 &&
+      r.body.feedback?.kind === "idea" &&
+      String(r.body.feedback?.dueAt).startsWith("2030-01-15T08:00:00"),
+    `${r.status} ${r.body.feedback?.dueAt}`,
+  );
+  r = await call(`/api/feedback/${a}`, { method: "PATCH", json: { dueAt: null } });
+  check("PATCH clears the due date", r.status === 200 && r.body.feedback?.dueAt === null, r.status);
+
+  r = await call(`/api/feedback/${a}`, { method: "PATCH", json: { duplicateOfId: a } });
+  check("an item can't duplicate itself", r.status === 400 && r.body.code === "INVALID_DUPLICATE", r.status);
+  r = await call(`/api/feedback/${a}`, { method: "PATCH", json: { duplicateOfId: b, status: "duplicate" } });
+  check(
+    "mark as duplicate of another item",
+    r.status === 200 && r.body.feedback?.duplicateOfId === b && r.body.feedback?.status === "duplicate",
+    r.status,
+  );
+  r = await call(`/api/feedback/${a}`, { method: "PATCH", json: { labelIds: [crypto.randomUUID()] } });
+  check(
+    "labels of another project are refused",
+    r.status === 400 && r.body.code === "INVALID_LABEL",
+    r.status,
+  );
+  r = await call(`/api/feedback/${a}`, { method: "PATCH", json: { labelIds: [] } });
+  check(
+    "an empty label list is accepted",
+    r.status === 200 && Array.isArray(r.body.feedback?.labelIds),
+    r.status,
+  );
+  r = await call(`/api/feedback/${a}`);
+  check(
+    "activity records the due date and the duplicate",
+    r.body.activity?.some((x) => x.type === "dueAt_changed") &&
+      r.body.activity?.some((x) => x.type === "duplicateOfId_changed"),
+  );
+
+  r = await call("/api/notifications/read", { method: "POST", json: { feedbackId: a } });
+  check(
+    "mark one item's notifications read",
+    r.status === 200 && typeof r.body.updated === "number",
+    r.status,
+  );
+  r = await call("/api/notifications/read", { method: "POST", json: { feedbackId: "nope" } });
+  check("notifications/read validates feedbackId", r.status === 400, r.status);
+  r = await call("/api/feedback?sort=priority&order=asc&hasReplay=0");
+  check("list accepts sort/order/hasReplay", r.status === 200, r.status);
+  r = await call("/api/feedback?sort=random");
+  check("list refuses an unknown sort", r.status === 400, r.status);
+
+  // BugPin notification columns (Notifications › General / › Reporter) with their defaults.
+  r = await call(`/api/projects/${projectId}`);
+  const np = r.body.project ?? {};
+  check(
+    "project carries notification recipients and reporter switches",
+    r.status === 200 &&
+      np.notifyMemberIds === null &&
+      Array.isArray(np.notifyEmails) &&
+      np.notifyEmails.length === 0 &&
+      np.reporterEmailReceived === true &&
+      np.reporterEmailStatus === true &&
+      np.reporterEmailPriority === false &&
+      np.reporterEmailAssigned === false,
+    JSON.stringify({ s: r.status, m: np.notifyMemberIds, e: np.notifyEmails }),
+  );
+}
+
+// =============================================================================================
+// Wave 5 — install-onboarding (docs/contracts/wave-5.md §3.5): presets, refused origins, setup
+// checklist, review links, project export, reporter erasure
+// =============================================================================================
+{
+  console.log("\n— wave 5: install-onboarding");
+  r = await call(`/api/projects/${projectId}`);
+  check(
+    "project payload has rejectedOrigins and the public URL",
+    r.status === 200 &&
+      Array.isArray(r.body.project?.rejectedOrigins) &&
+      typeof r.body.project?.publicUrl === "string",
+    `${r.status} ${r.body.project?.publicUrl}`,
+  );
+
+  // Presets: "what is this site for?"
+  r = await call("/api/projects", {
+    method: "POST",
+    json: { name: "Preset public", allowedOrigins: [], preset: "public-site" },
+  });
+  const presetPublic = r.body.project;
+  check(
+    "preset public-site: private pins, visitors can't resolve",
+    r.status === 201 &&
+      presetPublic?.publicRead === false &&
+      presetPublic?.widgetConfig?.visitorsCanResolve === false,
+    r.status,
+  );
+  r = await call("/api/projects", {
+    method: "POST",
+    json: { name: "Preset review", allowedOrigins: [], preset: "review" },
+  });
+  const presetReview = r.body.project;
+  check(
+    "preset review: public pins, visitors can resolve",
+    r.status === 201 &&
+      presetReview?.publicRead === true &&
+      presetReview?.widgetConfig?.visitorsCanResolve === true,
+    r.status,
+  );
+  r = await call("/api/projects", { method: "POST", json: { name: "Bad preset", preset: "public" } });
+  check("an unknown preset is refused", r.status === 400, r.status);
+  r = await call("/api/projects", { method: "POST", json: { name: "By an editor" }, jar: memberJar });
+  check("an Editor can't create projects", r.status === 403 && r.body.code === "FORBIDDEN_ROLE", r.status);
+  for (const p of [presetPublic, presetReview]) {
+    if (p?.id) await call(`/api/projects/${p.id}`, { method: "PATCH", json: { archived: true } });
+  }
+
+  // Refused origins: the widget area records them in the /w middleware; "Allow" is a normal PATCH that
+  // drops whatever the new allowlist lets through.
+  await W("/w/config", { headers: { origin: "https://refused.example" } });
+  const refused = await waitFor(async () => {
+    const p = (await call(`/api/projects/${projectId}`)).body.project;
+    return p?.rejectedOrigins?.some((o) => o.origin === "https://refused.example") ? p : null;
+  }, 3_000);
+  if (refused) {
+    r = await call(`/api/projects/${projectId}`, {
+      method: "PATCH",
+      json: { allowedOrigins: [...refused.allowedOrigins, "refused.example"] },
+    });
+    check(
+      "Allow drops the origin from the refused list",
+      r.status === 200 && !r.body.project.rejectedOrigins.some((o) => o.origin === "https://refused.example"),
+      r.status,
+    );
+    await call(`/api/projects/${projectId}`, {
+      method: "PATCH",
+      json: { allowedOrigins: refused.allowedOrigins },
+    });
+  } else {
+    skip("Allow drops the origin from the refused list", "the /w middleware records no refusals yet");
+  }
+
+  // First-run checklist, from real state.
+  r = await call("/api/setup-checklist");
+  const cl = r.body.checklist;
+  check(
+    "setup checklist: widget connected, feedback received, teammate added",
+    r.status === 200 && cl?.steps.widget === true && cl?.steps.feedback === true && cl?.steps.team === true,
+    JSON.stringify(cl?.steps),
+  );
+  check("setup checklist counts its steps", cl?.total === 6 && cl.done >= 3, `${cl?.done}/${cl?.total}`);
+  r = await call("/api/setup-checklist", { jar: viewerJar });
+  check("every role may read the checklist", r.status === 200, r.status);
+
+  // Review links.
+  r = await call(`/api/projects/${projectId}/review-links`, {
+    method: "POST",
+    json: { label: "Elsewhere", url: "https://not-allowed.example/" },
+  });
+  check(
+    "a review link must point at an allowed site",
+    r.status === 400 && r.body.code === "ORIGIN_NOT_ALLOWED",
+    r.status,
+  );
+  r = await call(`/api/projects/${projectId}/review-links`, {
+    method: "POST",
+    json: { label: "Client round", url: `${site}/pricing?plan=pro`, expiresInDays: 7 },
+  });
+  const linkId = r.body.link?.id;
+  const reviewToken = r.status === 201 ? new URL(r.body.url).searchParams.get("pinwren_review") : null;
+  check(
+    "create a review link (token shown once, in the URL)",
+    r.status === 201 && !!reviewToken && r.body.url.includes("plan=pro") && r.body.link.url === null,
+    r.status,
+  );
+  r = await call(`/api/projects/${projectId}/review-links`);
+  check(
+    "list review links without the token",
+    r.status === 200 && r.body.links.some((l) => l.id === linkId && l.url === null && l.expiresAt),
+    r.status,
+  );
+  r = await call(`/api/projects/${projectId}/review-links`, { jar: memberJar });
+  check("review links are for Admins", r.status === 403, r.status);
+  r = await W("/w/review-link", { headers: { "x-pinwren-review-token": reviewToken ?? "" } });
+  check("the widget accepts a valid review token", r.status === 200 && r.body.ok === true, r.status);
+  r = await W("/w/review-link", { headers: { "x-pinwren-review-token": "pwr_wrong" } });
+  check("the widget refuses an unknown review token", r.status === 404, r.status);
+  r = await call(`/api/review-links/${linkId}`, { method: "DELETE" });
+  check("revoke a review link", r.status === 204, r.status);
+  r = await W("/w/review-link", { headers: { "x-pinwren-review-token": reviewToken ?? "" } });
+  check("a revoked review token stops working", r.status === 404, r.status);
+
+  // Project data export (a background job).
+  r = await call(`/api/projects/${projectId}/export`, { method: "POST", jar: memberJar });
+  check("exports are for Admins", r.status === 403, r.status);
+  r = await call(`/api/projects/${projectId}/export`, { method: "POST" });
+  check("request a project export", r.status === 202 && r.body.export?.status === "pending", r.status);
+  const ready = await waitFor(async () => {
+    const e = (await call(`/api/projects/${projectId}/export`)).body.export;
+    return e && (e.status === "ready" || e.status === "failed") ? e : null;
+  }, 60_000);
+  check(
+    "the export job finishes with a download",
+    ready?.status === "ready" && ready.items > 0 && typeof ready.downloadUrl === "string",
+    JSON.stringify(ready),
+  );
+  if (ready?.downloadUrl) {
+    const zip = await fetch(B + ready.downloadUrl, {
+      headers: { cookie: mainJar.cookie, "x-forwarded-for": RUN_IP },
+    });
+    const bytes = new Uint8Array(await zip.arrayBuffer());
+    check(
+      "download the export zip",
+      zip.status === 200 &&
+        zip.headers.get("content-type") === "application/zip" &&
+        bytes[0] === 0x50 &&
+        bytes[1] === 0x4b &&
+        new TextDecoder().decode(bytes).includes("feedback.json"),
+      `${zip.status} ${bytes.length}`,
+    );
+  }
+
+  // Erase everything a reporter sent.
+  const gone = `erase+${Date.now()}@example.com`;
+  r = await W("/w/feedback", {
+    method: "POST",
+    json: { ...report, clientId: crypto.randomUUID(), reporter: { name: "Gone", email: gone } },
+  });
+  const goneId = r.body.feedback?.id;
+  check("a report to erase", r.status === 201, r.status);
+  r = await call("/api/privacy/erase", { method: "POST", json: { email: gone }, jar: memberJar });
+  check("erasure is for Admins", r.status === 403, r.status);
+  r = await call("/api/privacy/erase", { method: "POST", json: { email: "not-an-email" } });
+  check("erasure validates the address", r.status === 400, r.status);
+  r = await call("/api/privacy/erase", {
+    method: "POST",
+    json: { email: gone.toUpperCase(), dryRun: true },
+  });
+  check(
+    "a dry run counts without deleting",
+    r.status === 200 && r.body.result?.feedback === 1 && r.body.result?.dryRun === true,
+    JSON.stringify(r.body.result),
+  );
+  r = await call(`/api/feedback/${goneId}`);
+  check("the dry run deleted nothing", r.status === 200, r.status);
+  r = await call("/api/privacy/erase", { method: "POST", json: { email: gone } });
+  check(
+    "erase the reporter's data",
+    r.status === 200 && r.body.result?.feedback === 1,
+    JSON.stringify(r.body.result),
+  );
+  r = await call(`/api/feedback/${goneId}`);
+  check("their report is gone", r.status === 404, r.status);
+  r = await call("/api/privacy/erasures");
+  check(
+    "the erasure is recorded without the address",
+    r.status === 200 && r.body.erasures?.[0]?.feedback === 1 && !JSON.stringify(r.body).includes(gone),
+    r.status,
+  );
+}
+
+// =============================================================================================
+// Wave 5 — integrations (docs/contracts/wave-5.md §3.6): Teams / Telegram / ntfy channels, Linear and
+// Jira issue sync with signed inbound webhooks
+// =============================================================================================
+{
+  console.log("\n— wave 5: integrations");
+  // One local server plays Teams, ntfy and a Jira Cloud site (PINWREN_OUTBOUND_ALLOWLIST=127.0.0.1).
+  const hits = [];
+  const jiraIssues = new Map();
+  const party = createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => {
+      body += c;
+    });
+    req.on("end", () => {
+      const path = new URL(req.url, "http://x").pathname;
+      hits.push({ method: req.method, path, headers: req.headers, body });
+      const json = (status, data) => {
+        res.statusCode = status;
+        res.setHeader("content-type", "application/json");
+        res.end(data === undefined ? "" : JSON.stringify(data));
+      };
+      if (path.startsWith("/rest/api/3/")) {
+        const basic = `Basic ${Buffer.from("smoke@example.com:atl-smoke-token").toString("base64")}`;
+        if (req.headers.authorization !== basic) return json(401, { errorMessages: ["Unauthorized"] });
+        if (path === "/rest/api/3/project/WEB") return json(200, { key: "WEB", name: "Website" });
+        if (path === "/rest/api/3/issue/createmeta/WEB/issuetypes")
+          return json(200, {
+            issueTypes: [
+              { id: "10", name: "Task" },
+              { id: "11", name: "Bug" },
+            ],
+          });
+        if (path === "/rest/api/3/issue" && req.method === "POST") {
+          const key = `WEB-${jiraIssues.size + 1}`;
+          jiraIssues.set(key, { fields: JSON.parse(body).fields, category: "new" });
+          return json(201, { id: "1", key });
+        }
+        const tr = /^\/rest\/api\/3\/issue\/(WEB-\d+)\/transitions$/.exec(path);
+        if (tr) {
+          if (req.method === "GET")
+            return json(200, {
+              transitions: [
+                { id: "31", to: { statusCategory: { key: "done" } } },
+                { id: "11", to: { statusCategory: { key: "new" } } },
+              ],
+            });
+          const issue = jiraIssues.get(tr[1]);
+          if (issue) issue.category = JSON.parse(body).transition.id === "31" ? "done" : "new";
+          res.statusCode = 204;
+          return res.end();
+        }
+        return json(404, { errorMessages: ["No route"] });
+      }
+      json(200, { id: "msg" });
+    });
+  });
+  await new Promise((resolve) => party.listen(0, listenHost, resolve));
+  const partyBase = `http://${receiverHost}:${party.address().port}`;
+  const created = [];
+  try {
+    // --- Chat channels -------------------------------------------------------------------------------
+    r = await call("/api/webhooks", {
+      method: "POST",
+      json: { kind: "teams", url: `${partyBase}/workflows/smoke`, events: ["feedback.created"] },
+      jar: memberJar,
+    });
+    check("Editors can't add a Teams webhook", r.status === 403, r.status);
+    r = await call("/api/webhooks", {
+      method: "POST",
+      json: {
+        kind: "teams",
+        name: "Teams",
+        url: `${partyBase}/workflows/smoke`,
+        events: ["feedback.created"],
+      },
+    });
+    const teams = r.body.webhook;
+    created.push(teams?.id);
+    check(
+      "Teams webhook: no signing secret, URL masked",
+      r.status === 201 && r.body.secret === null && !teams.url.includes("/workflows/smoke"),
+      r.status,
+    );
+    r = await call(`/api/webhooks/${teams?.id}/test`, { method: "POST" });
+    const card = hits.findLast((h) => h.path === "/workflows/smoke");
+    check(
+      "Teams test posts an Adaptive Card",
+      r.body.delivery?.status === "success" &&
+        JSON.parse(card?.body ?? "{}").attachments?.[0]?.contentType ===
+          "application/vnd.microsoft.card.adaptive",
+      r.body.delivery?.status,
+    );
+
+    r = await call("/api/webhooks", {
+      method: "POST",
+      json: {
+        kind: "telegram",
+        events: ["feedback.created"],
+        botToken: "123456789:AAbbccddeeffgghhiijjkkllmmnnooppqq",
+      },
+    });
+    check("Telegram needs a chat id", r.status === 400, r.status);
+    r = await call("/api/webhooks", {
+      method: "POST",
+      json: {
+        kind: "telegram",
+        events: ["feedback.created", "feedback.priority_changed"],
+        botToken: "123456789:AAbbccddeeffgghhiijjkkllmmnnooppqq",
+        chatId: "-1001234567890",
+      },
+    });
+    const tg = r.body.webhook;
+    created.push(tg?.id);
+    check(
+      "Telegram webhook: token encrypted and masked, chat shown",
+      r.status === 201 &&
+        tg.chatId === "-1001234567890" &&
+        tg.url === "https://api.telegram.org/bot123456789:…ppqq" &&
+        !JSON.stringify(r.body).includes("AAbbcc"),
+      `${r.status} ${tg?.url}`,
+    );
+    r = await call(`/api/webhooks/${tg?.id}`, { method: "PATCH", json: { url: "https://example.com/x" } });
+    check("a Telegram webhook takes no URL", r.status === 400, r.status);
+    r = await call(`/api/webhooks/${tg?.id}`, { method: "PATCH", json: { chatId: "@pinwren_smoke" } });
+    check(
+      "move a Telegram webhook to another chat",
+      r.status === 200 && r.body.webhook?.chatId === "@pinwren_smoke",
+    );
+
+    r = await call("/api/webhooks", {
+      method: "POST",
+      json: { kind: "ntfy", url: `${partyBase}/`, events: ["feedback.created"] },
+    });
+    check("ntfy needs a topic URL", r.status === 400, r.status);
+    r = await call("/api/webhooks", {
+      method: "POST",
+      json: {
+        kind: "ntfy",
+        url: `${partyBase}/smoke-topic`,
+        accessToken: "tk_smoke",
+        events: ["feedback.created"],
+      },
+    });
+    const nt = r.body.webhook;
+    created.push(nt?.id);
+    check("ntfy webhook with an access token", r.status === 201 && nt.hasSecret === true, r.status);
+    r = await call(`/api/webhooks/${nt?.id}/test`, { method: "POST" });
+    const pub = hits.findLast((h) => h.path === "/" && h.method === "POST");
+    check(
+      "ntfy test publishes JSON to the server root with the token",
+      r.body.delivery?.status === "success" &&
+        pub?.headers.authorization === "Bearer tk_smoke" &&
+        JSON.parse(pub?.body ?? "{}").topic === "smoke-topic",
+      r.body.delivery?.status,
+    );
+    r = await call(`/api/webhooks/${nt?.id}`, { method: "PATCH", json: { accessToken: null } });
+    check("remove the ntfy access token", r.status === 200 && r.body.webhook?.hasSecret === false);
+    r = await call(`/api/webhooks/${nt?.id}/rotate-secret`, { method: "POST" });
+    check("ntfy has no signing secret to rotate", r.status === 400, r.status);
+
+    // A real event reaches the chat channels (payload id = the domain event id, shared by every endpoint).
+    const before = hits.length;
+    r = await W("/w/feedback", {
+      method: "POST",
+      json: w4report({ body: "Integrations smoke", kind: "bug" }),
+    });
+    const intFid = r.body.feedback?.id;
+    const fanned = await waitFor(
+      () => hits.slice(before).filter((h) => h.path === "/workflows/smoke").length >= 1,
+    );
+    check("new feedback reaches Teams", !!fanned);
+
+    // --- Linear --------------------------------------------------------------------------------------
+    r = await call(`/api/projects/${projectId}/integrations`, {
+      method: "POST",
+      json: { provider: "linear", token: "lin_api_smoke_key", repo: "acme/site" },
+    });
+    check("Linear wants a team key", r.status === 400, r.status);
+    r = await call(`/api/projects/${projectId}/integrations`, {
+      method: "POST",
+      json: { provider: "linear", token: "lin_api_smoke_key", repo: "eng", apiUrl: "https://linear.example" },
+    });
+    check("Linear has no base URL", r.status === 400, r.status);
+    r = await call(`/api/projects/${projectId}/integrations`, {
+      method: "POST",
+      json: { provider: "linear", token: "lin_api_smoke_key", repo: "eng" },
+    });
+    const lin = r.body.integration;
+    check(
+      "connect Linear (team key upper-cased, inbound URL)",
+      r.status === 201 && lin.repo === "ENG" && lin.webhookUrl.endsWith("/api/integrations/linear/webhook"),
+      r.status,
+    );
+    const linSecret = "lin_wh_smoke_signing_secret_0123456789";
+    r = await call(`/api/integrations/${lin?.id}`, { method: "PATCH", json: { webhookSecret: linSecret } });
+    check("paste Linear's signing secret", r.status === 200, r.status);
+    const linearBody = (ts) =>
+      JSON.stringify({
+        action: "update",
+        type: "Issue",
+        webhookTimestamp: ts,
+        updatedFrom: { stateId: "s0" },
+        data: { identifier: "ENG-999", number: 999, team: { key: "ENG" }, state: { type: "completed" } },
+      });
+    const linearPost = (raw, sig, delivery) =>
+      call("/api/integrations/linear/webhook", {
+        method: "POST",
+        rawBody: raw,
+        jar: { cookie: "" },
+        headers: {
+          "content-type": "application/json",
+          "linear-signature": sig,
+          "linear-delivery": delivery,
+        },
+      });
+    const fresh = linearBody(Date.now());
+    const sign = (secret, raw) => createHmac("sha256", secret).update(raw).digest("hex");
+    r = await linearPost(fresh, sign("wrong-secret-0123456789", fresh), crypto.randomUUID());
+    check("Linear webhook: wrong signature refused", r.status === 401, r.status);
+    const stale = linearBody(Date.now() - 60 * 60 * 1000);
+    r = await linearPost(stale, sign(linSecret, stale), crypto.randomUUID());
+    check("Linear webhook: stale timestamp refused", r.status === 401, r.status);
+    const delivery = crypto.randomUUID();
+    r = await linearPost(fresh, sign(linSecret, fresh), delivery);
+    check(
+      "Linear webhook: verified (no linked issue → ignored)",
+      r.status === 200 && r.body.ignored === true,
+      r.status,
+    );
+    r = await linearPost(fresh, sign(linSecret, fresh), delivery);
+    check(
+      "Linear webhook: a replayed delivery is not acted on twice",
+      r.status === 200 && r.body.duplicate === true,
+    );
+    await call(`/api/integrations/${lin?.id}`, { method: "DELETE" });
+
+    // --- Jira (Enterprise) -----------------------------------------------------------------------------
+    const jiraBody = {
+      provider: "jira",
+      token: "atl-smoke-token",
+      email: "smoke@example.com",
+      repo: "web",
+      apiUrl: partyBase,
+      autoCreate: "manual",
+    };
+    r = await call(`/api/projects/${projectId}/integrations`, {
+      method: "POST",
+      json: { ...jiraBody, email: undefined },
+    });
+    check("Jira needs the account email", r.status === 400, r.status);
+    r = await call("/api/admin/license", { jar: adminJar });
+    const canLicense =
+      r.status === 200 && r.body.license?.source !== "file" && r.body.license?.status === "none";
+    r = await call(`/api/projects/${projectId}/integrations`, { method: "POST", json: jiraBody });
+    if (r.status === 201) {
+      check("Jira accepted (this instance already has a licence with Jira)", true);
+      await call(`/api/integrations/${r.body.integration.id}`, { method: "DELETE" });
+    } else {
+      check(
+        "Jira without a licence is refused",
+        r.status === 403 && r.body.code === "LICENSE_REQUIRED",
+        r.status,
+      );
+    }
+    if (!canLicense) {
+      skip("Jira sync checks", "needs an instance admin and no licence installed");
+    } else {
+      const { signLicense } = await import(pathToFileURL(join(root, "tools/sign-license/lib.mjs")).href);
+      const devKey = readFileSync(join(root, "tools/sign-license/dev-private-key.pem"), "utf8");
+      const lic = signLicense(
+        {
+          kid: "dev-2026",
+          lid: `lic_smoke_jira_${Date.now()}`,
+          customer: "Smoke GmbH",
+          features: ["jira"],
+          limits: {},
+          issuedAt: new Date(Date.now() - 86_400_000).toISOString(),
+          expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+          graceDays: 30,
+        },
+        devKey,
+      );
+      const licensed = await call("/api/admin/license", {
+        method: "POST",
+        json: { license: lic },
+        jar: adminJar,
+      });
+      // A production build trusts only the production key, so the dev-signed licence is refused there.
+      if (licensed.status !== 200) {
+        skip("Jira sync checks", `the development licence was refused (${licensed.status})`);
+      } else
+        try {
+          r = await call(`/api/projects/${projectId}/integrations`, { method: "POST", json: jiraBody });
+          const jira = r.body.integration;
+          check(
+            "connect Jira with a licence (project key upper-cased, email shown, token hidden)",
+            r.status === 201 &&
+              jira.repo === "WEB" &&
+              jira.email === "smoke@example.com" &&
+              !JSON.stringify(r.body).includes("atl-smoke-token"),
+            r.status,
+          );
+          r = await call(`/api/integrations/${jira?.id}/test`, { method: "POST" });
+          check(
+            "Jira test connection",
+            r.body.ok === true && r.body.name === "Website (WEB)",
+            JSON.stringify(r.body),
+          );
+          r = await call(`/api/feedback/${intFid}/issues`, {
+            method: "POST",
+            json: { integrationId: jira?.id },
+          });
+          const issue = r.body.issue;
+          const sent = [...jiraIssues.values()][0];
+          check(
+            "Send to Jira: a Bug with an ADF description and a link back",
+            r.status === 201 &&
+              issue.provider === "jira" &&
+              issue.url === `${partyBase}/browse/WEB-1` &&
+              sent?.fields.issuetype.id === "11" &&
+              sent?.fields.description.type === "doc" &&
+              JSON.stringify(sent.fields.description).includes(`item=${intFid}`),
+            r.status,
+          );
+          r = await call(`/api/integrations/${jira?.id}/webhook-secret`);
+          const jiraSecret = r.body.secret;
+          const raw = JSON.stringify({
+            webhookEvent: "jira:issue_updated",
+            timestamp: Date.now(),
+            changelog: { items: [{ field: "status" }] },
+            issue: {
+              key: "WEB-1",
+              fields: { project: { key: "WEB" }, status: { statusCategory: { key: "done" } } },
+            },
+          });
+          const jiraPost = (sig, id) =>
+            call("/api/integrations/jira/webhook", {
+              method: "POST",
+              rawBody: raw,
+              jar: { cookie: "" },
+              headers: {
+                "content-type": "application/json",
+                "x-hub-signature": sig,
+                "x-atlassian-webhook-identifier": id,
+              },
+            });
+          r = await jiraPost(`sha256=${"0".repeat(64)}`, crypto.randomUUID());
+          check("Jira webhook: wrong signature refused", r.status === 401, r.status);
+          const hookId = crypto.randomUUID();
+          r = await jiraPost(`sha256=${createHmac("sha256", jiraSecret).update(raw).digest("hex")}`, hookId);
+          check(
+            "Jira webhook: moving to Done resolves the item",
+            r.status === 200 && r.body.feedback?.status === "resolved",
+            JSON.stringify(r.body),
+          );
+          r = await jiraPost(`sha256=${createHmac("sha256", jiraSecret).update(raw).digest("hex")}`, hookId);
+          check("Jira webhook: replay ignored", r.body.duplicate === true);
+          // Reopening in Pinwren moves the Jira issue back (through the issues queue).
+          await call(`/api/feedback/${intFid}`, { method: "PATCH", json: { status: "open" } });
+          const reopened = await waitFor(() => jiraIssues.get("WEB-1")?.category === "new", 15_000);
+          check("reopening the item reopens the Jira issue", !!reopened, jiraIssues.get("WEB-1")?.category);
+          await call(`/api/integrations/${jira?.id}`, { method: "DELETE" });
+        } finally {
+          await call("/api/admin/license", { method: "DELETE", jar: adminJar });
+        }
+    }
+  } finally {
+    for (const id of created.filter(Boolean)) await call(`/api/webhooks/${id}`, { method: "DELETE" });
+    party.close();
+  }
+}
+
+// =============================================================================================
+// Wave 5 — email-notifications (docs/contracts/wave-5.md §3.2): personal + project notification
+// settings, watchers, mentions, bell paging, the per-user stream event, team unsubscribe, SMTP test
+// with unsaved values and the delivery log
+// =============================================================================================
+{
+  console.log("\n— wave 5: email + notifications");
+  // Personal switches: per project (with the wave-5 kinds) and account-wide (digest, pause).
+  r = await call("/api/notification-preferences");
+  const pref0 = r.body.preferences?.find((p) => p.projectId === projectId);
+  check(
+    "notification preferences carry mentions, priority and emailConfigured",
+    r.status === 200 &&
+      typeof r.body.emailConfigured === "boolean" &&
+      pref0?.mentioned === true &&
+      pref0?.priorityChanges === true,
+    r.status,
+  );
+  r = await call("/api/notification-preferences", {
+    method: "PUT",
+    json: { projectId, mentioned: false, priorityChanges: false },
+  });
+  check(
+    "switch mentions and priority off for a project",
+    r.status === 200 &&
+      r.body.preference?.mentioned === false &&
+      r.body.preference?.priorityChanges === false,
+    r.status,
+  );
+  await call("/api/notification-preferences", {
+    method: "PUT",
+    json: { projectId, mentioned: true, priorityChanges: true },
+  });
+  r = await call("/api/me/preferences");
+  check(
+    "account email preferences default to instant and not paused",
+    r.status === 200 &&
+      r.body.preferences?.emailDigest === "off" &&
+      r.body.preferences?.emailPaused === false,
+    JSON.stringify(r.body),
+  );
+  r = await call("/api/me/preferences", {
+    method: "PATCH",
+    json: { emailDigest: "daily", emailPaused: true },
+  });
+  check(
+    "choose a daily digest and pause email",
+    r.status === 200 &&
+      r.body.preferences?.emailDigest === "daily" &&
+      r.body.preferences?.emailPaused === true,
+    r.status,
+  );
+  r = await call("/api/me/preferences", { method: "PATCH", json: { emailDigest: "weekly" } });
+  check("an unknown digest frequency is refused", r.status === 400, r.status);
+  await call("/api/me/preferences", { method: "PATCH", json: { emailDigest: "off", emailPaused: false } });
+  r = await call("/api/me/preferences", { method: "PATCH", json: { emailPaused: false }, jar: viewerJar });
+  check("a viewer manages their own email preferences", r.status === 200, r.status);
+
+  // Notifications › General / › Reporter (Admins change them; everyone reads).
+  r = await call(`/api/projects/${projectId}/notifications`);
+  check(
+    "read a project's notification settings",
+    r.status === 200 &&
+      r.body.notifications?.memberIds === null &&
+      r.body.notifications?.reporter?.enabled === true &&
+      r.body.notifications?.reporter?.received === true &&
+      r.body.notifications?.reporter?.priorityChanged === false &&
+      Array.isArray(r.body.members) &&
+      r.body.members.some((m) => m.userId === memberId),
+    r.status,
+  );
+  r = await call(`/api/projects/${projectId}/notifications`, { jar: viewerJar });
+  check("a viewer reads them too", r.status === 200, r.status);
+  r = await call(`/api/projects/${projectId}/notifications`, {
+    method: "PATCH",
+    json: { emails: ["x@example.com"] },
+    jar: memberJar,
+  });
+  check(
+    "an Editor can't change them",
+    r.status === 403 && r.body.code === "FORBIDDEN_ROLE",
+    `${r.status} ${r.body.code}`,
+  );
+  r = await call(`/api/projects/${projectId}/notifications`, {
+    method: "PATCH",
+    json: { memberIds: [crypto.randomUUID()] },
+  });
+  check("recipients must be members", r.status === 400 && r.body.code === "INVALID_MEMBER", r.status);
+  r = await call(`/api/projects/${projectId}/notifications`, {
+    method: "PATCH",
+    json: { emails: ["not-an-address"] },
+  });
+  check("extra addresses are validated", r.status === 400, r.status);
+  r = await call(`/api/projects/${projectId}/notifications`, {
+    method: "PATCH",
+    json: { emails: ["Boss@Example.com", "boss@example.com"], reporter: { priorityChanged: true } },
+  });
+  check(
+    "set extra addresses (normalised) and a reporter switch",
+    r.status === 200 &&
+      JSON.stringify(r.body.notifications?.emails) === JSON.stringify(["boss@example.com"]) &&
+      r.body.notifications?.reporter?.priorityChanged === true &&
+      r.body.notifications?.reporter?.received === true,
+    JSON.stringify(r.body.notifications),
+  );
+  await call(`/api/projects/${projectId}/notifications`, {
+    method: "PATCH",
+    json: { memberIds: null, emails: [], reporter: { priorityChanged: false } },
+  });
+
+  // A new report reaches the bell with its kind and reporter, through the per-user stream event.
+  // (The wave-1 section switched new-feedback notifications off for this project.)
+  await call("/api/notification-preferences", { method: "PUT", json: { projectId, newFeedback: true } });
+  await call("/api/notifications/read", { method: "POST", json: { all: true } });
+  const live = await openStream(mainJar);
+  const mk = await W("/w/feedback", {
+    method: "POST",
+    json: { ...report, clientId: crypto.randomUUID(), screenshot: undefined },
+  });
+  const item = mk.body.feedback?.id;
+  check("a report for the notification checks", mk.status === 201 && typeof item === "string", mk.status);
+  const created = await waitFor(async () => {
+    const n = await call("/api/notifications?unread=1");
+    return n.body.items?.find((x) => x.feedbackId === item && x.type === "feedback.created");
+  });
+  check(
+    "the bell names the kind and the reporter",
+    created?.data?.kind === "bug" && created?.data?.actorName === "Maria",
+    JSON.stringify(created?.data),
+  );
+  const pushed = await waitFor(() =>
+    live.events.find((e) => e.event === "notification.created" && e.data?.feedbackId === item),
+  );
+  check(
+    "notification.created is pushed to the recipient's stream after the row exists",
+    pushed?.data?.id === created?.id && pushed?.data?.orgId === orgId,
+    JSON.stringify(pushed?.data ?? null),
+  );
+  live.close();
+
+  // Paging and filters.
+  r = await call("/api/notifications?limit=1");
+  const first = r.body.items?.[0];
+  check(
+    "notifications page with a cursor",
+    r.status === 200 && r.body.items?.length === 1 && typeof r.body.nextCursor === "string",
+    r.status,
+  );
+  r = await call(`/api/notifications?limit=1&before=${encodeURIComponent(r.body.nextCursor ?? "")}`);
+  check(
+    "the next page continues after the cursor",
+    r.status === 200 && r.body.items?.length === 1 && r.body.items[0].id !== first?.id,
+    r.status,
+  );
+  r = await call(`/api/notifications?projectId=${projectId}&limit=100`);
+  check(
+    "filter notifications by project",
+    r.status === 200 && r.body.items.every((x) => x.data?.projectId === projectId),
+    r.status,
+  );
+  r = await call("/api/notifications?limit=500");
+  check("the page size is capped", r.status === 400, r.status);
+
+  // Follow an item: status and priority changes reach followers.
+  r = await call(`/api/feedback/${item}/watch`, { method: "POST", jar: memberJar });
+  check("follow an item", r.status === 200 && r.body.watching === true, r.status);
+  r = await call(`/api/feedback/${item}/watch`, { method: "POST", jar: viewerJar });
+  check("a viewer can follow too", r.status === 200 && r.body.watching === true, r.status);
+  r = await call(`/api/feedback/${item}/watch`, { method: "DELETE", jar: viewerJar });
+  check("unfollow", r.status === 200 && r.body.watching === false, r.status);
+  r = await call(`/api/feedback/${crypto.randomUUID()}/watch`, { method: "POST" });
+  check("following an unknown item is a 404", r.status === 404, r.status);
+  await call(`/api/feedback/${item}`, { method: "PATCH", json: { status: "in_progress", priority: "high" } });
+  const followed = await waitFor(async () => {
+    const n = await call("/api/notifications?unread=1", { jar: memberJar });
+    const mine = n.body.items?.filter((x) => x.feedbackId === item) ?? [];
+    return mine.some((x) => x.type === "feedback.status_changed") &&
+      mine.some((x) => x.type === "feedback.priority_changed")
+      ? mine
+      : null;
+  });
+  check(
+    "followers hear about status and priority changes",
+    !!followed,
+    JSON.stringify(followed?.map((x) => x.type) ?? []),
+  );
+
+  // @mentions (the comment handler stores them; dispatch turns them into a mention notification).
+  r = await call(`/api/feedback/${item}/comments`, {
+    method: "POST",
+    json: { body: "@Smoke Member can you check this?", visibility: "internal", mentions: [memberId] },
+  });
+  if (r.status !== 201 && r.status !== 200) {
+    skip("mention notification", `comment with mentions answered ${r.status}`);
+  } else {
+    const mentioned = await waitFor(async () => {
+      const n = await call("/api/notifications?unread=1", { jar: memberJar });
+      return n.body.items?.find((x) => x.feedbackId === item && x.type === "comment.mentioned");
+    });
+    check("the mentioned member gets a mention notification", !!mentioned);
+    const n = await call("/api/notifications?unread=1", { jar: memberJar });
+    const replies = n.body.items?.filter(
+      (x) =>
+        x.feedbackId === item && x.type === "comment.created" && x.data?.commentId === r.body.comment?.id,
+    );
+    check("…and no second, plain reply notification for that comment", replies?.length === 0);
+  }
+
+  // Mark one item's notifications read, then trash it: only the deletion notice stays listed.
+  r = await call("/api/notifications/read", { method: "POST", json: { feedbackId: item }, jar: memberJar });
+  check("opening an item reads its notifications", r.status === 200 && r.body.updated >= 1, r.status);
+  r = await call(`/api/feedback/${item}`, { method: "DELETE" });
+  check("trash the followed item", r.status === 204, r.status);
+  const trashed = await waitFor(async () => {
+    const n = await call("/api/notifications?limit=100", { jar: memberJar });
+    const about = n.body.items?.filter((x) => x.feedbackId === item) ?? [];
+    return about.some((x) => x.type === "feedback.deleted") ? about : null;
+  });
+  check(
+    "followers hear about the deletion; the item's other notifications leave the list",
+    !!trashed && trashed.every((x) => x.type === "feedback.deleted"),
+    JSON.stringify(trashed?.map((x) => x.type) ?? []),
+  );
+
+  // Signed links in team emails: forged tokens get nothing.
+  r = await call("/api/unsubscribe/team?token=forged.token", { jar: { cookie: "" } });
+  check("a forged team unsubscribe link is refused", r.status === 400, r.status);
+  r = await call("/api/unsubscribe/team?token=forged.token", {
+    method: "POST",
+    rawBody: "List-Unsubscribe=One-Click",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    jar: { cookie: "" },
+  });
+  check("one-click POST with a forged token is refused", r.status === 400, r.status);
+  r = await call("/api/email-assets/forged.token", { jar: { cookie: "" } });
+  check("a forged screenshot link serves nothing", r.status === 404, r.status);
+
+  // SMTP: test unsaved values (verify first), From validation, the delivery log.
+  r = await call("/api/admin/settings/email", { jar: adminJar });
+  if (r.status !== 200) {
+    skip(
+      "SMTP test + delivery log",
+      "needs an instance admin (PINWREN_ADMIN_EMAILS=smoke-admin@example.com)",
+    );
+  } else {
+    const configured = r.body.email?.configured === true;
+    const hostLocked = r.body.email?.locked?.host === true;
+    r = await call("/api/admin/settings/email", {
+      method: "PATCH",
+      json: { from: "not an address" },
+      jar: adminJar,
+    });
+    check(
+      "an invalid From is refused",
+      r.status === 400 && r.body.code === "INVALID_FROM",
+      `${r.status} ${r.body.code}`,
+    );
+    if (hostLocked) {
+      skip("test with unsaved values", "SMTP_HOST is set by the environment");
+    } else {
+      // Nothing listens on port 9 here: verify() fails, nothing is saved, the reason is categorised.
+      r = await call("/api/admin/settings/email/test", {
+        method: "POST",
+        json: { config: { host: "127.0.0.1", port: 9, secure: false, from: "Smoke <smoke@example.com>" } },
+        jar: adminJar,
+      });
+      check(
+        "test with unsaved values reports the connection failure",
+        r.status === 200 &&
+          r.body.sent === false &&
+          r.body.skipped === false &&
+          /Connection|refused/i.test(r.body.reason),
+        JSON.stringify(r.body),
+      );
+      r = await call("/api/admin/settings/email", { jar: adminJar });
+      check("the tested values were not saved", r.body.email?.host !== "127.0.0.1", r.body.email?.host);
+    }
+    r = await call("/api/admin/settings/email/deliveries?limit=20", { jar: adminJar });
+    check(
+      "list recent email deliveries",
+      r.status === 200 && Array.isArray(r.body.items) && typeof r.body.skippedNotConfigured === "number",
+      r.status,
+    );
+    r = await call("/api/admin/settings/email/deliveries?limit=20", { jar: memberJar });
+    check("the delivery log is for instance admins", r.status === 403, r.status);
+    if (!configured) {
+      const logged = await waitFor(async () => {
+        const d = await call("/api/admin/settings/email/deliveries?status=skipped&limit=50", {
+          jar: adminJar,
+        });
+        return d.body.items?.find((x) => x.templateKey === "feedback_created");
+      });
+      check(
+        "an email skipped for missing SMTP is logged with the reason",
+        logged?.status === "skipped" && logged?.error === "SMTP is not configured" && !("payload" in logged),
+        JSON.stringify(logged ?? null),
+      );
+      r = await call("/api/admin/settings/email/deliveries/resend-skipped", {
+        method: "POST",
+        jar: adminJar,
+      });
+      check(
+        "resending skipped emails needs SMTP first",
+        r.status === 409 && r.body.code === "EMAIL_NOT_CONFIGURED",
+        `${r.status} ${r.body.code}`,
+      );
+      if (logged) {
+        r = await call(`/api/admin/settings/email/deliveries/${logged.id}/resend`, {
+          method: "POST",
+          jar: adminJar,
+        });
+        check("resending one email also needs SMTP", r.status === 409, r.status);
+      }
+    } else {
+      skip("skipped-email log", "SMTP is configured on this instance");
+    }
+  }
+}
+
+// =============================================================================================
+// Wave 5 — accounts (docs/contracts/wave-5.md §3.1): first-run state, Users › Add User, roles,
+// own account (profile, avatar, email), workspaces, instance administrators
+// =============================================================================================
+{
+  console.log("\n— wave 5: accounts");
+  const anon = { cookie: "" };
+  r = await call("/api/setup", { jar: anon });
+  check(
+    "public setup state",
+    r.status === 200 &&
+      r.body.needed === false &&
+      typeof r.body.signupOpen === "boolean" &&
+      typeof r.body.emailConfigured === "boolean" &&
+      r.body.appUrl === new URL(B).origin,
+    JSON.stringify(r.body),
+  );
+  const mailOn = r.body.emailConfigured === true;
+
+  r = await call("/api/me");
+  check(
+    "me carries appRole, setupNeeded, emailConfigured, signupOpen",
+    r.status === 200 &&
+      r.body.appRole === "admin" &&
+      r.body.setupNeeded === false &&
+      typeof r.body.emailConfigured === "boolean" &&
+      typeof r.body.signupOpen === "boolean" &&
+      typeof r.body.user?.emailVerified === "boolean",
+    JSON.stringify({ appRole: r.body.appRole, setupNeeded: r.body.setupNeeded }),
+  );
+  const ownerId = r.body.user?.id;
+  r = await call("/api/me", { jar: memberJar });
+  check("a member is an Editor", r.status === 200 && r.body.appRole === "editor", r.body.appRole);
+  r = await call("/api/members");
+  check(
+    "members list carries app roles",
+    r.status === 200 && r.body.members?.every((m) => ["admin", "editor", "viewer"].includes(m.appRole)),
+  );
+
+  // Users › Add User
+  const addedEmail = `smoke-added+${Date.now()}@example.com`;
+  const addedPassword = "added-password-1";
+  r = await call("/api/members", {
+    method: "POST",
+    json: { name: "Added Person", email: addedEmail, password: addedPassword, role: "viewer" },
+    jar: memberJar,
+  });
+  check("Editors can't add users", r.status === 403 && r.body.code === "FORBIDDEN_ROLE", r.status);
+  r = await call("/api/members", {
+    method: "POST",
+    json: { name: "Added Person", email: addedEmail, password: "short", role: "viewer" },
+  });
+  check("Add User needs an 8-character password", r.status === 400, r.status);
+  r = await call("/api/members", {
+    method: "POST",
+    json: { name: "Added Person", email: addedEmail, password: addedPassword, role: "viewer" },
+  });
+  check(
+    "Admin adds a user directly",
+    r.status === 201 && r.body.member?.appRole === "viewer" && r.body.member?.email === addedEmail,
+    r.status,
+  );
+  const addedId = r.body.member?.userId;
+  r = await call("/api/members", {
+    method: "POST",
+    json: { name: "Again", email: addedEmail.toUpperCase(), password: addedPassword, role: "viewer" },
+  });
+  check("an existing address is EMAIL_TAKEN", r.status === 409 && r.body.code === "EMAIL_TAKEN", r.status);
+
+  const addedJar = { cookie: "" };
+  r = await call("/api/auth/sign-in/email", {
+    method: "POST",
+    json: { email: addedEmail, password: addedPassword },
+    jar: addedJar,
+  });
+  check("the added user signs in with the Admin's password", r.status === 200, r.status);
+  await call("/api/auth/organization/set-active", {
+    method: "POST",
+    json: { organizationId: orgId },
+    jar: addedJar,
+  });
+  r = await call("/api/me", { jar: addedJar });
+  check(
+    "the added user is a verified Viewer of the workspace",
+    r.status === 200 && r.body.appRole === "viewer" && r.body.user?.emailVerified === true,
+    r.body.appRole,
+  );
+  r = await call(`/api/feedback/${fid}`, { method: "PATCH", json: { status: "open" }, jar: addedJar });
+  check("the Viewer can't change reports", r.status === 403 && r.body.code === "READ_ONLY_ROLE", r.status);
+
+  // Roles
+  r = await call(`/api/members/${addedId}`, { method: "PATCH", json: { role: "editor" } });
+  check("Admin changes a role", r.status === 200 && r.body.member?.appRole === "editor", r.status);
+  r = await call(`/api/members/${ownerId}`, { method: "PATCH", json: { role: "viewer" } });
+  check("nobody changes their own role", r.status === 400 && r.body.code === "OWN_ROLE", r.status);
+  await call(`/api/members/${addedId}`, { method: "PATCH", json: { role: "admin" } });
+  r = await call(`/api/members/${ownerId}`, { method: "PATCH", json: { role: "editor" }, jar: addedJar });
+  check("the owner can't be demoted", r.status === 400 && r.body.code === "OWNER_LOCKED", r.status);
+  r = await call(`/api/members/${ownerId}`, { method: "DELETE", jar: addedJar });
+  check("the owner can't be removed", r.status === 400 && r.body.code === "OWNER_LOCKED", r.status);
+  await call(`/api/members/${addedId}`, { method: "PATCH", json: { role: "editor" } });
+
+  // Password reset
+  r = await call(`/api/members/${addedId}/reset-link`, { method: "POST" });
+  check(
+    "only instance admins copy reset links",
+    r.status === 403 && r.body.code === "INSTANCE_ADMIN_REQUIRED",
+    r.status,
+  );
+  r = await call("/api/auth/request-password-reset", {
+    method: "POST",
+    json: { email: addedEmail, redirectTo: "/reset-password" },
+    jar: anon,
+  });
+  check("password reset can be requested", r.status === 200 && r.body.status === true, r.status);
+
+  // Own account
+  r = await call("/api/me/profile", { method: "PATCH", json: { name: "Added Renamed" }, jar: addedJar });
+  check("profile rename", r.status === 200 && r.body.user?.name === "Added Renamed", r.status);
+  r = await call("/api/me/profile", { method: "PATCH", json: { name: " " }, jar: addedJar });
+  check("an empty name is refused", r.status === 400, r.status);
+  r = await call("/api/me/avatar", { method: "POST", json: { dataUrl: png }, jar: addedJar });
+  const avatar = r.body.image;
+  check(
+    "avatar upload",
+    r.status === 200 && typeof avatar === "string" && avatar.startsWith(`/api/avatars/${addedId}`),
+    r.status,
+  );
+  r = await call("/api/me/avatar", {
+    method: "POST",
+    json: { dataUrl: `data:image/png;base64,${Buffer.from("<svg/>").toString("base64")}` },
+    jar: addedJar,
+  });
+  check("a fake image is refused", r.status === 400 && r.body.code === "INVALID_IMAGE", r.status);
+  if (typeof avatar === "string") {
+    const res = await fetch(B + avatar, { headers: { cookie: mainJar.cookie, "x-forwarded-for": RUN_IP } });
+    check(
+      "teammates see the avatar",
+      res.status === 200 && res.headers.get("content-type") === "image/png",
+      res.status,
+    );
+    const out = await fetch(B + avatar, { headers: { cookie: adminJar.cookie, "x-forwarded-for": RUN_IP } });
+    check("people outside the workspace don't", out.status === 404 || out.status === 401, out.status);
+  }
+  r = await call("/api/me/avatar", { method: "DELETE", jar: addedJar });
+  check("avatar removed", r.status === 200 && r.body.image === null, r.status);
+  r = await call("/api/me/profile", {
+    method: "PATCH",
+    json: { name: "x" },
+    jar: addedJar,
+    headers: { origin: "https://evil.example" },
+  });
+  check(
+    "a cross-site write names PINWREN_URL",
+    r.status === 403 && r.body.code === "CROSS_SITE_REQUEST" && String(r.body.title).includes("PINWREN_URL"),
+    r.status,
+  );
+
+  if (mailOn) {
+    skip("email change with the password", "SMTP is configured: the change goes through a link");
+  } else {
+    const newEmail = `smoke-moved+${Date.now()}@example.com`;
+    r = await call("/api/me/email", {
+      method: "POST",
+      json: { newEmail, password: "wrong-password" },
+      jar: addedJar,
+    });
+    check(
+      "email change needs the password",
+      r.status === 400 && r.body.code === "INVALID_PASSWORD",
+      r.status,
+    );
+    r = await call("/api/me/email", {
+      method: "POST",
+      json: { newEmail: email, password: addedPassword },
+      jar: addedJar,
+    });
+    check(
+      "email change refuses a taken address",
+      r.status === 409 && r.body.code === "EMAIL_TAKEN",
+      r.status,
+    );
+    r = await call("/api/me/email", {
+      method: "POST",
+      json: { newEmail, password: addedPassword },
+      jar: addedJar,
+    });
+    check("email changed without SMTP", r.status === 200 && r.body.user?.email === newEmail, r.status);
+    r = await call("/api/auth/sign-in/email", {
+      method: "POST",
+      json: { email: newEmail, password: addedPassword },
+      jar: { cookie: "" },
+    });
+    check("sign in with the new address", r.status === 200, r.status);
+  }
+
+  // An invitation waiting for someone who signs up on their own
+  const inviteeEmail = `smoke-invitee+${Date.now()}@example.com`;
+  const invited = await call("/api/auth/organization/invite-member", {
+    method: "POST",
+    json: { email: inviteeEmail, role: "viewer" },
+  });
+  const inviteeJar = { cookie: "" };
+  await call("/api/auth/sign-up/email", {
+    method: "POST",
+    json: { name: "Smoke Invitee", email: inviteeEmail, password: "invitee-password-1" },
+    jar: inviteeJar,
+  });
+  r = await call("/api/me/invitations", { jar: inviteeJar });
+  check(
+    "onboarding sees the pending invitation",
+    r.status === 200 && r.body.invitations?.some((i) => i.organizationId === orgId && i.appRole === "viewer"),
+    `invite ${invited.status} ${invited.body?.code ?? ""}`,
+  );
+  r = await call("/api/me/invitations", { jar: anon });
+  check("invitations need a session", r.status === 401, r.status);
+
+  // Workspace settings
+  r = await call("/api/workspace", { method: "PATCH", json: { name: "Renamed" }, jar: memberJar });
+  check("Editors can't rename the workspace", r.status === 403 && r.body.code === "FORBIDDEN_ROLE", r.status);
+  r = await call("/api/workspace", { method: "PATCH", json: { name: "Smoke Org" } });
+  check("Admin renames the workspace", r.status === 200 && r.body.workspace?.name === "Smoke Org", r.status);
+  r = await call("/api/workspace/transfer", { method: "POST", json: { userId: ownerId }, jar: addedJar });
+  check("only the owner transfers", r.status === 403, r.status);
+  r = await call("/api/workspace", { method: "DELETE", json: { confirm: "not the name" } });
+  check("delete needs the exact name", r.status === 400 && r.body.code === "CONFIRM_MISMATCH", r.status);
+  r = await call("/api/auth/organization/create", {
+    method: "POST",
+    json: { name: "Smoke Throwaway", slug: `smoke-throwaway-${Date.now()}` },
+  });
+  const throwaway = r.body.id;
+  await call("/api/auth/organization/set-active", { method: "POST", json: { organizationId: throwaway } });
+  r = await call("/api/workspace", { method: "DELETE", json: { confirm: "Smoke Throwaway" } });
+  check("the owner deletes a workspace", r.status === 204, r.status);
+  r = await call("/api/auth/organization/list");
+  check("a deleted workspace is gone", Array.isArray(r.body) && !r.body.some((o) => o.id === throwaway));
+  await call("/api/auth/organization/set-active", { method: "POST", json: { organizationId: orgId } });
+
+  // Removing someone
+  r = await call(`/api/members/${addedId}`, { method: "DELETE" });
+  check("Admin removes a user", r.status === 204, r.status);
+  r = await call("/api/me", { jar: addedJar });
+  check("a removed user loses the workspace", r.status === 403 || r.status === 409, r.status);
+
+  // Instance administrators (Settings › Security)
+  r = await call("/api/admin/instance-admins");
+  check("the administrators list is for instance admins", r.status === 403, r.status);
+  if (isInstanceAdmin) {
+    r = await call("/api/admin/instance-admins", { jar: adminJar });
+    check(
+      "instance admins listed with their source",
+      r.status === 200 &&
+        r.body.admins?.some((a) => a.source === "env") &&
+        Array.isArray(r.body.pendingEmails),
+      r.status,
+    );
+    const envAdmin = r.body.admins?.find((a) => a.source === "env");
+    if (envAdmin) {
+      r = await call(`/api/admin/instance-admins/${envAdmin.id}`, { method: "DELETE", jar: adminJar });
+      check("env-listed admins are locked", r.status === 409 && r.body.code === "ENV_LOCKED", r.status);
+    }
+  } else {
+    skip("instance administrators", "start the server with PINWREN_ADMIN_EMAILS=smoke-admin@example.com");
+  }
+}
+
+// =============================================================================================
+// Wave 5 — widget look and feel (SitePing parity): the sidebar's "All pages" list carries each item's
+// page URL, and a reporter deletes their own feedback from the page (DELETE /w/feedback/:id with the
+// reporter token; it goes to the trash like a dashboard delete).
+// =============================================================================================
+{
+  r = await W("/w/feedback", {
+    method: "POST",
+    json: {
+      clientId: crypto.randomUUID(),
+      kind: "question",
+      body: "Smoke: is this the final pricing?",
+      page: { url: `${site}/pricing`, title: "Pricing" },
+      environment: { userAgent: "smoke", viewport: { w: 1280, h: 800 }, dpr: 1 },
+    },
+  });
+  check("sidebar: a question from the page", r.status === 201 && !!r.body.feedback?.reporterToken, r.status);
+  const own = r.body.feedback ?? {};
+  r = await W("/w/feedback?include=closed");
+  const listed = Array.isArray(r.body.items) ? r.body.items.find((i) => i.id === own.id) : undefined;
+  check(
+    "sidebar: All pages lists items with their page URL",
+    r.status === 200 && typeof listed?.pageUrl === "string" && listed.pageUrl.includes("/pricing"),
+    listed?.pageUrl,
+  );
+  r = await call(`/w/feedback/${own.id}`, {
+    method: "OPTIONS",
+    jar: { cookie: "" },
+    headers: { origin: site, "access-control-request-method": "DELETE" },
+  });
+  check(
+    "sidebar: CORS preflight allows DELETE",
+    (r.headers.get("access-control-allow-methods") ?? "").includes("DELETE"),
+    r.headers.get("access-control-allow-methods"),
+  );
+  r = await W(`/w/feedback/${own.id}`, { method: "DELETE" });
+  check(
+    "sidebar: delete without the reporter token is refused",
+    r.status === 403 && r.body.code === "DELETE_NOT_ALLOWED",
+    r.status,
+  );
+  r = await W(`/w/feedback/${own.id}`, {
+    method: "DELETE",
+    headers: { "x-pinwren-reporter-token": "not-the-token" },
+  });
+  check("sidebar: delete with someone else's token is refused", r.status === 403, r.status);
+  r = await W(`/w/feedback/${own.id}`, {
+    method: "DELETE",
+    headers: { "x-pinwren-reporter-token": own.reporterToken },
+  });
+  check("sidebar: the reporter deletes their own feedback", r.status === 204, r.status);
+  r = await W("/w/feedback?include=closed");
+  check(
+    "sidebar: a deleted item is gone from the page",
+    r.status === 200 && !r.body.items.some((i) => i.id === own.id),
+  );
+  r = await W(`/w/feedback/${own.id}`, {
+    method: "DELETE",
+    headers: { "x-pinwren-reporter-token": own.reporterToken },
+  });
+  check("sidebar: deleting twice is a 404", r.status === 404, r.status);
+  r = await call(`/api/feedback/${own.id}/restore`, { method: "POST" });
+  check("sidebar: an Admin can restore it from the trash", r.status === 200, r.status);
+}
+
+// =============================================================================================
+// Wave 5 — widget (docs/contracts/wave-5.md §3.3): private pins for their reporter, signed page links,
+// re-pin, page grouping (tracking parameters, trailing slash, ignored parameters), capture geometry and
+// annotations, refused origins, visitor resolve limited to the reporter
+// =============================================================================================
+{
+  console.log("\n— wave 5: widget data");
+  // A project that keeps pins private (the new default), on the same test site.
+  r = await call("/api/projects", {
+    method: "POST",
+    json: { name: "Smoke private pins", allowedOrigins: [new URL(site).host] },
+  });
+  const priv = r.body.project;
+  check("a new project keeps pins private", r.status === 201 && priv?.publicRead === false, r.status);
+  const P = (path, opts = {}) =>
+    call(path, {
+      ...opts,
+      jar: { cookie: "" },
+      headers: { "x-pinwren-key": priv?.publicKey, origin: site, ...(opts.headers ?? {}) },
+    });
+  const anchor = (css) => ({
+    v: 1,
+    css,
+    xpath: "/html/body/h1",
+    text: { content: "Pricing", prefix: "", suffix: "" },
+    tag: "h1",
+    structure: { depth: 2, siblingIndex: 0, childTagsHash: "smoke" },
+    rect: { x: 10, y: 20, w: 300, h: 40, vw: 1280, vh: 800, scrollY: 0 },
+    pin: { xPct: 50, yPct: 50 },
+  });
+
+  // Refused origin: recorded on the project for the Install tab.
+  r = await P("/w/config", { headers: { origin: "https://not-allowed.example" } });
+  check(
+    "a refused origin still gets 403",
+    r.status === 403 && r.body.code === "ORIGIN_NOT_ALLOWED",
+    r.status,
+  );
+  r = await call(`/api/projects/${priv?.id}`);
+  check(
+    "the refused origin is recorded with a count",
+    r.body.project?.rejectedOrigins?.some((o) => o.origin === "https://not-allowed.example" && o.count >= 1),
+    JSON.stringify(r.body.project?.rejectedOrigins),
+  );
+
+  // A bug report with capture geometry and a vector annotation layer, from a URL with trackers.
+  r = await P("/w/feedback", {
+    method: "POST",
+    json: {
+      clientId: crypto.randomUUID(),
+      kind: "bug",
+      body: "Price column overlaps",
+      page: { url: `${site}/pricing/?utm_source=mail&gclid=abc&pinwren=x&pwt=y` },
+      environment: { userAgent: "smoke", viewport: { w: 1280, h: 800 }, dpr: 1 },
+      reporter: { name: "Rita", email: "rita@example.com" },
+      screenshot: png,
+      capture: { vw: 1280, vh: 800, scrollY: 120, mode: "visible" },
+      annotations: {
+        v: 1,
+        width: 1,
+        height: 1,
+        shapes: [
+          {
+            tool: "highlighter",
+            color: "#f5a524",
+            size: "m",
+            points: [
+              { x: 0, y: 0 },
+              { x: 1, y: 1 },
+            ],
+          },
+          { tool: "step", color: "#0090ff", size: "s", at: { x: 0.5, y: 0.5 }, n: 1 },
+        ],
+      },
+      metadata: { plan: "pro" },
+    },
+  });
+  check(
+    "bug report with capture + annotations accepted",
+    r.status === 201,
+    `${r.status} ${r.body.title ?? ""}`,
+  );
+  const bugId = r.body.feedback?.id;
+  const bugToken = r.body.feedback?.reporterToken;
+  r = await call(`/api/feedback/${bugId}`);
+  const shotAsset = r.body.assets?.find((a) => a.kind === "screenshot");
+  check(
+    "tracking params, deep-link params and the trailing slash are dropped from the page",
+    r.body.feedback?.pageUrl === `${site}/pricing`,
+    r.body.feedback?.pageUrl,
+  );
+  check(
+    "the screenshot asset carries the capture geometry and the annotations",
+    shotAsset?.capture?.mode === "visible" &&
+      shotAsset?.capture?.scrollY === 120 &&
+      shotAsset?.annotations?.shapes?.length === 2,
+    JSON.stringify(shotAsset?.capture),
+  );
+
+  // Private pins: nothing for visitors, everything for the reporter.
+  r = await P(`/w/feedback?url=${encodeURIComponent(`${site}/pricing`)}`);
+  check(
+    "private pins: visitors see nothing",
+    r.status === 200 && r.body.items.length === 0,
+    r.body.items?.length,
+  );
+  r = await P("/w/mine", { headers: { "x-pinwren-reporter-tokens": `${bugToken},not-a-token` } });
+  check(
+    "GET /w/mine returns the reporter's own items",
+    r.status === 200 && r.body.items.length === 1 && r.body.items[0].id === bugId,
+    r.status,
+  );
+  r = await P(`/w/mine?url=${encodeURIComponent(`${site}/pricing?utm_campaign=z`)}`, {
+    headers: { "x-pinwren-reporter-tokens": bugToken },
+  });
+  check("GET /w/mine filters by page (normalised)", r.body.items?.length === 1, r.body.items?.length);
+  r = await P(`/w/mine?url=${encodeURIComponent(`${site}/elsewhere`)}`, {
+    headers: { "x-pinwren-reporter-tokens": bugToken },
+  });
+  check("GET /w/mine: other pages' items left out", r.body.items?.length === 0, r.body.items?.length);
+  r = await P("/w/mine");
+  check("GET /w/mine without tokens is empty", r.status === 200 && r.body.items.length === 0, r.status);
+
+  await call(`/api/feedback/${bugId}/comments`, {
+    method: "POST",
+    json: { body: "Looking into it", visibility: "public" },
+  });
+  r = await P(`/w/feedback/${bugId}/comments`);
+  check("private thread hidden without a token", r.status === 404, r.status);
+  r = await P(`/w/feedback/${bugId}/comments`, { headers: { "x-pinwren-reporter-token": bugToken } });
+  check("the reporter reads the team's reply", r.status === 200 && r.body.items?.length === 1, r.status);
+  r = await P(`/w/feedback/${bugId}/comments`, {
+    method: "POST",
+    json: { body: "Thanks!" },
+    headers: { "x-pinwren-reporter-token": bugToken },
+  });
+  check("the reporter replies on a private thread", r.status === 201, r.status);
+  r = await P(`/w/feedback/${bugId}/comments`, { method: "POST", json: { body: "Spam" } });
+  check("a stranger can't reply on a private thread", r.status === 404, r.status);
+
+  // Visitor resolve: only the reporter, unless the project allows visitors.
+  r = await P(`/w/feedback/${bugId}`, { method: "PATCH", json: { status: "resolved" } });
+  check(
+    "visitors can't resolve by default",
+    r.status === 403 && r.body.code === "RESOLVE_NOT_ALLOWED",
+    r.status,
+  );
+  r = await P(`/w/feedback/${bugId}`, {
+    method: "PATCH",
+    json: { status: "resolved" },
+    headers: { "x-pinwren-reporter-token": bugToken },
+  });
+  check(
+    "the reporter resolves their own item",
+    r.status === 200 && r.body.feedback?.status === "resolved",
+    r.status,
+  );
+
+  // Signed page links ("Open on page", reporter emails).
+  const comment = await P("/w/feedback", {
+    method: "POST",
+    json: {
+      clientId: crypto.randomUUID(),
+      kind: "comment",
+      body: "Heading too small",
+      page: { url: `${site}/pricing` },
+      anchor: anchor("h1"),
+      environment: { userAgent: "smoke", viewport: { w: 1280, h: 800 }, dpr: 1 },
+    },
+  });
+  const cid = comment.body.feedback?.id;
+  r = await call(`/api/feedback/${cid}/page-link`, { method: "POST" });
+  const link = r.body.url ? new URL(r.body.url) : null;
+  const pwt = link?.searchParams.get("pwt");
+  check(
+    "page link: the page URL with ?pinwren=<id>&pwt=<token>",
+    r.status === 200 && link?.searchParams.get("pinwren") === cid && !!pwt && !!r.body.expiresAt,
+    r.status,
+  );
+  r = await call(`/api/feedback/${cid}/page-link`, { method: "POST", jar: viewerJar });
+  check("viewers may get a page link", r.status === 200, r.status);
+  r = await call(`/api/feedback/${cid}/page-link`, { method: "POST", json: { repin: true }, jar: viewerJar });
+  check("viewers can't get a re-pin link", r.status === 403 && r.body.code === "FORBIDDEN_ROLE", r.status);
+  r = await P(`/w/feedback/${cid}`, { headers: { "x-pinwren-link-token": pwt } });
+  check(
+    "the link opens the private item and its replies",
+    r.status === 200 && r.body.item?.id === cid && Array.isArray(r.body.replies) && r.body.scope === "read",
+    r.status,
+  );
+  r = await P(`/w/feedback/${bugId}`, { headers: { "x-pinwren-link-token": pwt } });
+  check("a link opens only its own item", r.status === 404, r.status);
+  r = await P(`/w/feedback/${cid}`, { headers: { "x-pinwren-link-token": `${pwt}x` } });
+  check("a tampered link is a 404", r.status === 404, r.status);
+  r = await P(`/w/feedback/${cid}/comments`, { headers: { "x-pinwren-link-token": pwt } });
+  check("the link reads the thread", r.status === 200, r.status);
+
+  // Re-pin: a team-issued link moves the pin from the page; the session route does it from the API.
+  r = await P(`/w/feedback/${cid}/anchor`, {
+    method: "PATCH",
+    json: { anchor: anchor("main h1") },
+    headers: { "x-pinwren-link-token": pwt },
+  });
+  check("a read link can't move the pin", r.status === 403 && r.body.code === "REPIN_NOT_ALLOWED", r.status);
+  r = await call(`/api/feedback/${cid}/page-link`, { method: "POST", json: { repin: true }, jar: memberJar });
+  const repinToken = r.body.url ? new URL(r.body.url).searchParams.get("pwt") : null;
+  check("an Editor gets a re-pin link", r.status === 200 && !!repinToken, r.status);
+  r = await P(`/w/feedback/${cid}`, { headers: { "x-pinwren-link-token": repinToken } });
+  check("the re-pin link says so", r.body.scope === "repin", r.body.scope);
+  r = await P(`/w/feedback/${cid}/anchor`, {
+    method: "PATCH",
+    json: { anchor: anchor("main h1") },
+    headers: { "x-pinwren-link-token": repinToken },
+  });
+  check("the widget re-pins with the link", r.status === 200, r.status);
+  r = await call(`/api/feedback/${cid}`);
+  check("the new anchor is stored", r.body.feedback?.anchor?.css === "main h1", r.body.feedback?.anchor?.css);
+  r = await call(`/api/feedback/${cid}/anchor`, { method: "PATCH", json: { anchor: anchor("h1") } });
+  check("the team re-pins through the API", r.status === 200, r.status);
+  r = await call(`/api/feedback/${cid}/anchor`, { method: "PATCH", json: { anchor: { v: 2 } } });
+  check("a malformed anchor is refused", r.status === 400, r.status);
+  r = await call(`/api/feedback/${cid}/anchor`, {
+    method: "PATCH",
+    json: { anchor: anchor("h1") },
+    jar: viewerJar,
+  });
+  check("viewers can't re-pin", r.status === 403, r.status);
+
+  // URL grouping: a project's own ignored parameters, and re-grouping the pages already stored.
+  for (const sid of ["1", "2"]) {
+    await P("/w/feedback", {
+      method: "POST",
+      json: {
+        clientId: crypto.randomUUID(),
+        kind: "comment",
+        body: `Session ${sid}`,
+        page: { url: `${site}/account?sid=${sid}` },
+        environment: { userAgent: "smoke", viewport: { w: 1280, h: 800 }, dpr: 1 },
+      },
+    });
+  }
+  r = await call(`/api/projects/${priv?.id}`, {
+    method: "PATCH",
+    json: { widgetConfig: { ignoredQueryParams: ["sid", "bad param!"] } },
+  });
+  check("an invalid ignored parameter is refused", r.status === 400, r.status);
+  r = await call(`/api/projects/${priv?.id}`, {
+    method: "PATCH",
+    json: { widgetConfig: { ignoredQueryParams: ["sid"] } },
+  });
+  check(
+    "ignored parameters saved",
+    r.body.project?.widgetConfig?.ignoredQueryParams?.includes("sid"),
+    r.status,
+  );
+  r = await call(`/api/projects/${priv?.id}/pages/regroup`, { method: "POST", jar: memberJar });
+  check("Editors can't re-group pages", r.status === 403 && r.body.code === "FORBIDDEN_ROLE", r.status);
+  r = await call(`/api/projects/${priv?.id}/pages/regroup`, { method: "POST" });
+  check(
+    "re-grouping merges the two session pages",
+    r.status === 200 && r.body.merged >= 2,
+    JSON.stringify(r.body),
+  );
+  r = await call(`/api/feedback?projectId=${priv?.id}&status=all&page=${encodeURIComponent("/account")}`);
+  check(
+    "both items now share one page",
+    r.body.items?.length === 2 && r.body.items.every((i) => i.pageUrl === `${site}/account`),
+    JSON.stringify(r.body.items?.map((i) => i.pageUrl)),
+  );
+
+  if (priv?.id) await call(`/api/projects/${priv.id}`, { method: "PATCH", json: { archived: true } });
+}
+
+// =============================================================================================
+// Wave 5 — triage (docs/contracts/wave-5.md §3.4): labels, list sort/cursor/total/search, duplicates,
+// mentions, comment edit/delete, reproduction, export, and the Admin-only trash.
+// =============================================================================================
+{
+  const report = async (body) =>
+    (
+      await W("/w/feedback", {
+        method: "POST",
+        json: {
+          clientId: crypto.randomUUID(),
+          kind: "bug",
+          body,
+          page: { url: `${site}/triage`, title: "Triage" },
+          environment: { userAgent: "smoke", viewport: { w: 1280, h: 800 }, dpr: 1 },
+        },
+      })
+    ).body.feedback?.id;
+  const t1 = await report("Triage smoke: checkout button broken");
+  const t2 = await report("Triage smoke: second item");
+  check("triage: two reports", !!t1 && !!t2);
+
+  r = await call(`/api/projects/${projectId}/labels`, {
+    method: "POST",
+    json: { name: "Smoke-Checkout", color: "#E5484D" },
+  });
+  check("labels: an Admin creates one", r.status === 201 && r.body.label?.color === "#e5484d", r.status);
+  const labelId = r.body.label?.id;
+  r = await call(`/api/projects/${projectId}/labels`, {
+    method: "POST",
+    json: { name: "smoke-checkout", color: "#000" },
+  });
+  check(
+    "labels: names are unique ignoring case",
+    r.status === 409 && r.body.code === "LABEL_EXISTS",
+    r.status,
+  );
+  r = await call(`/api/projects/${projectId}/labels`, {
+    method: "POST",
+    json: { name: "x", color: "#000" },
+    jar: viewerJar,
+  });
+  check("labels: viewers can't create", r.status === 403, r.status);
+  r = await call(`/api/feedback/${t1}`, {
+    method: "PATCH",
+    json: { labelIds: [labelId], dueAt: new Date(Date.now() + 86_400_000).toISOString() },
+    jar: memberJar,
+  });
+  check("labels: an Editor labels an item and sets a due date", r.status === 200, r.status);
+  r = await call(`/api/feedback?status=all&labelId=${labelId}`);
+  check(
+    "labels: list filter, labels and due date on rows, total",
+    r.status === 200 &&
+      r.body.items.length === 1 &&
+      r.body.items[0].labels?.[0]?.name === "Smoke-Checkout" &&
+      !!r.body.items[0].dueAt &&
+      r.body.total === 1,
+  );
+  r = await call(`/api/projects/${projectId}/labels`);
+  check("labels: list with counts", r.body.labels?.find((l) => l.id === labelId)?.count === 1);
+  r = await call(`/api/feedback/${t1}`);
+  check(
+    "detail: labels, replyReach, watching, duplicates",
+    r.body.feedback?.labels?.length === 1 &&
+      typeof r.body.replyReach?.publicRead === "boolean" &&
+      typeof r.body.watching === "boolean" &&
+      Array.isArray(r.body.duplicates),
+  );
+
+  await call(`/api/feedback/${t2}`, { method: "PATCH", json: { duplicateOfId: t1, status: "duplicate" } });
+  r = await call(`/api/feedback/${t1}`);
+  check(
+    "duplicates: listed on the original",
+    r.body.duplicates?.some((d) => d.id === t2),
+  );
+  r = await call(`/api/feedback/${t2}`);
+  check("duplicates: the duplicate names its original", r.body.feedback?.duplicateOf?.id === t1);
+
+  r = await call("/api/feedback?status=all&limit=1&sort=priority&order=desc");
+  const c1 = r.body.nextCursor ?? "";
+  r = await call(
+    `/api/feedback?status=all&limit=1&sort=priority&order=desc&cursor=${encodeURIComponent(c1)}`,
+  );
+  check("list: the cursor pages a priority sort", r.status === 200 && r.body.items.length === 1, r.status);
+  r = await call("/api/feedback?status=all&cursor=garbage");
+  check("list: a bad cursor is 400", r.status === 400, r.status);
+  r = await call(`/api/feedback?status=all&q=${encodeURIComponent("checko")}`);
+  check(
+    "search: prefix words match",
+    r.body.items?.some((i) => i.id === t1),
+  );
+  const n1 = (await call(`/api/feedback/${t1}`)).body.feedback?.number;
+  r = await call(`/api/feedback?status=all&q=${encodeURIComponent(`#${n1}`)}`);
+  check(
+    "search: #number matches",
+    r.body.items?.some((i) => i.id === t1),
+  );
+  r = await call(`/api/feedback?status=all&assigneeId=me&projectId=${projectId}`);
+  check("list: assigneeId=me is the caller", r.status === 200, r.status);
+
+  r = await call(`/api/feedback/${t1}/comments`, {
+    method: "POST",
+    json: { body: "@Smoke Member look", mentions: [memberId] },
+  });
+  check(
+    "mentions: a member is stored on the comment",
+    r.status === 201 && r.body.comment?.mentions?.includes(memberId),
+    r.status,
+  );
+  const cid = r.body.comment?.id;
+  r = await call(`/api/feedback/${t1}/comments`, {
+    method: "POST",
+    json: { body: "x", mentions: ["not-a-member"] },
+  });
+  check(
+    "mentions: a non-member is 400 INVALID_MENTION",
+    r.status === 400 && r.body.code === "INVALID_MENTION",
+    r.status,
+  );
+  r = await call(`/api/comments/${cid}`, { method: "PATCH", json: { body: "edited" } });
+  check("comments: edit (emits comment.updated)", r.status === 200, r.status);
+  r = await call(`/api/comments/${cid}`, { method: "DELETE" });
+  check("comments: delete (emits comment.deleted)", r.status === 204, r.status);
+
+  r = await call(`/api/feedback/${t1}/reproduction`);
+  check(
+    "copy as Markdown: reproduction context",
+    r.status === 200 && typeof r.body.markdown === "string",
+    r.status,
+  );
+
+  const raw = (path) => fetch(B + path, { headers: { cookie: mainJar.cookie, "x-forwarded-for": RUN_IP } });
+  let res = await raw(`/api/feedback/export?format=csv&status=all&projectId=${projectId}`);
+  const csv = await res.text();
+  check(
+    "export: CSV of the filtered list",
+    res.status === 200 && csv.includes("number,project,kind") && csv.includes("Triage smoke"),
+    res.status,
+  );
+  r = await call(`/api/feedback/export?format=json&ids=${t1}`);
+  check("export: JSON of selected ids", r.status === 200 && r.body.items?.[0]?.id === t1, r.status);
+  res = await raw(`/api/feedback/export?format=pdf&ids=${t1}`);
+  check(
+    "export: PDF",
+    res.status === 200 && (res.headers.get("content-type") ?? "").includes("pdf"),
+    res.status,
+  );
+
+  r = await call(`/api/feedback/${t2}`, { method: "DELETE", jar: memberJar });
+  check("trash: Editors can't delete", r.status === 403 && r.body.code === "FORBIDDEN_ROLE", r.status);
+  r = await call(`/api/feedback/${t2}/forever`, { method: "DELETE" });
+  check(
+    "trash: delete forever needs the trash first",
+    r.status === 400 && r.body.code === "NOT_IN_TRASH",
+    r.status,
+  );
+  r = await call(`/api/feedback/${t2}`, { method: "DELETE" });
+  check("trash: an Admin moves it to the trash", r.status === 204, r.status);
+  r = await call("/api/feedback?trash=1", { jar: memberJar });
+  check("trash: Editors can't list it", r.status === 403, r.status);
+  r = await call(`/api/feedback?trash=1&status=all&projectId=${projectId}`);
+  check("trash: Admins list it", r.status === 200 && r.body.items.some((i) => i.id === t2 && !!i.deletedAt));
+  r = await call(`/api/feedback/${t2}/restore`, { method: "POST" });
+  check("trash: restore", r.status === 200, r.status);
+  r = await call(`/api/feedback/${t2}`);
+  check(
+    "trash: delete and restore are in the timeline",
+    r.body.activity?.some((e) => e.type === "restored") && r.body.activity?.some((e) => e.type === "deleted"),
+  );
+  await call(`/api/feedback/${t2}`, { method: "DELETE" });
+  r = await call(`/api/feedback/${t2}/forever`, { method: "DELETE" });
+  check("trash: delete forever", r.status === 204, r.status);
+  r = await call(`/api/labels/${labelId}`, { method: "DELETE" });
+  check("labels: delete", r.status === 204, r.status);
+}
+
+// =============================================================================================
+// Wave 5 — review links / guest review (docs/contracts/wave-5.md §3.5): reports sent through a link carry
+// it as their source, the inbox filters by it, and the link counts what came through it
+// =============================================================================================
+{
+  console.log("\n— wave 5: review links (guest review)");
+  r = await call(`/api/projects/${projectId}/review-links`, {
+    method: "POST",
+    json: { label: "Guest round", url: `${site}/` },
+  });
+  const guestLinkId = r.body.link?.id;
+  const guestToken = r.status === 201 ? new URL(r.body.url).searchParams.get("pinwren_review") : null;
+  check(
+    "guest review: create a link (no expiry)",
+    r.status === 201 && !!guestToken && r.body.link.expiresAt === null && r.body.link.feedbackCount === 0,
+    r.status,
+  );
+  const guestReport = (extra = {}) => ({
+    clientId: crypto.randomUUID(),
+    kind: "comment",
+    body: "The hero headline wraps badly",
+    page: { url: `${site}/`, title: "Home" },
+    environment: { userAgent: "smoke", viewport: { w: 1280, h: 800 }, dpr: 1 },
+    reporter: { name: "Guest Reviewer", email: "guest@example.com" },
+    ...extra,
+  });
+  r = await W("/w/feedback", {
+    method: "POST",
+    json: guestReport(),
+    headers: { "x-pinwren-review-token": guestToken ?? "" },
+  });
+  const guestItem = r.body.feedback?.id;
+  check("guest review: a guest sends feedback through the link", r.status === 201 && !!guestItem, r.status);
+  r = await W("/w/feedback", { method: "POST", json: guestReport({ body: "Sent without a link" }) });
+  const plainItem = r.body.feedback?.id;
+  check("guest review: a report without a link still goes in", r.status === 201, r.status);
+  r = await W("/w/feedback", {
+    method: "POST",
+    json: guestReport({ body: "Sent with a forged link" }),
+    headers: { "x-pinwren-review-token": "pwr_forged-token-that-does-not-exist" },
+  });
+  const forgedItem = r.body.feedback?.id;
+  check("guest review: a forged token doesn't refuse the report", r.status === 201, r.status);
+
+  r = await call(`/api/feedback/${guestItem}`);
+  check(
+    "guest review: the item shows the link as its source",
+    r.status === 200 &&
+      r.body.feedback?.reviewLink?.id === guestLinkId &&
+      r.body.feedback.reviewLink.label === "Guest round" &&
+      r.body.activity?.some((e) => e.type === "created" && e.data?.reviewLink === "Guest round"),
+    JSON.stringify(r.body.feedback?.reviewLink),
+  );
+  r = await call(`/api/feedback/${forgedItem}`);
+  check("guest review: a forged token isn't attributed", r.body.feedback?.reviewLink === null);
+  r = await call(`/api/feedback?projectId=${projectId}&status=all&reviewLinkId=${guestLinkId}`);
+  check(
+    "guest review: the inbox filters by review link",
+    r.status === 200 &&
+      r.body.items.length === 1 &&
+      r.body.items[0].id === guestItem &&
+      !r.body.items.some((i) => i.id === plainItem || i.id === forgedItem),
+    r.body.items?.length,
+  );
+  r = await call("/api/feedback?reviewLinkId=not-a-uuid");
+  check("guest review: a malformed filter is a 400", r.status === 400, r.status);
+  r = await call(`/api/projects/${projectId}/review-links`);
+  check(
+    "guest review: the link counts what came through it",
+    r.body.links?.find((l) => l.id === guestLinkId)?.feedbackCount === 1,
+    JSON.stringify(r.body.links?.find((l) => l.id === guestLinkId)),
+  );
+  r = await call(`/api/review-links/${guestLinkId}`, { method: "DELETE" });
+  check("guest review: revoke the link", r.status === 204, r.status);
+  r = await call(`/api/review-links/${guestLinkId}`, { method: "DELETE" });
+  check("guest review: revoking twice is a 404", r.status === 404, r.status);
+  r = await W("/w/feedback", {
+    method: "POST",
+    json: guestReport({ body: "Sent after the link was revoked" }),
+    headers: { "x-pinwren-review-token": guestToken ?? "" },
+  });
+  const lateItem = r.body.feedback?.id;
+  r = await call(`/api/feedback/${lateItem}`);
+  check(
+    "guest review: a revoked link no longer marks reports",
+    r.status === 200 && r.body.feedback?.reviewLink === null,
+    r.status,
+  );
+  r = await call(`/api/feedback/${guestItem}`);
+  check(
+    "guest review: earlier items keep their source after a revoke",
+    r.body.feedback?.reviewLink?.label === "Guest round",
+  );
+  r = await W("/w/review-link", { headers: { "x-pinwren-review-token": "not a token" } });
+  check("guest review: a malformed token is refused unchecked", r.status === 404, r.status);
+  for (const id of [guestItem, plainItem, forgedItem, lateItem].filter(Boolean)) {
+    await call(`/api/feedback/${id}`, { method: "DELETE" });
+  }
+}
+
+// =============================================================================================
+// Wave 5 — sign-in methods: what the auth pages offer (GET /api/sign-in-methods), the instance switches
+// (Settings › Security), passkeys / connected accounts through Better Auth, and refusals while a method is
+// off. Google / GitHub need real OAuth apps, so only "not configured" is checked here.
+// =============================================================================================
+{
+  console.log("\n— wave 5: sign-in methods");
+  const anon = { cookie: "" };
+  r = await call("/api/sign-in-methods", { jar: anon });
+  const methods = r.body.methods;
+  check(
+    "sign-in methods: public, password always offered",
+    r.status === 200 &&
+      methods?.password === true &&
+      ["magicLink", "passkey", "google", "github"].every((k) => typeof methods[k] === "boolean"),
+    r.status,
+  );
+  r = await call("/api/admin/settings/sign-in", { jar: memberJar });
+  check("sign-in methods: non-admins can't read the instance switches", r.status === 403, r.status);
+
+  r = await call("/api/auth/list-accounts");
+  check(
+    "sign-in methods: the password account is listed",
+    r.status === 200 && Array.isArray(r.body) && r.body.some((a) => a.providerId === "credential"),
+    r.status,
+  );
+  r = await call("/api/auth/passkey/list-user-passkeys");
+  check("sign-in methods: passkeys list (none yet)", r.status === 200 && Array.isArray(r.body), r.status);
+  r = await call("/api/auth/passkey/list-user-passkeys", { jar: anon });
+  check("sign-in methods: passkeys need a session", r.status === 401, r.status);
+
+  for (const provider of ["google", "github"]) {
+    if (methods?.[provider]) {
+      skip(`sign-in methods: ${provider} refused when unconfigured`, `${provider} is configured here`);
+      continue;
+    }
+    r = await call("/api/auth/sign-in/social", {
+      method: "POST",
+      json: { provider, callbackURL: "/inbox" },
+      jar: anon,
+    });
+    check(`sign-in methods: ${provider} refused when unconfigured`, r.status === 404, r.status);
+  }
+
+  if (methods && !methods.magicLink) {
+    r = await call("/api/auth/sign-in/magic-link", {
+      method: "POST",
+      json: { email: `nobody+${Date.now()}@example.com`, callbackURL: "/inbox" },
+      jar: anon,
+    });
+    check(
+      "sign-in methods: email links refused without SMTP (or switched off)",
+      r.status === 400 && r.body.code === "MAGIC_LINK_DISABLED",
+      `${r.status} ${r.body.code}`,
+    );
+  } else {
+    r = await call("/api/auth/sign-in/magic-link", {
+      method: "POST",
+      json: { email: `nobody+${Date.now()}@example.com`, callbackURL: "/inbox" },
+      jar: anon,
+    });
+    check(
+      "sign-in methods: an email link answers the same for unknown addresses",
+      r.status === 200,
+      r.status,
+    );
+  }
+
+  r = await call("/api/admin/settings/sign-in", { jar: adminJar });
+  if (r.status === 403) {
+    skip(
+      "sign-in methods: instance switches",
+      "start the server with PINWREN_ADMIN_EMAILS=smoke-admin@example.com",
+    );
+  } else {
+    const before = r.body.signIn;
+    check(
+      "sign-in methods: admin reads the switches and provider callbacks",
+      r.status === 200 &&
+        typeof before?.magicLink === "boolean" &&
+        typeof before?.passkeys === "boolean" &&
+        before.providers?.length === 2 &&
+        before.providers.every((p) => p.callbackUrl.endsWith(`/api/auth/callback/${p.id}`)),
+      r.status,
+    );
+    r = await call("/api/admin/settings/sign-in", { method: "PATCH", json: {}, jar: adminJar });
+    check("sign-in methods: an empty change is a 400", r.status === 400, r.status);
+    r = await call("/api/admin/settings/sign-in", {
+      method: "PATCH",
+      json: { passkeys: false, googleClientSecret: "nope" },
+      jar: adminJar,
+    });
+    check("sign-in methods: unknown fields are refused", r.status === 400, r.status);
+    r = await call("/api/admin/settings/sign-in", {
+      method: "PATCH",
+      json: { passkeys: false },
+      jar: adminJar,
+    });
+    check(
+      "sign-in methods: switch passkeys off",
+      r.status === 200 && r.body.signIn?.passkeys === false,
+      r.status,
+    );
+    r = await call("/api/sign-in-methods", { jar: anon });
+    check("sign-in methods: the sign-in page stops offering passkeys", r.body.methods?.passkey === false);
+    r = await call("/api/auth/passkey/generate-authenticate-options", { jar: anon });
+    check(
+      "sign-in methods: passkey sign-in refused while off",
+      r.status === 400 && r.body.code === "PASSKEYS_DISABLED",
+      `${r.status} ${r.body.code}`,
+    );
+    r = await call("/api/auth/passkey/list-user-passkeys");
+    check("sign-in methods: listing passkeys still works while off", r.status === 200, r.status);
+    r = await call("/api/admin/settings/sign-in", {
+      method: "PATCH",
+      json: { passkeys: before?.passkeys ?? true, magicLink: before?.magicLink ?? true },
+      jar: adminJar,
+    });
+    check("sign-in methods: restore the switches", r.status === 200, r.status);
+    if (before?.passkeys !== false) {
+      r = await call("/api/auth/passkey/generate-authenticate-options", { jar: anon });
+      check(
+        "sign-in methods: passkey sign-in options once back on",
+        r.status === 200 && typeof r.body.challenge === "string",
+        r.status,
+      );
+    }
   }
 }
 

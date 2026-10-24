@@ -8,8 +8,15 @@ import { encryptSecret, randomToken } from "../crypto";
 import { env } from "../env";
 import { ApiError, notFound } from "../errors";
 import { runDelivery } from "../webhooks/deliver";
-import { WEBHOOK_API_VERSION, type WebhookPayload } from "../webhooks/format";
-import { maskedWebhookUrl, storedWebhookUrl } from "../webhooks/url";
+import { ntfyTarget, WEBHOOK_API_VERSION, type WebhookPayload } from "../webhooks/format";
+import {
+  maskedWebhookUrl,
+  parseTelegramTarget,
+  storedWebhookUrl,
+  telegramChatOf,
+  telegramTarget,
+  webhookTargetUrl,
+} from "../webhooks/url";
 
 type Endpoint = typeof webhookEndpoint.$inferSelect;
 
@@ -19,10 +26,13 @@ const endpointOut = (e: Endpoint) => ({
   // Chat webhook URLs are credentials themselves: stored encrypted, shown masked.
   url: maskedWebhookUrl(e),
   kind: e.kind,
+  /** Telegram: the chat it posts to. */
+  chatId: telegramChatOf(e),
   events: e.events,
   projectId: e.projectId,
   active: e.active,
   failingSince: e.failingSince,
+  /** generic: a signing secret exists; ntfy: an access token is set. */
   hasSecret: e.secret !== null,
   createdAt: e.createdAt,
   updatedAt: e.updatedAt,
@@ -45,6 +55,15 @@ const deliveryOut = (d: typeof webhookDelivery.$inferSelect) => ({
 });
 
 const newSecret = () => `whsec_${randomToken(24)}`;
+
+const badRequest = (message: string) => new ApiError(400, "VALIDATION_ERROR", message);
+
+/** ntfy posts to the server root with the topic in the body, so the URL must end in a topic name. */
+function assertNtfyUrl(url: string) {
+  if (!ntfyTarget(url)) {
+    throw badRequest("Use the topic URL, like https://ntfy.sh/my-topic (letters, digits, - and _)");
+  }
+}
 
 function pingPayload(): WebhookPayload {
   const now = new Date().toISOString();
@@ -125,17 +144,22 @@ export const webhooks = new Hono<{ Variables: SessionVars }>()
   .post("/webhooks", requireOrgAdmin, zValidator("json", webhookCreate), async (c) => {
     const body = c.req.valid("json");
     await assertProject(c.var.orgId, body.projectId);
+    // Telegram is built from its bot token and chat id; every other kind has a URL (the schema checks both).
+    const target =
+      body.kind === "telegram" ? telegramTarget(body.botToken ?? "", body.chatId ?? "") : (body.url ?? "");
+    if (body.kind === "ntfy") assertNtfyUrl(target);
     const secret = body.kind === "generic" ? newSecret() : null;
+    const stored = secret ?? (body.kind === "ntfy" ? (body.accessToken ?? null) : null);
     const [e] = await getDb()
       .insert(webhookEndpoint)
       .values({
         orgId: c.var.orgId,
         projectId: body.projectId ?? null,
         name: body.name ?? null,
-        url: storedWebhookUrl(body.kind, body.url),
+        url: storedWebhookUrl(body.kind, target),
         kind: body.kind,
         events: [...new Set(body.events)],
-        secret: secret ? encryptSecret(secret) : null,
+        secret: stored ? encryptSecret(stored) : null,
         active: body.active,
         createdBy: c.var.userId,
       })
@@ -155,7 +179,31 @@ export const webhooks = new Hono<{ Variables: SessionVars }>()
     await assertProject(c.var.orgId, body.projectId);
     const set: Partial<typeof webhookEndpoint.$inferInsert> = {};
     if (body.name !== undefined) set.name = body.name;
-    if (body.url !== undefined) set.url = storedWebhookUrl(current.kind, body.url);
+    if (current.kind === "telegram") {
+      if (body.url !== undefined)
+        throw badRequest("Telegram webhooks take a bot token and chat id, not a URL");
+      if (body.botToken !== undefined || body.chatId !== undefined) {
+        const plain = webhookTargetUrl(current);
+        const prev = plain ? parseTelegramTarget(plain) : null;
+        const botToken = body.botToken ?? prev?.botToken;
+        const chatId = body.chatId ?? prev?.chatId;
+        if (!botToken || !chatId)
+          throw badRequest("The stored bot token can't be read — enter the bot token and chat id");
+        set.url = storedWebhookUrl("telegram", telegramTarget(botToken, chatId));
+      }
+    } else {
+      if (body.botToken !== undefined || body.chatId !== undefined) {
+        throw badRequest("Only Telegram webhooks take a bot token and chat id");
+      }
+      if (body.url !== undefined) {
+        if (current.kind === "ntfy") assertNtfyUrl(body.url);
+        set.url = storedWebhookUrl(current.kind, body.url);
+      }
+    }
+    if (body.accessToken !== undefined) {
+      if (current.kind !== "ntfy") throw badRequest("Only ntfy webhooks take an access token");
+      set.secret = body.accessToken === null ? null : encryptSecret(body.accessToken);
+    }
     if (body.events !== undefined) set.events = [...new Set(body.events)];
     if (body.projectId !== undefined) set.projectId = body.projectId;
     if (body.active !== undefined) {

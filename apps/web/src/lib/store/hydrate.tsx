@@ -19,7 +19,8 @@ export function HydrateQueries({
 }) {
   const store = useAppStore();
   useState(() => {
-    if (entries.length) store.dispatch(api.util.upsertQueryEntries(entries));
+    // See `HydrationEntries`: RTK can't type a mixed list once an infinite query exists.
+    if (entries.length) store.dispatch(api.util.upsertQueryEntries(entries as never));
     return true;
   });
   return children;

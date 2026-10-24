@@ -3,21 +3,24 @@ title: Webhooks
 description: Signed JSON for every new report, change and comment, with retries, a delivery log and redelivery.
 ---
 
-A webhook POSTs a JSON event to your URL whenever something happens in the workspace. Use it to feed Jira or Linear,
-trigger an AI agent, page someone, or sync a data warehouse.
+A webhook POSTs a JSON event to your URL whenever something happens in the workspace. Use it to trigger an AI
+agent, page someone, or sync a data warehouse. For chat and push notifications there are ready-made types
+([Slack](/docs/integrations/slack), [Discord](/docs/integrations/discord), [Microsoft Teams](/docs/integrations/teams),
+[Telegram](/docs/integrations/telegram), [ntfy](/docs/integrations/ntfy)); for issue trackers, the
+[GitHub, GitLab, Linear and Jira](/docs/integrations/github) integrations.
 
 ## Create a webhook
 
-As a workspace owner or admin, open **Settings › Integrations** and add a webhook:
+As a workspace Admin, open **Settings › Integrations** and add a webhook:
 
-| Field        | Notes                                                                                                                                                     |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Type**     | **Webhook (JSON)** — the signed payload below — or **Slack** or **Discord**; see [Slack](/docs/integrations/slack), [Discord](/docs/integrations/discord) |
-| **URL**      | `https://` (or `http://`) endpoint that receives the POST                                                                                                 |
-| **Name**     | Optional, up to 80 characters                                                                                                                             |
-| **Events**   | One or more of the events below                                                                                                                           |
-| **Projects** | All projects in the workspace, or just one                                                                                                                |
-| **Active**   | Paused webhooks receive nothing                                                                                                                           |
+| Field        | Notes                                                                                                           |
+| ------------ | --------------------------------------------------------------------------------------------------------------- |
+| **Type**     | **Webhook (signed JSON)** — the payload below — or a chat type: Slack, Discord, Microsoft Teams, Telegram, ntfy |
+| **URL**      | `https://` (or `http://`) endpoint that receives the POST                                                       |
+| **Name**     | Optional, up to 80 characters                                                                                   |
+| **Events**   | One or more of the events below                                                                                 |
+| **Projects** | All projects in the workspace, or just one                                                                      |
+| **Active**   | Paused webhooks receive nothing                                                                                 |
 
 ### Which URLs can receive
 
@@ -32,17 +35,23 @@ in your receiver's secrets. **Rotate secret** issues a new one (shown once again
 
 ## Events
 
-| Event                     | Sent when                                                                              | `data` carries                    |
-| ------------------------- | -------------------------------------------------------------------------------------- | --------------------------------- |
-| `feedback.created`        | A comment or bug report arrives                                                        | `feedback`, `actor`               |
-| `feedback.updated`        | Any field changes: status, priority, title, assignees, round                           | `feedback`, `changes`, `actor`    |
-| `feedback.status_changed` | The status changes                                                                     | `feedback`, `changes.status`      |
-| `feedback.assigned`       | The assignees change                                                                   | `feedback`, `changes.assigneeIds` |
-| `comment.created`         | A comment is added — by a visitor, a teammate or the API, **including internal notes** | `feedback`, `comment`, `actor`    |
-| `ping`                    | You press **Send test event**                                                          | a sample `feedback`               |
+| Event                       | Sent when                                                                              | `data` carries                    |
+| --------------------------- | -------------------------------------------------------------------------------------- | --------------------------------- |
+| `feedback.created`          | A comment or bug report arrives                                                        | `feedback`, `actor`               |
+| `feedback.updated`          | Any field changes: status, priority, title, assignees, labels, due date, round         | `feedback`, `changes`, `actor`    |
+| `feedback.status_changed`   | The status changes                                                                     | `feedback`, `changes.status`      |
+| `feedback.assigned`         | The assignees change                                                                   | `feedback`, `changes.assigneeIds` |
+| `feedback.priority_changed` | The priority changes                                                                   | `feedback`, `changes.priority`    |
+| `feedback.labels_changed`   | Labels are added or removed                                                            | `feedback`, `changes.labelIds`    |
+| `feedback.deleted`          | An item is moved to the trash                                                          | `feedback` (as it was), `actor`   |
+| `comment.created`           | A comment is added — by a visitor, a teammate or the API, **including internal notes** | `feedback`, `comment`, `actor`    |
+| `comment.updated`           | A comment is edited                                                                    | `feedback`, `comment`, `actor`    |
+| `comment.deleted`           | A comment is deleted                                                                   | `feedback`, `comment`, `actor`    |
+| `ping`                      | You press **Send test event**                                                          | a sample `feedback`               |
 
-A status change sends both `feedback.updated` and `feedback.status_changed`; subscribe to the one you need. Check
-`comment.visibility` before forwarding a comment anywhere public — internal notes are delivered too.
+A status, assignee, priority or label change sends both `feedback.updated` and the specific event; subscribe to the
+one you need. Check `comment.visibility` before forwarding a comment anywhere public — internal notes are delivered
+too.
 
 ## Payload
 
@@ -80,11 +89,11 @@ Every generic delivery has the same envelope:
 
 | Field                | Notes                                                                                                            |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `id`                 | Unique per delivery target; stays the same across retries and redeliveries — use it to de-duplicate              |
+| `id`                 | The event's id: the same for every endpoint and every retry and redelivery of that event — **dedupe on `id`**    |
 | `apiVersion`         | `2026-11-01`. A breaking change to the payload gets a new version                                                |
 | `data.feedback.body` | Cut at 4,000 characters; fetch the item from the [API](/docs/api) for the full text                              |
 | `data.feedback.url`  | The item in the dashboard (sign-in required)                                                                     |
-| `data.comment`       | `comment.created` only: `{ id, body, visibility: "public" \| "internal", authorName, team, createdAt }`          |
+| `data.comment`       | `comment.*` only: `{ id, body, visibility: "public" \| "internal", authorName, team, createdAt }`                |
 | `data.changes`       | Field → `{ from, to }` for update events                                                                         |
 | `data.actor`         | `{ kind: "user" \| "guest" \| "api" \| "integration", id }` — `guest` is a site visitor, `integration` a tracker |
 
@@ -243,8 +252,10 @@ A `3xx` answer counts as a failure with its status code; Pinwren does not follow
 webhook at the final URL.
 
 **Auto-disable.** When an endpoint has failed continuously for **3 days**, it is switched off (`active: false`) and
-receives nothing until an admin turns it on again. The webhook shows when it started failing (`failingSince`), and the
-first success clears it. Re-enabling starts a fresh three-day window.
+receives nothing until an admin turns it on again. Every workspace Admin gets a **Webhook disabled** notification in
+the bell and by email (unless they paused email), with the last error and a link to the webhook. The webhook shows
+when it started failing (`failingSince`), and the first success clears it. Re-enabling starts a fresh three-day
+window.
 
 ## Delivery log, test and redeliver
 

@@ -9,6 +9,8 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
+  /** Better Auth `twoFactor` plugin (wave 5). */
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -113,3 +115,46 @@ export const authRateLimit = pgTable("auth_rate_limit", {
   count: integer("count").notNull(),
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
+
+/** Better Auth `twoFactor` plugin: the TOTP secret and backup codes (both encrypted by Better Auth). */
+export const twoFactor = pgTable(
+  "two_factor",
+  {
+    id: text("id").primaryKey(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** False between "enable" and the first correct code (enrolment not finished). */
+    verified: boolean("verified").notNull().default(true),
+    /** Better Auth's lock after repeated wrong codes. */
+    failedVerificationCount: integer("failed_verification_count").notNull().default(0),
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  },
+  (t) => [index("two_factor_user_idx").on(t.userId)],
+);
+
+/**
+ * Better Auth `passkey` plugin (`@better-auth/passkey`): one WebAuthn credential per row, registered in
+ * Settings › Profile and used on the sign-in page. Keys follow the plugin's field names (`credentialID`).
+ */
+export const passkey = pgTable(
+  "passkey",
+  {
+    id: text("id").primaryKey(),
+    name: text("name"),
+    publicKey: text("public_key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    credentialID: text("credential_id").notNull(),
+    counter: integer("counter").notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: boolean("backed_up").notNull(),
+    transports: text("transports"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    aaguid: text("aaguid"),
+  },
+  (t) => [index("passkey_user_idx").on(t.userId), uniqueIndex("passkey_credential_id_uq").on(t.credentialID)],
+);

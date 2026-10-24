@@ -1,6 +1,6 @@
 "use client";
 
-import { WEBHOOK_EVENTS } from "@pinwren/core";
+import { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, WEBHOOK_EVENTS, WEBHOOK_KINDS } from "@pinwren/core";
 import {
   ChevronRight,
   KeyRound,
@@ -18,7 +18,6 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { timeAgo } from "@/components/feedback-meta";
 import { SecretDialog } from "@/components/secret-dialog";
-import { Segmented } from "@/components/segmented";
 import { SettingGroup, SettingRow } from "@/components/setting-row";
 import { EmptyState, ErrorState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +39,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Controller, useWatch } from "react-hook-form";
+import { z } from "zod";
 import { controlProps, Field, FormError, useZodForm } from "@/components/form";
 import type { Project, Webhook, WebhookDelivery, WebhookEvent, WebhookKind } from "@/lib/api";
 import { webhookForm } from "@/lib/form-schemas";
@@ -66,14 +66,58 @@ const EVENT_LABELS: Record<WebhookEvent, string> = {
   "feedback.updated": "Feedback updated (any field)",
   "feedback.status_changed": "Status changed",
   "feedback.assigned": "Assignee changed",
+  "feedback.priority_changed": "Priority changed",
+  "feedback.labels_changed": "Labels changed",
+  "feedback.deleted": "Feedback deleted",
   "comment.created": "New comment",
+  "comment.updated": "Comment edited",
+  "comment.deleted": "Comment deleted",
 };
-const KIND_LABELS: Record<WebhookKind, string> = { generic: "Webhook", slack: "Slack", discord: "Discord" };
-const URL_HINT: Record<WebhookKind, string> = {
+const KIND_LABELS: Record<WebhookKind, string> = {
+  generic: "Webhook",
+  slack: "Slack",
+  discord: "Discord",
+  teams: "Microsoft Teams",
+  telegram: "Telegram",
+  ntfy: "ntfy",
+};
+const KIND_OPTIONS: Record<WebhookKind, string> = { ...KIND_LABELS, generic: "Webhook (signed JSON)" };
+const URL_HINT: Record<Exclude<WebhookKind, "telegram">, string> = {
   generic: "https://example.com/hooks/pinwren",
   slack: "https://hooks.slack.com/services/…",
   discord: "https://discord.com/api/webhooks/…",
+  teams: "https://….logic.azure.com/workflows/…",
+  ntfy: "https://ntfy.sh/my-team-bugs",
 };
+/** Where to find the URL (or the credentials) for each kind. */
+const KIND_HELP: Record<WebhookKind, React.ReactNode> = {
+  generic: "Pinwren signs each request; you get the signing secret next.",
+  slack: (
+    <>
+      In Slack: <b>Apps › Incoming Webhooks</b>, add one for the channel and paste its URL.
+    </>
+  ),
+  discord: (
+    <>
+      In Discord: <b>Channel settings › Integrations › Webhooks › New webhook</b>, then{" "}
+      <b>Copy webhook URL</b>.
+    </>
+  ),
+  teams: (
+    <>
+      In the Teams channel: <b>Workflows</b> › <b>Post to a channel when a webhook request is received</b>,
+      then paste the URL the workflow shows.
+    </>
+  ),
+  telegram: (
+    <>
+      Create a bot with <b>@BotFather</b>, add it to the group or channel, and use the chat&apos;s id (a group
+      id starts with -100) or the channel&apos;s @name.
+    </>
+  ),
+  ntfy: "The topic URL on ntfy.sh or your own server. Add an access token if the topic is protected.",
+};
+const usesUrl = (kind: WebhookKind) => kind !== "telegram";
 
 const SECRET_HELP =
   "Verify the Pinwren-Signature header with it: v1 = HMAC-SHA256(secret, timestamp + '.' + body).";
@@ -100,7 +144,7 @@ export function IntegrationsSettings() {
           <EmptyState
             icon={Lock}
             title="Integrations are managed by admins"
-            description="Ask a workspace owner or admin to connect Slack, Discord or a webhook."
+            description="Ask a workspace Admin to connect Slack, Discord, Teams, Telegram, ntfy or a webhook."
           />
         </CardContent>
       </Card>
@@ -112,8 +156,8 @@ export function IntegrationsSettings() {
       <CardHeader>
         <CardTitle>Webhooks</CardTitle>
         <CardDescription>
-          Send events to Slack, Discord or your own endpoint. Deliveries are signed, retried for up to 3 days
-          and logged.
+          Send events to Slack, Discord, Microsoft Teams, Telegram, ntfy or your own endpoint. Deliveries are
+          retried for up to 3 days and logged; generic webhooks are signed.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -133,7 +177,7 @@ export function IntegrationsSettings() {
           <EmptyState
             icon={WebhookIcon}
             title="No webhooks yet"
-            description="Post new feedback to a Slack channel, a Discord server or any HTTPS endpoint."
+            description="Post new feedback to Slack, Discord, Teams, Telegram, ntfy or any HTTPS endpoint."
             action={
               <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
                 <Plus /> Add webhook
@@ -168,6 +212,7 @@ export function IntegrationsSettings() {
                     </span>
                     <span className="mt-0.5 block truncate font-mono text-xs text-muted-foreground">
                       {w.url}
+                      {w.chatId && ` → ${w.chatId}`}
                     </span>
                   </span>
                   <span className="hidden shrink-0 text-xs text-muted-foreground sm:block">
@@ -305,6 +350,9 @@ function CreateWebhookForm({
       url: "",
       events: ["feedback.created", "comment.created"],
       projectId: "all",
+      botToken: "",
+      chatId: "",
+      accessToken: "",
     },
   });
   const { errors, isSubmitting } = form.formState;
@@ -313,10 +361,11 @@ function CreateWebhookForm({
     try {
       const { webhook, secret } = await create({
         kind: v.kind,
-        url: v.url,
         events: v.events,
         projectId: v.projectId === "all" ? null : v.projectId,
         ...(v.name ? { name: v.name } : {}),
+        ...(v.kind === "telegram" ? { botToken: v.botToken, chatId: v.chatId } : { url: v.url }),
+        ...(v.kind === "ntfy" && v.accessToken ? { accessToken: v.accessToken } : {}),
       }).unwrap();
       toast.success("Webhook added");
       onCreated(webhook, secret);
@@ -329,46 +378,101 @@ function CreateWebhookForm({
     <form className="grid gap-4" noValidate onSubmit={(e) => void submit(e)}>
       <DialogHeader>
         <DialogTitle>Add a webhook</DialogTitle>
-        <DialogDescription>Pinwren posts each selected event to this URL.</DialogDescription>
+        <DialogDescription>Pinwren posts each selected event here.</DialogDescription>
       </DialogHeader>
-      <div className="grid gap-2">
-        <Label>Type</Label>
+      <div className="grid gap-1.5">
+        <Label htmlFor="wh-kind">Type</Label>
         <Controller
           control={form.control}
           name="kind"
           render={({ field }) => (
-            <Segmented
-              label="Type"
+            <Select
+              items={WEBHOOK_KINDS.map((k) => ({ value: k, label: KIND_OPTIONS[k] }))}
               value={field.value}
-              onChange={field.onChange}
-              options={[
-                { value: "generic", label: "Webhook (JSON)" },
-                { value: "slack", label: "Slack" },
-                { value: "discord", label: "Discord" },
-              ]}
-            />
+              onValueChange={(v) => v && field.onChange(v)}
+            >
+              <SelectTrigger id="wh-kind" className="w-full" aria-label="Type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {WEBHOOK_KINDS.map((k) => (
+                  <SelectItem key={k} value={k}>
+                    {KIND_OPTIONS[k]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         />
+        <p className="text-xs text-muted-foreground" data-testid="wh-kind-help">
+          {KIND_HELP[kind]}
+        </p>
       </div>
-      <Field
-        id="wh-url"
-        label="URL"
-        error={errors.url?.message}
-        help={
-          kind !== "generic"
-            ? "The URL is a credential — it's stored encrypted and shown masked afterwards."
-            : undefined
-        }
-      >
-        <Input
-          {...controlProps("wh-url", errors.url?.message, kind !== "generic")}
-          {...form.register("url")}
-          placeholder={URL_HINT[kind]}
-          className="font-mono text-xs"
-          // eslint-disable-next-line jsx-a11y/no-autofocus -- the dialog's first field; focus moves into a dialog on open
-          autoFocus
-        />
-      </Field>
+      {usesUrl(kind) ? (
+        <Field
+          id="wh-url"
+          label={kind === "ntfy" ? "Topic URL" : "URL"}
+          error={errors.url?.message}
+          help={
+            kind !== "generic"
+              ? "The URL is a credential — it's stored encrypted and shown masked afterwards."
+              : undefined
+          }
+        >
+          <Input
+            {...controlProps("wh-url", errors.url?.message, kind !== "generic")}
+            {...form.register("url")}
+            inputMode="url"
+            spellCheck={false}
+            placeholder={URL_HINT[kind]}
+            className="font-mono text-xs"
+          />
+        </Field>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            id="wh-bot-token"
+            label="Bot token"
+            error={errors.botToken?.message}
+            help="Stored encrypted, never shown again."
+          >
+            <Input
+              {...controlProps("wh-bot-token", errors.botToken?.message, true)}
+              {...form.register("botToken")}
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="123456789:AA…"
+              className="font-mono text-xs"
+            />
+          </Field>
+          <Field id="wh-chat" label="Chat id" error={errors.chatId?.message}>
+            <Input
+              {...controlProps("wh-chat", errors.chatId?.message)}
+              {...form.register("chatId")}
+              spellCheck={false}
+              placeholder="-1001234567890 or @channel"
+              className="font-mono text-xs"
+            />
+          </Field>
+        </div>
+      )}
+      {kind === "ntfy" && (
+        <Field
+          id="wh-ntfy-token"
+          label="Access token (optional)"
+          error={errors.accessToken?.message}
+          help="For protected topics: a tk_… token, or user:password. Stored encrypted."
+        >
+          <Input
+            {...controlProps("wh-ntfy-token", errors.accessToken?.message, true)}
+            {...form.register("accessToken")}
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </Field>
+      )}
       <Field id="wh-name" label="Name (optional)" error={errors.name?.message}>
         <Input
           {...controlProps("wh-name", errors.name?.message)}
@@ -486,7 +590,10 @@ function WebhookDetail({
             {KIND_LABELS[w.kind]}
           </Badge>
         </SheetTitle>
-        <SheetDescription className="font-mono text-xs break-all">{w.url}</SheetDescription>
+        <SheetDescription className="font-mono text-xs break-all">
+          {w.url}
+          {w.chatId && ` → chat ${w.chatId}`}
+        </SheetDescription>
       </SheetHeader>
       <div className="grid gap-6 p-5">
         {w.failingSince && (
@@ -506,6 +613,7 @@ function WebhookDetail({
               projects={projects}
             />
           </SettingRow>
+          <ConnectionRows webhook={w} onPatch={patch} />
         </SettingGroup>
         <EventPicker
           value={w.events}
@@ -575,6 +683,140 @@ function WebhookDetail({
         onClose={() => setRotated(null)}
       />
     </div>
+  );
+}
+
+const urlRule = z
+  .string()
+  .trim()
+  .min(1, "Enter the URL")
+  .pipe(z.url({ protocol: /^https?$/, error: "Use an http(s) URL" }).max(2000));
+
+/**
+ * Replace a webhook's credentials without re-creating it: the URL (chat webhooks are write-only, so the
+ * field starts empty), Telegram's bot token or chat, or ntfy's access token.
+ */
+function ConnectionRows({ webhook: w, onPatch }: { webhook: Webhook; onPatch: (p: WebhookPatch) => void }) {
+  if (w.kind === "telegram") {
+    return (
+      <>
+        <SettingRow
+          label="Chat"
+          htmlFor="wh-edit-chat"
+          description="The group, channel or chat the bot posts to."
+        >
+          <ReplaceValue
+            id="wh-edit-chat"
+            placeholder={w.chatId ?? "-1001234567890"}
+            rule={z.string().trim().regex(TELEGRAM_CHAT_ID, "A numeric chat id or @channelname")}
+            label="Move"
+            onSave={(chatId) => onPatch({ chatId })}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Bot token"
+          htmlFor="wh-edit-bot"
+          description="Saved and hidden. Paste a new one to replace it."
+        >
+          <ReplaceValue
+            id="wh-edit-bot"
+            secret
+            placeholder="New bot token"
+            rule={z.string().trim().regex(TELEGRAM_BOT_TOKEN, "A bot token looks like 123456789:AA…")}
+            onSave={(botToken) => onPatch({ botToken })}
+          />
+        </SettingRow>
+      </>
+    );
+  }
+  return (
+    <>
+      <SettingRow
+        label={w.kind === "ntfy" ? "Topic URL" : "URL"}
+        htmlFor="wh-edit-url"
+        description={
+          w.kind === "generic"
+            ? "Where events are posted."
+            : "Saved encrypted. Paste a new URL to replace it."
+        }
+        stack
+      >
+        <ReplaceValue
+          id="wh-edit-url"
+          placeholder={w.kind === "generic" ? w.url : URL_HINT[w.kind]}
+          rule={urlRule}
+          onSave={(url) => onPatch({ url })}
+          wide
+        />
+      </SettingRow>
+      {w.kind === "ntfy" && (
+        <SettingRow
+          label="Access token"
+          htmlFor="wh-edit-ntfy"
+          description={w.hasSecret ? "Set. Paste a new one to replace it." : "None: the topic is public."}
+        >
+          <div className="flex flex-wrap gap-2">
+            <ReplaceValue
+              id="wh-edit-ntfy"
+              secret
+              placeholder="tk_… or user:password"
+              rule={z.string().trim().min(4, "That token looks too short").max(200)}
+              onSave={(accessToken) => onPatch({ accessToken })}
+            />
+            {w.hasSecret && (
+              <Button variant="ghost" onClick={() => onPatch({ accessToken: null })}>
+                Remove
+              </Button>
+            )}
+          </div>
+        </SettingRow>
+      )}
+    </>
+  );
+}
+
+function ReplaceValue({
+  id,
+  placeholder,
+  rule,
+  onSave,
+  secret,
+  wide,
+  label = "Replace",
+}: {
+  id: string;
+  placeholder: string;
+  rule: z.ZodType<string, string>;
+  onSave: (v: string) => void;
+  secret?: boolean;
+  wide?: boolean;
+  label?: string;
+}) {
+  const form = useZodForm(z.object({ value: rule }), { defaultValues: { value: "" } });
+  const value = useWatch({ control: form.control, name: "value" });
+  const error = form.formState.errors.value?.message;
+  const submit = form.handleSubmit((v) => {
+    onSave(v.value);
+    form.reset({ value: "" });
+  });
+  return (
+    <form className="grid gap-1" noValidate onSubmit={(e) => void submit(e)}>
+      <div className="flex gap-2">
+        <Input
+          {...controlProps(id, error)}
+          {...form.register("value")}
+          type={secret ? "password" : "text"}
+          autoComplete="off"
+          spellCheck={false}
+          placeholder={placeholder}
+          className={cn("font-mono text-xs", wide ? "w-full" : "w-full sm:w-52")}
+        />
+        <Button type="submit" variant="outline" disabled={!value.trim()}>
+          {label}
+        </Button>
+      </div>
+      <FormError message={error} />
+    </form>
   );
 }
 

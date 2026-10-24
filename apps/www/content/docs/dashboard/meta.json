@@ -1,4 +1,13 @@
 {
   "title": "Dashboard",
-  "pages": ["index", "board", "page-review", "review-rounds", "saved-views", "notifications", "settings"]
+  "pages": [
+    "index",
+    "board",
+    "page-review",
+    "review-rounds",
+    "saved-views",
+    "notifications",
+    "accounts",
+    "settings"
+  ]
 }

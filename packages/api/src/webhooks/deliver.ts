@@ -3,6 +3,7 @@ import { and, eq, lt, sql } from "drizzle-orm";
 import { decryptSecret } from "../crypto";
 import { enqueue, enqueueAfter, QUEUES } from "../jobs/boss";
 import { type OutboundFetch, outboundErrorText, safeFetch } from "../outbound/safe-fetch";
+import { notifyWebhookDisabled } from "./disabled";
 import { buildRequest, type WebhookPayload } from "./format";
 import { webhookTargetUrl } from "./url";
 
@@ -53,11 +54,16 @@ export async function sendOnce(
       error: "URL unreadable (PINWREN_SECRET changed?)",
     };
   }
-  const req = buildRequest(endpoint.kind, payload, secret);
+  let req: ReturnType<typeof buildRequest>;
+  try {
+    req = buildRequest(endpoint.kind, payload, secret, undefined, url);
+  } catch {
+    return { ok: false, responseCode: null, durationMs: 0, error: "stored URL is not valid for this kind" };
+  }
   const started = performance.now();
   try {
     // Redirects are reported (3xx), never followed; the body is drained up to 1 KiB and dropped.
-    const res = await fetchImpl(url, {
+    const res = await fetchImpl(req.url ?? url, {
       method: "POST",
       headers: req.headers,
       body: req.body,
@@ -74,8 +80,15 @@ export async function sendOnce(
   }
 }
 
-/** Create the first delivery row for an event and queue its attempt. */
-export async function queueDelivery(endpoint: Endpoint, payload: WebhookPayload): Promise<string> {
+/**
+ * Create the first delivery row for an event and queue its attempt. With `domainEventId`, a second call for
+ * the same event and endpoint (a retried dispatch job) does nothing and returns null.
+ */
+export async function queueDelivery(
+  endpoint: Endpoint,
+  payload: WebhookPayload,
+  domainEventId?: string,
+): Promise<string | null> {
   const [d] = await getDb()
     .insert(webhookDelivery)
     .values({
@@ -86,10 +99,16 @@ export async function queueDelivery(endpoint: Endpoint, payload: WebhookPayload)
       payload: payload,
       attempt: 1,
       status: "pending",
+      domainEventId: domainEventId ?? null,
     })
+    .onConflictDoNothing()
     .returning({ id: webhookDelivery.id });
-  if (!d) throw new Error("delivery insert failed");
-  await enqueue(QUEUES.webhook, { deliveryId: d.id });
+  if (!d) {
+    if (domainEventId) return null;
+    throw new Error("delivery insert failed");
+  }
+  // First attempts go ahead of retries, so endpoints that keep failing can't delay everyone else's events.
+  await enqueue(QUEUES.webhook, { deliveryId: d.id }, { priority: 1 });
   return d.id;
 }
 
@@ -143,9 +162,19 @@ export async function runDelivery(
     } else if (!e.failingSince) {
       await db.update(webhookEndpoint).set({ failingSince: new Date() }).where(eq(webhookEndpoint.id, e.id));
     } else if (Date.now() - e.failingSince.getTime() > DISABLE_AFTER_MS) {
-      // Three days of continuous failure: stop sending until an admin re-enables it.
-      await db.update(webhookEndpoint).set({ active: false }).where(eq(webhookEndpoint.id, e.id));
-      console.warn(`[pinwren] webhook ${e.id} disabled after 3 days of failures`);
+      // Three days of continuous failure: stop sending until an admin re-enables it, and tell the admins.
+      // Only the attempt that flips `active` notifies (concurrent attempts see no row returned).
+      const [off] = await db
+        .update(webhookEndpoint)
+        .set({ active: false })
+        .where(and(eq(webhookEndpoint.id, e.id), eq(webhookEndpoint.active, true)))
+        .returning();
+      if (off) {
+        console.warn(`[pinwren] webhook ${e.id} disabled after 3 days of failures`);
+        await notifyWebhookDisabled(off, result.error).catch((err: unknown) =>
+          console.warn("[pinwren] webhook-disabled notification failed", err),
+        );
+      }
     }
   }
 

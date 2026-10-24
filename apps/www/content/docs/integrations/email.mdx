@@ -1,40 +1,45 @@
 ---
 title: Email (SMTP)
-description: Connect any SMTP server for notifications, invitations and replies to reporters — in the admin UI or with environment variables.
+description: Connect any SMTP server in Settings › Email — or with environment variables — test it before saving, and see every delivery.
 ---
 
-Pinwren sends email through any SMTP server: your provider's (Postmark, SES, Mailgun, Resend, Fastmail…), Gmail with
-an app password, or your own. Until SMTP is set up, every email is skipped and logged — nothing fails, and in-app
-notifications still work.
+Pinwren sends email through any SMTP server: your provider's (Postmark, SES, Mailgun, Resend, Brevo…), Gmail with an
+app password, or your own. Until SMTP is set up, every email is **skipped and logged** — nothing fails, the in-app bell
+still works, and you can send the skipped emails once it is.
 
 Email is used for:
 
-- team notifications (new feedback, assignments, replies, status changes) — see
-  [notifications](/docs/dashboard/notifications);
-- workspace invitations;
-- replies and status updates to reporters who left an address, when the project has **Email the reporter** on.
+- team notifications: new reports, assignments, replies, @mentions, status and priority changes, deletions and digests
+  — see [notifications](/docs/dashboard/notifications);
+- emails to reporters who left an address in the widget (received, replies, status, priority, assignment);
+- invitations, password resets and email changes.
 
 ## Configure in the dashboard
 
-As an [instance admin](/docs/dashboard/settings#instance-settings), open **Settings › Email**:
+The first account on a fresh instance is its admin, so it can open **Settings › Email** straight away (a banner on every
+page links there while email isn't set up).
 
-| Field            | Notes                                                                    |
-| ---------------- | ------------------------------------------------------------------------ |
-| **SMTP host**    | SMTP server, e.g. `smtp.postmarkapp.com`                                 |
-| **Port**         | Defaults to `587`, or `465` with TLS                                     |
-| **Username**     | Optional                                                                 |
-| **Password**     | Write-only: stored encrypted with `PINWREN_SECRET` and never shown again |
-| **Use TLS**      | On for implicit TLS (usually port 465); off uses STARTTLS when offered   |
-| **From address** | Sender, e.g. `Pinwren <feedback@example.com>` — required                 |
+| Field                               | Notes                                                                                                                     |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Provider**                        | Fills in the usual host and port for Gmail, Microsoft 365, SES, Postmark, Mailgun, SendGrid, Brevo or Resend, with a hint |
+| **SMTP host**                       | e.g. `smtp.postmarkapp.com`                                                                                               |
+| **Port**                            | `587` (STARTTLS, most providers) or `465` (TLS from the start)                                                            |
+| **Use TLS**                         | On for port 465                                                                                                           |
+| **Require STARTTLS**                | Refuse to send unless a 587/25 connection upgrades to TLS                                                                 |
+| **Allow a self-signed certificate** | Only for a mail server on your own network                                                                                |
+| **Username** / **Password**         | The password is write-only: stored encrypted with `PINWREN_SECRET`, never shown again                                     |
+| **From address**                    | `noreply@example.com` or `Pinwren <noreply@example.com>` — required, checked on save                                      |
 
-Email is considered configured once **SMTP host** and **From address** are set. **Send test email** (in the **Send a
-test email** card) sends a message to you (or the address you enter) right away with the saved settings and shows the
-SMTP server's error if it fails.
+Email counts as configured once **SMTP host** and **From address** are set.
+
+**Send test email** connects, signs in (`verify`) and sends one message to you — or the address you type — **using
+the values in the form, before you save them**, and shows the server's answer with a category such as
+`Authentication failed`, `Connection failed` or `TLS problem`.
 
 ## Configure with environment variables
 
-Each variable overrides its field and **locks** it: the dashboard shows it read-only, and the API answers a change with
-`409 SETTING_LOCKED`. Use this to keep mail credentials in your secret store.
+Each variable overrides its field and **locks** it: the dashboard shows it read-only with the variable's name, and the
+API answers a change with `409 SETTING_LOCKED`. Use this to keep mail credentials in your secret store.
 
 <EnvTable group="Email (SMTP)" />
 
@@ -44,21 +49,53 @@ SMTP_PORT=587
 SMTP_USER=your-server-token
 SMTP_PASSWORD=your-server-token
 SMTP_SECURE=false
+# Refuse servers that don't upgrade with STARTTLS; accept a self-signed certificate (own network only).
+SMTP_REQUIRE_TLS=true
+# SMTP_TLS_REJECT_UNAUTHORIZED=false
 EMAIL_FROM="Acme Feedback <feedback@acme.example>"
 ```
 
 <Callout type="warn" title="Pass the variables to the container">
-  The stock `docker/compose.yml` forwards only the variables it lists under `environment:`. Add the `SMTP_*`
-  and `EMAIL_FROM` lines there (or an `env_file:`), or set SMTP in the dashboard instead. See [environment
+  Variables reach Pinwren only if the container gets them — through `env_file:` or `environment:` in your
+  compose file. Or skip them and use the dashboard. See [environment
   variables](/docs/self-hosting/environment).
 </Callout>
+
+## Common providers
+
+| Provider          | Host                                | Port | Username          | Notes                                       |
+| ----------------- | ----------------------------------- | ---- | ----------------- | ------------------------------------------- |
+| Gmail / Workspace | `smtp.gmail.com`                    | 587  | your address      | Use an **app password**                     |
+| Microsoft 365     | `smtp.office365.com`                | 587  | your address      | SMTP AUTH must be enabled for the mailbox   |
+| Amazon SES        | `email-smtp.<region>.amazonaws.com` | 587  | SES SMTP username | SES SMTP credentials, not IAM keys          |
+| Postmark          | `smtp.postmarkapp.com`              | 587  | Server API token  | Password is the same token                  |
+| Mailgun           | `smtp.mailgun.org`                  | 587  | domain SMTP login | EU: `smtp.eu.mailgun.org`                   |
+| SendGrid          | `smtp.sendgrid.net`                 | 587  | `apikey`          | Password is an API key                      |
+| Brevo             | `smtp-relay.brevo.com`              | 587  | your Brevo login  | Password is the SMTP key                    |
+| Resend            | `smtp.resend.com`                   | 465  | `resend`          | Turn **Use TLS** on; password is an API key |
+
+Send from a domain your provider has verified (SPF and DKIM), or mail lands in spam.
+
+## What the emails contain
+
+- **New report** and **Assigned to you** show the screenshot (a signed image link that works without signing in, for
+  180 days), priority, page, browser and OS, console error and failed request counts, and whether a session replay
+  was recorded, under the text and above **Open in Pinwren**. The table sits outside the editable template, so it
+  stays when you customise the wording.
+- Links to an item include the workspace (`/inbox?org=…&item=…`), so someone in several workspaces lands in the right
+  one; signed-out readers sign in and continue to it.
+- Team emails end with **Manage notifications** and carry a one-click `List-Unsubscribe` that turns off email for that
+  project only. Extra recipients (people without an account, under Notifications › General) get an **Unsubscribe**
+  link that removes their address from the project.
+- Reporter emails link to the conversation on your page (a signed link that opens the widget on their report, valid
+  30 days) and carry a one-click unsubscribe.
 
 ## Templates and branding
 
 Every email uses your workspace's product name, logo and accent from **Settings › Branding**, and each one has an
-editable Markdown template with a live preview and its own **Send me this email** button — see
-[email templates](/docs/dashboard/settings#email-templates). Untrusted text (feedback, names, URLs) is escaped, so it
-can't inject markup into an email.
+editable Markdown template with a live preview and its own **Send me this email** button, in **Settings ›
+Notifications › Email templates** — see [email templates](/docs/dashboard/settings#email-templates). Untrusted text
+(feedback, names, URLs) is escaped, so it can't inject markup into an email.
 
 So that template tests can't be used to send mail to strangers:
 
@@ -73,7 +110,27 @@ Invitation emails go to any address an admin types, so they are limited too: a w
 `PINWREN_INVITES_PER_HOUR` invitations an hour (default 30). Beyond that, inviting is refused
 (`INVITES_RATE_LIMITED`) until the hour is up. Raise the variable for a large onboarding.
 
-## Delivery
+## Delivery and the delivery log
 
-Emails are sent by a background job. If the SMTP server refuses or times out, the job retries with backoff (up to
-four more attempts), so a short outage doesn't lose notifications. Connections time out after 10 seconds.
+Emails are sent by a background job. If the SMTP server refuses or times out, the job retries with backoff (up to four
+more attempts over about 15 minutes), so a short outage doesn't lose notifications. Connections time out after 10
+seconds.
+
+**Settings › Email › Recent deliveries** lists the last 50 emails of the past 30 days, with **All / Failed / Skipped /
+Sent** filters:
+
+| Status      | Meaning                                                                                                                                                                                      | What you can do                                                     |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **Sent**    | The SMTP server accepted it                                                                                                                                                                  | If it never arrived, check spam and SPF/DKIM                        |
+| **Skipped** | `SMTP is not configured` when it was due, or the reporter unsubscribed                                                                                                                       | Once SMTP works, **Send skipped emails** (or **Send again** on one) |
+| **Failed**  | Refused on every attempt; the reason starts with a category (`Authentication failed`, `Connection failed`, `Host not found`, `TLS problem`, `Rejected by the server`, `Temporarily refused`) | Fix the settings, then **Send again**                               |
+
+An address that unsubscribed is never emailed again, even with **Send again**. The log keeps each message for the resend
+and is pruned after 30 days.
+
+| Endpoint (instance admins)                                 | Does                                                                                       |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `POST /api/admin/settings/email/test`                      | `{ to?, config? }`: verify + send with the saved settings, or with `config` laid over them |
+| `GET /api/admin/settings/email/deliveries?limit=&status=`  | `{ items, skippedNotConfigured }` (no message bodies)                                      |
+| `POST /api/admin/settings/email/deliveries/:id/resend`     | Send one again now → `{ delivery }`; `409 EMAIL_NOT_CONFIGURED` / `UNSUBSCRIBED`           |
+| `POST /api/admin/settings/email/deliveries/resend-skipped` | Queue every email skipped for missing SMTP (30 days) → `{ queued }`                        |

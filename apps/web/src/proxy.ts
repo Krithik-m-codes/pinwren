@@ -35,6 +35,10 @@ export function proxy(request: NextRequest) {
     const to = request.nextUrl.clone();
     to.pathname = "/sign-in";
     to.search = "";
+    // Back to the same screen afterwards (an email's deep link survives signing in). The sign-in page
+    // only follows same-origin paths (lib/next-path.ts).
+    const { pathname, search } = request.nextUrl;
+    if (pathname !== "/inbox" || search) to.searchParams.set("next", `${pathname}${search}`);
     return NextResponse.redirect(to);
   }
   const res = NextResponse.next();

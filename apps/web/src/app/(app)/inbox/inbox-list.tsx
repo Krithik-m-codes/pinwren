@@ -1,31 +1,48 @@
 "use client";
 
-import { FEEDBACK_STATUSES, type FeedbackStatus, type ViewFilters } from "@pinwren/core";
+import {
+  FEEDBACK_STATUSES,
+  type FeedbackStatus,
+  isClosedStatus,
+  PRIORITIES,
+  type Priority,
+  type ViewFilters,
+} from "@pinwren/core";
 import {
   ArrowUp,
   BadgeCheck,
+  CalendarClock,
   Camera,
   CircleDot,
+  Download,
   Film,
+  Flag,
   Inbox as InboxIcon,
+  Loader2,
   MessageSquare,
   Paperclip,
+  RotateCcw,
   Search,
+  SearchX,
+  Tag,
   Target,
   Trash2,
   UserRound,
   X,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ButtonLink } from "@/components/button-link";
 import {
   KIND_META,
+  LocalDate,
+  PRIORITY_META,
   PriorityIcon,
   pathOf,
   RelativeTime,
   STATUS_META,
   StatusIcon,
 } from "@/components/feedback-meta";
+import { NotInstalledEmpty } from "@/components/not-installed-empty";
 import { EmptyState, ErrorState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -38,56 +55,96 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
-import type { FeedbackList, FeedbackRow, Member, PresenceUser } from "@/lib/api";
+import { type FeedbackRow, type ItemLabel, isForbidden, type Member, type PresenceUser } from "@/lib/api";
+import { CLEAR_FILTERS, exportUrl, extraFilterCount, type FeedbackListArgs } from "@/lib/inbox-filters";
 import { useRoundsQuery } from "@/lib/store/api";
-import type { FeedbackPatch } from "@/lib/store/api/feedback";
+import type { FeedbackFields, FeedbackPatch, ItemChange } from "@/lib/store/api/feedback";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { selectionCleared } from "@/lib/store/slices/inbox";
 import { followChanged, freshCleared, newItemsShown } from "@/lib/store/slices/realtime";
+import { useUrlParams } from "@/lib/use-url-params";
 import { useMounted } from "@/lib/use-synced-state";
 import { cn } from "@/lib/utils";
 import { useMembers, useViewer } from "@/lib/viewer";
+import { LabelChips, LabelPicker } from "./pickers";
 
-type ListQuery = {
-  data?: FeedbackList | undefined;
+/** The list as the inbox shows it: every loaded page, the total, and "load more". */
+export type Feed = {
+  items: FeedbackRow[];
+  /** Every match, all pages (null until the first page arrives). */
+  total: number | null;
   isLoading: boolean;
   isError: boolean;
   isSuccess: boolean;
   error?: unknown;
-  refetch: () => unknown;
+  refetch: () => void;
+  hasMore: boolean;
+  loadingMore: boolean;
+  loadMoreFailed: boolean;
+  loadMore: () => void;
 };
 
 const AT_TOP_PX = 48;
 
+const subscribeNever = () => () => {
+  // the clock isn't watched: an item turns overdue on the next render
+};
+
+/** Start the browser download of an export (the API answers with `Content-Disposition: attachment`). */
+export function download(url: string) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.rel = "noopener";
+  document.body.append(a);
+  a.click();
+  a.remove();
+}
+
+export const EXPORT_FORMATS = [
+  { value: "csv", label: "CSV (spreadsheet)" },
+  { value: "json", label: "JSON" },
+  { value: "pdf", label: "PDF (first 1,000)" },
+] as const;
+
 /**
  * The list column: rows with presence avatars, the "N new" pill while scrolled (new items come in
- * live when the list is at the top), and the bulk bar for checked rows.
+ * live when the list is at the top), more pages as the list scrolls, and the bulk bar for checked rows.
  */
 export function InboxList({
-  list,
+  feed,
+  args,
   filters,
+  trash,
   selected,
   hasProjects,
   onOpen,
   onCheck,
   onChange,
+  onChangeEach,
   onDelete,
+  onRestore,
+  onPurge,
 }: {
-  list: ListQuery;
+  feed: Feed;
+  args: FeedbackListArgs;
   filters: ViewFilters;
+  trash: boolean;
   selected: string | null;
   hasProjects: boolean;
   onOpen: (id: string) => void;
   onCheck: (id: string, range: boolean) => void;
-  onChange: (ids: string[], patch: FeedbackPatch, label: string) => void;
+  onChange: (ids: string[], patch: FeedbackPatch, label: string, optimistic?: FeedbackFields) => void;
+  onChangeEach: (each: ItemChange[], label: string) => void;
   onDelete: () => void;
+  onRestore: () => void;
+  onPurge: () => void;
 }) {
   const dispatch = useAppDispatch();
   const scroller = useRef<HTMLUListElement>(null);
   // The list is server-rendered; `data-ready` marks when it is interactive (keyboard map attached).
   const ready = useMounted();
   const members = useMembers();
-  const { canWrite, userId } = useViewer();
+  const { canWrite, isAdmin, userId } = useViewer();
   const selection = useAppSelector((s) => s.inbox.selection);
   const density = useAppSelector((s) => s.inbox.prefs.density);
   const follow = useAppSelector((s) => s.realtime.follow);
@@ -96,11 +153,11 @@ export function InboxList({
   const pendingAll = useAppSelector((s) => s.realtime.pending);
   // Live state exists only in this browser: leave it out until hydration is done, so the server HTML and the
   // first client render agree (boundaries hydrate one by one while the stream may already be delivering).
-  const pending = ready
-    ? pendingAll.filter((p) => !filters.projectId || p.projectId === filters.projectId)
-    : [];
-  const items = list.data?.items ?? [];
+  const pending =
+    ready && !trash ? pendingAll.filter((p) => !filters.projectId || p.projectId === filters.projectId) : [];
+  const items = feed.items;
   const checked = new Set(selection);
+  const selectedRows = items.filter((i) => checked.has(i.id));
 
   const onScroll = () => {
     const atTop = (scroller.current?.scrollTop ?? 0) < AT_TOP_PX;
@@ -129,12 +186,12 @@ export function InboxList({
         ref={scroller}
         onScroll={onScroll}
         className={cn("min-h-0 flex-1 overflow-y-auto", selection.length > 0 && "pb-20")}
-        aria-label="Feedback"
+        aria-label={trash ? "Trash" : "Feedback"}
         data-ready={ready || undefined}
         aria-live="polite"
-        aria-busy={list.isLoading || undefined}
+        aria-busy={feed.isLoading || undefined}
       >
-        {list.isLoading &&
+        {feed.isLoading &&
           ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"].map((k) => (
             <li key={k} className="flex items-center gap-3 border-b px-4 py-3">
               <Skeleton className="size-4 rounded-full" />
@@ -144,16 +201,25 @@ export function InboxList({
               </div>
             </li>
           ))}
-        {list.isError && (
+        {feed.isError && (
           <li>
-            <ErrorState error={list.error} retry={() => void list.refetch()} />
+            {trash && isForbidden(feed.error) ? (
+              <EmptyState
+                icon={Trash2}
+                title="Only Admins can open the trash"
+                description="Ask a workspace Admin to restore an item you need back."
+              />
+            ) : (
+              <ErrorState error={feed.error} retry={feed.refetch} />
+            )}
           </li>
         )}
-        {list.isSuccess && items.length === 0 && (
+        {feed.isSuccess && items.length === 0 && (
           <li>
             <EmptyInbox
               hasProjects={hasProjects}
-              searching={!!filters.q}
+              filters={filters}
+              trash={trash}
               status={filters.status ?? "active"}
             />
           </li>
@@ -168,71 +234,214 @@ export function InboxList({
             active={f.id === selected}
             checked={checked.has(f.id)}
             selecting={selection.length > 0}
-            selectable={canWrite}
+            selectable={trash ? isAdmin : canWrite}
             fresh={ready && fresh.includes(f.id)}
             compact={density === "compact"}
+            trash={trash}
             onFreshSeen={() => dispatch(freshCleared(f.id))}
             onCheck={(range) => onCheck(f.id, range)}
             onOpen={() => onOpen(f.id)}
           />
         ))}
+        {items.length > 0 && <ListFooter feed={feed} />}
       </ul>
-      {canWrite && selection.length > 0 && (
-        <BulkBar
-          count={selection.length}
-          members={members}
-          projectId={filters.projectId}
-          onStatus={(s) =>
-            onChange(selection, { status: s }, `${selection.length} moved to ${STATUS_META[s].label}`)
-          }
-          onAssign={(id) =>
-            onChange(
-              selection,
-              { assigneeIds: id ? [id] : [] },
-              id ? `Assigned ${selection.length}` : `Unassigned ${selection.length}`,
+      {selection.length > 0 &&
+        (trash
+          ? isAdmin && (
+              <TrashBar
+                count={selection.length}
+                onRestore={onRestore}
+                onPurge={onPurge}
+                onClear={() => dispatch(selectionCleared())}
+              />
             )
-          }
-          onRound={(id, name) =>
-            onChange(
-              selection,
-              { roundId: id },
-              id ? `${selection.length} added to ${name}` : `${selection.length} taken out of their round`,
-            )
-          }
-          onDelete={onDelete}
-          onClear={() => dispatch(selectionCleared())}
-        />
-      )}
+          : canWrite && (
+              <BulkBar
+                count={selection.length}
+                rows={selectedRows}
+                members={members}
+                projectId={filters.projectId}
+                canDelete={isAdmin}
+                onStatus={(s) =>
+                  onChange(selection, { status: s }, `${selection.length} moved to ${STATUS_META[s].label}`)
+                }
+                onPriority={(p) =>
+                  onChange(
+                    selection,
+                    { priority: p },
+                    `${selection.length} set to ${PRIORITY_META[p].label} priority`,
+                  )
+                }
+                onAssign={(id) =>
+                  onChange(
+                    selection,
+                    { assigneeIds: id ? [id] : [] },
+                    id ? `Assigned ${selection.length}` : `Unassigned ${selection.length}`,
+                  )
+                }
+                onLabels={onChangeEach}
+                onRound={(id, name) =>
+                  onChange(
+                    selection,
+                    { roundId: id },
+                    id
+                      ? `${selection.length} added to ${name}`
+                      : `${selection.length} taken out of their round`,
+                  )
+                }
+                onExport={(format) => download(exportUrl(args, format, selection))}
+                onDelete={onDelete}
+                onClear={() => dispatch(selectionCleared())}
+              />
+            ))}
     </>
   );
 }
 
+/** "Showing 50 of 312", and the next page when the end of the list scrolls into view. */
+function ListFooter({ feed }: { feed: Feed }) {
+  const sentinel = useRef<HTMLLIElement>(null);
+  const { hasMore, loadingMore, loadMoreFailed, loadMore } = feed;
+  const latest = useRef(loadMore);
+  useEffect(() => {
+    latest.current = loadMore;
+  });
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || !hasMore || loadingMore || loadMoreFailed || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) latest.current();
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, loadingMore, loadMoreFailed]);
+
+  return (
+    <li
+      ref={sentinel}
+      className="flex items-center justify-center gap-3 px-4 py-3 text-xs text-muted-foreground"
+      data-testid="list-footer"
+    >
+      {feed.total !== null && (
+        <span className="tabular-nums">
+          {feed.items.length < feed.total
+            ? `Showing ${feed.items.length} of ${feed.total}`
+            : `${feed.total} item${feed.total === 1 ? "" : "s"}`}
+        </span>
+      )}
+      {hasMore &&
+        (loadingMore ? (
+          <span className="flex items-center gap-1.5">
+            <Loader2 className="size-3.5 animate-spin" /> Loading more…
+          </span>
+        ) : (
+          <Button variant="outline" size="xs" onClick={loadMore} data-testid="load-more">
+            {loadMoreFailed ? "Couldn't load more. Retry" : "Load more"}
+          </Button>
+        ))}
+    </li>
+  );
+}
+
+function TrashBar({
+  count,
+  onRestore,
+  onPurge,
+  onClear,
+}: {
+  count: number;
+  onRestore: () => void;
+  onPurge: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div
+      role="toolbar"
+      aria-label="Trash actions"
+      className="absolute inset-x-3 bottom-3 z-10 mx-auto flex max-w-xl flex-wrap items-center gap-1 rounded-xl border bg-popover p-1.5 pl-3 text-popover-foreground shadow-lg sm:flex-nowrap"
+    >
+      <span className="mr-auto text-sm font-medium tabular-nums">{count} selected</span>
+      <Button variant="ghost" size="sm" onClick={onRestore}>
+        <RotateCcw /> Restore
+      </Button>
+      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={onPurge}>
+        <Trash2 /> Delete forever
+      </Button>
+      <Button variant="ghost" size="icon-sm" aria-label="Clear selection" onClick={onClear}>
+        <X />
+      </Button>
+    </div>
+  );
+}
+
+/** The labels every one of `rows` carries (checked in the bulk picker). */
+export function sharedLabels(rows: readonly FeedbackRow[]): ItemLabel[] {
+  const [first, ...rest] = rows;
+  if (!first) return [];
+  return first.labels.filter((l) => rest.every((r) => r.labels.some((x) => x.id === l.id)));
+}
+
+/**
+ * The bulk label picker's toggle as one change per item: a label checked now is added to every item, one
+ * unchecked is removed from every item, and each item keeps its other labels. Unchanged items are left out.
+ */
+export function bulkLabelChanges(rows: readonly FeedbackRow[], next: readonly ItemLabel[]): ItemChange[] {
+  const shared = sharedLabels(rows);
+  const added = next.filter((l) => !shared.some((s) => s.id === l.id));
+  const removed = new Set(shared.filter((s) => !next.some((l) => l.id === s.id)).map((s) => s.id));
+  const out: ItemChange[] = [];
+  for (const r of rows) {
+    const labels = r.labels.filter((l) => !removed.has(l.id));
+    for (const a of added) if (!labels.some((l) => l.id === a.id)) labels.push(a);
+    const same =
+      labels.length === r.labels.length && labels.every((l) => r.labels.some((x) => x.id === l.id));
+    if (!same) out.push({ id: r.id, patch: { labelIds: labels.map((l) => l.id) }, optimistic: { labels } });
+  }
+  return out;
+}
+
 function BulkBar({
   count,
+  rows,
   members,
   projectId,
+  canDelete,
   onStatus,
+  onPriority,
   onAssign,
+  onLabels,
   onRound,
+  onExport,
   onDelete,
   onClear,
 }: {
   count: number;
+  rows: FeedbackRow[];
   members: Member[];
   projectId: string | undefined;
+  canDelete: boolean;
   onStatus: (s: FeedbackStatus) => void;
+  onPriority: (p: Priority) => void;
   onAssign: (userId: string | null) => void;
+  onLabels: (each: ItemChange[], label: string) => void;
   onRound: (roundId: string | null, name: string) => void;
+  onExport: (format: "csv" | "json" | "pdf") => void;
   onDelete: () => void;
   onClear: () => void;
 }) {
   const rounds = useRoundsQuery(projectId ?? "", { skip: !projectId });
   const active = rounds.data?.rounds.filter((r) => r.status === "active") ?? [];
+  const [labelsOpen, setLabelsOpen] = useState(false);
+  // Labels belong to a project: the picker needs every checked item to share one.
+  const projects = new Set(rows.map((r) => r.projectId));
+  const labelProject = projects.size === 1 ? [...projects][0] : undefined;
   return (
     <div
       role="toolbar"
       aria-label="Bulk actions"
-      className="absolute inset-x-3 bottom-3 z-10 mx-auto flex max-w-xl flex-wrap items-center gap-1 rounded-xl border bg-popover p-1.5 pl-3 text-popover-foreground shadow-lg sm:flex-nowrap"
+      className="absolute inset-x-3 bottom-3 z-10 mx-auto flex max-w-2xl flex-wrap items-center gap-1 rounded-xl border bg-popover p-1.5 pl-3 text-popover-foreground shadow-lg"
     >
       <span className="mr-auto text-sm font-medium tabular-nums">{count} selected</span>
       <DropdownMenu>
@@ -243,6 +452,18 @@ function BulkBar({
           {FEEDBACK_STATUSES.map((s) => (
             <DropdownMenuItem key={s} onClick={() => onStatus(s)}>
               <StatusIcon status={s} /> {STATUS_META[s].label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button variant="ghost" size="sm" data-testid="bulk-priority" />}>
+          <Flag /> Priority
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" side="top" className="w-40">
+          {PRIORITIES.map((p) => (
+            <DropdownMenuItem key={p} onClick={() => onPriority(p)}>
+              <PriorityIcon priority={p} /> {PRIORITY_META[p].label}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
@@ -260,6 +481,36 @@ function BulkBar({
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
+      {labelProject ? (
+        <LabelPicker
+          projectId={labelProject}
+          selected={sharedLabels(rows)}
+          canCreate
+          open={labelsOpen}
+          onOpenChange={setLabelsOpen}
+          side="top"
+          align="end"
+          label="Labels of the selected items"
+          trigger={
+            <Button variant="ghost" size="sm" data-testid="bulk-labels">
+              <Tag /> Labels
+            </Button>
+          }
+          onChange={(next) => {
+            const each = bulkLabelChanges(rows, next);
+            if (each.length) onLabels(each, `Labels changed on ${each.length}`);
+          }}
+        />
+      ) : (
+        <Tooltip>
+          <TooltipTrigger render={<span />}>
+            <Button variant="ghost" size="sm" disabled>
+              <Tag /> Labels
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Labels belong to a project: select items of one project.</TooltipContent>
+        </Tooltip>
+      )}
       {projectId && (
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
@@ -278,14 +529,28 @@ function BulkBar({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="text-destructive hover:text-destructive"
-        onClick={onDelete}
-      >
-        <Trash2 /> Delete
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button variant="ghost" size="sm" data-testid="export-selected" />}>
+          <Download /> Export
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" side="top" className="w-44">
+          {EXPORT_FORMATS.map((f) => (
+            <DropdownMenuItem key={f.value} onClick={() => onExport(f.value)}>
+              {f.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {canDelete && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-destructive hover:text-destructive"
+          onClick={onDelete}
+        >
+          <Trash2 /> Delete
+        </Button>
+      )}
       <Button variant="ghost" size="icon-sm" aria-label="Clear selection" onClick={onClear}>
         <X />
       </Button>
@@ -322,6 +587,39 @@ export function PresenceStack({ users, className }: { users: PresenceUser[]; cla
   );
 }
 
+/** A due date: overdue (red) while the item is still open. */
+export function DueDate({
+  iso,
+  status,
+  className,
+}: {
+  iso: string;
+  status: FeedbackStatus;
+  className?: string;
+}) {
+  // The due day counts until its end. "Now" is read only in the browser, after hydration, so the server
+  // HTML and the first client render agree; the colour follows.
+  const overdue = useSyncExternalStore(
+    subscribeNever,
+    () => !isClosedStatus(status) && Date.parse(iso) < Date.now(),
+    () => false,
+  );
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-0.5 tabular-nums",
+        overdue && "text-destructive",
+        className,
+      )}
+      title={overdue ? "Overdue" : "Due"}
+      data-testid="due-date"
+    >
+      <CalendarClock className="size-3.5" aria-label={overdue ? "Overdue" : "Due"} />
+      <LocalDate iso={iso} />
+    </span>
+  );
+}
+
 const FRESH_MS = 4000;
 
 function FeedbackListRow({
@@ -335,6 +633,7 @@ function FeedbackListRow({
   selectable,
   fresh,
   compact,
+  trash,
   onFreshSeen,
   onCheck,
   onOpen,
@@ -349,12 +648,15 @@ function FeedbackListRow({
   selectable: boolean;
   fresh: boolean;
   compact: boolean;
+  trash: boolean;
   onFreshSeen: () => void;
   onCheck: (range: boolean) => void;
   onOpen: () => void;
 }) {
   const Kind = KIND_META[item.kind].icon;
-  const assignee = item.assigneeIds[0] ? members.find((m) => m.id === item.assigneeIds[0]) : undefined;
+  const assignees = item.assigneeIds
+    .map((id) => members.find((m) => m.id === id))
+    .filter((m): m is Member => !!m);
   const latestSeen = useRef(onFreshSeen);
   useEffect(() => {
     latestSeen.current = onFreshSeen;
@@ -432,6 +734,8 @@ function FeedbackListRow({
                   </span>
                 </span>
               )}
+              <LabelChips labels={item.labels} max={2} className="shrink" />
+              {item.dueAt && <DueDate iso={item.dueAt} status={item.status} />}
               {item.pageUrl && <span className="min-w-0 truncate font-mono">{pathOf(item.pageUrl)}</span>}
             </div>
           )}
@@ -449,13 +753,32 @@ function FeedbackListRow({
               </span>
             )}
             <PriorityIcon priority={item.priority} />
-            {assignee ? (
-              <UserAvatar name={assignee.name} image={assignee.image} className="size-5" />
+            {assignees.length ? (
+              <span
+                className="flex -space-x-1.5"
+                aria-label={`Assigned to ${assignees.map((a) => a.name).join(", ")}`}
+              >
+                {assignees.slice(0, 2).map((a) => (
+                  <UserAvatar
+                    key={a.id}
+                    name={a.name}
+                    image={a.image}
+                    className="size-5 ring-2 ring-background"
+                  />
+                ))}
+              </span>
             ) : (
               <span className="size-5" aria-hidden />
             )}
           </div>
-          {!compact && <RelativeTime iso={item.createdAt} className="text-xs whitespace-nowrap" />}
+          {!compact &&
+            (trash && item.deletedAt ? (
+              <span className="text-xs whitespace-nowrap">
+                Deleted <RelativeTime iso={item.deletedAt} />
+              </span>
+            ) : (
+              <RelativeTime iso={item.createdAt} className="text-xs whitespace-nowrap" />
+            ))}
         </div>
       </button>
     </li>
@@ -464,25 +787,73 @@ function FeedbackListRow({
 
 function EmptyInbox({
   hasProjects,
-  searching,
+  filters,
+  trash,
   status,
 }: {
   hasProjects: boolean;
-  searching: boolean;
+  filters: ViewFilters;
+  trash: boolean;
   status: string;
 }) {
-  if (searching) {
+  const { setParams } = useUrlParams();
+  if (trash) {
     return (
-      <EmptyState icon={Search} title="No matches" description="Try other words, or search all statuses." />
+      <EmptyState
+        icon={Trash2}
+        title="The trash is empty"
+        description="Deleted items stay here for 30 days, then they are purged with their files."
+      />
+    );
+  }
+  if (filters.q) {
+    return (
+      <EmptyState
+        icon={Search}
+        title="No matches"
+        description={
+          status === "all"
+            ? "Try other words, an item number like #12, a reporter's email or part of a page URL."
+            : "Nothing in this tab matches. The item may already be resolved or closed."
+        }
+        action={
+          status !== "all" ? (
+            <Button size="sm" variant="outline" onClick={() => setParams({ status: "all", item: null })}>
+              Search all statuses
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => setParams({ q: null, item: null })}>
+              Clear search
+            </Button>
+          )
+        }
+      />
+    );
+  }
+  if (extraFilterCount(filters) > 0) {
+    return (
+      <EmptyState
+        icon={SearchX}
+        title="No items match these filters"
+        description="Remove a filter, or clear them all to see everything in this tab."
+        action={
+          <Button size="sm" variant="outline" onClick={() => setParams(CLEAR_FILTERS)}>
+            Clear filters
+          </Button>
+        }
+      />
     );
   }
   if (hasProjects && status === "active") {
+    // A site the widget has never loaded on can't be "inbox zero": point at the Install tab instead.
     return (
-      <EmptyState
-        icon={InboxIcon}
-        title="Inbox zero"
-        description="Everything is triaged. New pinned comments and bug reports from your sites land here."
-      />
+      <NotInstalledEmpty>
+        <EmptyState
+          icon={InboxIcon}
+          title="Inbox zero"
+          description="Everything is triaged. New pinned comments and bug reports from your sites land here."
+        />
+      </NotInstalledEmpty>
     );
   }
   return (

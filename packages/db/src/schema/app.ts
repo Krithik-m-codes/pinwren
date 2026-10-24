@@ -1,9 +1,14 @@
 import {
+  type AnnotationLayer,
+  type CaptureGeometry,
+  EMAIL_DELIVERY_STATUSES,
+  EMAIL_DIGEST_FREQUENCIES,
   FEEDBACK_KINDS,
   FEEDBACK_STATUSES,
   ISSUE_AUTO_CREATE,
   ISSUE_PROVIDERS,
   PRIORITIES,
+  type RejectedOrigin,
   REVIEW_ROUND_STATUSES,
   VIEW_LAYOUTS,
   type WidgetConsent,
@@ -11,6 +16,7 @@ import {
 } from "@pinwren/core";
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   customType,
   index,
@@ -67,14 +73,33 @@ export const project = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
-    publicRead: boolean("public_read").notNull().default(true),
+    /** Visitors see the page's pins and public replies. Off by default (wave 5): bug reports stay private. */
+    publicRead: boolean("public_read").notNull().default(false),
     widgetConfig: jsonb("widget_config").$type<Record<string, unknown>>().notNull().default({}),
     captureConfig: jsonb("capture_config").$type<Record<string, unknown>>().notNull().default({}),
     feedbackCounter: integer("feedback_counter").notNull().default(0),
     /** Hard-delete feedback older than this many days (`retention.apply` job). null = keep forever. */
     retentionDays: integer("retention_days"),
     /** Email reporters who left an address about team replies and status changes. */
-    notifyReporter: boolean("notify_reporter").notNull().default(false),
+    notifyReporter: boolean("notify_reporter").notNull().default(true),
+    /**
+     * Notifications › Reporter (BugPin model, wave-5 contract §1): which emails a reporter who left an address
+     * gets, under the `notifyReporter` master switch. Public team replies always go out while it is on.
+     */
+    reporterEmailReceived: boolean("reporter_email_received").notNull().default(true),
+    reporterEmailStatus: boolean("reporter_email_status").notNull().default(true),
+    reporterEmailPriority: boolean("reporter_email_priority").notNull().default(false),
+    reporterEmailAssigned: boolean("reporter_email_assigned").notNull().default(false),
+    /**
+     * Notifications › General: the members who get new-report notifications. null = every member (each still
+     * filtered by their own preferences); a list narrows it to those people.
+     */
+    notifyMemberIds: text("notify_member_ids").array(),
+    /** Notifications › General: extra addresses (not accounts) that get every new-report email. */
+    notifyEmails: text("notify_emails")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     /** Widget reports/replies per IP per minute; null = `WIDGET_RATE_LIMIT_PER_MIN`. */
     widgetRateLimitPerMin: integer("widget_rate_limit_per_min"),
     /** Widget branding (wave-3 contract §2): hidePoweredBy, dialogAccent, logoUrl. */
@@ -84,6 +109,11 @@ export const project = pgTable(
     /** AES-256-GCM ciphertext of the signed-identity secret (`identify(..., { signature })`). */
     identitySecret: text("identity_secret"),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    /**
+     * Origins the `/w` middleware refused for this project's valid key (wave-5 contract §1): newest first,
+     * at most 10, written at most once a minute per origin. The Install tab lists them with "Allow".
+     */
+    rejectedOrigins: jsonb("rejected_origins").$type<RejectedOrigin[]>().notNull().default([]),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps,
   },
@@ -167,6 +197,16 @@ export const feedback = pgTable(
     /** The consent notice the reporter accepted (F-019): `{ version, acceptedAt }`. */
     consent: jsonb("consent").$type<WidgetConsent>(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    /** Due date set in triage (F-051). */
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    /** Set with status `duplicate`: the item this one duplicates (same project). */
+    duplicateOfId: uuid("duplicate_of_id").references((): AnyPgColumn => feedback.id, {
+      onDelete: "set null",
+    }),
+    /** The review link a guest came through (F-012), shown as the item's source and filterable in the inbox. */
+    reviewLinkId: uuid("review_link_id").references((): AnyPgColumn => reviewLink.id, {
+      onDelete: "set null",
+    }),
     search: tsvector("search").generatedAlwaysAs(
       sql`to_tsvector('simple', coalesce(title, '') || ' ' || body)`,
     ),
@@ -180,6 +220,8 @@ export const feedback = pgTable(
     index("feedback_org_created_idx").on(t.orgId, t.createdAt),
     index("feedback_round_idx").on(t.roundId),
     index("feedback_search_idx").using("gin", t.search),
+    index("feedback_duplicate_of_idx").on(t.duplicateOfId),
+    index("feedback_review_link_idx").on(t.reviewLinkId),
   ],
 );
 
@@ -207,6 +249,10 @@ export const feedbackAsset = pgTable(
     name: text("name"),
     /** Kind-specific facts, e.g. a replay's `{ durationMs, events }`. */
     meta: jsonb("meta").$type<Record<string, unknown>>(),
+    /** Screenshots: the reporter's vector annotation shapes, drawn over the unflattened capture. */
+    annotations: jsonb("annotations").$type<AnnotationLayer>(),
+    /** Screenshots: the viewport the capture was taken in (`{ vw, vh, scrollY, mode }`), for Page Review. */
+    capture: jsonb("capture").$type<CaptureGeometry>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("asset_feedback_idx").on(t.feedbackId)],
@@ -224,6 +270,11 @@ export const comment = pgTable(
     authorGuest: jsonb("author_guest").$type<ReporterGuest>(),
     body: text("body").notNull(),
     visibility: commentVisibilityEnum("visibility").notNull().default("internal"),
+    /** Members @mentioned in a team comment (user ids, checked against the organisation). */
+    mentions: text("mentions")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     editedAt: timestamp("edited_at", { withTimezone: true }),
     ...timestamps,
   },
@@ -285,6 +336,8 @@ export const notificationPreference = pgTable(
     assigned: boolean("assigned").notNull().default(true),
     replies: boolean("replies").notNull().default(true),
     statusChanges: boolean("status_changes").notNull().default(true),
+    mentioned: boolean("mentioned").notNull().default(true),
+    priorityChanges: boolean("priority_changes").notNull().default(true),
     email: boolean("email").notNull().default(true),
     ...timestamps,
   },
@@ -303,10 +356,115 @@ export const notification = pgTable(
     feedbackId: uuid("feedback_id").references(() => feedback.id, { onDelete: "cascade" }),
     type: text("type").notNull(),
     data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+    /** The `DomainEvent.id` that produced it: a retried dispatch inserts with ON CONFLICT DO NOTHING. */
+    eventId: text("event_id"),
     readAt: timestamp("read_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("notification_user_created_idx").on(t.userId, t.createdAt)],
+  (t) => [
+    index("notification_user_created_idx").on(t.userId, t.createdAt),
+    uniqueIndex("notification_user_event_type_uq").on(t.userId, t.eventId, t.type),
+  ],
+);
+
+export const emailDigestEnum = pgEnum("email_digest", EMAIL_DIGEST_FREQUENCIES);
+
+/** Account-wide (every organisation) email settings. No row = instant email, not paused. */
+export const userPreference = pgTable("user_preference", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  /** off = one email per notification; hourly/daily = unread notifications grouped by `notify.digest`. */
+  emailDigest: emailDigestEnum("email_digest").notNull().default("off"),
+  /** Stops every team notification email (the bell still fills). */
+  emailPaused: boolean("email_paused").notNull().default(false),
+  lastDigestAt: timestamp("last_digest_at", { withTimezone: true }),
+  /** Storage key of an uploaded avatar; `user.image` then points at `/api/avatars/:userId`. */
+  avatarKey: text("avatar_key"),
+  ...timestamps,
+});
+
+/** People following an item (F-054): added on create/comment/assign/mention, or with "Follow". */
+export const feedbackWatcher = pgTable(
+  "feedback_watcher",
+  {
+    feedbackId: uuid("feedback_id")
+      .notNull()
+      .references(() => feedback.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.feedbackId, t.userId] }), index("feedback_watcher_user_idx").on(t.userId)],
+);
+
+/** Per-project labels (F-051). Names are unique per project, ignoring case. */
+export const label = pgTable(
+  "label",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** Hex colour, e.g. `#e5484d`. */
+    color: text("color").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("label_project_name_uq").on(t.projectId, sql`lower(${t.name})`)],
+);
+
+export const feedbackLabel = pgTable(
+  "feedback_label",
+  {
+    feedbackId: uuid("feedback_id")
+      .notNull()
+      .references(() => feedback.id, { onDelete: "cascade" }),
+    labelId: uuid("label_id")
+      .notNull()
+      .references(() => label.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.feedbackId, t.labelId] }),
+    index("feedback_label_label_idx").on(t.labelId),
+  ],
+);
+
+export type EmailDeliveryPayload = {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  headers?: Record<string, string> | undefined;
+  suppressionOrgId?: string | undefined;
+};
+
+export const emailDeliveryStatusEnum = pgEnum("email_delivery_status", EMAIL_DELIVERY_STATUSES);
+
+/**
+ * Every email the `notify.email` worker handled: sent, skipped (SMTP unset, unsubscribed) or failed after its
+ * retries, so admins can see and resend it. `payload` is the whole message, for the resend. Pruned by a sweep.
+ */
+export const emailDelivery = pgTable(
+  "email_delivery",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** null for instance emails (password reset, verification, test). */
+    orgId: text("org_id").references(() => organization.id, { onDelete: "cascade" }),
+    toAddress: text("to_address").notNull(),
+    /** An `EmailTemplateKey`, or `test`. */
+    templateKey: text("template_key").notNull(),
+    subject: text("subject").notNull(),
+    status: emailDeliveryStatusEnum("status").notNull(),
+    error: text("error"),
+    attempts: integer("attempts").notNull().default(1),
+    payload: jsonb("payload").$type<EmailDeliveryPayload>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (t) => [index("email_delivery_created_idx").on(t.createdAt)],
 );
 
 export const webhookKindEnum = pgEnum("webhook_kind", WEBHOOK_KINDS);
@@ -325,7 +483,7 @@ export const webhookEndpoint = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
-    /** AES-256-GCM ciphertext of the signing secret (generic endpoints). */
+    /** AES-256-GCM ciphertext of the signing secret (generic) or the access token (ntfy, optional). */
     secret: text("secret"),
     active: boolean("active").notNull().default(true),
     /** First failure of the current failing streak; the endpoint is disabled after 3 days. */
@@ -356,11 +514,19 @@ export const webhookDelivery = pgTable(
     error: text("error"),
     durationMs: integer("duration_ms"),
     nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
+    /**
+     * The `DomainEvent.id` behind a first attempt (null on retries, tests and redeliveries): a retried
+     * dispatch job can't queue the same event to the same endpoint twice.
+     */
+    domainEventId: text("domain_event_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("webhook_delivery_endpoint_idx").on(t.endpointId, t.createdAt),
     index("webhook_delivery_created_idx").on(t.createdAt),
+    uniqueIndex("webhook_delivery_endpoint_event_uq")
+      .on(t.endpointId, t.domainEventId)
+      .where(sql`domain_event_id is not null`),
   ],
 );
 
@@ -438,7 +604,10 @@ export const emailTemplate = pgTable(
 
 export const issueProviderEnum = pgEnum("issue_provider", ISSUE_PROVIDERS);
 
-/** GitHub / GitLab issue sync for one project, authenticated by an access token (ADR 0015). */
+/**
+ * GitHub / GitLab / Linear / Jira issue sync for one project, authenticated by an access token (ADR 0015).
+ * `repo` is the repository path, Linear team key or Jira project key; Jira stores `email:apiToken` in `token`.
+ */
 export const issueIntegration = pgTable(
   "issue_integration",
   {
@@ -486,7 +655,7 @@ export const issueLink = pgTable(
       .notNull()
       .references(() => issueIntegration.id, { onDelete: "cascade" }),
     provider: issueProviderEnum("provider").notNull(),
-    /** GitHub issue number / GitLab issue iid. */
+    /** GitHub issue number / GitLab issue iid / the number in a Linear or Jira key (`ENG-12` → 12). */
     number: integer("number").notNull(),
     url: text("url").notNull(),
     state: text("state", { enum: ["open", "closed"] })
@@ -546,3 +715,26 @@ export const license = pgTable("license", {
   installedAt: timestamp("installed_at", { withTimezone: true }).notNull().defaultNow(),
   installedBy: text("installed_by").references(() => user.id, { onDelete: "set null" }),
 });
+
+/**
+ * Review links (F-012): a URL with a token that shows the widget to a guest on a site where visibility rules
+ * hide it. Only a SHA-256 of the token is stored; the URL is shown once, at creation.
+ */
+export const reviewLink = pgTable(
+  "review_link",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [index("review_link_project_idx").on(t.projectId)],
+);

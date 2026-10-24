@@ -1,7 +1,7 @@
 "use client";
 
-import { LICENSE_FEATURES } from "@pinwren/core";
-import { Award, CircleCheck, FileKey2, Lock, ShieldAlert, TriangleAlert, Upload } from "lucide-react";
+import { IMPLEMENTED_LICENSE_FEATURES, type LicenseFeature, PLANNED_LICENSE_FEATURES } from "@pinwren/core";
+import { Award, CircleCheck, Clock, FileKey2, Lock, ShieldAlert, TriangleAlert, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -32,7 +32,7 @@ import {
 import { cn } from "@/lib/utils";
 import { SectionTitle } from "../settings-shell";
 
-const FEATURE_NAMES: Record<(typeof LICENSE_FEATURES)[number], string> = {
+const FEATURE_NAMES: Record<LicenseFeature, string> = {
   sso: "Single sign-on",
   scim: "SCIM provisioning",
   audit_log: "Audit log",
@@ -42,6 +42,11 @@ const FEATURE_NAMES: Record<(typeof LICENSE_FEATURES)[number], string> = {
   legal_hold: "Legal hold",
   siem_stream: "SIEM stream",
   priority_support: "Priority support",
+};
+
+/** What an implemented entitlement does, next to its name. */
+const FEATURE_HINTS: Record<(typeof IMPLEMENTED_LICENSE_FEATURES)[number], string> = {
+  white_label: "hide “Powered by Pinwren” in the widget and emails",
 };
 
 const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" });
@@ -179,7 +184,7 @@ export function LicenseSettings() {
           <div className="grid gap-2">
             <p className="text-sm font-medium">Features</p>
             <ul className="grid gap-1.5 sm:grid-cols-2" aria-label="Enterprise features">
-              {LICENSE_FEATURES.map((f) => {
+              {IMPLEMENTED_LICENSE_FEATURES.map((f) => {
                 const on = l.features.includes(f);
                 return (
                   <li
@@ -194,13 +199,36 @@ export function LicenseSettings() {
                       <span className="size-4 shrink-0 rounded-full border border-dashed" />
                     )}
                     {FEATURE_NAMES[f]}
+                    <span className="text-xs text-muted-foreground">{FEATURE_HINTS[f]}</span>
                   </li>
                 );
               })}
             </ul>
-            <p className="text-xs text-muted-foreground">
-              In this version only white-label (hiding “Powered by Pinwren”, the email credit) is gated; the
-              rest arrive in later releases.
+          </div>
+          <div className="grid gap-2" data-testid="license-coming-soon">
+            <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+              <Clock className="size-3.5" /> Coming soon
+            </p>
+            <ul className="grid gap-1.5 sm:grid-cols-2" aria-label="Planned Enterprise features">
+              {PLANNED_LICENSE_FEATURES.map((f) => (
+                <li
+                  key={f}
+                  className="flex items-center gap-2 text-sm text-muted-foreground"
+                  data-feature={f}
+                >
+                  <span className="size-4 shrink-0 rounded-full border border-dashed" />
+                  {FEATURE_NAMES[f]}
+                  {l.features.includes(f) && (
+                    <Badge variant="outline" className="font-normal">
+                      In your licence
+                    </Badge>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-pretty text-muted-foreground">
+              Not built yet. A licence that names them keeps them, and they switch on in the release that
+              ships them, with no new licence file.
             </p>
           </div>
           {l.source === "upload" && (

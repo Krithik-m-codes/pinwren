@@ -31,9 +31,9 @@ Licence** is locked and refused with `409 LICENSE_LOCKED`.
 Use the environment for anything you manage as code; use the dashboard for anything you want admins to change
 without a redeploy.
 
-<Callout type="warn" title="With Docker Compose">
-  `docker/compose.yml` forwards only the variables listed under its `environment:` key. To set anything else,
-  add it there or in an override file — see [Passing more settings](/docs/self-hosting#passing-more-settings).
+<Callout title="With Docker Compose">
+  Every variable in `docker/.env` reaches the app (`env_file` in `docker/compose.yml`, Docker Compose v2.24+)
+  — see [Passing more settings](/docs/self-hosting#passing-more-settings).
 </Callout>
 
 ## Client addresses
@@ -57,14 +57,31 @@ their own address. The details are under [Reverse proxy](/docs/self-hosting/reve
 - **Sign-up.** With `PINWREN_DISABLE_SIGNUP` unset, the first account can always be created and after that only
   people with a pending invitation can sign up. `PINWREN_DISABLE_SIGNUP=false` opens sign-up to anyone.
   `PINWREN_DISABLE_SIGNUP=true` behaves like unset: the first account and invited people can still sign up.
-- **Instance admins** (SMTP, storage, licence and other instance settings) come from exactly two places: the
-  addresses in `PINWREN_ADMIN_EMAILS`, or the account that claimed the one-time setup token at `/setup` — see
-  [First run](/docs/self-hosting#first-run). Signing up first does not make anyone an admin.
+- **Instance admins** (SMTP, security, licence and other instance settings) are the first account created on
+  the server, plus every address in `PINWREN_ADMIN_EMAILS` — see [First run](/docs/self-hosting#first-run).
+  Keep a new server private until that first account exists.
+
+## Sign in with Google or GitHub
+
+Both are optional and offered only when configured. Their secrets are read from the environment only, never
+stored in the database.
+
+1. Create an OAuth app: in Google Cloud (**APIs & Services › Credentials › OAuth client ID**, type "Web
+   application") or on GitHub (**Settings › Developer settings › OAuth Apps**).
+2. Register the callback URL: `PINWREN_URL/api/auth/callback/google` or `PINWREN_URL/api/auth/callback/github`.
+   **Settings › Security › Sign-in methods** shows both, ready to copy.
+3. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, or `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`, and
+   restart. Setting only one value of a pair stops the server with a configuration error.
+
+New accounts from Google or GitHub follow the same sign-up rules as a password sign-up (first account,
+invitations, `PINWREN_DISABLE_SIGNUP`). Passkeys and email sign-in links need no variables: they are switched in
+**Settings › Security**, and email links also need SMTP. Passkeys are bound to the host name in `PINWREN_URL`, so
+changing that host means everyone adds their passkeys again.
 
 ## Outbound requests
 
-Webhooks, Slack and Discord channels, webhook panel actions and the GitHub/GitLab base URL an admin enters are
-URLs typed by users, so Pinwren refuses to send requests to private and internal addresses: loopback, RFC 1918
+Webhooks, chat channels (Slack, Discord, Teams, Telegram, ntfy), webhook panel actions, the GitHub/GitLab base URL
+and the Jira site URL an admin enters are URLs typed by users, so Pinwren refuses to send requests to private and internal addresses: loopback, RFC 1918
 ranges, CGNAT, link-local and cloud metadata addresses, IPv6 unique-local and link-local, multicast,
 documentation and reserved ranges — including IPv6 forms that embed one of those IPv4 addresses. Redirects are
 never followed.

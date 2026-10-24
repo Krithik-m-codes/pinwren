@@ -19,6 +19,7 @@ import type { Project, SavedView } from "@/lib/api";
 import { MainNav, NavLinks } from "./main-nav";
 import { SidebarLists } from "./sidebar-lists";
 import { UserMenu } from "./user-menu";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 
 /**
  * The sidebar: static chrome (prerendered into the shell) with three session-dependent parts streamed
@@ -86,16 +87,19 @@ async function SidebarBrand() {
     getOrgBranding(viewer.me.orgId),
     getWorkspaceName(viewer.me.orgId),
   ]);
+  // The brand opens the workspace switcher (and "Create workspace").
   return (
-    <div className="flex items-center gap-2 px-1 py-1">
+    <WorkspaceSwitcher orgId={viewer.me.orgId}>
       <BrandMark logoUrl={branding.logoUrl} />
-      <div className="min-w-0">
+      <div className="min-w-0 text-left">
         <p className="truncate text-sm font-semibold" data-testid="product-name">
           {branding.productName ?? "Pinwren"}
         </p>
-        <p className="truncate text-xs text-muted-foreground">{workspace ?? "…"}</p>
+        <p className="truncate text-xs text-muted-foreground" data-testid="workspace-name">
+          {workspace ?? "…"}
+        </p>
       </div>
-    </div>
+    </WorkspaceSwitcher>
   );
 }
 

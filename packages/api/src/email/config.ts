@@ -16,6 +16,8 @@ type Stored = {
   user?: string | null;
   secure?: boolean | null;
   from?: string | null;
+  requireTls?: boolean | null;
+  allowSelfSigned?: boolean | null;
 };
 
 export type SmtpConfig = {
@@ -25,6 +27,10 @@ export type SmtpConfig = {
   password: string | undefined;
   secure: boolean;
   from: string;
+  /** STARTTLS is mandatory (nodemailer `requireTLS`). */
+  requireTls: boolean;
+  /** Accept an unverifiable certificate (nodemailer `tls.rejectUnauthorized: false`). */
+  allowSelfSigned: boolean;
 };
 
 export type EmailSettingsView = {
@@ -33,9 +39,20 @@ export type EmailSettingsView = {
   user: string | null;
   secure: boolean;
   from: string | null;
+  requireTls: boolean;
+  allowSelfSigned: boolean;
   passwordSet: boolean;
   /** Fields set by environment variables; the UI shows them read-only. */
-  locked: { host: boolean; port: boolean; user: boolean; password: boolean; secure: boolean; from: boolean };
+  locked: {
+    host: boolean;
+    port: boolean;
+    user: boolean;
+    password: boolean;
+    secure: boolean;
+    from: boolean;
+    requireTls: boolean;
+    allowSelfSigned: boolean;
+  };
   configured: boolean;
 };
 
@@ -53,21 +70,44 @@ function lockedFields() {
     password: e.SMTP_PASSWORD !== undefined,
     secure: e.SMTP_SECURE !== undefined,
     from: e.EMAIL_FROM !== undefined,
+    requireTls: e.SMTP_REQUIRE_TLS !== undefined,
+    allowSelfSigned: e.SMTP_TLS_REJECT_UNAUTHORIZED !== undefined,
   };
 }
 
-/** The effective SMTP configuration, or null when email is not set up (sends are then skipped). */
-export async function resolveSmtp(): Promise<SmtpConfig | null> {
+/** Env wins over the stored value; `SMTP_TLS_REJECT_UNAUTHORIZED=false` means "allow self-signed". */
+function tlsOptions(value: Stored): { requireTls: boolean; allowSelfSigned: boolean } {
   const e = env();
-  const { value, secret } = await readStored();
-  const host = e.SMTP_HOST ?? value.host ?? undefined;
-  const from = e.EMAIL_FROM ?? value.from ?? undefined;
+  const reject = e.SMTP_TLS_REJECT_UNAUTHORIZED;
+  return {
+    requireTls: e.SMTP_REQUIRE_TLS ?? value.requireTls ?? false,
+    allowSelfSigned: reject !== undefined ? !reject : (value.allowSelfSigned ?? false),
+  };
+}
+
+/**
+ * The effective SMTP configuration, or null when email is not set up (sends are then skipped). `draft`:
+ * unsaved form values (Settings › Email › Test) laid over the saved ones; env-locked fields still win, and
+ * an omitted password means the saved one.
+ */
+export async function resolveSmtp(draft?: EmailSettingsUpdate): Promise<SmtpConfig | null> {
+  const e = env();
+  const saved = await readStored();
+  const value: Stored = { ...saved.value };
+  if (draft) {
+    for (const k of ["host", "port", "user", "secure", "from", "requireTls", "allowSelfSigned"] as const) {
+      if (draft[k] !== undefined) (value as Record<string, unknown>)[k] = draft[k];
+    }
+  }
+  const host = e.SMTP_HOST ?? (value.host || undefined);
+  const from = e.EMAIL_FROM ?? (value.from || undefined);
   if (!host || !from) return null;
   const secure = e.SMTP_SECURE ?? value.secure ?? false;
   let password = e.SMTP_PASSWORD;
-  if (password === undefined && secret) {
+  if (password === undefined && draft?.password !== undefined) password = draft.password ?? undefined;
+  else if (password === undefined && saved.secret) {
     try {
-      password = decryptSecret(secret);
+      password = decryptSecret(saved.secret);
     } catch {
       console.warn("[pinwren] stored SMTP password cannot be decrypted (PINWREN_SECRET changed?)");
     }
@@ -75,11 +115,21 @@ export async function resolveSmtp(): Promise<SmtpConfig | null> {
   return {
     host,
     port: e.SMTP_PORT ?? value.port ?? (secure ? 465 : 587),
-    user: e.SMTP_USER ?? value.user ?? undefined,
+    user: e.SMTP_USER ?? (value.user || undefined),
     password,
     secure,
     from,
+    ...tlsOptions(value),
   };
+}
+
+/** A usable From header: `address@domain` or `Name <address@domain>` (one address, no line breaks). */
+export function isValidFrom(from: string): boolean {
+  const t = from.trim();
+  if (!t || t.length > 320 || /[\r\n]/.test(from)) return false;
+  const addr = /^[^\s@<>",;]+@[^\s@<>",;]+\.[^\s@<>",;]+$/;
+  const named = /^(?:"[^"\r\n]*"|[^<>"\r\n,;]+?)\s*<([^<>]+)>$/.exec(t);
+  return named ? addr.test(named[1] ?? "") : addr.test(t);
 }
 
 export async function getEmailSettings(): Promise<EmailSettingsView> {
@@ -92,6 +142,7 @@ export async function getEmailSettings(): Promise<EmailSettingsView> {
     user: e.SMTP_USER ?? value.user ?? null,
     secure: e.SMTP_SECURE ?? value.secure ?? false,
     from: e.EMAIL_FROM ?? value.from ?? null,
+    ...tlsOptions(value),
     passwordSet: e.SMTP_PASSWORD !== undefined || secret !== null,
     locked: lockedFields(),
     configured: effective !== null,
@@ -108,7 +159,7 @@ export async function updateEmailSettings(patch: EmailSettingsUpdate, userId: st
 
   const { value, secret } = await readStored();
   const next: Stored = { ...value };
-  for (const k of ["host", "port", "user", "secure", "from"] as const) {
+  for (const k of ["host", "port", "user", "secure", "from", "requireTls", "allowSelfSigned"] as const) {
     if (patch[k] !== undefined) (next as Record<string, unknown>)[k] = patch[k];
   }
   let nextSecret = secret;

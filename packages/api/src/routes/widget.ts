@@ -1,9 +1,12 @@
 import {
+  anchorBundle,
   ATTACHMENT_CONTENT_TYPES,
   isClosedStatus,
   isOriginAllowed,
   MAX_ATTACHMENT_BYTES,
+  MAX_REPORTER_TOKENS,
   normalizePageUrl,
+  PAGE_LINK_TOKEN_HEADER,
   parseCaptureConfig,
   parseWidgetBranding,
   parseWidgetConfig,
@@ -11,6 +14,8 @@ import {
   MAX_REPLAY_BYTES,
   REPLAY_CONTENT_TYPE,
   REPORTER_TOKEN_HEADER,
+  REPORTER_TOKENS_HEADER,
+  REVIEW_TOKEN_HEADER,
   urlPatternRegexSource,
   type WidgetFeedbackCreate,
   widgetCommentCreate,
@@ -30,18 +35,24 @@ import {
   reviewRound,
 } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { createMiddleware } from "hono/factory";
+import { z } from "zod";
 import { randomToken, safeEqualHex, sha256Hex } from "../crypto";
 import { env } from "../env";
 import { ApiError, notFound } from "../errors";
 import { emit } from "../events";
+import { publishDeleted } from "../realtime/publish";
 import { clientIp, family } from "../net";
 import { hasFeature } from "../license";
 import { consume, consumeAmount } from "../rate-limit";
+import { updateAnchor } from "../services/anchor";
 import { verifyIdentity } from "../services/identity";
+import { verifyPageLinkToken } from "../services/page-link";
+import { recordRejectedOrigin } from "../services/rejected-origins";
+import { findReviewLink } from "../services/review-links";
 import { decodeDataUrl, decodeImageDataUrl, EXTENSIONS, storage } from "../storage";
 
 const LAST_SEEN_INTERVAL_MS = 60_000;
@@ -49,16 +60,148 @@ const LAST_SEEN_INTERVAL_MS = 60_000;
 const URL_PATH_RE = "^[a-z][a-z0-9+.-]*://[^/?#]*([^?#]*)";
 
 type WidgetVars = { project: typeof project.$inferSelect; origin: string };
+type Project = typeof project.$inferSelect;
 
 const corsHeaders = (origin: string) => ({
   "access-control-allow-origin": origin,
-  "access-control-allow-methods": "GET, POST, PATCH, OPTIONS",
-  "access-control-allow-headers": `content-type, x-pinwren-key, ${REPORTER_TOKEN_HEADER}`,
+  "access-control-allow-methods": "GET, POST, PATCH, DELETE, OPTIONS",
+  "access-control-allow-headers": [
+    "content-type",
+    "x-pinwren-key",
+    REPORTER_TOKEN_HEADER,
+    REPORTER_TOKENS_HEADER,
+    PAGE_LINK_TOKEN_HEADER,
+    REVIEW_TOKEN_HEADER,
+  ].join(", "),
   "access-control-max-age": "600",
   vary: "Origin",
 });
 
-const inPrivacyMode = (p: typeof project.$inferSelect) => parseWidgetConfig(p.widgetConfig).privacyMode;
+const inPrivacyMode = (p: Project) => parseWidgetConfig(p.widgetConfig).privacyMode;
+
+/** Page URLs are grouped with the built-in ignored parameters plus the project's own (wave-5 §2). */
+const pageKey = (p: Project, url: string) =>
+  normalizePageUrl(url, parseWidgetConfig(p.widgetConfig).ignoredQueryParams);
+
+/** One pin as the widget lists it (`GET /w/feedback`, `/w/mine`, `/w/feedback/:id`). */
+const pinColumns = {
+  id: feedback.id,
+  number: feedback.number,
+  kind: feedback.kind,
+  status: feedback.status,
+  priority: feedback.priority,
+  title: feedback.title,
+  body: sql<string>`left(${feedback.body}, 500)`,
+  anchor: feedback.anchor,
+  createdAt: feedback.createdAt,
+  reporterName: sql<string | null>`${feedback.reporterGuest}->>'name'`,
+  reporterVerified: sql<boolean>`coalesce((${feedback.reporterGuest}->>'verified')::boolean, false)`,
+  pageUrl: sql<string | null>`(select pg.url from ${page} pg where pg.id = ${feedback.pageId})`,
+  replyCount: sql<number>`(select count(*)::int from ${comment} cm where cm.feedback_id = ${feedback.id} and cm.visibility = 'public')`,
+};
+
+/** A live item's public replies, oldest first. */
+async function publicReplies(p: Project, feedbackId: string) {
+  return getDb()
+    .select({
+      id: comment.id,
+      body: comment.body,
+      createdAt: comment.createdAt,
+      authorName: sql<
+        string | null
+      >`coalesce((select name from "user" u where u.id = ${comment.authorId}), ${comment.authorGuest}->>'name')`,
+      team: sql<boolean>`${comment.authorId} is not null`,
+      authorVerified: sql<boolean>`coalesce((${comment.authorGuest}->>'verified')::boolean, false)`,
+    })
+    .from(comment)
+    .innerJoin(feedback, eq(feedback.id, comment.feedbackId))
+    .where(
+      and(
+        eq(comment.feedbackId, feedbackId),
+        eq(feedback.projectId, p.id),
+        // A deleted (trashed) item's thread is gone from the page too.
+        isNull(feedback.deletedAt),
+        eq(comment.visibility, "public"),
+      ),
+    )
+    .orderBy(asc(comment.createdAt));
+}
+
+/** Reporter tokens from `x-pinwren-reporter-tokens`: well-formed, deduplicated, at most 50. */
+export function reporterTokensOf(header: string | undefined): string[] {
+  if (!header) return [];
+  const out = new Set<string>();
+  for (const raw of header.split(",")) {
+    const t = raw.trim();
+    if (/^[A-Za-z0-9_-]{16,128}$/.test(t)) out.add(t);
+    if (out.size >= MAX_REPORTER_TOKENS) break;
+  }
+  return [...out];
+}
+
+/**
+ * Which items are "on this page": the page the URL normalises to, or with a page scope (wave-4 contract §4)
+ * every page reported under the pattern or whose path matches it, so `/product/:id` groups all product
+ * pages. null = no page filter; "none" = nothing can match.
+ */
+async function pageFilter(
+  p: Project,
+  url: string | undefined,
+  urlPattern: string | undefined,
+): Promise<SQL | null | "none"> {
+  if (urlPattern) {
+    const re = urlPatternRegexSource(urlPattern);
+    if (!re) return "none";
+    const pages = await getDb()
+      .select({ id: page.id })
+      .from(page)
+      .where(
+        and(
+          eq(page.projectId, p.id),
+          sql`(${page.urlPattern} = ${urlPattern} or substring(${page.url} from ${URL_PATH_RE}) ~ ${re})`,
+        ),
+      )
+      .limit(1000);
+    if (!pages.length) return "none";
+    return inArray(
+      feedback.pageId,
+      pages.map((x) => x.id),
+    );
+  }
+  if (!url) return null;
+  let key: string;
+  try {
+    key = pageKey(p, url);
+  } catch {
+    return "none"; // not a URL
+  }
+  const [pg] = await getDb()
+    .select({ id: page.id })
+    .from(page)
+    .where(and(eq(page.projectId, p.id), eq(page.url, key)));
+  return pg ? eq(feedback.pageId, pg.id) : "none";
+}
+
+const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+
+/**
+ * Whether this request may read (and reply to) one item although the project keeps pins private: the visitor
+ * opened a signed page link for this item, or the reporter proves authorship with its token (wave-5 §3.3).
+ */
+async function privateAccess(
+  header: (name: string) => string | undefined,
+  p: Project,
+  feedbackId: string,
+): Promise<boolean> {
+  if (verifyPageLinkToken(header(PAGE_LINK_TOKEN_HEADER))?.feedbackId === feedbackId) return true;
+  const token = header(REPORTER_TOKEN_HEADER);
+  if (!token) return false;
+  const [f] = await getDb()
+    .select({ tokenHash: feedback.reporterTokenHash })
+    .from(feedback)
+    .where(and(eq(feedback.id, feedbackId), eq(feedback.projectId, p.id)));
+  return !!f?.tokenHash && safeEqualHex(sha256Hex(token), f.tokenHash);
+}
 
 /**
  * Largest valid report: replay (14 MB of base64) + screenshot (11 MB) + three attachments (7 MB each)
@@ -120,6 +263,9 @@ type StoredAsset = {
   bytes: number;
   name: string | null;
   meta: Record<string, unknown> | null;
+  /** Screenshot only (wave-5 §3.3): the reporter's vector shapes and the viewport it was taken in. */
+  annotations: WidgetFeedbackCreate["annotations"] | null;
+  capture: WidgetFeedbackCreate["capture"] | null;
 };
 
 /** The project's active review round, when it has exactly one (wave-4 contract §2). */
@@ -186,6 +332,8 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       .where(and(eq(project.publicKey, key), isNull(project.archivedAt)));
     if (!p) throw new ApiError(401, "INVALID_PROJECT_KEY", "Unknown project key");
     if (!origin || !isOriginAllowed(origin, p.allowedOrigins)) {
+      // Remembered for the Install tab ("Blocked a request from … — Allow"); throttled, never fails the request.
+      if (origin) await recordRejectedOrigin(p, origin);
       throw new ApiError(403, "ORIGIN_NOT_ALLOWED", "This site is not on the project's allowed origins");
     }
     c.set("project", p);
@@ -232,52 +380,11 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
     if (c.req.query("include") !== "closed") {
       where.push(inArray(feedback.status, ["open", "in_progress", "in_review"]));
     }
-    if (urlPattern) {
-      // Page scope (wave-4 contract §4): pins of every page reported under this pattern or whose path
-      // matches it, so `/product/:id` groups all product pages.
-      const re = urlPatternRegexSource(urlPattern);
-      if (!re) return c.json({ items: [] });
-      const pages = await getDb()
-        .select({ id: page.id })
-        .from(page)
-        .where(
-          and(
-            eq(page.projectId, p.id),
-            sql`(${page.urlPattern} = ${urlPattern} or substring(${page.url} from ${URL_PATH_RE}) ~ ${re})`,
-          ),
-        )
-        .limit(1000);
-      if (!pages.length) return c.json({ items: [] });
-      where.push(
-        inArray(
-          feedback.pageId,
-          pages.map((x) => x.id),
-        ),
-      );
-    } else if (url) {
-      const [pg] = await getDb()
-        .select({ id: page.id })
-        .from(page)
-        .where(and(eq(page.projectId, p.id), eq(page.url, normalizePageUrl(url))));
-      if (!pg) return c.json({ items: [] });
-      where.push(eq(feedback.pageId, pg.id));
-    }
+    const onPage = await pageFilter(p, url, urlPattern);
+    if (onPage === "none") return c.json({ items: [] });
+    if (onPage) where.push(onPage);
     const items = await getDb()
-      .select({
-        id: feedback.id,
-        number: feedback.number,
-        kind: feedback.kind,
-        status: feedback.status,
-        priority: feedback.priority,
-        title: feedback.title,
-        body: sql<string>`left(${feedback.body}, 500)`,
-        anchor: feedback.anchor,
-        createdAt: feedback.createdAt,
-        reporterName: sql<string | null>`${feedback.reporterGuest}->>'name'`,
-        reporterVerified: sql<boolean>`coalesce((${feedback.reporterGuest}->>'verified')::boolean, false)`,
-        pageUrl: sql<string | null>`(select pg.url from ${page} pg where pg.id = ${feedback.pageId})`,
-        replyCount: sql<number>`(select count(*)::int from ${comment} cm where cm.feedback_id = ${feedback.id} and cm.visibility = 'public')`,
-      })
+      .select(pinColumns)
       .from(feedback)
       .where(and(...where))
       .orderBy(desc(feedback.createdAt))
@@ -285,34 +392,91 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
     return c.json({ items });
   })
 
-  .get("/feedback/:id/comments", async (c) => {
+  /**
+   * The reporter's own items, whatever `publicRead` says (wave-5 §3.3): the widget sends the reporter tokens
+   * it holds for this project. Closed items are included, so "Mine" shows what the team resolved.
+   */
+  .get("/mine", async (c) => {
     const p = c.var.project;
-    if (!p.publicRead) throw notFound("Feedback");
+    const tokens = reporterTokensOf(c.req.header(REPORTER_TOKENS_HEADER));
+    if (!tokens.length) return c.json({ items: [] });
+    // Optional `url` / `urlPattern`: only this page's items, matched like `GET /w/feedback`.
+    const onPage = await pageFilter(p, c.req.query("url"), c.req.query("urlPattern"));
+    if (onPage === "none") return c.json({ items: [] });
     const items = await getDb()
-      .select({
-        id: comment.id,
-        body: comment.body,
-        createdAt: comment.createdAt,
-        authorName: sql<
-          string | null
-        >`coalesce((select name from "user" u where u.id = ${comment.authorId}), ${comment.authorGuest}->>'name')`,
-        team: sql<boolean>`${comment.authorId} is not null`,
-        authorVerified: sql<boolean>`coalesce((${comment.authorGuest}->>'verified')::boolean, false)`,
-      })
-      .from(comment)
-      .innerJoin(feedback, eq(feedback.id, comment.feedbackId))
+      .select(pinColumns)
+      .from(feedback)
       .where(
         and(
-          eq(comment.feedbackId, c.req.param("id")),
           eq(feedback.projectId, p.id),
-          // A deleted (trashed) item's thread is gone from the page too.
           isNull(feedback.deletedAt),
-          eq(comment.visibility, "public"),
+          inArray(
+            feedback.reporterTokenHash,
+            tokens.map((t) => sha256Hex(t)),
+          ),
+          onPage ?? undefined,
         ),
       )
-      .orderBy(asc(comment.createdAt));
+      .orderBy(desc(feedback.createdAt))
+      .limit(MAX_REPORTER_TOKENS);
     return c.json({ items });
   })
+
+  /**
+   * One item opened from a signed page link (`?pinwren=<id>&pwt=<token>`), with its public replies, even when
+   * the project keeps pins private. A missing, forged, expired or foreign token is a plain 404.
+   */
+  .get("/feedback/:id", async (c) => {
+    const p = c.var.project;
+    const id = c.req.param("id");
+    const claim = verifyPageLinkToken(c.req.header(PAGE_LINK_TOKEN_HEADER));
+    if (!isUuid(id) || claim?.feedbackId !== id) throw notFound("Feedback");
+    const [item] = await getDb()
+      .select(pinColumns)
+      .from(feedback)
+      .where(and(eq(feedback.id, id), eq(feedback.projectId, p.id), isNull(feedback.deletedAt)));
+    if (!item) throw notFound("Feedback");
+    return c.json({ item, replies: await publicReplies(p, id), scope: claim.scope });
+  })
+
+  .get("/feedback/:id/comments", async (c) => {
+    const p = c.var.project;
+    const id = c.req.param("id");
+    if (!isUuid(id)) throw notFound("Feedback");
+    if (!p.publicRead && !(await privateAccess((n) => c.req.header(n), p, id))) throw notFound("Feedback");
+    return c.json({ items: await publicReplies(p, id) });
+  })
+
+  /**
+   * Re-pin from the page (F-031): the widget holds a team-issued `repin` page link for this item and sends the
+   * anchor of the element the team member picked. The old anchor stays in the activity history.
+   */
+  .patch(
+    "/feedback/:id/anchor",
+    limitBody(MAX_SMALL_BODY),
+    zValidator("json", z.object({ anchor: anchorBundle })),
+    async (c) => {
+      const p = c.var.project;
+      const id = c.req.param("id");
+      const claim = verifyPageLinkToken(c.req.header(PAGE_LINK_TOKEN_HEADER));
+      if (claim?.feedbackId !== id || claim.scope !== "repin") {
+        throw new ApiError(403, "REPIN_NOT_ALLOWED", "This link doesn't allow moving the pin");
+      }
+      const [f] = await getDb()
+        .select({ id: feedback.id })
+        .from(feedback)
+        .where(and(eq(feedback.id, id), eq(feedback.projectId, p.id), isNull(feedback.deletedAt)));
+      if (!f) throw notFound("Feedback");
+      const out = await updateAnchor(
+        p.orgId,
+        f.id,
+        c.req.valid("json").anchor,
+        { kind: "guest", id: null },
+        "widget",
+      );
+      return c.json({ feedback: out });
+    },
+  )
 
   .post(
     "/feedback",
@@ -343,6 +507,8 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
         contentType: string;
         name: string | null;
         meta: Record<string, unknown> | null;
+        annotations?: StoredAsset["annotations"];
+        capture?: StoredAsset["capture"];
       }[] = [];
       if (input.screenshot) {
         try {
@@ -350,6 +516,8 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
             kind: "screenshot",
             name: null,
             meta: null,
+            annotations: input.annotations ?? null,
+            capture: input.capture ?? null,
             ...decodeImageDataUrl(input.screenshot),
           });
         } catch (err) {
@@ -405,7 +573,10 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
           "This project has received too many files this hour",
         );
       }
-      const pageUrl = normalizePageUrl(input.page.url);
+      const pageUrl = pageKey(p, input.page.url);
+      // A guest who came through a review link (wave-5 §3.5): the report records the link as its source.
+      // A revoked or expired link doesn't refuse the report; it just isn't attributed.
+      const via = await findReviewLink(p.id, c.req.header(REVIEW_TOKEN_HEADER));
 
       // Signed identity (wave-4 contract §4). The signature itself is never stored.
       let reporter: ReporterGuest | null = null;
@@ -461,6 +632,8 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
             bytes: f.bytes.length,
             name: f.name,
             meta: f.meta,
+            annotations: f.annotations ?? null,
+            capture: f.capture ?? null,
           });
         }
       } catch (err) {
@@ -484,6 +657,8 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
         bytes: a.bytes,
         name: a.name,
         meta: a.meta,
+        annotations: a.annotations,
+        capture: a.capture,
       }));
       let created: { id: string; number: number } | undefined;
       try {
@@ -495,7 +670,8 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
         ), f as (
           insert into ${feedback}
             (org_id, project_id, page_id, number, kind, title, body, priority, client_id,
-             anchor, environment, metadata, reporter_guest, reporter_token_hash, consent, round_id)
+             anchor, environment, metadata, reporter_guest, reporter_token_hash, consent, round_id,
+             review_link_id)
           select ${p.orgId}, ${p.id}, ${pageId ?? null}, counter.n, ${input.kind}::feedback_kind,
              ${input.title ?? null}, ${input.body}, ${input.priority ?? "none"}::priority, ${input.clientId},
              ${json(input.anchor)}::jsonb, ${json(input.environment)}::jsonb, ${json(input.metadata)}::jsonb,
@@ -507,7 +683,8 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
                   and r.project_id = ${p.id} and r.status = 'active'),
                (select (array_agg(r.id))[1] from ${reviewRound} r
                   where r.project_id = ${p.id} and r.status = 'active' having count(*) = 1)
-             )
+             ),
+             ${via?.id ?? null}::uuid
           from counter
           returning id, number
         ), d as (
@@ -515,13 +692,17 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
           select f.id, ${json(diag?.console)}::jsonb, ${json(diag?.network)}::jsonb
           from f where ${diag !== undefined}
         ), a as (
-          insert into ${feedbackAsset} (org_id, feedback_id, kind, storage_key, content_type, bytes, name, meta)
-          select ${p.orgId}, f.id, x.kind::asset_kind, x.storage_key, x.content_type, x.bytes, x.name, x.meta
+          insert into ${feedbackAsset}
+            (org_id, feedback_id, kind, storage_key, content_type, bytes, name, meta, annotations, capture)
+          select ${p.orgId}, f.id, x.kind::asset_kind, x.storage_key, x.content_type, x.bytes, x.name, x.meta,
+            x.annotations, x.capture
           from f, jsonb_to_recordset(${JSON.stringify(assetRows)}::jsonb)
-            as x(kind text, storage_key text, content_type text, bytes int, name text, meta jsonb)
+            as x(kind text, storage_key text, content_type text, bytes int, name text, meta jsonb,
+                 annotations jsonb, capture jsonb)
         ), act as (
           insert into ${activity} (org_id, feedback_id, actor_kind, type, data)
-          select ${p.orgId}, f.id, 'guest', 'created', '{"source":"widget"}'::jsonb from f
+          select ${p.orgId}, f.id, 'guest', 'created',
+            ${JSON.stringify(via ? { source: "widget", reviewLink: via.label } : { source: "widget" })}::jsonb from f
         )
         select id, number from f
       `);
@@ -607,6 +788,56 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
     },
   )
 
+  // --- Wave 5 (widget look and feel): delete from the sidebar ----------------------------------------
+  /**
+   * The reporter deletes their own feedback from the page, proven by the reporter token this browser got
+   * when it sent the item. It goes to the trash (an Admin can restore it), like a dashboard delete.
+   */
+  .delete("/feedback/:id", async (c) => {
+    const p = c.var.project;
+    if (parseWidgetConfig(p.widgetConfig).readOnly) {
+      throw new ApiError(403, "READ_ONLY", "This project is not accepting changes from the page");
+    }
+    const db = getDb();
+    const [f] = await db
+      .select({ id: feedback.id, tokenHash: feedback.reporterTokenHash })
+      .from(feedback)
+      .where(
+        and(eq(feedback.id, c.req.param("id")), eq(feedback.projectId, p.id), isNull(feedback.deletedAt)),
+      );
+    if (!f) throw notFound("Feedback");
+    const token = c.req.header(REPORTER_TOKEN_HEADER);
+    if (!token || !f.tokenHash || !safeEqualHex(sha256Hex(token), f.tokenHash)) {
+      throw new ApiError(403, "DELETE_NOT_ALLOWED", "Only the person who sent this feedback can delete it");
+    }
+    const trashed = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(feedback)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(feedback.id, f.id), isNull(feedback.deletedAt)))
+        .returning({ id: feedback.id });
+      if (!row) return false;
+      await tx.insert(activity).values({
+        orgId: p.orgId,
+        feedbackId: f.id,
+        actorKind: "guest",
+        type: "deleted",
+        data: { via: "reporter" },
+      });
+      return true;
+    });
+    if (trashed) {
+      emit({
+        type: "feedback.deleted",
+        orgId: p.orgId,
+        feedbackId: f.id,
+        actor: { kind: "guest", id: null },
+      });
+      publishDeleted(p.orgId, p.id, f.id);
+    }
+    return c.body(null, 204);
+  })
+
   .post(
     "/feedback/:id/comments",
     replyIntake,
@@ -614,7 +845,11 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
     zValidator("json", widgetCommentCreate),
     async (c) => {
       const p = c.var.project;
-      if (!p.publicRead) throw notFound("Feedback");
+      const id = c.req.param("id");
+      // Private pins: the reporter (token) or a signed page-link holder may still reply (wave-5 §3.3).
+      if (!isUuid(id) || (!p.publicRead && !(await privateAccess((n) => c.req.header(n), p, id)))) {
+        throw notFound("Feedback");
+      }
       if (parseWidgetConfig(p.widgetConfig).readOnly) {
         throw new ApiError(403, "READ_ONLY", "This project is not accepting replies from the page");
       }
@@ -622,9 +857,7 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       const [f] = await db
         .select({ id: feedback.id })
         .from(feedback)
-        .where(
-          and(eq(feedback.id, c.req.param("id")), eq(feedback.projectId, p.id), isNull(feedback.deletedAt)),
-        );
+        .where(and(eq(feedback.id, id), eq(feedback.projectId, p.id), isNull(feedback.deletedAt)));
       if (!f) throw notFound("Feedback");
       const body = c.req.valid("json");
       let authorGuest: ReporterGuest | null = null;

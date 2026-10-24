@@ -1,38 +1,33 @@
-import { setupClaim } from "@pinwren/core";
-import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { getAuth } from "../auth";
-import { ApiError, unauthorized } from "../errors";
-import { clientIp } from "../net";
-import { consume } from "../rate-limit";
-import { claimSetup, setupNeeded } from "../services/setup";
-
-/** Claim attempts per address and hour; the token is 256 random bits, this only keeps logs quiet. */
-const CLAIMS_PER_HOUR = 10;
+import { resolveSmtp } from "../email/config";
+import { env } from "../env";
+import { ApiError } from "../errors";
+import { hasAnyUser, signupOpen } from "../services/setup";
 
 /**
- * First-run setup (ADR 0021): whoever holds the token printed to the server log becomes the instance
- * admin. Needs a signed-in account but no organisation yet, so it sits outside the dashboard routes.
+ * Public first-run state for the sign-in screens (ADR 0021, amended: the BugPin model). No session.
+ * `needed`: no account exists yet, so the visitor creates the administrator account. `signupOpen`: a
+ * stranger may create an account (the "Create an account" link). `emailConfigured`: whether "Forgot
+ * password?" can send anything. `appUrl`: PINWREN_URL's origin, so a page opened on another address can
+ * say where the server expects to be reached.
  */
 export const setup = new Hono()
-  .get("/setup", async (c) => c.json({ needed: await setupNeeded() }))
+  .get("/setup", async (c) => {
+    const [anyone, open, smtp] = await Promise.all([hasAnyUser(), signupOpen(), resolveSmtp()]);
+    c.header("cache-control", "no-store");
+    return c.json({
+      needed: !anyone,
+      signupOpen: open,
+      emailConfigured: smtp !== null,
+      appUrl: new URL(env().PINWREN_URL).origin,
+    });
+  })
 
-  .post("/setup/claim", zValidator("json", setupClaim), async (c) => {
-    if (!(await consume(`setup:${clientIp(c)}`, CLAIMS_PER_HOUR, 3600))) {
-      throw new ApiError(429, "RATE_LIMITED", "Too many attempts — try again later");
-    }
-    const session = await getAuth().api.getSession({ headers: c.req.raw.headers });
-    if (!session) throw unauthorized();
-    const result = await claimSetup(session.user.id, c.req.valid("json").token);
-    if (result === "not_needed") {
-      throw new ApiError(409, "SETUP_DONE", "This instance already has an administrator");
-    }
-    if (result === "invalid") {
-      throw new ApiError(
-        403,
-        "INVALID_SETUP_TOKEN",
-        "That setup token is not valid — copy it from the server log",
-      );
-    }
-    return c.json({ instanceAdmin: true });
+  // The setup-token claim is gone: the first account is the administrator. Old links get a clear answer.
+  .post("/setup/claim", () => {
+    throw new ApiError(
+      410,
+      "SETUP_TOKEN_REMOVED",
+      "Setup tokens are gone: the first account on an instance is its administrator",
+    );
   });

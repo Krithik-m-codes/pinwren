@@ -1,3 +1,4 @@
+import { type Permission, roleCan } from "@pinwren/core";
 import { createMiddleware } from "hono/factory";
 import type { SessionVars } from "./context";
 import { ApiError } from "./errors";
@@ -39,6 +40,15 @@ export const VIEWER_ALLOWED_MUTATIONS: readonly { method: string; path: string; 
   { method: "POST", path: "/api/views", why: "personal saved views (sharing is refused)" },
   { method: "PATCH", path: "/api/views/:id", why: "personal saved views" },
   { method: "DELETE", path: "/api/views/:id", why: "personal saved views" },
+  // Wave 5 (docs/contracts/wave-5.md): personal state the owning areas add. Listed here up front so the
+  // builders never edit this list concurrently; `permissions.test.ts` lists the exemptions that exist.
+  { method: "POST", path: "/api/feedback/:id/watch", why: "follow an item (own subscription)" },
+  { method: "DELETE", path: "/api/feedback/:id/watch", why: "unfollow an item" },
+  { method: "POST", path: "/api/feedback/:id/page-link", why: "a signed link to read the item on its page" },
+  { method: "PATCH", path: "/api/me/preferences", why: "own digest / pause switches" },
+  { method: "PATCH", path: "/api/me/profile", why: "own name" },
+  { method: "POST", path: "/api/me/avatar", why: "own avatar" },
+  { method: "DELETE", path: "/api/me/avatar", why: "own avatar" },
   { method: "*", path: "/api/admin/*", why: "instance administration, checked separately" },
 ];
 
@@ -67,3 +77,15 @@ export const forbidViewerWrites = createMiddleware<{ Variables: SessionVars }>(a
   if (isReadOnlyRole(c.var.role) && !viewerMayCall(c.req.method, c.req.path)) throw readOnlyError();
   await next();
 });
+
+/**
+ * BugPin roles (wave-5 contract §2): Admin / Editor / Viewer over `member.role`. Put it in front of a route
+ * whose permission is narrower than "not a viewer", e.g. `requirePermission("feedback.delete")` (Admins only).
+ */
+export const requirePermission = (permission: Permission) =>
+  createMiddleware<{ Variables: SessionVars }>(async (c, next) => {
+    if (!roleCan(c.var.role, permission)) {
+      throw new ApiError(403, "FORBIDDEN_ROLE", "Your role doesn't allow this. Ask a workspace Admin.");
+    }
+    await next();
+  });

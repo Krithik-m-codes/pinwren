@@ -1,12 +1,14 @@
 import type { AnchorBundle } from "@pinwren/core";
 import { captureAnchor, resolveAnchor } from "./anchor";
-import { type Created, type Pin, WidgetApi } from "./api";
+import { type Access, type Created, type Pin, WidgetApi } from "./api";
+import type { Attachment } from "./attachments";
 import { loadChunk, preload } from "./chunks";
 import {
   type Branding,
   type CaptureCfg,
   DEFAULT_CONFIG,
   type FeedbackPayload,
+  mergeMetadata,
   readableOn,
   type WidgetConfig,
 } from "./config";
@@ -14,13 +16,16 @@ import { installDiagnostics, snapshotDiagnostics, uninstallDiagnostics } from ".
 import { focused, h, ICONS, icon, trapFocus } from "./dom";
 import { hasDraft } from "./drafts";
 import { environment, errText as errOr, uuid } from "./env";
+import { cleanPageUrl } from "./export";
+import { Fab } from "./fab";
+import type { AttachBox, FlowsModule } from "./flows";
 import { consentBlock, identityFields } from "./form";
 import { loadLocale, pickLocale, t, tn } from "./i18n";
 import { idbKV } from "./idb";
 import { PRIVACY_MASKS } from "./mask";
 import type { Panel, PanelModule, PanelRow } from "./panel";
 import { elementAt, type Pick, Picker } from "./picker";
-import { Outbox } from "./queue";
+import { HttpError, isRetryable, Outbox } from "./queue";
 import { type Box, isRegion, type PinPct, pinBox, placeCard, regionPin } from "./region";
 import type { Recorder, ReplayModule } from "./replay";
 import type { ReplayOffer, ReportModule } from "./report";
@@ -30,17 +35,22 @@ import { STYLES } from "./styles";
 import type { Mode, WidgetEvent } from "./types";
 import {
   ago,
-  avatar,
-  colorFor,
+  autosize,
   isClosed,
   isEditable,
-  KIND_LIST,
   type Kind,
+  kindChips,
   kindOf,
+  MARKER,
+  markerEl,
+  markerSpot,
+  markersShown,
+  paintMarker,
+  setMarkersShown,
   shortName,
   tag,
 } from "./ui";
-import { hiddenBy } from "./visibility";
+import { allowedByMode, hiddenBy } from "./visibility";
 
 export type { Mode, WidgetEvent };
 export type WidgetOptions = {
@@ -59,6 +69,12 @@ export type WidgetOptions = {
   urlPattern?: string | undefined;
   /** Privacy mode turns session replay off unless the host sets this. */
   allowReplayInPrivacyMode?: boolean | undefined;
+  /** Light or dark UI; "auto" (the default) follows the visitor's system. */
+  theme?: "light" | "dark" | "auto" | undefined;
+  /** `Pinwren.setMetadata` called before init (wave-5 §3.3). */
+  metadata?: Record<string, unknown> | null | undefined;
+  /** `Pinwren.show()` / `hide()` called before init: overrides the visibility mode. */
+  shown?: "show" | "hide" | null | undefined;
 };
 
 /** Highlight boxes for a quoted text range, re-measured every frame. */
@@ -88,9 +104,8 @@ type Selected = { range: Range; el: Element };
 /** Events the widget listens for on the host page's window and document. */
 type PageEventMap = WindowEventMap & DocumentEventMap;
 
-const PIN = 32; // marker size, px
 const SHEET = 640; // below this width cards become bottom sheets and the panel goes full screen
-const PANEL_W = 360;
+const PANEL_W = 400;
 const errText = (err: unknown) => errOr(err, t("genericError"));
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -105,12 +120,14 @@ export class PinwrenWidget {
   private ready = false;
   private destroyed = false;
   private pending: { mode?: Mode | undefined } | null = null;
+  /** The speed-dial launcher (fab.ts); `launcher` is its button, null when the launcher is hidden. */
+  private fab: Fab | null = null;
   private launcher: HTMLButtonElement | null = null;
-  private badge = h("span", { class: "count", hidden: true });
-  private menu: HTMLElement | null = null;
-  private menuAway: ((e: Event) => void) | null = null;
+  private get menu(): HTMLElement | null {
+    return this.fab?.menu ?? null;
+  }
   private card: Card | null = null;
-  private preview: { el: HTMLElement; p: Placed } | null = null;
+  private preview: { el: HTMLElement; ring: HTMLElement; p: Placed } | null = null;
   private previewTimer = 0;
   private panel: Panel | null = null;
   /** Bumped by every panel open/close request, so a slow chunk load can't reopen a panel closed meanwhile. */
@@ -124,8 +141,10 @@ export class PinwrenWidget {
   private selOffer: { el: HTMLElement; sel: Selected } | null = null;
   private placed: Placed[] = [];
   private orphans: Pin[] = [];
-  private showPins = true;
-  private showResolved = false;
+  /** The speed dial's eye, remembered per visitor and project. */
+  private showPins: boolean;
+  /** Resolved items stay on the page as muted check markers, and the sidebar counts them. */
+  private showResolved = true;
   private haveClosed = false;
   private loadSeq = 0;
   private picker: Picker | null = null;
@@ -147,20 +166,48 @@ export class PinwrenWidget {
     network: "failures",
     maskSelectors: [],
     replay: { enabled: false, seconds: 60 },
+    screenshotOnComment: false,
   };
   private outbox: Outbox<FeedbackPayload, Created> | null = null;
   private queued = 0;
   private draftWaiting = false;
+  /** Host context from `Pinwren.setMetadata`, merged into every report and comment (wave-5 §3.3). */
+  private metadata: Record<string, unknown> | null = null;
+  /**
+   * Visibility mode (F-012, wave-5 §2): a valid review link, `?<queryParam>` seen this session, and
+   * `Pinwren.show()` / `hide()`. While the mode hides the widget it makes no further requests.
+   */
+  private gate: { review: boolean; flagged: boolean; host: "show" | "hide" | null } = {
+    review: false,
+    flagged: false,
+    host: null,
+  };
+  /** Came through a valid review link (`?pinwren_review=`): reports carry it as their source, and need a name. */
+  private reviewGuest = false;
+  /** Below `visibility.minViewportWidth`. */
+  private narrow = false;
+  /** Pins weren't listed because the mode hid the widget; listed as soon as it shows. */
+  private skipped = false;
+  /** Page-link tokens of items opened from a signed link (`?pinwren=<id>&pwt=<token>`), by item id. */
+  private readonly links = new Map<string, string>();
+  /** Items opened from a signed link: shown even when the project keeps pins private. */
+  private readonly linked = new Map<string, Pin>();
+  /** Comments waiting in the outbox, by clientId: their optimistic pin gets its number when they go out. */
+  private readonly queuedPins = new Map<string, { pin: Pin; placed: Placed | null }>();
 
   constructor(private readonly opts: WidgetOptions) {
     this.api = new WidgetApi(opts.endpoint, opts.projectKey);
     this.assets = opts.assets ?? opts.endpoint;
     this.identity = opts.identity ?? {};
     this.urlPattern = opts.urlPattern;
+    this.metadata = opts.metadata ?? null;
+    this.gate.host = opts.shown ?? null;
     const shadow = this.host.attachShadow({ mode: "closed" });
     const style = document.createElement("style");
     style.textContent = STYLES;
     this.root = h("div", { class: "root" });
+    if (opts.theme === "light" || opts.theme === "dark") this.root.dataset.theme = opts.theme;
+    this.showPins = markersShown(opts.projectKey);
     shadow.append(style, this.root);
     // A hostile page stylesheet (`* { all: unset }`, `display: none` on unknown tags) must not reach us.
     this.host.style.cssText = "all:initial!important;display:block!important;position:static!important";
@@ -194,12 +241,16 @@ export class PinwrenWidget {
       return;
     }
     this.capture = loaded.capture;
-    installDiagnostics(loaded.capture);
+    // Only the widget's own calls (`<endpoint>/w/…`) stay out of the network log.
+    installDiagnostics(loaded.capture, this.opts.endpoint);
     this.cfg = loaded.widget;
     this.branding = loaded.branding;
     this.projectSlug = loaded.project.slug;
     this.root.lang = lang;
     this.publicRead = loaded.project.publicRead;
+    await this.initGate();
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- destroy() can run during the await above
+    if (this.destroyed) return;
     this.root.style.setProperty("--pinwren-accent", this.cfg.launcher.accent);
     const dialog = this.branding.dialogAccent;
     if (dialog) {
@@ -210,11 +261,8 @@ export class PinwrenWidget {
     const reposition = () => this.schedule();
     // Below `minViewportWidth` the widget is hidden, and comes back when the window grows again.
     const fit = () => {
-      const hide = hiddenBy(visibility, { hostname: "", width: innerWidth, forceShow }) === "viewport";
-      if (hide === this.suppressed) return;
-      this.suppressed = hide;
-      if (hide) this.close();
-      this.host.style.setProperty("display", hide ? "none" : "block", "important");
+      this.narrow = hiddenBy(visibility, { hostname: "", width: innerWidth, forceShow }) === "viewport";
+      this.applyVisibility();
     };
     fit();
     this.listen(window, "scroll", reposition, { passive: true, capture: true });
@@ -285,8 +333,12 @@ export class PinwrenWidget {
     this.ready = true;
     this.startReplay();
     this.emit("ready");
-    const deepLink = new URLSearchParams(location.search).get("pinwren");
-    if (deepLink) setTimeout(() => void this.focusPin(deepLink), 300);
+    const q = new URLSearchParams(location.search);
+    const deepLink = q.get("pinwren");
+    const linkToken = q.get("pwt");
+    // A signed link (dashboard "Open on page", reporter emails) opens the item even when pins are private.
+    if (deepLink && linkToken) void this.openLinked(deepLink, linkToken);
+    else if (deepLink) setTimeout(() => void this.focusPin(deepLink), 300);
     if (this.pending) {
       const { mode } = this.pending;
       this.pending = null;
@@ -320,6 +372,18 @@ export class PinwrenWidget {
       id: r.id || undefined,
       signature: r.id ? r.signature : undefined,
     };
+    this.applyVisibility(); // visibility mode "identified"
+  }
+
+  /** `Pinwren.show()` / `hide()`: override the visibility mode until the other one is called. */
+  setShown(shown: "show" | "hide") {
+    this.gate.host = shown;
+    if (this.cfg !== DEFAULT_CONFIG) this.applyVisibility();
+  }
+
+  /** `Pinwren.setMetadata` (validated by index.ts): context for every report and comment from now on. */
+  setMetadata(m: Record<string, unknown> | null) {
+    this.metadata = m;
   }
 
   /** Change the page scope (wave-4 §4); the pins on the page are re-listed under it. */
@@ -336,8 +400,13 @@ export class PinwrenWidget {
       return;
     }
     this.closeMenu();
+    // The screenshot taken with every comment needs SnapDOM: start fetching it while they write.
+    if ((mode === "comment" || mode === "page") && this.capture.screenshotOnComment)
+      preload(this.assets, "capture");
     if (mode === "comment") {
       if (this.canComment) this.startPicking();
+    } else if (mode === "page") {
+      if (this.canComment) this.openComposer(null);
     } else if (mode === "bug") {
       if (this.canBug) void this.startBugReport();
     } else if (mode === "panel") void this.openPanel();
@@ -465,96 +534,55 @@ export class PinwrenWidget {
   }
 
   private buildLauncher() {
-    const l = this.cfg.launcher;
-    if (l.hidden) return;
-    const [v, hz] = this.side();
-    // The server's English defaults follow the visitor's language; a custom text is shown as written.
-    const label = l.label === "Feedback" ? t("feedback") : l.label;
-    const tooltip = l.tooltip === "Give feedback" ? t("giveFeedback") : l.tooltip;
-    const name = tooltip ?? (l.shape === "pill" && label ? label : t("feedback"));
-    const b = h(
-      "button",
-      {
-        class: `launcher ${l.shape} ${v} ${hz}`,
-        "aria-label": name,
-        "aria-haspopup": "menu",
-        "aria-expanded": "false",
-        "data-tip": l.shape === "round" ? (tooltip ?? undefined) : undefined,
-        onclick: () => (this.menu ? this.closeMenu() : this.open()),
-        // Intent to open: fetch the small chunks now so the panel / report form appear without a wait.
-        onpointerenter: () => this.prefetch(),
-        onfocus: () => this.prefetch(),
+    this.fab = new Fab({
+      root: this.root,
+      host: this.host,
+      cfg: this.cfg,
+      poweredBy: !this.branding.hidePoweredBy,
+      press: () => (this.menu ? this.closeMenu() : this.open()),
+      prefetch: () => this.prefetch(),
+      opened: () => {
+        this.prefetch();
+        this.active("menu");
       },
-      h("span", { class: "li" }, icon(ICONS[l.icon === "pin" ? "logo" : l.icon])),
-      l.shape === "pill" && label ? h("span", { class: "ll" }, label) : null,
-      this.badge,
-    );
-    b.style.setProperty(v, `${l.offset.y}px`);
-    b.style.setProperty(hz, `${l.offset.x}px`);
-    this.launcher = b;
-    this.root.append(b);
+      closed: () => this.idle(),
+      actions: () => {
+        const listed = this.publicRead || this.rows().length > 0;
+        return {
+          markers: listed ? { shown: this.showPins, toggle: () => this.toggleMarkers() } : null,
+          annotate: this.canComment ? () => this.open("comment") : null,
+          page: this.canComment ? () => this.open("page") : null,
+          bug: this.canBug ? { draft: this.draftWaiting, run: () => this.open("bug") } : null,
+          sidebar: listed ? { open: this.openCount(), run: () => this.open("panel") } : null,
+          queued:
+            this.queued > 0
+              ? {
+                  n: this.queued,
+                  run: () => {
+                    this.closeMenu();
+                    void this.outbox?.flush(true);
+                  },
+                }
+              : null,
+        };
+      },
+    });
+    this.launcher = this.fab.button;
   }
 
   private openMenu() {
     if (this.menu) return;
     this.closeCard();
-    const l = this.cfg.launcher;
-    const [v, hz] = this.side();
-    const item = (svg: string, title: string, sub: string, key: string, onclick: () => void) =>
-      h(
-        "button",
-        { role: "menuitem", onclick },
-        h("span", { class: "ico" }, icon(svg)),
-        h("span", { class: "grow" }, title, h("small", {}, sub)),
-        key && this.cfg.shortcuts ? h("kbd", {}, key) : null,
-      );
-    const open = this.openCount();
-    const menu = h(
-      "div",
-      { class: `menu ${v}`, role: "menu", "aria-label": t("feedback") },
-      this.canComment &&
-        item(ICONS.comment, t("addComment"), t("addCommentSub"), "C", () => this.open("comment")),
-      this.canBug &&
-        item(ICONS.bug, t("reportBug"), this.draftWaiting ? t("draftSub") : t("reportBugSub"), "B", () =>
-          this.open("bug"),
-        ),
-      this.publicRead &&
-        item(ICONS.list, t("viewComments"), open ? t("openOnPage", { n: open }) : t("noneOpen"), "", () =>
-          this.open("panel"),
-        ),
-      this.publicRead &&
-        item(ICONS.eye, this.showPins ? t("hideComments") : t("showComments"), t("pinsOnPage"), "", () => {
-          this.showPins = !this.showPins;
-          this.closeMenu();
-          this.schedule();
-        }),
-      this.queued > 0 &&
-        item(ICONS.clock, tn("queued", this.queued), t("queuedSub"), "", () => {
-          this.closeMenu();
-          void this.outbox?.flush(true);
-        }),
-      !this.branding.hidePoweredBy && h("div", { class: "foot" }, t("poweredBy")),
-    );
-    menu.style.setProperty(v, `${(l.hidden ? 0 : 60) + l.offset.y}px`);
-    menu.style.setProperty(hz, `${l.offset.x}px`);
-    menu.addEventListener("keydown", (e) => {
-      const items = Array.from(menu.querySelectorAll<HTMLElement>("[role=menuitem]"));
-      const i = items.indexOf(e.composedPath()[0] as HTMLElement);
-      const d = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
-      if (!d) return;
-      e.preventDefault();
-      items[(i + d + items.length) % items.length]?.focus();
-    });
-    this.menu = menu;
-    this.root.append(menu);
-    this.launcher?.setAttribute("aria-expanded", "true");
-    menu.querySelector<HTMLElement>("[role=menuitem]")?.focus();
-    this.menuAway = (e: Event) => {
-      if (!e.composedPath().includes(this.host)) this.closeMenu();
-    };
-    document.addEventListener("pointerdown", this.menuAway, true);
-    this.prefetch();
-    this.active("menu");
+    this.fab?.open();
+  }
+
+  /** The speed dial's eye: markers on or off, remembered for this visitor. */
+  private toggleMarkers() {
+    this.showPins = !this.showPins;
+    setMarkersShown(this.opts.projectKey, this.showPins);
+    this.closeMenu();
+    if (!this.showPins) this.hidePreview();
+    this.schedule();
   }
 
   private prefetched = false;
@@ -566,17 +594,12 @@ export class PinwrenWidget {
   }
 
   private closeMenu() {
-    if (!this.menu) return;
-    // Keyboard users go back to the launcher (Esc, or an item that opens nothing focusable).
-    if (this.menu.contains(focused(this.root))) this.launcher?.focus({ preventScroll: true });
-    this.menu.remove();
-    this.menu = null;
-    if (this.menuAway) document.removeEventListener("pointerdown", this.menuAway, true);
-    this.launcher?.setAttribute("aria-expanded", "false");
-    this.idle();
+    this.fab?.close();
   }
 
   private toast(text: string) {
+    // One at a time: toasts share a spot, so a new one replaces the last instead of stacking on it.
+    for (const old of this.root.querySelectorAll(".toast")) old.remove();
     const t = h("div", { class: "toast", role: "status", "aria-live": "polite" }, text);
     this.root.append(t);
     setTimeout(() => t.remove(), 3200);
@@ -586,23 +609,28 @@ export class PinwrenWidget {
 
   private async loadPins() {
     const seq = ++this.loadSeq;
-    const withClosed = this.showResolved || this.panel?.filter === "resolved";
+    const withClosed = this.showResolved;
     let items: Pin[] = [];
-    if (this.publicRead) {
+    // Hidden by the visibility mode: no requests until the widget shows (applyVisibility lists them then).
+    this.skipped = !this.gateOpen;
+    if (this.publicRead && !this.skipped) {
       try {
-        items = (await this.api.pins(location.href, withClosed, this.urlPattern)).items;
+        items = (await this.api.pins(cleanPageUrl(location.href), withClosed, this.urlPattern)).items;
       } catch {
         // Pins are a nicety; failing to load them must never break the page.
         return;
       }
     }
+    // Private pins (wave-5 §3.3): the reporter's own items and items opened from a signed link still show.
+    if (!this.skipped) items = mergePins(items, await this.privatePins(withClosed));
     if (seq !== this.loadSeq || this.destroyed) return;
     this.haveClosed = withClosed;
     // Optimistic pins still waiting for the server stay put.
     const keep = this.placed.filter((p) => p.pin.id.startsWith("tmp:"));
     for (const p of this.placed) if (!keep.includes(p)) this.unplace(p);
     this.placed = keep;
-    this.orphans = [];
+    // Page-level comments still on their way (optimistic or queued) stay listed too.
+    this.orphans = this.orphans.filter((o) => o.id.startsWith("tmp:"));
     this.hidePreview();
     for (const pin of items) this.place(pin);
     this.schedule();
@@ -617,12 +645,8 @@ export class PinwrenWidget {
       return null;
     }
     const moved = found.confidence < 0.8;
-    const marker = h(
-      "button",
-      { class: `pin${moved ? " moved" : ""}`, style: `--c:${colorFor(pin.reporterName)}` },
-      avatar(pin.reporterName),
-      h("span", { class: "n" }),
-    );
+    const marker = markerEl(pin);
+    marker.classList.toggle("moved", moved);
     const area = isRegion(pin.anchor.pin) ? h("div", { class: `area${moved ? " moved" : ""}` }) : null;
     // A comment on selected text highlights the quote again — only while that text is still on the page.
     const tr = pin.anchor.textRange;
@@ -659,7 +683,7 @@ export class PinwrenWidget {
 
   private label(p: Placed) {
     const { pin } = p;
-    (p.marker.lastElementChild as HTMLElement).textContent = pin.number ? String(pin.number) : "…";
+    paintMarker(p.marker, pin);
     p.marker.setAttribute(
       "aria-label",
       t("pinLabel", {
@@ -732,9 +756,10 @@ export class PinwrenWidget {
       }
       if (!b) continue;
       if (p.area) box(p.area, b);
-      // The marker's tail points at the pin; for regions it sits on the top-right corner.
-      p.marker.style.left = `${b.left + b.width}px`;
-      p.marker.style.top = `${b.top - PIN}px`;
+      // Centred on the pin; for regions on the top-right corner.
+      const at = markerSpot(b);
+      p.marker.style.left = `${at.left}px`;
+      p.marker.style.top = `${at.top}px`;
     }
     if (this.draft) {
       const r = this.draft.el.getBoundingClientRect();
@@ -743,16 +768,19 @@ export class PinwrenWidget {
       const b = (q ? quoteEnd(q.range) : null) ?? pinBox(r, this.draft.pin);
       if (isRegion(this.draft.pin)) box(this.draft.node, b);
       else {
-        this.draft.node.style.left = `${b.left}px`;
-        this.draft.node.style.top = `${b.top - PIN}px`;
+        const at = markerSpot(b);
+        this.draft.node.style.left = `${at.left}px`;
+        this.draft.node.style.top = `${at.top}px`;
       }
     }
     if (this.card) this.position(this.card.el, this.card.target());
     if (this.selOffer) this.placeSelOffer();
     if (this.preview) {
       const t = this.targetOf(this.preview.p);
-      if (t) this.position(this.preview.el, t);
-      else this.hidePreview();
+      if (t) {
+        this.position(this.preview.el, t);
+        this.placeRing();
+      } else this.hidePreview();
     }
     this.picker?.refresh();
   }
@@ -782,10 +810,7 @@ export class PinwrenWidget {
   }
 
   private updateCount() {
-    const n = this.openCount();
-    this.badge.hidden = !n;
-    this.badge.textContent = n > 99 ? "99+" : String(n);
-    this.panel?.setCount(n);
+    this.fab?.setCount(this.openCount());
   }
 
   private hover(p: Placed, on: boolean) {
@@ -803,6 +828,7 @@ export class PinwrenWidget {
     }, 120);
   }
 
+  /** The hover card (kind, time, the first lines) and an outline around the marker's element. */
   private showPreview(p: Placed) {
     this.hidePreview();
     const { pin } = p;
@@ -816,26 +842,37 @@ export class PinwrenWidget {
         pin.number ? h("span", { class: "muted" }, `#${pin.number}`) : null,
         p.moved && h("span", { class: "chip warn" }, t("moved")),
         isClosed(pin.status) && h("span", { class: "chip ok" }, t("resolved")),
+        h("span", { class: "muted when" }, ago(pin.createdAt)),
       ),
       pin.title && h("b", { class: "title" }, pin.title),
       p.quote && h("p", { class: "quote" }, pin.anchor?.textRange?.quote ?? ""),
       h("p", { class: "text clamp" }, pin.body),
       h(
-        "div",
-        { class: "by" },
-        avatar(pin.reporterName),
-        h("span", {}, shortName(pin.reporterName)),
-        h("span", { class: "muted" }, `· ${ago(pin.createdAt)}`),
-        pin.replyCount > 0 && h("span", { class: "muted" }, `· ${tn("reply", pin.replyCount)}`),
+        "span",
+        { class: "muted" },
+        shortName(pin.reporterName),
+        pin.replyCount > 0 ? ` · ${tn("reply", pin.replyCount)}` : "",
       ),
     );
-    this.preview = { el, p };
-    this.root.append(el);
+    const ring = h("div", { class: "ring", style: `--c:${kindOf(pin.kind).color}`, "aria-hidden": "true" });
+    this.preview = { el, ring, p };
+    this.root.append(ring, el);
     this.position(el, this.targetOf(p));
+    this.placeRing();
+  }
+
+  /** Outline the anchored element of a point marker (regions and quotes are highlighted already). */
+  private placeRing() {
+    const pv = this.preview;
+    if (!pv) return;
+    const r = !pv.p.area && !pv.p.quote && pv.p.el.isConnected ? pv.p.el.getBoundingClientRect() : null;
+    pv.ring.hidden = !r || r.width + r.height === 0;
+    if (r) box(pv.ring, { left: r.left - 4, top: r.top - 4, width: r.width + 8, height: r.height + 8 });
   }
 
   private hidePreview() {
     this.preview?.el.remove();
+    this.preview?.ring.remove();
     this.preview = null;
   }
 
@@ -972,52 +1009,83 @@ export class PinwrenWidget {
     getSelection()?.removeAllRanges(); // our highlight takes over from the browser's
   }
 
+  /** `pick` null: a comment on the whole page (wave-5 §3.3) — no anchor and no marker; it lists as page-level. */
   private openComposer(
-    pick: Pick & { range?: Range },
-    restore?: { text: string; kind: Kind; error: string; clientId: string },
+    pick: (Pick & { range?: Range }) | null,
+    restore?: { text: string; kind: Kind; error: string; clientId: string; files?: Attachment[] },
   ) {
     this.stopPicking();
-    const anchor = captureAnchor(pick.el, pick.x, pick.y);
-    if (pick.region) anchor.pin = regionPin(pick.el.getBoundingClientRect(), pick.region);
-    if (pick.range) anchor.textRange = toTextRange(pick.el, pick.range);
-    const quote = pick.range ? { range: pick.range, hls: [] } : null;
-    const region = isRegion(anchor.pin);
+    const anchor = pick ? captureAnchor(pick.el, pick.x, pick.y) : undefined;
+    if (pick && anchor) {
+      if (pick.region) anchor.pin = regionPin(pick.el.getBoundingClientRect(), pick.region);
+      if (pick.range) anchor.textRange = toTextRange(pick.el, pick.range);
+    }
+    const quote = pick?.range ? { range: pick.range, hls: [] } : null;
+    const region = !!anchor && isRegion(anchor.pin);
     const clientId = restore?.clientId ?? uuid();
-    let kind: Kind = restore?.kind ?? "comment";
-
-    const chips = KIND_LIST.map((k) =>
-      h(
-        "button",
-        {
-          role: "radio",
-          "aria-checked": String(k === kind),
-          style: `--k:${kindOf(k).color}`,
-          onclick: () => {
-            kind = k;
-            for (const [i, c] of chips.entries()) c.setAttribute("aria-checked", String(KIND_LIST[i] === k));
-            text.focus();
-          },
-        },
-        kindOf(k).label,
-      ),
-    );
+    const chips = kindChips(restore?.kind ?? null, () => text.focus());
     const text = h("textarea", {
-      placeholder: quote
-        ? t("selectionPlaceholder")
-        : region
-          ? t("regionPlaceholder")
-          : t("commentPlaceholder"),
+      placeholder: !anchor
+        ? t("pagePlaceholder")
+        : quote
+          ? t("selectionPlaceholder")
+          : region
+            ? t("regionPlaceholder")
+            : t("commentPlaceholder"),
       "aria-label": t("yourComment"),
       maxlength: 10000,
     });
     text.value = restore?.text ?? "";
+    autosize(text);
 
-    const ident = identityFields(this.identity);
+    const ident = identityFields(this.identity, { requireName: this.reviewGuest });
     const consent = consentBlock(this.cfg.consent, this.opts.projectKey);
 
     const error = h("p", { class: "err", role: "alert" }, restore?.error ?? "");
+    // Attachments (wave-5 §3.3): the picker is native (a file dialog); reading and the chips live in widget-flows.js.
+    let files: AttachBox | null = null;
+    const filesSlot = h("div", {});
+    const mountFiles = async (list: File[], initial?: Attachment[]) => {
+      const m = await this.flowsMod();
+      if (!m) return;
+      files ??= m.attachBox(
+        this.root,
+        (msg) => {
+          error.textContent = msg;
+        },
+        initial,
+      );
+      filesSlot.replaceChildren(files.el);
+      if (list.length) await files.add(list);
+      this.schedule();
+    };
+    const input = h("input", {
+      type: "file",
+      multiple: true,
+      hidden: true,
+      accept: "image/png,image/jpeg,image/webp,image/gif,application/pdf",
+    });
+    input.addEventListener("change", () => {
+      const list = Array.from(input.files ?? []);
+      input.value = "";
+      if (list.length) void mountFiles(list);
+    });
+    const attach = h(
+      "button",
+      {
+        class: "ib",
+        type: "button",
+        "aria-label": t("attachFiles"),
+        title: t("attachFiles"),
+        onclick: () => input.click(),
+      },
+      icon(ICONS.clip),
+    );
+    if (restore?.files?.length) void mountFiles([], restore.files);
     const send = h("button", { class: "btn primary" }, consent.need ? t("agreeSend") : t("send"));
     const mac = /Mac|iPhone|iPad/.test(navigator.userAgent);
+    text.setAttribute("aria-keyshortcuts", mac ? "Meta+Enter" : "Control+Enter");
+    send.disabled = !text.value.trim();
     let warned = false;
 
     const submit = () => {
@@ -1029,19 +1097,25 @@ export class PinwrenWidget {
       }
       const bad = ident.invalid();
       if (bad) {
-        error.textContent = t("badEmail");
-        bad.focus();
+        error.textContent = bad.message;
+        bad.el.focus();
         return;
       }
       consent.accept();
-      void this.submitComment(pick, anchor, kind, body, ident.read() ?? {}, clientId, consent.record());
+      void this.submitComment(
+        pick,
+        anchor,
+        chips.value(),
+        body,
+        ident.read() ?? {},
+        clientId,
+        consent.record(),
+        files?.list() ?? [],
+      );
     };
     send.addEventListener("click", submit);
     text.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        submit();
-      } else if (e.key === "Escape" && text.value.trim() && !warned) {
+      if (e.key === "Escape" && text.value.trim() && !warned) {
         e.preventDefault();
         warned = true;
         error.textContent = t("escAgain");
@@ -1050,35 +1124,45 @@ export class PinwrenWidget {
     text.addEventListener("input", () => {
       warned = false;
       error.textContent = "";
+      send.disabled = !text.value.trim();
     });
 
     const el = h(
       "div",
       { class: "card composer", role: "dialog", "aria-label": t("newComment") },
-      h("div", { class: "kinds", role: "radiogroup", "aria-label": t("type") }, ...chips),
-      anchor.textRange &&
+      chips.el,
+      anchor?.textRange &&
         h("blockquote", { class: "quote", "aria-label": t("selectedText") }, anchor.textRange.quote),
       text,
+      h("span", { class: "muted hintl", "aria-hidden": "true" }, mac ? t("sendHintMac") : t("sendHint")),
+      filesSlot,
       ...ident.els,
       consent.el,
       error,
       h(
         "div",
         { class: "foot" },
-        h("span", { class: "muted grow" }, mac ? t("sendHintMac") : t("sendHint")),
+        attach,
+        input,
+        h("span", { class: "grow" }),
         h("button", { class: "btn ghost", onclick: () => this.closeCard() }, t("cancel")),
         send,
       ),
     );
+    // "Ctrl+Enter to send" holds in every field of the card (name, email), not just the comment.
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        submit();
+      }
+    });
 
-    const node = region
-      ? h("div", { class: "area draft" })
-      : h("div", { class: "pin draft", "aria-hidden": "true" }, h("span", { class: "av" }, icon(ICONS.plus)));
     this.showCard({
       el,
       kind: "composer",
-      dirty: () => !!text.value.trim(),
+      dirty: () => !!text.value.trim() || !!files?.list().length,
       target: () => {
+        if (!pick || !anchor) return null; // page-level: the card sits at the side
         const q = quote && union(textRects(quote.range, 200));
         const end = quote && quoteEnd(quote.range);
         if (q && end) return union([q, withMarker(end, false)]);
@@ -1086,20 +1170,26 @@ export class PinwrenWidget {
         return withMarker(pinBox(r, anchor.pin), region);
       },
     });
-    this.draft = { el: pick.el, pin: anchor.pin, node, quote };
-    this.root.append(node);
+    if (pick && anchor) {
+      const node = region
+        ? h("div", { class: "area draft" })
+        : h("div", { class: "pin draft", "aria-hidden": "true" }, icon(ICONS.plus));
+      this.draft = { el: pick.el, pin: anchor.pin, node, quote };
+      this.root.append(node);
+    }
     this.frame();
     text.focus();
   }
 
   private async submitComment(
-    pick: Pick & { range?: Range },
-    anchor: AnchorBundle,
+    pick: (Pick & { range?: Range }) | null,
+    anchor: AnchorBundle | undefined,
     kind: Kind,
     body: string,
     reporter: NonNullable<FeedbackPayload["reporter"]>,
     clientId: string,
     consent: FeedbackPayload["consent"],
+    files: Attachment[] = [],
   ) {
     // Optimistic: the pin appears now and gets its number when the server answers.
     const pin: Pin = {
@@ -1108,53 +1198,94 @@ export class PinwrenWidget {
       kind,
       status: "open",
       body: body.slice(0, 500),
-      anchor,
+      anchor: anchor ?? null,
       createdAt: new Date().toISOString(),
       reporterName: reporter.name ?? null,
       replyCount: 0,
+      pageUrl: cleanPageUrl(location.href),
     };
     this.closeCard();
     const placed = this.place(pin);
     placed?.marker.classList.add("pending");
     this.busy = true;
     this.schedule();
+    this.updateCount();
+    this.renderList();
+    // "Screenshot with every comment": the page as the commenter saw it, for Page Review. It never holds the
+    // comment up for long — past the timeout (or on any failure) the comment goes without it.
+    const shot = this.capture.screenshotOnComment
+      ? await loadChunk<FlowsModule>(this.assets, "flows")
+          .then((m) =>
+            m.commentShot(
+              this.assets,
+              this.cfg.privacyMode
+                ? [...this.capture.maskSelectors, ...PRIVACY_MASKS]
+                : this.capture.maskSelectors,
+            ),
+          )
+          .catch(() => null)
+      : null;
+    const payload: FeedbackPayload = {
+      clientId,
+      kind,
+      body,
+      page: {
+        url: cleanPageUrl(location.href),
+        title: document.title.slice(0, 300),
+        ...(this.urlPattern ? { urlPattern: this.urlPattern } : {}),
+      },
+      ...(anchor ? { anchor } : {}),
+      environment: environment(this.cfg.privacyMode),
+      reporter: reporter.name || reporter.email || reporter.externalId ? reporter : undefined,
+      diagnostics: kind === "bug" ? snapshotDiagnostics() : undefined,
+      consent,
+      metadata: mergeMetadata(this.metadata, undefined),
+      ...(shot ?? {}),
+      attachments: files.length
+        ? (files.map((f) => ({
+            name: f.name,
+            contentType: f.contentType,
+            dataUrl: f.dataUrl,
+          })) as FeedbackPayload["attachments"])
+        : undefined,
+    };
     try {
-      const { feedback } = await this.api.submit({
-        clientId,
-        kind,
-        body,
-        page: {
-          url: location.href,
-          title: document.title.slice(0, 300),
-          ...(this.urlPattern ? { urlPattern: this.urlPattern } : {}),
-        },
-        anchor,
-        environment: environment(this.cfg.privacyMode),
-        reporter: reporter.name || reporter.email || reporter.externalId ? reporter : undefined,
-        diagnostics: kind === "bug" ? snapshotDiagnostics() : undefined,
-        consent,
-      });
-      pin.id = feedback.id;
-      pin.number = feedback.number;
-      store.addMine(this.opts.projectKey, { id: feedback.id, token: feedback.reporterToken });
-      if (placed) {
-        placed.marker.classList.remove("pending");
-        this.label(placed);
-      }
+      const { feedback } = await this.api.submit(payload);
+      this.confirmPin(pin, placed, feedback);
       this.toast(t("sent", { n: feedback.number }));
       this.emit("submit", { id: feedback.id, number: feedback.number, kind });
     } catch (err) {
+      if (isRetryable(err) && this.outbox) {
+        // Offline or the server is struggling: the comment waits in the outbox (same clientId, so a late
+        // success isn't doubled) and goes out by itself; its pin stays, marked as waiting.
+        await this.outbox.add(clientId, payload);
+        this.queuedPins.set(clientId, { pin, placed });
+        placed?.marker.classList.add("queued");
+        this.toast(t("commentQueued"));
+        return;
+      }
       if (placed) this.unplace(placed);
       else this.orphans = this.orphans.filter((o) => o !== pin);
       this.emit("error", { message: errText(err) });
-      if (!this.destroyed && pick.el.isConnected)
-        this.openComposer(pick, { text: body, kind, error: errText(err), clientId });
+      if (!this.destroyed && (!pick || pick.el.isConnected))
+        this.openComposer(pick, { text: body, kind, error: errText(err), clientId, files });
       else this.toast(errText(err));
     } finally {
       this.busy = false;
       this.updateCount();
       this.renderList();
       this.idle();
+    }
+  }
+
+  /** The server took the comment: the optimistic pin gets its id and number, and this browser its token. */
+  private confirmPin(pin: Pin, placed: Placed | null, feedback: Created["feedback"]) {
+    pin.id = feedback.id;
+    pin.number = feedback.number;
+    store.addMine(this.opts.projectKey, { id: feedback.id, token: feedback.reporterToken });
+    if (placed) {
+      placed.marker.classList.remove("pending", "queued");
+      this.label(placed);
     }
   }
 
@@ -1185,7 +1316,12 @@ export class PinwrenWidget {
         projectKey: this.opts.projectKey,
         projectSlug: this.projectSlug,
         identity: () => this.identity,
-        api: this.api,
+        // Private items: replies are read and written with this browser's reporter token or the page link.
+        api: {
+          replies: (id) => this.api.replies(id, this.access(id)),
+          reply: (id, text, author) => this.api.reply(id, text, author, this.access(id)),
+          setStatus: (id, status, token) => this.api.setStatus(id, status, token),
+        },
         toast: (text) => this.toast(text),
         error: (message) => this.emit("error", { message }),
         close: () => this.closeCard(),
@@ -1245,26 +1381,17 @@ export class PinwrenWidget {
     if (want !== this.panelWant || this.destroyed || this.panel) return;
     this.panel = new mod.Panel({
       root: this.root,
+      cfg: this.cfg,
+      projectKey: this.opts.projectKey,
+      api: this.api,
       rows: () => this.rows(),
-      mine: () => new Set(store.mine(this.opts.projectKey).map((m) => m.id)),
       canComment: this.canComment,
       shortcuts: this.cfg.shortcuts,
-      showResolved: () => this.showResolved,
-      toggleResolved: () => this.toggleResolved(),
-      needClosed: () => {
-        if (!this.haveClosed) void this.loadPins();
-      },
-      openItem: (row) => {
-        const p = this.placed.find((x) => x.pin === row.pin);
-        if (p) {
-          p.el.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "center" });
-          setTimeout(() => void this.openThread(p.pin, p), reduced() ? 0 : 350);
-        } else void this.openThread(row.pin, null);
-      },
-      comment: () => this.open("comment"),
+      openItem: (row) => this.flashItem(row),
       close: () => this.closePanel(),
       pageUrl: () => location.href,
       toast: (text) => this.toast(text),
+      refresh: () => void this.loadPins(),
     });
     this.updateCount();
     this.schedule();
@@ -1290,11 +1417,19 @@ export class PinwrenWidget {
     this.idle();
   }
 
-  private toggleResolved() {
-    this.showResolved = !this.showResolved;
-    this.panel?.syncResolved();
-    if (this.showResolved && !this.haveClosed) void this.loadPins();
-    this.schedule();
+  /** A sidebar card was picked: bring its marker into view, flash it and open the thread. */
+  private flashItem(row: PanelRow) {
+    const p = this.placed.find((x) => x.pin.id === row.pin.id);
+    if (!p) {
+      void this.openThread(row.pin, null);
+      return;
+    }
+    p.el.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "center" });
+    p.marker.classList.remove("pulse");
+    p.marker.getBoundingClientRect(); // a reflow restarts the animation
+    p.marker.classList.add("pulse");
+    setTimeout(() => p.marker.classList.remove("pulse"), 3200);
+    setTimeout(() => void this.openThread(p.pin, p), reduced() ? 0 : 350);
   }
 
   private renderList() {
@@ -1309,10 +1444,18 @@ export class PinwrenWidget {
       kv: idbKV("outbox"),
       project,
       send: (p) => this.api.submitOnce(p),
-      onSent: (_item, { feedback }) => {
+      onSent: (item, { feedback }) => {
         store.addMine(project, { id: feedback.id, token: feedback.reporterToken });
+        // A queued comment (wave-5 §3.3): its waiting pin gets its number.
+        const q = this.queuedPins.get(item.clientId);
+        if (q) {
+          this.queuedPins.delete(item.clientId);
+          this.confirmPin(q.pin, q.placed, feedback);
+          this.updateCount();
+          this.renderList();
+        }
         this.toast(t("queuedSentToast", { n: feedback.number }));
-        this.emit("submit", { id: feedback.id, number: feedback.number, kind: "bug" });
+        this.emit("submit", { id: feedback.id, number: feedback.number, kind: item.payload.kind });
       },
       onDropped: (_item, err) => this.emit("error", { message: errText(err) }),
       onChange: (n) => {
@@ -1367,7 +1510,9 @@ export class PinwrenWidget {
       branding: this.branding,
       opener: opener && opener !== document.body ? opener : this.launcher,
       identity: this.identity,
+      reviewGuest: this.reviewGuest,
       urlPattern: this.urlPattern,
+      metadata: () => this.metadata,
       replay,
       submit: (p) => this.api.submitOnce(p),
       queue: async (id, p) => {
@@ -1377,6 +1522,8 @@ export class PinwrenWidget {
       sent: (id, number, token) => {
         store.addMine(this.opts.projectKey, { id, token });
         this.emit("submit", { id, number, kind: "bug" });
+        // The report is the reporter's own item now: the sidebar and the badge count it (private pins too).
+        void this.loadPins();
       },
       error: (message) => this.emit("error", { message }),
       done: () => {
@@ -1393,6 +1540,131 @@ export class PinwrenWidget {
     } catch (err) {
       console.warn("[pinwren]", err);
       report.close(false);
+    }
+  }
+
+  // --- Visibility mode, private pins, signed links, re-pin (wave-5 §2, §3.3) ---------------------------
+
+  /** Whether the visibility mode lets the widget show (`forceShow` overrides every rule). */
+  private get gateOpen(): boolean {
+    if (this.opts.forceShow === true) return true;
+    return allowedByMode(this.cfg.visibility, {
+      ...this.gate,
+      url: location.href,
+      identified: !!(this.identity.id || this.identity.email),
+    });
+  }
+
+  /** `?<queryParam>` and a review link (`?pinwren_review=`), remembered for this browser session. */
+  private async initGate() {
+    const v = this.cfg.visibility;
+    const key = this.opts.projectKey;
+    const q = new URLSearchParams(location.search);
+    if (q.has(v.queryParam)) session.set(`pinwren:qp:${key}`, "1");
+    this.gate.flagged = session.get(`pinwren:qp:${key}`) === "1";
+    // Checked in every mode, "always" included: a valid link also marks the guest's reports with its source.
+    const token = q.get("pinwren_review") ?? session.get(`pinwren:review:${key}`);
+    if (!token || !/^[\w-]{16,200}$/.test(token)) return;
+    const valid = await this.api.reviewLink(token);
+    this.gate.review = valid;
+    this.reviewGuest = valid;
+    this.api.reviewToken = valid ? token : null;
+    if (valid) session.set(`pinwren:review:${key}`, token);
+    else session.del(`pinwren:review:${key}`);
+  }
+
+  /** Show or hide the whole widget for the viewport rule and the visibility mode. */
+  private applyVisibility() {
+    const hide = this.narrow || !this.gateOpen;
+    if (hide !== this.suppressed) {
+      this.suppressed = hide;
+      if (hide) this.close();
+      this.host.style.setProperty("display", hide ? "none" : "block", "important");
+    }
+    if (!hide && this.skipped && this.ready) void this.loadPins();
+  }
+
+  /** What opens a private item for this browser: its reporter token, or the signed link it came from. */
+  private access(id: string): Access {
+    return {
+      reporter: store.mine(this.opts.projectKey).find((m) => m.id === id)?.token,
+      link: this.links.get(id),
+    };
+  }
+
+  /** This browser's own items (when pins are private, matched to this page by the server) and linked items. */
+  private async privatePins(withClosed: boolean): Promise<Pin[]> {
+    const here = cleanPageUrl(location.href);
+    // A linked item belongs to the page it was opened on; after SPA navigation it stays behind.
+    const out = [...this.linked.values()].filter((p) => !p.pageUrl || samePath(p.pageUrl, here));
+    if (!this.publicRead) {
+      const tokens = store.mine(this.opts.projectKey).flatMap((m) => (m.token ? [m.token] : []));
+      if (tokens.length) {
+        try {
+          out.push(...(await this.api.mine(tokens, here, this.urlPattern)).items);
+        } catch {
+          // Like the public list, a nicety: the page keeps working without it.
+        }
+      }
+    }
+    return out.filter((p) => withClosed || !isClosed(p.status));
+  }
+
+  /** `?pinwren=<id>&pwt=<token>`: open the item (and its thread) even when pins are private; a re-pin link starts re-pin mode. */
+  private async openLinked(id: string, token: string) {
+    let res: Awaited<ReturnType<WidgetApi["linked"]>>;
+    try {
+      res = await this.api.linked(id, token);
+    } catch (err) {
+      // A forged, expired or foreign link is a 404: say so instead of a generic error.
+      if (!this.destroyed)
+        this.toast(err instanceof HttpError && err.status === 404 ? t("linkExpired") : errText(err));
+      return;
+    }
+    if (this.destroyed) return;
+    this.links.set(id, token);
+    this.linked.set(id, res.item);
+    // The link is the invitation: it shows the widget whatever the visibility mode says.
+    this.gate.review = true;
+    this.applyVisibility();
+    await this.loadPins();
+    if (res.scope === "repin") void this.repin(res.item, token);
+    else setTimeout(() => void this.focusPin(id), 300);
+  }
+
+  /** Re-pin mode (F-031): the team member picks the right spot; the new anchor replaces the old one. */
+  private async repin(pin: Pin, token: string) {
+    const m = await this.flowsMod();
+    if (!m || this.destroyed) return;
+    this.close();
+    m.startRepin({
+      host: this.host,
+      root: this.root,
+      number: pin.number,
+      anchorOf: (pick) => {
+        const a = captureAnchor(pick.el, pick.x, pick.y);
+        if (pick.region) a.pin = regionPin(pick.el.getBoundingClientRect(), pick.region);
+        return a;
+      },
+      save: async (anchor) => {
+        await this.api.repin(pin.id, anchor, token);
+        pin.anchor = anchor;
+      },
+      toast: (text) => this.toast(text),
+      done: (moved) => {
+        if (moved) void this.loadPins().then(() => this.focusPin(pin.id));
+      },
+    });
+  }
+
+  /** The lazy widget-flows.js chunk (composer attachments, re-pin), or null after saying it didn't load. */
+  private async flowsMod(): Promise<FlowsModule | null> {
+    try {
+      return await loadChunk<FlowsModule>(this.assets, "flows");
+    } catch (err) {
+      console.warn("[pinwren]", err);
+      if (!this.destroyed) this.toast(t("loadFailed"));
+      return null;
     }
   }
 
@@ -1437,12 +1709,54 @@ export class PinwrenWidget {
   }
 }
 
-/** The box a card must not cover: the region (or point) plus the marker drawn above it. */
+/** The box a card must not cover: the marker, plus the region it sits on. */
 function withMarker(b: Box, region: boolean): Box {
-  return region
-    ? { left: b.left, top: b.top - PIN, width: b.width + PIN, height: b.height + PIN }
-    : { left: b.left, top: b.top - PIN, width: 0, height: PIN };
+  const at = markerSpot(b);
+  const m = { left: at.left, top: at.top, width: MARKER, height: MARKER };
+  return region ? (union([b, m]) ?? m) : m;
 }
+
+/** `a` plus the items of `b` it doesn't have yet (by id). */
+function mergePins(a: readonly Pin[], b: readonly Pin[]): Pin[] {
+  const seen = new Set(a.map((p) => p.id));
+  return [...a, ...b.filter((p) => !seen.has(p.id) && seen.add(p.id))];
+}
+
+/** Same origin and path (trailing slash aside): the page a linked item was left on. */
+function samePath(a: string, b: string): boolean {
+  try {
+    const x = new URL(a);
+    const y = new URL(b);
+    return x.origin === y.origin && x.pathname.replace(/\/+$/, "") === y.pathname.replace(/\/+$/, "");
+  } catch {
+    return false;
+  }
+}
+
+/** sessionStorage, which can be missing or throw (private mode, blocked storage): best effort only. */
+const session = {
+  get(k: string): string | null {
+    try {
+      return sessionStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  },
+  set(k: string, v: string) {
+    try {
+      sessionStorage.setItem(k, v);
+    } catch {
+      // the flag just won't outlive this page
+    }
+  },
+  del(k: string) {
+    try {
+      sessionStorage.removeItem(k);
+    } catch {
+      // nothing stored
+    }
+  },
+};
 
 /** The point a quote's marker sits on: the top-right of its first line, so the marker never covers the text. */
 function quoteEnd(range: Range): Box | null {

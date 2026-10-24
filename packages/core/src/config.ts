@@ -12,6 +12,8 @@ export const LAUNCHER_ICONS = ["pin", "comment", "bug"] as const;
 export const CONSOLE_CAPTURE_LEVELS = ["off", "errors", "warnings", "all"] as const;
 export const NETWORK_CAPTURE_MODES = ["off", "failures"] as const;
 export const VISIBILITY_ENVIRONMENTS = ["all", "non-production"] as const;
+export const VISIBILITY_MODES = ["always", "identified", "queryParam", "urlPatterns", "manual"] as const;
+export type VisibilityMode = (typeof VISIBILITY_MODES)[number];
 export const MIN_REPLAY_SECONDS = 30;
 export const MAX_REPLAY_SECONDS = 120;
 
@@ -130,7 +132,11 @@ export const widgetConfig = z.object({
   shortcuts: z.boolean().default(true),
   rightClickComment: z.boolean().default(false),
   readOnly: z.boolean().default(false),
-  visitorsCanResolve: z.boolean().default(true),
+  /**
+   * Any visitor (not only the reporter, who holds a token) may resolve and reopen pins on the page. Off by
+   * default since wave 5; projects created earlier were migrated with it on, as they behaved before.
+   */
+  visitorsCanResolve: z.boolean().default(false),
   consent: z
     .object({
       enabled: z.boolean().default(false),
@@ -160,14 +166,40 @@ export const widgetConfig = z.object({
    */
   privacyMode: z.boolean().default(false),
   /**
+   * Query parameters that don't identify a page on this site (session ids, A/B flags…), on top of the built-in
+   * trackers (`IGNORED_QUERY_PARAMS`). A trailing `*` matches a prefix. Applied by the server when it groups
+   * reports into pages (`normalizePageUrl`); existing pages are re-grouped on the next start.
+   */
+  ignoredQueryParams: z
+    .array(
+      z
+        .string()
+        .trim()
+        .regex(/^[A-Za-z0-9_.\-[\]]{1,63}\*?$/, "Use a parameter name, optionally ending in *"),
+    )
+    .max(30, "At most 30 parameters")
+    .default([]),
+  /**
    * Where the launcher shows (SitePing parity, wave-4 contract §4) — applied by the widget only.
    * "non-production" hides it on production hosts unless `forceShow` (`data-force-show` / init option).
    * Below `minViewportWidth` px the launcher stays hidden.
+   *
+   * `mode` (F-012, wave-5 contract §1) decides who gets the widget at all: `always`; `identified` (after
+   * `Pinwren.identify`); `queryParam` (the page URL carries `?<queryParam>`, remembered for the session);
+   * `urlPatterns` (the page path matches one of `urlPatterns`, same syntax as `urlPattern`); `manual`
+   * (hidden until `Pinwren.show()`). A valid review link (`?pinwren_review=<token>`) shows it in every mode.
    */
   visibility: z
     .object({
       environments: z.enum(VISIBILITY_ENVIRONMENTS).default("all"),
       minViewportWidth: z.number().int().min(0).max(10_000).default(0),
+      mode: z.enum(VISIBILITY_MODES).default("always"),
+      urlPatterns: z.array(z.string().trim().min(1).max(500)).max(50).default([]),
+      queryParam: z
+        .string()
+        .trim()
+        .regex(/^[A-Za-z0-9_.-]{1,64}$/, "Use letters, digits, dots, dashes or underscores")
+        .default("pinwren"),
     })
     .prefault({}),
 });

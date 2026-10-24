@@ -1,0 +1,74 @@
+---
+title: Jira Cloud
+description: Open a Jira Cloud issue for each feedback item and keep it in sync through Done — an Enterprise feature.
+---
+
+<Callout title="Enterprise">
+  Jira is part of the [Enterprise licence](/docs/licensing); GitHub, GitLab and Linear are in every edition.
+  Without a licence that includes `jira`, the integration can't be connected and an existing one pauses until
+  a licence is installed. After the licence's grace period its settings are read-only while it keeps working.
+</Callout>
+
+## Connect a project
+
+<Steps>
+<Step>
+
+**Create an API token** at **id.atlassian.com › Security › API tokens**, for an account that can browse and create
+issues in the project (and transition them). Issues are opened as that account.
+
+</Step>
+<Step>
+
+**Connect.** As a workspace Admin, open the Pinwren project's **Issue trackers** tab and connect Jira:
+
+| Field               | Notes                                                                         |
+| ------------------- | ----------------------------------------------------------------------------- |
+| **Jira site URL**   | `https://acme.atlassian.net`                                                  |
+| **Account email**   | The Atlassian account the token belongs to                                    |
+| **API token**       | Stored encrypted with the email; only its last four characters are ever shown |
+| **Project key**     | The prefix of the project's issue keys, e.g. `WEB` for `WEB-42`               |
+| **Labels**          | Comma-separated; spaces become `-` (Jira labels can't contain spaces)         |
+| **Open issues for** | **Manually**, **Bugs** or **Everything**                                      |
+
+Use **Test connection** to check that the account can see the project.
+
+</Step>
+<Step>
+
+**Add the webhook** so status changes in Jira update Pinwren. Under **Two-way status** the tab shows a **URL**
+(`https://feedback.example.com/api/integrations/jira/webhook`); press **Reveal webhook secret** for the **secret**. In
+Jira open **Settings › System › WebHooks › Create a WebHook**, paste the URL and the secret, limit it with the JQL
+`project = WEB`, and tick **Issue › updated**.
+
+</Step>
+</Steps>
+
+## Creating issues
+
+Bug reports become **Bug** issues when the project has that type, everything else a **Task** (or the project's first
+standard type). The description is an Atlassian Document Format document: the report quoted as plain text, a list
+with project, kind, page, browser, viewport and reporter, and a link to the item in the dashboard. Text from reports
+is never parsed as markup or mentions. In the inbox the link shows the Jira key (`Jira WEB-42`).
+
+## Two-way state
+
+| You do                                           | Pinwren does                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------------- |
+| Move an item to Resolved, Won't fix or Duplicate | Runs the issue's transition into a **Done**-category status         |
+| Reopen the item                                  | Runs a transition back to a **To Do** (else **In Progress**) status |
+| Move the issue to a Done status in Jira          | Moves an open item to **Resolved**                                  |
+| Move it back out of Done                         | Moves a closed item back to **Open**                                |
+
+If the workflow has no such transition from the issue's current status, the integration shows the error and nothing
+changes.
+
+## Reliability and security
+
+- Issue creation and transitions are retried background jobs; a Jira outage never blocks a report. The last error
+  (Jira's own `errorMessages`, with a hint for 401/403/404) shows on the integration until the next success.
+- The webhook is verified with `X-Hub-Signature` (`sha256=` HMAC of the raw body with the secret) and each
+  `X-Atlassian-Webhook-Identifier` is acted on once (remembered for 7 days). Only updates that change the status do
+  anything.
+- The site URL is entered by an Admin, so requests to it go through Pinwren's outbound guard: a site reached on a
+  private network needs [`PINWREN_OUTBOUND_ALLOWLIST`](/docs/self-hosting/environment#outbound-requests).

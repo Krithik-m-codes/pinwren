@@ -9,7 +9,7 @@ place across scrolling, breakpoints and redesigns.
 
 ## Leave a comment
 
-Open the launcher and choose **Add a comment**, or press <kbd>C</kbd>. The page is covered by a transparent
+Open the launcher and choose **Create new annotation**, or press <kbd>C</kbd>. The page is covered by a transparent
 layer, so clicks and drags never trigger your own handlers or select text, and a hint bar shows the controls.
 
 | Gesture                           | Result                                                                                                                                      |
@@ -21,9 +21,11 @@ layer, so clicks and drags never trigger your own handlers or select text, and a
 | <kbd>Esc</kbd>                    | Leave comment mode.                                                                                                                         |
 | Touch: long-press, then drag      | Long-press (≈ 0.5 s) to pin; keep the finger down and drag to select a region. Before the long-press fires, a swipe still scrolls the page. |
 
-The composer opens next to the pin (as a bottom sheet below 640 px). Visitors choose a type — **Comment**,
-**Bug**, **Idea** or **Question** — write their message (up to 10,000 characters) and, unless you identified
-them, can leave a name and email. The name and email are remembered in the browser for next time.
+The composer opens next to the pin or region and stays on screen (as a bottom sheet below 640 px). Visitors
+pick a type — **Question**, **Change**, **Bug** or **Other** (stored as the kinds `question`, `idea`, `bug` and
+`comment`; with no type picked it is sent as **Other**) — write their message (up to 10,000 characters; the box
+grows with the text) and, unless you identified them, can leave a name and email. The name and email are
+remembered in the browser for next time. **Send** stays disabled until there is some text.
 
 <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> sends. Pressing <kbd>Esc</kbd> on a composer with text asks
 for a second
@@ -50,16 +52,61 @@ at the cursor. Right-clicks with a modifier key, on form fields, or from the key
 browser menu. On a text selection the browser menu stays too (people usually want **Copy**) and the widget
 offers **Comment on selection** next to it.
 
-## Pins on the page
+### Comment on the whole page
 
-When public read is on for the project, the widget places every open item of the current page: point pins
-as numbered avatars, regions as outlined areas, text comments as highlights. Hovering a pin previews it;
-clicking opens its thread. The launcher shows a badge with the number of open items, and the menu has
-**View comments** and **Hide comments / Show comments**.
+Some feedback isn't about one spot ("the page loads slowly", "the tone is off"). `Pinwren.open("page")` opens the
+composer without a pin; the comment is listed in the sidebar and the dashboard as **Whole page**. Bug reports
+are page-level too.
 
-A pin whose element was found with lower confidence (the page changed) is marked **Moved?**. Items whose
-element is gone entirely are listed in the side panel as **Not on page** instead of being dropped — see
-[Anchoring](/docs/widget/anchoring#moved-and-orphaned-pins).
+### Attachments, screenshots and metadata
+
+- **Attach** (the paper clip in the composer) adds up to three images or PDFs, 5 MB each, like a bug report.
+- With **Screenshot with every comment** on (project **Capture** tab), every new comment also sends a screenshot
+  of what the commenter saw, masked like a bug report's, plus the viewport it shows, so the team sees the
+  comment in context and [Page review](/docs/dashboard/page-review) can place it. The comment never waits more
+  than a few seconds for it: if the capture is slow or fails, the comment goes without one.
+- Whatever your code passed to [`Pinwren.setMetadata()`](/docs/widget/api#metadata) goes with it.
+
+### When sending fails
+
+Messages are in the visitor's language and say what to do: offline, too slow, too large (remove an attachment),
+too many at once (wait a minute), or that the site isn't accepting feedback. A request gets 30 seconds (90 for a
+report with files) before it counts as timed out. When the cause is temporary (offline, a timeout, a server
+error), the comment is kept in the browser's outbox and sent by itself when the connection is back; its marker
+stays on the page, marked as waiting.
+
+## The launcher
+
+The launcher is a speed dial. Its badge counts the open items on the page; pressing it fans out labelled
+actions:
+
+| Action                    | What it does                                                                             |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| **Hide / Show markers**   | Takes the markers off the page and brings them back. Remembered per visitor and project. |
+| **Create new annotation** | Starts comment mode (<kbd>C</kbd>).                                                      |
+| **Report a bug**          | Opens the bug report (<kbd>B</kbd>), when bug reports are on. Notes an unsent draft.     |
+| **Show sidebar**          | Opens the [sidebar](#sidebar) with every item, with the open count.                      |
+
+It is a menu button: <kbd>Enter</kbd> or <kbd>Space</kbd> opens it with focus on the first action, the arrow
+keys (and <kbd>Home</kbd> / <kbd>End</kbd>) move, <kbd>Esc</kbd> closes it and puts focus back on the launcher.
+A report waiting to send (offline) adds a **reports waiting to send** action that retries it.
+
+## Markers on the page
+
+When public read is on for the project, the widget places the current page's items as numbered circles
+coloured by type — blue for questions, orange for changes, red for bugs, grey for other. Resolved items stay
+as a muted check, so a review shows what is done. Regions are outlined areas and text comments highlights.
+Hovering a marker shows a preview (type, how long ago, the first lines) and outlines the element it is pinned
+to; clicking opens its thread.
+
+When public read is off (the default for new projects), visitors see no one else's feedback — but a visitor still
+sees **their own** items and the team's public replies on them: the browser keeps the reporter token it got for
+each item and asks for those (`GET /w/mine`). **View comments** and the sidebar's **Mine** filter work the same
+way.
+
+A pin whose element was found with lower confidence (the page changed) is marked **Moved?**; the team can
+[re-pin](/docs/widget/anchoring#moved-and-orphaned-pins) it. Items whose element is gone entirely are listed in the
+sidebar instead of being dropped, and page-level items are labelled **Whole page**.
 
 ## Threads
 
@@ -69,9 +116,9 @@ actions](/docs/widget/panel-actions).
 
 - **Reply** — type in the box at the bottom; <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> sends. Replies share the
   report rate limit.
-- **Resolve / Reopen** — allowed when the project lets visitors resolve (`visitorsCanResolve`, on by default),
+- **Resolve / Reopen** — allowed when the project lets visitors resolve (`visitorsCanResolve`, off by default),
   or always for the browser that created the item: the server hands that browser a one-time reporter token,
-  kept in `localStorage`. Resolved items leave the page until someone turns on **Show resolved**.
+  kept in `localStorage`. Resolved items stay on the page as a muted check marker.
 - **Copy link** — copies a deep link to the thread.
 
 In read-only mode, threads are visible but replying and resolving are hidden.
@@ -80,26 +127,39 @@ In read-only mode, threads are visible but replying and resolving are hidden.
 
 Any page URL with `?pinwren=<feedback id>` opens with that thread showing: the widget scrolls to the pin,
 pulses it and opens the card. If the item is resolved, the widget looks it up among closed items; if its
-element is gone, it opens the side panel with the thread. The page's own query string and hash are kept.
+element is gone, it opens the sidebar with the thread. The page's own query string and hash are kept.
 
 ```text
 https://example.com/pricing?plan=pro&pinwren=7b0c5c1e-…
 ```
 
-The dashboard's **Open on page** button uses the same links.
+A plain deep link only shows what the visitor may see anyway. The dashboard's **Open on page** and the links in
+reporter emails add a signed token, `&pwt=<token>`: it opens that one item and its public replies even when the
+project keeps pins private, and lets the reader reply. Links from the dashboard last 7 days, those in reporter emails 30; an expired or altered one shows
+"This link has expired or the item was removed". The deep-link parameters (`pinwren`, `pwt`,
+`pinwren_review`) never become part of a page's address.
 
-## Side panel
+## Sidebar
 
-**View comments** opens a panel listing every item of the current page, including those not placed on it.
+**Show sidebar** opens the list of feedback, including items not placed on the page.
 
-- Filters: **Open**, **Resolved**, **Mine** (items sent from this browser), plus search and a **Show resolved**
-  switch for the pins on the page.
-- Selecting a row scrolls to its pin and opens the thread.
-- **Export** downloads the rows currently listed as **CSV** or **JSON**, built in the browser from data the
+- **Stats**: how many items are open and resolved, how many are bugs, and a resolved progress bar.
+- **Filters**: search; **Type** (Question, Change, Bug, Other); **All / Open / Resolved**; **This page / All
+  pages** (every page of the project, each card showing its page); **Mine** (items sent from this browser).
+- **Sort and group**: **Newest first / Oldest first** and **By page**.
+- **Cards** show the number, type, status, how long ago and the text, with a coloured bar for the type.
+  Clicking a card scrolls to its marker, flashes it and opens the thread; a card from another page opens that
+  page with the thread showing ([deep link](#deep-links)).
+- **Resolve / Reopen** appears where the visitor may change the status (see [Threads](#threads)).
+- **Delete** appears only on the visitor's own items: the browser that sent an item can delete it with its
+  reporter token. The widget asks first; the item goes to the dashboard's trash, where an Admin can restore it.
+- **Select all** and the card checkboxes resolve or delete several items at once; **Delete all** deletes the
+  visitor's own items in the current list.
+- **Export** downloads the cards currently listed as **CSV** or **JSON**, built in the browser from data the
   widget already has. Columns: number, kind, status, title, body, author, created, page URL and deep link. The
   CSV opens cleanly in Excel (UTF-8 with BOM) and neutralises cells that a spreadsheet would run as a formula.
 
-Below 640 px the panel goes full screen.
+Below 640 px the sidebar goes full screen.
 
 ## Keyboard shortcuts
 
@@ -108,7 +168,7 @@ Below 640 px the panel goes full screen.
 | <kbd>C</kbd>                                    | Page            | Start (or stop) comment mode         |
 | <kbd>B</kbd>                                    | Page            | Report a bug                         |
 | <kbd>Esc</kbd>                                  | Anywhere        | Close the card, menu, offer or panel |
-| <kbd>↑</kbd> <kbd>↓</kbd>                       | Launcher menu   | Move between items                   |
+| <kbd>↑</kbd> <kbd>↓</kbd>                       | Launcher        | Open it, then move between actions   |
 | <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> | Composer, reply | Send                                 |
 
 Shortcuts never fire while focus is in a text field — yours or the widget's — or with
@@ -118,5 +178,5 @@ Shortcuts never fire while focus is in a text field — yours or the widget's �
 ## Accessibility
 
 Every control is a real button reachable by keyboard. Cards and dialogs trap focus and give it back to
-whatever opened them; pins carry labels such as “Comment 3 by Maria: Logo too small”; toasts are announced
+whatever opened them; markers carry labels such as “Other 3 by Maria: Logo too small”; toasts are announced
 through a live region; motion is reduced when the visitor asks for it.

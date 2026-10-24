@@ -164,8 +164,9 @@ test.describe("wave 4", () => {
       const member = page.locator(`[data-member="${viewer.email}"]`);
       await expect(member.getByRole("combobox", { name: /Role of/ })).toContainText("Viewer");
       await member.getByRole("combobox", { name: /Role of/ }).click();
-      await page.getByRole("option", { name: "Member" }).click();
-      await expect(page.getByText("Vic Viewer is now member")).toBeVisible();
+      // BugPin's roles: Admin, Editor, Viewer.
+      await page.getByRole("option", { name: "Editor" }).click();
+      await expect(page.getByText("Vic Viewer is now an Editor")).toBeVisible();
     } finally {
       await viewer.ctx.close();
     }
@@ -195,7 +196,7 @@ test.describe("wave 4", () => {
     // Assign two items from the inbox: the bulk bar and the detail's round picker.
     await page.goto(`/inbox?project=${projectId}&status=all`);
     await expect(page.locator("ul[aria-label=Feedback][data-ready]")).toBeVisible();
-    await page.getByRole("checkbox", { name: `Select #${items.region.number}` }).click();
+    await page.getByRole("checkbox", { name: `Select #${items.region.number}`, exact: true }).click();
     const bar = page.getByRole("toolbar", { name: "Bulk actions" });
     await bar.getByRole("button", { name: "Round" }).click();
     await page.getByRole("menuitem", { name: "Pricing review" }).click();

@@ -208,7 +208,7 @@ export async function exportRound(
           f.pageUrl,
           f.createdAt,
           f.resolvedAt,
-          feedbackLink(f.id),
+          feedbackLink(orgId, f.id),
         ]),
       ),
     };

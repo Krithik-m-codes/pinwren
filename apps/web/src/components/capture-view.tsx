@@ -1,7 +1,10 @@
 "use client";
 
-import type { FeedbackStatus } from "@pinwren/core";
+import type { AnnotationLayer, FeedbackStatus } from "@pinwren/core";
 import { isClosedStatus } from "@pinwren/core";
+import { PenLine } from "lucide-react";
+import { AnnotationOverlay } from "@/components/annotation-layer";
+import { Toggle } from "@/components/ui/toggle";
 import type { Placement } from "@/lib/geometry";
 import { cn } from "@/lib/utils";
 
@@ -15,8 +18,37 @@ export type Marker = Placement & {
 };
 
 /**
+ * "Annotations" on/off for a screenshot that carries the reporter's vector shapes (wave-5 contract §2): off
+ * shows what was underneath. A view setting, so it stays available to viewers.
+ */
+export function AnnotationsToggle({
+  layer,
+  pressed,
+  onPressedChange,
+}: {
+  layer: AnnotationLayer | null | undefined;
+  pressed: boolean;
+  onPressedChange: (on: boolean) => void;
+}) {
+  if (!layer?.shapes.length) return null;
+  return (
+    <Toggle
+      size="sm"
+      pressed={pressed}
+      onPressedChange={onPressedChange}
+      aria-label={pressed ? "Hide annotations" : "Show annotations"}
+      title={pressed ? "Hide the reporter's annotations" : "Show the reporter's annotations"}
+      data-testid="annotations-toggle"
+    >
+      <PenLine /> Annotations
+    </Toggle>
+  );
+}
+
+/**
  * A screenshot with numbered pins and region rectangles at their captured positions (blueprint 06
- * §3.4). Markers are buttons, so the overlay is reachable by keyboard.
+ * §3.4). Markers are buttons, so the overlay is reachable by keyboard. `annotations` (the reporter's vector
+ * shapes, wave-5 §2) are drawn over the image while `showAnnotations` is on.
  */
 export function CaptureView({
   src,
@@ -25,6 +57,8 @@ export function CaptureView({
   className,
   showMarkers = true,
   decorative = false,
+  annotations,
+  showAnnotations = true,
 }: {
   src: string;
   alt: string;
@@ -33,12 +67,15 @@ export function CaptureView({
   showMarkers?: boolean;
   /** Markers drawn but not interactive (e.g. the capture itself is a link). */
   decorative?: boolean;
+  annotations?: AnnotationLayer | null | undefined;
+  showAnnotations?: boolean;
 }) {
   const Tag = decorative ? "span" : "button";
   return (
     <div className={cn("relative overflow-hidden rounded-lg border bg-muted/40", className)}>
       {/* eslint-disable-next-line @next/next/no-img-element -- session-authenticated asset; next/image would fetch it without the cookie */}
       <img src={src} alt={alt} className="block w-full select-none" draggable={false} />
+      {annotations && showAnnotations && <AnnotationOverlay layer={annotations} />}
       {showMarkers &&
         markers.map((m) => {
           const closed = m.status ? isClosedStatus(m.status) : false;

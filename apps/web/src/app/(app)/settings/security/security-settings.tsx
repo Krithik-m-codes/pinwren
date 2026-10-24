@@ -21,6 +21,8 @@ import {
   useUpdateSecuritySettingsMutation,
 } from "@/lib/store/api";
 import { SectionTitle } from "../settings-shell";
+import { InstanceAdminsCard } from "./instance-admins";
+import { SignInMethodsCard } from "./sign-in-methods-card";
 
 function EnvBadge({ name }: { name: string }) {
   return (
@@ -34,7 +36,10 @@ function EnvBadge({ name }: { name: string }) {
   );
 }
 
-/** Settings › Security (instance admins): session lifetime, HTTPS status, update check. */
+/**
+ * Settings › Security (instance admins): administrators, sign-in methods, session lifetime, HTTPS status,
+ * update check.
+ */
 export function SecuritySettingsForm() {
   const query = useSecuritySettingsQuery(undefined);
   const [updateSecurity] = useUpdateSecuritySettingsMutation();
@@ -77,7 +82,7 @@ export function SecuritySettingsForm() {
           <EmptyState
             icon={Lock}
             title="Instance admins only"
-            description="These settings belong to whoever runs this server (PINWREN_ADMIN_EMAILS)."
+            description="These settings belong to the server's administrators: the first account, anyone they name, and PINWREN_ADMIN_EMAILS."
           />
         </CardContent>
       </Card>
@@ -93,6 +98,8 @@ export function SecuritySettingsForm() {
         title="Security"
         description="Instance-wide settings for everyone who signs in to this server."
       />
+      <InstanceAdminsCard />
+      <SignInMethodsCard />
       <Card>
         <CardHeader>
           <CardTitle>Sessions</CardTitle>

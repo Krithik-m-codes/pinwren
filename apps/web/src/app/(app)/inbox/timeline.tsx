@@ -1,13 +1,20 @@
 "use client";
 
-import { type FeedbackStatus, type Priority, safeHref } from "@pinwren/core";
+import { type FeedbackKind, type FeedbackStatus, type Priority, safeHref } from "@pinwren/core";
 import {
   ArrowRight,
   BadgeCheck,
+  CalendarClock,
   CircleDot,
+  Eye,
+  Mail,
+  RotateCcw,
+  Tag,
+  TriangleAlert,
   ExternalLink,
   Flag,
   Lock,
+  MapPin,
   MoreHorizontal,
   Pencil,
   PencilLine,
@@ -15,13 +22,22 @@ import {
   UserRound,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import Link from "next/link";
+import { useRef, useState } from "react";
 import { commentCreate, commentUpdate } from "@pinwren/core";
 import { Controller, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { useZodForm } from "@/components/form";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { PRIORITY_META, PriorityIcon, STATUS_META, StatusIcon, timeAgo } from "@/components/feedback-meta";
+import {
+  KIND_META,
+  LocalDate,
+  PRIORITY_META,
+  PriorityIcon,
+  STATUS_META,
+  StatusIcon,
+  timeAgo,
+} from "@/components/feedback-meta";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -40,13 +56,15 @@ import {
   useDeleteCommentMutation,
   useEditCommentMutation,
 } from "@/lib/store/api";
-import { useViewer } from "@/lib/viewer";
+import { insertMention, matchMembers, mentionParts, mentionQuery, mentionsIn } from "@/lib/mentions";
+import { useMembers, useViewer } from "@/lib/viewer";
 import { cn } from "@/lib/utils";
+import { issueRef, trackerName } from "@/components/tracker-icon";
 
 type Entry =
   | { kind: "comment"; at: string; comment: Comment }
   | { kind: "event"; at: string; event: ActivityEvent }
-  | { kind: "created"; at: string; who: string };
+  | { kind: "created"; at: string; who: string; via: string | null };
 
 const absolute = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -65,13 +83,25 @@ function Time({ iso }: { iso: string }) {
 }
 
 const isStatus = (v: unknown): v is FeedbackStatus => typeof v === "string" && v in STATUS_META;
+const isKind = (v: unknown): v is FeedbackKind => typeof v === "string" && v in KIND_META;
+
+/** `added` / `removed` of a labels change (the API resolves names; a deleted label has none). */
+function labelNames(v: unknown): string {
+  if (!Array.isArray(v) || !v.length) return "";
+  return v
+    .map((l: unknown) =>
+      l && typeof l === "object" && "name" in l && typeof l.name === "string"
+        ? `“${l.name}”`
+        : "a deleted label",
+    )
+    .join(", ");
+}
 const isPriority = (v: unknown): v is Priority => typeof v === "string" && v in PRIORITY_META;
 
 function actorOf(e: ActivityEvent): string {
   if (e.actorName) return e.actorName;
   if (e.actorKind === "guest") return e.data.via === "reporter" ? "The reporter" : "A visitor";
-  if (e.actorKind === "integration")
-    return e.data.via === "gitlab" ? "GitLab" : e.data.via === "github" ? "GitHub" : "An integration";
+  if (e.actorKind === "integration") return trackerName(e.data.via) ?? "An integration";
   return "Someone";
 }
 
@@ -155,7 +185,12 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
   } else if (e.type === "issue_linked") {
     icon = <ExternalLink className="size-3.5" />;
     const url = safeHref(e.data.url);
-    const label = `${e.data.provider === "gitlab" ? "GitLab" : "GitHub"} issue #${str(e.data.number)}`;
+    const label = `${trackerName(e.data.provider) ?? "Tracker"} issue ${issueRef({
+      provider: str(e.data.provider),
+      number: Number(e.data.number),
+      url: str(e.data.url),
+      key: e.data.key,
+    })}`;
     body = (
       <>
         Linked{" "}
@@ -180,6 +215,66 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
         {who} deleted {e.data.visibility === "internal" ? "an internal note" : "a reply"}
       </>
     );
+  } else if (e.type === "kind_changed" && isKind(to)) {
+    const Icon = KIND_META[to].icon;
+    icon = <Icon className="size-3.5" />;
+    body = (
+      <>
+        {who} changed the type to <span className="text-foreground">{KIND_META[to].label}</span>
+        {isKind(from) && <> (was {KIND_META[from].label})</>}
+      </>
+    );
+  } else if (e.type === "anchor_changed") {
+    icon = <MapPin className="size-3.5" />;
+    body = (
+      <>
+        {who} re-pinned this{e.data.via === "widget" ? " on the page" : ""}
+      </>
+    );
+  } else if (e.type === "dueAt_changed") {
+    icon = <CalendarClock className="size-3.5" />;
+    body =
+      typeof to === "string" ? (
+        <>
+          {who} set the due date to{" "}
+          <span className="text-foreground">
+            <LocalDate iso={to} />
+          </span>
+        </>
+      ) : (
+        <>{who} removed the due date</>
+      );
+  } else if (e.type === "labelIds_changed") {
+    icon = <Tag className="size-3.5" />;
+    const added = labelNames(e.data.added);
+    const removed = labelNames(e.data.removed);
+    body = (
+      <>
+        {who} {added && <>added {added}</>}
+        {added && removed && " and "}
+        {removed && <>removed {removed}</>}
+        {!added && !removed && "changed the labels"}
+      </>
+    );
+  } else if (e.type === "duplicateOfId_changed") {
+    icon = <StatusIcon status="duplicate" className="size-3.5" />;
+    body =
+      typeof to === "string" ? (
+        <>
+          {who} marked this as a duplicate of{" "}
+          <span className="text-foreground">
+            {typeof e.data.toNumber === "number" ? `#${e.data.toNumber}` : "another item"}
+          </span>
+        </>
+      ) : (
+        <>{who} marked this as not a duplicate</>
+      );
+  } else if (e.type === "deleted") {
+    icon = <Trash2 className="size-3.5" />;
+    body = <>{who} moved this to the trash</>;
+  } else if (e.type === "restored") {
+    icon = <RotateCcw className="size-3.5" />;
+    body = <>{who} restored this from the trash</>;
   } else {
     icon = <Flag className="size-3.5" />;
     body = (
@@ -276,7 +371,9 @@ function CommentCard({ comment: c, feedbackId }: { comment: Comment; feedbackId:
       {editing ? (
         <EditComment comment={c} feedbackId={feedbackId} onDone={() => setEditing(false)} />
       ) : (
-        <p className="text-sm break-words whitespace-pre-wrap">{c.body}</p>
+        <p className="text-sm break-words whitespace-pre-wrap">
+          <CommentBody body={c.body} mentions={c.mentions} />
+        </p>
       )}
       <ConfirmDialog
         open={confirming}
@@ -299,6 +396,22 @@ function CommentCard({ comment: c, feedbackId }: { comment: Comment; feedbackId:
 }
 
 /** Edit your own comment (core's commentUpdate: 1–10 000 characters). */
+/** Comment text with the @mentioned teammates highlighted (only real mentions, not any `@word`). */
+function CommentBody({ body, mentions }: { body: string; mentions: string[] | undefined }) {
+  const members = useMembers();
+  if (!mentions?.length) return body;
+  const names = members.filter((m) => mentions.includes(m.id)).map((m) => m.name);
+  return mentionParts(body, names).map((p, i) =>
+    p.mention ? (
+      <span key={i} className="rounded bg-primary/10 px-0.5 font-medium text-primary">
+        {p.text}
+      </span>
+    ) : (
+      p.text
+    ),
+  );
+}
+
 function EditComment({
   comment: c,
   feedbackId,
@@ -359,7 +472,15 @@ export function Timeline({ data }: { data: FeedbackDetail }) {
   // The API writes its own "created" row; it becomes the "reported this" line (named after the reporter).
   const created = data.activity.find((e) => e.type === "created");
   const entries: Entry[] = [
-    { kind: "created" as const, at: created?.createdAt ?? f.createdAt, who: created?.actorName ?? reporter },
+    {
+      kind: "created" as const,
+      at: created?.createdAt ?? f.createdAt,
+      who: created?.actorName ?? reporter,
+      // Sent through a review link (F-012): the link's name as it is now, else as it was when sent.
+      via:
+        f.reviewLink?.label ??
+        (typeof created?.data.reviewLink === "string" ? created.data.reviewLink : null),
+    },
     ...data.comments.map((c) => ({ kind: "comment" as const, at: c.createdAt, comment: c })),
     ...data.activity
       .filter((e) => e.type !== "created")
@@ -380,6 +501,12 @@ export function Timeline({ data }: { data: FeedbackDetail }) {
               </span>
               <span className="min-w-0 flex-1 pt-0.5">
                 <span className="font-medium text-foreground">{entry.who}</span> reported this
+                {entry.via && (
+                  <>
+                    {" "}
+                    via review link <span className="font-medium text-foreground">{entry.via}</span>
+                  </>
+                )}
               </span>
               <span className="pt-0.5">
                 <Time iso={entry.at} />
@@ -395,45 +522,159 @@ export function Timeline({ data }: { data: FeedbackDetail }) {
 }
 
 /** Reply publicly or leave an internal note (default) — blueprint 06 §3.2. */
-export function CommentComposer({ feedbackId }: { feedbackId: string }) {
+export function CommentComposer({
+  feedbackId,
+  projectId,
+  reach,
+}: {
+  feedbackId: string;
+  projectId: string;
+  reach: FeedbackDetail["replyReach"];
+}) {
   const [addComment] = useAddCommentMutation();
+  const { userId } = useViewer();
+  const members = useMembers().filter((m) => m.id !== userId);
   const form = useZodForm(commentCreate, { defaultValues: { body: "", visibility: "internal" } });
   const { isSubmitting } = form.formState;
   const body = useWatch({ control: form.control, name: "body" });
   const visibility = useWatch({ control: form.control, name: "visibility" });
+  const field = useRef<HTMLTextAreaElement | null>(null);
+  const [picked, setPicked] = useState<ReadonlyMap<string, string>>(new Map());
+  const [query, setQuery] = useState<string | null>(null);
+  const [active, setActive] = useState(0);
+  const matches = query === null ? [] : matchMembers(members, query);
+  const listId = `mentions-${feedbackId}`;
+  const { ref: registerRef, onChange: registerChange, ...bodyField } = form.register("body");
+
   const submit = form.handleSubmit(async (v) => {
     try {
-      await addComment({ feedbackId, body: v.body, visibility: v.visibility }).unwrap();
+      const mentions = mentionsIn(v.body, picked);
+      await addComment({
+        feedbackId,
+        body: v.body,
+        visibility: v.visibility,
+        ...(mentions.length ? { mentions } : {}),
+      }).unwrap();
+      setPicked(new Map());
       form.reset({ body: "", visibility: v.visibility });
     } catch (e) {
       toast.error(errorMessage(e));
     }
   });
 
+  const track = (el: HTMLTextAreaElement) => {
+    setQuery(mentionQuery(el.value.slice(0, el.selectionStart)));
+    setActive(0);
+  };
+  const pick = (m: { id: string; name: string }) => {
+    const el = field.current;
+    if (!el) return;
+    const next = insertMention(el.value, el.selectionStart, m.name);
+    setPicked((p) => new Map(p).set(m.id, m.name));
+    form.setValue("body", next.text, { shouldDirty: true });
+    setQuery(null);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(next.caret, next.caret);
+    });
+  };
+
   return (
     <form
       className={cn(
-        "space-y-2 rounded-lg border p-2 transition-colors focus-within:border-ring",
+        "relative space-y-2 rounded-lg border p-2 transition-colors focus-within:border-ring",
         visibility === "internal" && "bg-amber-50/40 dark:bg-amber-500/[0.04]",
       )}
       onSubmit={(e) => void submit(e)}
     >
       <Textarea
-        {...form.register("body")}
+        {...bodyField}
+        ref={(el) => {
+          registerRef(el);
+          field.current = el;
+        }}
+        onChange={(e) => {
+          void registerChange(e);
+          track(e.currentTarget);
+        }}
+        onClick={(e) => track(e.currentTarget)}
+        onBlur={(e) => {
+          void bodyField.onBlur(e);
+          // Let a click on a suggestion land before the list closes.
+          setTimeout(() => setQuery(null), 150);
+        }}
         placeholder={
           visibility === "internal"
-            ? "Leave an internal note…"
-            : "Reply to the reporter (visible on the page)…"
+            ? "Leave an internal note… (@ to mention)"
+            : "Reply to the reporter… (@ to mention a teammate)"
         }
         aria-label="Comment"
+        role="combobox"
+        aria-expanded={matches.length > 0}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={matches[active] ? `${listId}-${matches[active].id}` : undefined}
         rows={3}
         maxLength={10_000}
         className="min-h-16 resize-none border-0 bg-transparent p-1.5 shadow-none focus-visible:ring-0 dark:bg-transparent"
         onKeyDown={(e) => {
+          if (matches.length) {
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              const step = e.key === "ArrowDown" ? 1 : -1;
+              setActive((a) => (a + step + matches.length) % matches.length);
+              return;
+            }
+            if (e.key === "Enter" || e.key === "Tab") {
+              const m = matches[active];
+              if (m) {
+                e.preventDefault();
+                pick(m);
+                return;
+              }
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              setQuery(null);
+              return;
+            }
+          }
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit();
           if (e.key === "Escape") e.currentTarget.blur();
         }}
       />
+      {matches.length > 0 && (
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label="Mention a teammate"
+          className="absolute inset-x-2 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md"
+        >
+          {matches.map((m, i) => (
+            <li
+              key={m.id}
+              id={`${listId}-${m.id}`}
+              role="option"
+              aria-selected={i === active}
+              className={cn(
+                "flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm",
+                i === active && "bg-muted",
+              )}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pick(m);
+              }}
+              onMouseEnter={() => setActive(i)}
+            >
+              <UserAvatar name={m.name} image={m.image} className="size-5" />
+              <span className="truncate">{m.name}</span>
+              <span className="ml-auto truncate text-xs text-muted-foreground">{m.email}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {visibility === "public" && <ReplyReach reach={reach} projectId={projectId} />}
       <div className="flex flex-wrap items-center gap-2">
         <Controller
           control={form.control}
@@ -457,5 +698,57 @@ export function CommentComposer({ feedbackId }: { feedbackId: string }) {
         </Button>
       </div>
     </form>
+  );
+}
+
+/** Where a public reply goes, from the project's settings and the report (wave-5 contract §3.4). */
+export function replyReachText(reach: FeedbackDetail["replyReach"]): {
+  tone: "ok" | "warn";
+  text: string;
+} {
+  const email = reach.notifyReporter && reach.reporterHasEmail;
+  if (reach.publicRead && email) {
+    return { tone: "ok", text: "Shown under the pin on the page and emailed to the reporter." };
+  }
+  if (reach.publicRead) {
+    return {
+      tone: "ok",
+      text: reach.reporterHasEmail
+        ? "Shown under the pin on the page. Reporter emails are off for this project."
+        : "Shown under the pin on the page. The reporter left no email address.",
+    };
+  }
+  if (email) return { tone: "ok", text: "Emailed to the reporter. Pins are private on this project." };
+  return {
+    tone: "warn",
+    text: reach.reporterHasEmail
+      ? "Not delivered: pins are private and reporter emails are off for this project."
+      : "Not delivered: pins are private and the reporter left no email address.",
+  };
+}
+
+function ReplyReach({ reach, projectId }: { reach: FeedbackDetail["replyReach"]; projectId: string }) {
+  const { isAdmin } = useViewer();
+  const { tone, text } = replyReachText(reach);
+  const Icon = tone === "warn" ? TriangleAlert : reach.publicRead ? Eye : Mail;
+  return (
+    <p
+      className={cn(
+        "flex flex-wrap items-center gap-1.5 px-1 text-xs",
+        tone === "warn" ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground",
+      )}
+      data-testid="reply-reach"
+    >
+      <Icon className="size-3.5 shrink-0" />
+      {text}
+      {tone === "warn" && isAdmin && (
+        <Link
+          href={`/projects/${projectId}?tab=privacy`}
+          className="font-medium underline underline-offset-2"
+        >
+          Change in project settings
+        </Link>
+      )}
+    </p>
   );
 }

@@ -2,19 +2,24 @@
 // vectors (see shapes.ts) and are flattened onto the screenshot only on export, so undo/redo, drafts and
 // re-rendering at any size are lossless.
 import {
+  type AnnotationLayer,
   COLORS,
   cropOf,
+  DESTRUCTIVE,
   ellipseOf,
   History,
   isTiny,
+  nextStep,
   type Point,
   rectOf,
   type Shape,
   type Size,
+  stepRadius,
   strokeWidth,
   TOOL_KEYS,
   type Tool,
   textSize,
+  vectorLayer,
 } from "./shapes";
 
 const MAX_DATA_URL = 10_500_000; // the API accepts 11 MB of data URL
@@ -100,7 +105,7 @@ export class Editor {
     this.changed();
   }
 
-  /** Editor shortcuts: R O A P T B C pick tools, Ctrl/⌘+Z undo, Ctrl/⌘+Shift+Z or Ctrl+Y redo. */
+  /** Editor shortcuts: R O A P H T N B C pick tools, Ctrl/⌘+Z undo, Ctrl/⌘+Shift+Z or Ctrl+Y redo. */
   key(e: KeyboardEvent): boolean {
     if (e.altKey) return false;
     const k = e.key.toLowerCase();
@@ -133,21 +138,34 @@ export class Editor {
       this.placeText(p);
       return;
     }
+    if (this.tool === "step") {
+      // One click, one numbered marker.
+      this.history.push({
+        tool: "step",
+        color: this.color,
+        size: this.size,
+        at: p,
+        n: nextStep(this.shapes),
+      });
+      this.changed();
+      return;
+    }
     try {
       this.canvas.setPointerCapture(e.pointerId);
     } catch {
       // pointer capture is a nicety; drawing works without it
     }
     const { color, size } = this;
+    const tool = this.tool;
     this.draft =
-      this.tool === "pen"
-        ? { tool: "pen", color, size, points: [p] }
-        : { tool: this.tool, color, size, a: p, b: p };
+      tool === "pen" || tool === "highlighter"
+        ? { tool, color, size, points: [p] }
+        : { tool, color, size, a: p, b: p };
     const move = (ev: PointerEvent) => {
       const d = this.draft;
-      if (!d || d.tool === "text") return;
+      if (!d || d.tool === "text" || d.tool === "step") return;
       const q = this.toCanvas(ev);
-      if (d.tool === "pen") d.points.push(q);
+      if (d.tool === "pen" || d.tool === "highlighter") d.points.push(q);
       else d.b = q;
       this.render();
     };
@@ -206,12 +224,16 @@ export class Editor {
     this.changed();
   }
 
-  private render(forExport = false) {
+  /** `export`: everything flattened; `base`: only the redactions (blur), for the vector-layer upload. */
+  private render(forExport: false | "flat" | "base" = false) {
     const { ctx, canvas } = this;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(this.base, 0, 0);
     const all = this.draft ? [...this.history.items, this.draft] : this.history.items;
-    for (const s of all) if (s.tool !== "crop") drawShape(ctx, this.base, s);
+    for (const s of all) {
+      if (s.tool === "crop" || (forExport === "base" && s.tool !== "blur")) continue;
+      drawShape(ctx, this.base, s);
+    }
     if (forExport) return;
     // Show the crop as a dimmed surround; the pixels themselves are only cut on export.
     const d = this.draft?.tool === "crop" ? this.draft : null;
@@ -233,8 +255,35 @@ export class Editor {
 
   /** Flattened (and cropped) image as a data URL, kept under the server's size limit. */
   export(): string {
+    return this.encodeAs("flat").dataUrl;
+  }
+
+  /**
+   * The image with only the redactions (blur) and the crop applied, plus the other shapes as a vector layer
+   * (wave-5 §2): the dashboard draws them on top and can switch them off. Redactions are never sent as vectors,
+   * so hidden data stays hidden. Without vector shapes this is the plain export.
+   */
+  exportLayered(): { screenshot: string; annotations: AnnotationLayer | null; cropped: boolean } {
     this.commitText();
-    this.render(true);
+    const crop = cropOf(this.shapes, this.canvas.width, this.canvas.height);
+    const vectors = this.shapes.some((s) => !DESTRUCTIVE.includes(s.tool));
+    if (!vectors) return { screenshot: this.export(), annotations: null, cropped: !!crop };
+    const out = this.encodeAs("base");
+    const layer = vectorLayer(
+      this.shapes,
+      crop,
+      out.width,
+      out.height,
+      out.width / (crop?.w ?? this.canvas.width),
+    );
+    // A layer over the size cap can't be sent: flatten instead, as before wave 5.
+    if (!layer) return { screenshot: this.export(), annotations: null, cropped: !!crop };
+    return { screenshot: out.dataUrl, annotations: layer, cropped: !!crop };
+  }
+
+  private encodeAs(mode: "flat" | "base"): { dataUrl: string; width: number; height: number } {
+    this.commitText();
+    this.render(mode);
     const crop = cropOf(this.shapes, this.canvas.width, this.canvas.height);
     let src: HTMLCanvasElement = this.canvas;
     if (crop) {
@@ -255,7 +304,7 @@ export class Editor {
       out = encode(src, 0.7);
     }
     this.render();
-    return out;
+    return { dataUrl: out, width: src.width, height: src.height };
   }
 
   destroy() {
@@ -278,13 +327,32 @@ function drawShape(ctx: CanvasRenderingContext2D, base: HTMLCanvasElement, s: Sh
   ctx.lineWidth = lw;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  if (s.tool === "pen") {
+  if (s.tool === "pen" || s.tool === "highlighter") {
+    if (s.tool === "highlighter") {
+      // A wide translucent marker stroke; multiply keeps the text under it readable.
+      ctx.globalAlpha = 0.35;
+      ctx.globalCompositeOperation = "multiply";
+      ctx.lineWidth = lw * 4;
+    }
     ctx.beginPath();
     for (const [i, p] of s.points.entries()) {
       if (i) ctx.lineTo(p.x, p.y);
       else ctx.moveTo(p.x, p.y);
     }
     ctx.stroke();
+  } else if (s.tool === "step") {
+    const r = stepRadius(ctx.canvas.width, s.size);
+    ctx.beginPath();
+    ctx.arc(s.at.x, s.at.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = Math.max(2, r / 6);
+    ctx.strokeStyle = "#fff";
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = `700 ${Math.round(r * 1.1)}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(s.n), s.at.x, s.at.y + r * 0.05);
   } else if (s.tool === "text") {
     ctx.font = `600 ${s.px}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif`;
     ctx.textBaseline = "top";

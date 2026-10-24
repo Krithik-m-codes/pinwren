@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { feedbackKind, feedbackStatus, priority } from "./schemas";
+import { FEEDBACK_SORTS, feedbackKind, feedbackStatus, priority, SORT_ORDERS } from "./schemas";
 
 // Review rounds (F-055) and saved views (wave-4 contract §2).
 
@@ -42,6 +42,13 @@ export const viewFilters = z.object({
   assigneeId: z.string().max(100).optional(),
   page: z.string().trim().max(2000).optional(),
   since: z.iso.datetime({ offset: true }).optional(),
+  /** Wave 5 (triage): label, reporter and the list order are part of a view too. */
+  labelId: z.uuid().optional(),
+  reporter: z.string().trim().max(254).optional(),
+  /** Wave 5: items sent through one review link (F-012). */
+  reviewLinkId: z.uuid().optional(),
+  sort: z.enum(FEEDBACK_SORTS).optional(),
+  order: z.enum(SORT_ORDERS).optional(),
 });
 export type ViewFilters = z.infer<typeof viewFilters>;
 

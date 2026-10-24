@@ -2,6 +2,8 @@
 
 **Status:** accepted. Amends blueprint 09 §1 (CSRF: an Origin check instead of a double-submit header) and
 §4 (CSP: no script nonces). Supersedes ADR 0014's "first user who signed up is the instance admin" rule.
+**Amended** in wave 5 (see [Amendment: the first account is the administrator](#amendment-wave-5-the-first-account-is-the-administrator)):
+decision 3's setup token is gone; the first account administers the instance again.
 
 ## Context
 
@@ -59,7 +61,8 @@ An independent review before the first release found:
    Per-project caps hold however many addresses send: `WIDGET_PROJECT_REPORTS_PER_MIN` (120) and
    `WIDGET_PROJECT_MB_PER_HOUR` (500, counting stored files).
 
-3. **First-run admin.** An instance admin is either listed in `PINWREN_ADMIN_EMAILS` or claimed with a one-time
+3. **First-run admin** (replaced by the wave-5 amendment below). An instance admin is either listed in
+   `PINWREN_ADMIN_EMAILS` or claimed with a one-time
    setup token. While no admin exists, each server start prints a new token to the log; only its SHA-256 hash is
    stored. A signed-in user claims it at `/setup` (`POST /api/setup/claim`), behind an advisory lock and a rate
    limit, after which all tokens are dropped.
@@ -120,9 +123,46 @@ An independent review before the first release found:
 - **Self-hosters:**
   - Must set `PINWREN_TRUST_PROXY` to their real proxy count.
   - Must list internal webhook or tracker hosts in `PINWREN_OUTBOUND_ALLOWLIST`.
-  - Must set `PINWREN_ADMIN_EMAILS` or claim `/setup`.
+  - Must set `PINWREN_ADMIN_EMAILS` or claim `/setup` (since the wave-5 amendment: create the first account
+    before anyone else can reach the server).
   - Must set `PINWREN_DISABLE_SIGNUP=false` if they want open sign-up.
 - **Members** (non-admins) now see project settings read-only.
 - **Webhook logs** no longer show receiver responses.
 - **Smoke and e2e** start the server with `PINWREN_DISABLE_SIGNUP=false PINWREN_OUTBOUND_ALLOWLIST=127.0.0.1`, and
   Playwright's API client sends an Origin header.
+
+## Amendment (wave 5): the first account is the administrator
+
+**Context.** The setup token kept a stranger from claiming a fresh, public instance, but it cost every
+self-hoster a trip to the server log before they could set up email. The audit for the first release found
+first-time owners stuck: Settings › Email was hidden from them and nothing in the dashboard said why. The
+owner chose BugPin's model: the person who installs the server signs up first and administers it, and
+everything is configured in the dashboard.
+
+**Decision.**
+
+- The **first account** created on an instance becomes its administrator. `promoteFirstAccount`
+  (`packages/api/src/services/setup.ts`) runs after every account insert (Better Auth's user-create hook)
+  and once at start. It takes the same advisory lock the old claim used and promotes the **oldest** account
+  only while nobody administers the instance, so two simultaneous first sign-ups can't both win.
+- The setup token is removed: no token is issued or printed, `POST /api/setup/claim` answers `410
+SETUP_TOKEN_REMOVED`, and `/setup` only forwards old links (to `/sign-up`, or `/inbox` when signed in).
+  Instances upgraded with an unclaimed token get their oldest account promoted at start.
+- `PINWREN_ADMIN_EMAILS` stays as an optional, env-locked extra. While it lists anyone, nobody is promoted
+  automatically.
+- Administrators name more administrators, or remove them, in Settings › Security. The server never removes
+  the last one. Deleting the last administrator's account promotes the oldest remaining account.
+- `GET /api/setup` is public and tells the sign-in screens whether an account exists yet, whether strangers
+  may sign up, whether email can go out, and the `PINWREN_URL` origin.
+- The sign-up rules of decision 3 are unchanged: the first account can always be created, invited addresses
+  can always sign up, and anyone else only with `PINWREN_DISABLE_SIGNUP=false`.
+
+**Consequences.**
+
+- The exposure is the time between the server starting and its owner signing up: whoever creates the first
+  account administers the instance. This is the trade BugPin makes. The self-hosting docs tell owners to keep
+  a new instance private (firewall, VPN or a localhost-only port) until the first account exists, or to set
+  `PINWREN_ADMIN_EMAILS` before exposing it.
+- First-time owners reach Settings › Email (SMTP) straight after onboarding; there is no log to read.
+- `scripts/smoke.mjs` and the Playwright suites keep `PINWREN_ADMIN_EMAILS`, so they create no administrator
+  by signing up first.

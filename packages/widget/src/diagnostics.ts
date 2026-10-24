@@ -13,6 +13,9 @@ const SENSITIVE_PARAM = /token|key|secret|pass(word)?|auth|session|code|sig/i;
 const consoleBuf: ConsoleEntry[] = [];
 const networkBuf: NetworkEntry[] = [];
 let installed = false;
+/** `<endpoint>/w/`: the widget's own API calls, left out of the network log. Host paths like `/w/orders` stay. */
+let own = "";
+const isOwn = (url: string) => !!own && url.startsWith(own);
 
 function push<T>(buf: T[], item: T, max: number) {
   buf.push(item);
@@ -81,9 +84,10 @@ function wrap<O extends object, K extends keyof O>(
   });
 }
 
-export function installDiagnostics(cfg: Pick<CaptureCfg, "console" | "network">) {
+export function installDiagnostics(cfg: Pick<CaptureCfg, "console" | "network">, endpoint = "") {
   if (installed) return;
   installed = true;
+  own = endpoint ? `${endpoint.replace(/\/+$/, "")}/w/` : "";
   const live = { on: true };
 
   try {
@@ -179,17 +183,18 @@ function installNetwork(cfg: Pick<CaptureCfg, "network">, live: { on: boolean })
         try {
           const res = await originalFetch.call(this, input, init);
           const ms = performance.now() - started;
-          if ((res.status >= 400 || ms > 3000) && !url.includes("/w/"))
+          if ((res.status >= 400 || ms > 3000) && !isOwn(url))
             record({ method, url: redactUrl(url), status: res.status, durationMs: ms, at: Date.now() });
           return res;
         } catch (err) {
-          record({
-            method,
-            url: redactUrl(url),
-            status: 0,
-            durationMs: performance.now() - started,
-            at: Date.now(),
-          });
+          if (!isOwn(url))
+            record({
+              method,
+              url: redactUrl(url),
+              status: 0,
+              durationMs: performance.now() - started,
+              at: Date.now(),
+            });
           throw err;
         }
       },

@@ -8,6 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { ProjectDetail } from "@/lib/api";
+import { useViewer } from "@/lib/viewer";
+import { DataExportCard, EraseReporterCard } from "./privacy-data";
 import { useProjectPatch } from "./use-project";
 
 const RETENTION = [
@@ -28,6 +30,7 @@ export function PrivacyTab({ project: p }: { project: ProjectDetail }) {
   const retentionValue = custom ? "custom" : preset;
 
   const privacy = p.widgetConfig.privacyMode;
+  const { isAdmin } = useViewer();
 
   return (
     <div className="grid max-w-3xl gap-4">
@@ -103,7 +106,9 @@ export function PrivacyTab({ project: p }: { project: ProjectDetail }) {
       <Card>
         <CardHeader>
           <CardTitle>Data</CardTitle>
-          <CardDescription>How long feedback is kept, and who hears about changes.</CardDescription>
+          <CardDescription>
+            How long feedback is kept. Emails to reporters are set on the Widget tab.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <SettingGroup>
@@ -161,17 +166,6 @@ export function PrivacyTab({ project: p }: { project: ProjectDetail }) {
                 )}
               </div>
             </SettingRow>
-            <SettingRow
-              label="Email the reporter"
-              htmlFor="notify-reporter"
-              description="When a reporter left an address, email them about public replies and status changes."
-            >
-              <Switch
-                id="notify-reporter"
-                checked={p.notifyReporter}
-                onCheckedChange={(notifyReporter) => save.mutate({ patch: { notifyReporter } })}
-              />
-            </SettingRow>
           </SettingGroup>
         </CardContent>
       </Card>
@@ -223,6 +217,8 @@ export function PrivacyTab({ project: p }: { project: ProjectDetail }) {
           </SettingGroup>
         </CardContent>
       </Card>
+      {isAdmin && <DataExportCard project={p} />}
+      {isAdmin && <EraseReporterCard />}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { urlPatternMatches } from "../../core/src/url-pattern";
 import type { WidgetConfig } from "./config";
 
 // Visibility rules (F-012, SitePing parity; wave-4 §4). Widget-side only: the server just stores the setting.
@@ -36,11 +37,41 @@ export type Hidden = "environment" | "viewport" | null;
 
 /** Why the widget must stay hidden right now, or null when it may show. */
 export function hiddenBy(
-  v: WidgetConfig["visibility"],
+  v: Pick<WidgetConfig["visibility"], "environments" | "minViewportWidth">,
   page: { hostname: string; width: number; forceShow: boolean },
 ): Hidden {
   if (page.forceShow) return null;
   if (v.environments === "non-production" && isProductionHost(page.hostname)) return "environment";
   if (v.minViewportWidth > 0 && page.width < v.minViewportWidth) return "viewport";
   return null;
+}
+
+/**
+ * Who gets the widget (`visibility.mode`, wave-5 §2):
+ *   always       everyone
+ *   identified   only after `Pinwren.identify(user)` with an id or email
+ *   queryParam   the page was opened with `?<queryParam>` (remembered for the browser session)
+ *   urlPatterns  the page path matches one of `urlPatterns` (`/app/*`, `/product/:id`)
+ *   manual       nobody until the host calls `Pinwren.show()`
+ * `Pinwren.show()` / `hide()` override the mode either way (`host`), and a valid review link shows it in
+ * every mode.
+ */
+export function allowedByMode(
+  v: Pick<WidgetConfig["visibility"], "mode" | "urlPatterns">,
+  page: { url: string; identified: boolean; flagged: boolean; review: boolean; host: "show" | "hide" | null },
+): boolean {
+  if (page.host) return page.host === "show";
+  if (page.review) return true;
+  switch (v.mode) {
+    case "identified":
+      return page.identified;
+    case "queryParam":
+      return page.flagged;
+    case "urlPatterns":
+      return v.urlPatterns.some((p) => urlPatternMatches(p, page.url));
+    case "manual":
+      return false;
+    default:
+      return true;
+  }
 }

@@ -58,15 +58,18 @@ export function ReportButton() {
 | `forceShow`                                           | `boolean`                        | Ignore the project's visibility rules                                                                         |
 | `allowReplayInPrivacyMode`                            | `boolean`                        | Keep session replay on in privacy mode                                                                        |
 | `nonce`                                               | `string`                         | CSP nonce for the widget's scripts                                                                            |
+| `metadata`                                            | `object \| null`                 | Context sent with every report and comment (plain JSON, ≤ 14 KB); compared by value                           |
+| `visible`                                             | `boolean`                        | `true` shows, `false` hides the widget whatever the visibility mode; leave out to let the mode decide         |
 | `onReady`, `onOpen`, `onClose`, `onSubmit`, `onError` | callbacks                        | Widget events; the latest function is always called                                                           |
 
 Changing `projectKey`, `endpoint`, `locale`, `accent`, `forceShow`, `nonce` or `allowReplayInPrivacyMode`
-re-creates the widget; `user`, `userSignature` and `urlPattern` update it in place.
+re-creates the widget; `user`, `userSignature`, `urlPattern`, `metadata` and `visible` update it in place.
 
 ## `usePinwren()`
 
-Returns `{ ready, open(mode?), close(), identify(user, { signature }?), setPageScope({ urlPattern }), on(event,
-handler) }`. The functions work before the widget has loaded (calls are queued); `on` returns an unsubscribe
+Returns `{ ready, open(mode?), close(), identify(user, { signature }?), setPageScope({ urlPattern }),
+setMetadata(object), show(), hide(), on(event, handler) }`. The functions work before the widget has loaded
+(calls are queued); `on` returns an unsubscribe
 function to call in your effect's cleanup.
 
 ## Server-side rendering

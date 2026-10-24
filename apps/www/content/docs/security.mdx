@@ -21,7 +21,7 @@ instance.
 | Session theft and CSRF                       | `/api`                            | Better Auth sessions with a trusted-origin check against `PINWREN_URL`; cookie-carrying writes must come from Pinwren's own origin (`Origin` or `Sec-Fetch-Site: same-origin`) and be JSON (`415` otherwise); a Content-Security-Policy on every dashboard page; an instance-wide session lifetime that is a hard limit from sign-in; optional HTTPS enforcement with HSTS. |
 | Server-side request forgery                  | Webhooks, panel actions, trackers | One outbound guard for every URL a user enters: private, internal and metadata addresses refused (after DNS resolution, connecting only to the checked address), no redirects followed, timeouts and response caps, and no response body ever shown back. `PINWREN_OUTBOUND_ALLOWLIST` admits internal targets you choose.                                                  |
 | Spoofed client addresses                     | Rate limits, sign-in limiter      | `PINWREN_TRUST_PROXY` counts trusted proxy hops and takes the address from the right of `X-Forwarded-For`; `X-Real-IP` is never read; with no trusted proxy only the socket address counts.                                                                                                                                                                                 |
-| Taking over a fresh instance                 | Sign-up, instance admin           | Instance admins only from `PINWREN_ADMIN_EMAILS` or a one-time `pws_` setup token printed to the server log (stored as a hash, single use); sign-up closes after the first account unless `PINWREN_DISABLE_SIGNUP=false`.                                                                                                                                                   |
+| Taking over a fresh instance                 | Sign-up, instance admin           | The first account administers the server (keep it private until you have signed up), plus `PINWREN_ADMIN_EMAILS`; the promotion is serialised so two first sign-ups can't both win; sign-up closes after the first account unless `PINWREN_DISABLE_SIGNUP=false`.                                                                                                           |
 | Guessing API tokens                          | `/api/v1`, `/mcp`                 | 20 failed tokens per address in 10 minutes, then `429 RATE_LIMITED` for the rest of the window.                                                                                                                                                                                                                                                                             |
 | Oversized requests                           | Every public endpoint             | Body caps enforced while the request streams in, before parsing: 2 MB on `/api` and `/mcp`, 48 MB per report (with a required `Content-Length`), 64 KB for widget replies, 1 MB for inbound webhooks; per-project report and storage caps.                                                                                                                                  |
 | Leaked credentials                           | SMTP, webhook and tracker secrets | AES-256-GCM at rest with a key derived from `PINWREN_SECRET` (HKDF); write-only in the API. Slack and Discord webhook URLs are encrypted the same way and only ever returned masked. API tokens are stored as scrypt hashes and shown once.                                                                                                                                 |
@@ -46,9 +46,11 @@ Before the first release, an independent review led to these changes
   `X-Forwarded-For`, and `X-Real-IP` is ignored — see
   [client addresses](/docs/self-hosting/reverse-proxy#client-addresses). The sign-in limiter uses the same address
   and keeps its counters in Postgres, shared by all workers.
-- **Setup token.** Signing up first no longer makes anyone an admin. Admins come from `PINWREN_ADMIN_EMAILS` or claim
-  the instance at `/setup` with the one-time token from the server log; sign-up closes after the first account by
-  default. See [first run](/docs/self-hosting#first-run).
+- **First account.** The first account created on a server is its administrator (there is no setup token), so
+  keep a new server private until you have signed up. `PINWREN_ADMIN_EMAILS` names more; sign-up closes after the
+  first account by default. See [the first account](/docs/dashboard/accounts#the-first-account).
+- **Accounts.** Password reset links work once and sign every device out; two-factor authentication (TOTP with
+  backup codes) is available to everyone; reset, verification, two-factor and sign-in endpoints are rate limited.
 - **CSRF and CSP.** Cookie-authenticated writes must be same-origin JSON. Dashboard pages send a fixed
   Content-Security-Policy (no third-party origins, `object-src 'none'`, `base-uri 'none'`,
   `frame-ancestors 'none'`), which also keeps session replays from loading remote resources. Inline scripts stay
@@ -87,8 +89,8 @@ Before the first release, an independent review led to these changes
   `PINWREN_ENFORCE_HTTPS=true`.
 - **Limit each project's allowed sites** to the origins that really embed the widget. The origin allowlist and
   the rate limits are what protect ingest, not the key.
-- **Claim the instance.** Set `PINWREN_ADMIN_EMAILS`, or claim `/setup` with the `pws_` token from the server log
-  right after the first start. Keep sign-up at its default (first account, then invitations only) unless you
+- **Create the first account** before anyone else can reach the server (or set `PINWREN_ADMIN_EMAILS` first), and
+  turn on two-factor authentication for administrators. Keep sign-up at its default (first account, then invitations only) unless you
   really want `PINWREN_DISABLE_SIGNUP=false`.
 - **Allowlist only what you need.** Add internal webhook receivers or a self-managed GitLab to
   `PINWREN_OUTBOUND_ALLOWLIST` by host name or a narrow CIDR, and never set `PINWREN_OUTBOUND_ALLOW_PRIVATE` outside

@@ -1,6 +1,8 @@
 # Pinwren self-host: the app + Postgres. Put a TLS reverse proxy in front for production.
 #   cp docker/.env.example docker/.env   # fill in the values
 #   docker compose -f docker/compose.yml --env-file docker/.env up -d
+# Then open PINWREN_URL and create the first account: it is the instance admin (SMTP, security,
+# licence are all set in the dashboard). Needs Docker Compose v2.24+ (optional env_file).
 services:
   pinwren:
     image: ${PINWREN_IMAGE:-pinwren:latest}
@@ -8,6 +10,11 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     restart: unless-stopped
+    # Every variable in docker/.env reaches the app (SMTP_*, EMAIL_FROM, S3_*, rate limits…). The
+    # `environment:` block below sets the required and derived ones and wins over the same name here.
+    env_file:
+      - path: .env
+        required: false
     ports:
       - "${PINWREN_BIND:-127.0.0.1}:${PINWREN_PORT:-3000}:3000"
     environment:
@@ -15,7 +22,7 @@ services:
       PINWREN_SECRET: ${PINWREN_SECRET:?Set PINWREN_SECRET (openssl rand -base64 48)}
       DATABASE_URL: postgres://pinwren:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/pinwren
       PINWREN_TRUST_PROXY: ${PINWREN_TRUST_PROXY:-1}
-      # Unset: first account + invitations only (ADR 0021). false: open sign-up. true: closed.
+      # Unset: the first account (the admin) + invited people only. false: open sign-up. true: closed.
       PINWREN_DISABLE_SIGNUP: ${PINWREN_DISABLE_SIGNUP:-}
       PINWREN_ADMIN_EMAILS: ${PINWREN_ADMIN_EMAILS:-}
       PINWREN_OUTBOUND_ALLOWLIST: ${PINWREN_OUTBOUND_ALLOWLIST:-}

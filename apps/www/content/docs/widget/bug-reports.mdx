@@ -39,21 +39,31 @@ share** or **Send without screenshot**.
 
 ## Annotation editor
 
-| Tool    | Key          | Notes                                                                                        |
-| ------- | ------------ | -------------------------------------------------------------------------------------------- |
-| Box     | <kbd>R</kbd> | A rectangle outline.                                                                         |
-| Ellipse | <kbd>O</kbd> |                                                                                              |
-| Arrow   | <kbd>A</kbd> |                                                                                              |
-| Draw    | <kbd>P</kbd> | Freehand strokes.                                                                            |
-| Text    | <kbd>T</kbd> | Click to place and type; <kbd>Enter</kbd> or clicking away commits, <kbd>Esc</kbd> discards. |
-| Hide    | <kbd>B</kbd> | Pixelates the area — irreversibly, unlike a blur, so it is safe for personal data.           |
-| Crop    | <kbd>C</kbd> | Shown as a dimmed surround; pixels are cut when the report is sent.                          |
+| Tool      | Key          | Notes                                                                                        |
+| --------- | ------------ | -------------------------------------------------------------------------------------------- |
+| Box       | <kbd>R</kbd> | A rectangle outline.                                                                         |
+| Ellipse   | <kbd>O</kbd> |                                                                                              |
+| Arrow     | <kbd>A</kbd> |                                                                                              |
+| Draw      | <kbd>P</kbd> | Freehand strokes.                                                                            |
+| Highlight | <kbd>H</kbd> | A wide, see-through marker stroke for text and areas.                                        |
+| Text      | <kbd>T</kbd> | Click to place and type; <kbd>Enter</kbd> or clicking away commits, <kbd>Esc</kbd> discards. |
+| Step      | <kbd>N</kbd> | Click to drop a numbered marker (1, 2, 3 …) for steps to reproduce.                          |
+| Hide      | <kbd>B</kbd> | Pixelates the area — irreversibly, unlike a blur, so it is safe for personal data.           |
+| Crop      | <kbd>C</kbd> | Shown as a dimmed surround; pixels are cut when the report is sent.                          |
 
 Five colours (red, amber, green, blue, near-black), three sizes (small, medium, large), and undo / redo with
 
 <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd> and <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd>
 (or
 <kbd>Ctrl</kbd> + <kbd>Y</kbd>).
+
+Annotations are sent as a vector layer over the screenshot, not burnt into it: the dashboard draws them on top and
+can switch them off to show what was underneath. **Hide** and **Crop** are the exception — they change the image
+itself before it leaves the browser, so hidden data is never uploaded.
+
+The screenshot also records the viewport it shows (width, height, scroll position and capture mode), which
+[Page review](/docs/dashboard/page-review) uses to place every thread of the page on it. A cropped screenshot or
+an element capture is not used for that.
 
 ## Attachments
 

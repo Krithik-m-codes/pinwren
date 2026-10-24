@@ -7,6 +7,7 @@
 //   widget-editor.<hash>.js    screenshot annotation editor
 //   widget-capture.<hash>.js   SnapDOM (screenshot engine)
 //   widget-replay.<hash>.js    rrweb recorder (session replay)
+//   widget-flows.<hash>.js     composer attachments, re-pin mode (wave 5)
 //   widget-i18n-<code>.<hash>.js
 //
 // File names are content-hashed so CDNs can cache them forever; build.mjs inlines the name map into
@@ -18,7 +19,7 @@
 
 declare const __PINWREN_MANIFEST__: Record<string, string> | undefined;
 
-export type ChunkName = "capture" | "editor" | "report" | "panel" | "replay";
+export type ChunkName = "capture" | "editor" | "report" | "panel" | "replay" | "flows";
 
 const GLOBALS: Record<ChunkName, string> = {
   capture: "__pinwrenCapture",
@@ -26,6 +27,7 @@ const GLOBALS: Record<ChunkName, string> = {
   report: "__pinwrenReport",
   panel: "__pinwrenPanel",
   replay: "__pinwrenReplay",
+  flows: "__pinwrenFlows",
 };
 
 const MANIFEST: Record<string, string> = typeof __PINWREN_MANIFEST__ === "object" ? __PINWREN_MANIFEST__ : {};

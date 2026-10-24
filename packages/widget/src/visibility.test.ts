@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hiddenBy, isProductionHost } from "./visibility";
+import { allowedByMode, hiddenBy, isProductionHost } from "./visibility";
 
 describe("isProductionHost", () => {
   it.each([
@@ -65,5 +65,38 @@ describe("hiddenBy", () => {
   it("forceShow overrides every rule", () => {
     const v = { environments: "non-production", minViewportWidth: 2000 } as const;
     expect(hiddenBy(v, { hostname: "example.com", width: 300, forceShow: true })).toBeNull();
+  });
+});
+
+describe("allowedByMode (wave-5)", () => {
+  const page = {
+    url: "https://shop.test/app/orders",
+    identified: false,
+    flagged: false,
+    review: false,
+    host: null,
+  };
+  const v = (
+    mode: "always" | "identified" | "queryParam" | "urlPatterns" | "manual",
+    urlPatterns: string[] = [],
+  ) => ({
+    mode,
+    urlPatterns,
+  });
+  it("applies each mode", () => {
+    expect(allowedByMode(v("always"), page)).toBe(true);
+    expect(allowedByMode(v("identified"), page)).toBe(false);
+    expect(allowedByMode(v("identified"), { ...page, identified: true })).toBe(true);
+    expect(allowedByMode(v("queryParam"), page)).toBe(false);
+    expect(allowedByMode(v("queryParam"), { ...page, flagged: true })).toBe(true);
+    expect(allowedByMode(v("urlPatterns", ["/app/*"]), page)).toBe(true);
+    expect(allowedByMode(v("urlPatterns", ["/blog/:slug"]), page)).toBe(false);
+    expect(allowedByMode(v("manual"), page)).toBe(false);
+  });
+  it("lets the host and review links override the mode", () => {
+    expect(allowedByMode(v("manual"), { ...page, host: "show" })).toBe(true);
+    expect(allowedByMode(v("always"), { ...page, host: "hide" })).toBe(false);
+    expect(allowedByMode(v("manual"), { ...page, review: true })).toBe(true);
+    expect(allowedByMode(v("manual"), { ...page, review: true, host: "hide" })).toBe(false);
   });
 });

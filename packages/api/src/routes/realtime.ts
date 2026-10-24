@@ -45,7 +45,12 @@ export const realtime = new Hono<{ Variables: SessionVars }>()
           });
       };
       const sub = await subscribe(
-        { orgId, projectIds: projectIds.length ? new Set(projectIds) : null, send: write },
+        {
+          orgId,
+          userId: c.var.userId,
+          projectIds: projectIds.length ? new Set(projectIds) : null,
+          send: write,
+        },
         lastEventId,
       );
       await stream.write("retry: 3000\n\n");

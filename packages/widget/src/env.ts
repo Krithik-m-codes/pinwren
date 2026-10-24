@@ -1,4 +1,6 @@
 import type { WidgetFeedbackCreate } from "@pinwren/core";
+import { t } from "./i18n";
+import { HttpError } from "./queue";
 
 export function uuid(): string {
   return (
@@ -56,4 +58,24 @@ export function environment(privacy = false, ua = navigator.userAgent): WidgetFe
   };
 }
 
-export const errText = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback);
+/**
+ * What to tell the visitor about a failed request, in their language (wave-5 §3.3): the HTTP status and the
+ * server's problem `code` pick the message. Server titles and browser texts ("Failed to fetch") are English
+ * and technical, so they never reach the visitor; anything unrecognised gets `fallback`.
+ */
+export function errText(err: unknown, fallback: string): string {
+  if (!(err instanceof HttpError)) return fallback;
+  const { status, code } = err;
+  if (status === 0) return t("errOffline");
+  if (status === 408) return t("errTimeout");
+  if (status === 413) return t("errTooLarge");
+  if (status === 429) return t("errRateLimited");
+  if (status === 409) return t("errConflict");
+  if (status === 404) return t("errGone");
+  if (status === 403 || status === 401)
+    return code === "READ_ONLY" || code === "ORIGIN_NOT_ALLOWED" || code === "INVALID_PROJECT_KEY"
+      ? t("errNotAccepting")
+      : t("errNotAllowed");
+  if (status >= 500) return t("errServer");
+  return fallback;
+}

@@ -42,4 +42,31 @@ The first public release, 0.1.0. Pinwren was developed privately as "Annota" and
   OpenSSF Scorecard, dependency review, release-please, and multi-arch Docker images on GHCR with SBOM and
   provenance.
 
+### First run, install and projects
+
+- **The first account is the admin.** A new server sends you to "Create the admin account"; that account
+  configures SMTP, security and the licence from the dashboard right away. The one-time setup token and the
+  `/setup` claim page are gone (ADR 0021 amendment). `PINWREN_ADMIN_EMAILS` still adds more admins.
+- **Get started checklist** on the inbox, driven by the server's real state: admin account, email set up, a
+  test email sent, widget connected, first report received, a teammate added. Dismissible.
+- **Install tab**: snippets for HTML, Next.js, Google Tag Manager, npm (`@pinwren/widget`) and React
+  (`@pinwren/react`), built from `PINWREN_URL` (with a hint when the dashboard is opened on another address);
+  a "Verify from your terminal" `npx pinwren doctor` command; test-report steps once connected; refused sites
+  listed ("Blocked a request from … 2 min ago") with **Allow**; a warning while no site is allowed.
+- **What is this site for?** when creating a project: a public website keeps bug reports private; a staging or
+  client-review site shows reviewers each other's pins (`preset` on `POST /api/projects`). New projects open
+  on their Install tab. Creating projects is an Admin permission.
+- **Review links**: a page link with a token that shows the widget to a client or reviewer, with an expiry,
+  last-used time and revoke.
+- **Project export** (JSON + every file, as a zip built in the background) and **erase everything one reporter
+  sent** (dry run first, recorded without the address) on Project › Privacy & data.
+- "Email the reporter" moved to the project's Widget tab, next to a link to the reporter email settings.
+- The command palette lists every settings page you can open (same rules as the settings menu); the account
+  menu has **Profile & settings**.
+- The Licence page shows what a licence switches on today (white-label) apart from the **Coming soon**
+  Enterprise features; licences naming those keep working.
+- Docker: every variable in `docker/.env` now reaches the app (`env_file`, Compose v2.24+);
+  `docker/.env.example` has commented blocks for SMTP, S3 storage and HTTPS. New
+  `docs/self-hosting/getting-started.md` walks from install to the first emailed report.
+
 [Unreleased]: https://github.com/Krithik-m-codes/pinwren/commits/main

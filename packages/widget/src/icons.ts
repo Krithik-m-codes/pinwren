@@ -15,6 +15,10 @@ export const ellipse = svg('<ellipse cx="12" cy="12" rx="9" ry="7"/>');
 export const text = svg('<path d="M5 6V4h14v2M12 4v16M9 20h6"/>');
 export const crop = svg('<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>');
 export const redo = svg('<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>');
+export const highlighter = svg(
+  '<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>',
+);
+export const step = svg('<circle cx="12" cy="12" r="9"/><path d="M11 9.5 12.5 8v8"/>');
 export const clip = svg(
   '<path d="m21 11-8.6 8.6a5 5 0 0 1-7-7l8.5-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l8-7.9"/>',
 );
@@ -54,3 +58,10 @@ export const ticket = svg(
 export const bot = svg(
   '<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01M9 17h6"/>',
 );
+export const trash = svg(
+  '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
+);
+export const layers = svg('<path d="m12 3 9 5-9 5-9-5Z"/><path d="m3 13 9 5 9-5"/>');
+export const chevron = svg('<path d="m6 9 6 6 6-6"/>');
+export const sort = svg('<path d="M3 6h10M3 12h7M3 18h4M17 4v16M14 17l3 3 3-3"/>');
+export const user = svg('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>');

@@ -9,36 +9,65 @@ Page review answers "what's wrong with _this_ page?" rather than "what's in my q
 ## All pages
 
 The overview lists every page of the project that has feedback, newest activity first, each with a thumbnail of its
-latest screenshot and its open and closed counts. Pages are grouped by URL — the hash is dropped and query parameters
-are sorted, so `?b=2&a=1` and `?a=1&b=2` are the same page.
+latest screenshot and its open and closed counts. The view reads up to 500 of the project's most recent items:
+enough for a review, not an archive. Use the [inbox](/docs/dashboard) search for anything older.
 
-The view reads up to 500 of the project's most recent items: enough for a review, not an archive. Use the
-[inbox](/docs/dashboard) search for anything older.
+### How pages are grouped
+
+Pins left on `/pricing`, `/pricing/` and `/pricing?utm_source=newsletter` belong to one page. Before grouping, a
+page address loses:
+
+- the hash, and a trailing slash (the site root keeps its `/`);
+- campaign and tracking parameters: `utm_*`, `gclid`, `fbclid`, `msclkid`, `mc_cid`, `mc_eid`, `ref`;
+- Pinwren's own link parameters (`pinwren`, `pwt`, `pinwren_review`);
+- the parameters you list in **URL grouping**.
+
+The remaining query parameters are sorted, so `?b=2&a=1` and `?a=1&b=2` are the same page.
+
+**URL grouping** (top right of the overview, Admins only) lists parameters that don't identify a page on your
+site, such as a session id (`sid`) or an A/B flag. End a name with `*` to match a prefix (`hsa_*`); up to 30.
+**Save and re-group** applies the rule to new feedback and merges the pages already stored. Removing a parameter
+later doesn't split pages that were merged.
 
 ## One page
 
 Pick a page to see:
 
-- **The capture** — a screenshot of the page with every pin and region drawn where it was left. Pins are placed using
-  the geometry stored in each item's [anchor](/docs/widget/anchoring), so they line up with the capture they were
-  made on.
+- **The capture** — a screenshot of the page with every pin and region drawn where it was left. Bug reports and,
+  with **Screenshot with every comment** on, comments carry the viewport their screenshot shows (width, height,
+  scroll position), so every thread made at the same screen width lines up with it. Older items are placed using
+  the geometry stored in their [anchor](/docs/widget/anchoring).
+- **Annotations** — when the reporter drew on the screenshot (boxes, arrows, highlights, numbered steps, text), the
+  marks are drawn over the capture. The **Annotations** toggle hides them to show what was underneath. Areas the
+  reporter blurred stay blurred: they are part of the image.
 - **Other captures** — when several items carry a screenshot, choose which one to use as the base. By default it is
-  the capture on which the most threads can be placed (newest wins a tie).
+  the capture on which the most threads can be placed (newest wins a tie). A cropped screenshot or a capture of one
+  element shows no whole viewport, so it can't be used as a base.
 - **Threads on this page** — every item with its kind, status and number. Items whose anchor doesn't fit the chosen
-  capture are listed as "not on this capture" instead of being drawn in the wrong place.
+  capture are listed as "Not on this capture" instead of being drawn in the wrong place; bug reports and comments
+  on the whole page are listed as "Whole page".
 - **Show: Open / All** — only open threads, or resolved ones too.
-- **Open page** — the live page, where the widget shows the same pins.
+- **Open page** — the live page.
 
 Click a thread to open it in the [detail panel](/docs/dashboard#list-and-detail).
 
 <Callout title="No capture yet?">
-  Pins are drawn over screenshots, and only bug reports carry one — comments don't. Until a page has a bug
-  report with a screenshot, its threads are listed without a capture. The project's **Capture** tab has a
-  **Screenshot with every comment** switch (`capture.screenshotOnComment`), but the widget doesn't act on it
-  in this release. See [bug reports & capture](/docs/widget/bug-reports).
+  Turn on **Screenshot with every comment** on the project's **Capture** tab: every new comment then sends a
+  masked screenshot of what the commenter saw, and the page gets a capture with its first comment. Bug reports
+  always carry one unless the reporter removed it.
 </Callout>
 
 ## On the live page
 
-Every item also has **Open on page** in the inbox. It opens the page with `?pinwren=<id>`, and the widget scrolls to
-the pin and opens its thread — the quickest way to check a fix in context.
+**Open on page** (in the detail panel here and in the inbox) opens the page with a signed link
+(`?pinwren=<id>&pwt=<token>`, valid for 7 days). The widget scrolls to the pin and opens its thread, even when the
+project keeps pins private. Anyone with the link can read that one item and its public replies, so share it like
+the item itself.
+
+### Re-pin
+
+When the page changed and a pin points at the wrong spot (the widget marks it **Moved?**), Admins and Editors can
+use **Re-pin on page**. It opens the page with a re-pin link, valid for 24 hours: a banner says
+"Click where #12 belongs", and the next click (or drag, for an area) moves the pin. **Cancel** or <kbd>Esc</kbd>
+leaves it where it was. The old position stays in the item's history. Tools and scripts can do the same with
+`PATCH /api/feedback/:id/anchor`.

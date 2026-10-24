@@ -457,7 +457,7 @@ test("French UI from data-locale, lazy-loaded catalogue", async ({ page }) => {
   await ready(page, "/?locale=fr");
   expect(requested.some((p) => /^\/widget-i18n-fr\.[0-9a-f]{10}\.js$/.test(p))).toBe(true);
   await page.locator("pinwren-root .launcher").click();
-  await expect(page.getByRole("menuitem", { name: /Ajouter un commentaire/ })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /Créer une annotation/ })).toBeVisible();
   await page.getByRole("menuitem", { name: /Signaler un bug/ }).click();
   const dlg = page.getByRole("dialog", { name: "Signaler un bug" });
   await expect(dlg).toBeVisible();

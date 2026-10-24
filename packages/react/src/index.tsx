@@ -10,6 +10,7 @@ import {
   destroy,
   type EventMap,
   type Handler,
+  hide,
   identify,
   type IdentifyOptions,
   init,
@@ -19,7 +20,9 @@ import {
   type PageScope,
   type PinwrenOptions,
   type PinwrenUser,
+  setMetadata,
   setPageScope,
+  show,
   type WidgetEvent,
 } from "@pinwren/widget";
 import { useEffect, useRef, useSyncExternalStore } from "react";
@@ -33,6 +36,16 @@ export type PinwrenProps = PinwrenOptions & {
   user?: PinwrenUser | null | undefined;
   /** Hex HMAC-SHA256 of `user.id` with the project's identity secret — compute it on your server. */
   userSignature?: string | undefined;
+  /**
+   * Context sent with every bug report and comment (plan, account id, feature flags…): a plain JSON object of
+   * at most 14 KB, shown in the dashboard. Compared by value, so an inline object literal is fine.
+   */
+  metadata?: Record<string, unknown> | null | undefined;
+  /**
+   * `true` shows the widget and `false` hides it, whatever the project's visibility mode says (e.g. mode
+   * "manual"); leave it out to let the mode decide.
+   */
+  visible?: boolean | undefined;
   onReady?: (() => void) | undefined;
   onOpen?: ((data: EventMap["open"]) => void) | undefined;
   onClose?: (() => void) | undefined;
@@ -62,7 +75,8 @@ type Callbacks = Pick<PinwrenProps, "onReady" | "onOpen" | "onClose" | "onSubmit
 
 /**
  * Mounts the Pinwren widget. Changing `projectKey`, `endpoint`, `accent`, `locale`, `forceShow`, `nonce` or
- * `allowReplayInPrivacyMode` re-creates it; `user`, `userSignature` and `urlPattern` update it in place.
+ * `allowReplayInPrivacyMode` re-creates it; `user`, `userSignature`, `urlPattern`, `metadata` and `visible`
+ * update it in place.
  */
 export function Pinwren(props: PinwrenProps): null {
   const {
@@ -76,7 +90,11 @@ export function Pinwren(props: PinwrenProps): null {
     urlPattern,
     user,
     userSignature,
+    metadata,
+    visible,
   } = props;
+  // By value: a parent that writes `metadata={{ plan }}` re-renders with a new object every time.
+  const metadataJson = metadata ? JSON.stringify(metadata) : null;
   const userId = user?.id;
   const userName = user?.name;
   const userEmail = user?.email;
@@ -120,6 +138,20 @@ export function Pinwren(props: PinwrenProps): null {
     identify(who, userSignature ? { signature: userSignature } : undefined);
   }, [userId, userName, userEmail, userSignature]);
 
+  // Only once there is something to set or clear: a component without `metadata` leaves the host's own
+  // `Pinwren.setMetadata()` calls alone.
+  const hadMetadata = useRef(false);
+  useEffect(() => {
+    if (!metadataJson && !hadMetadata.current) return;
+    hadMetadata.current = !!metadataJson;
+    setMetadata(metadataJson ? (JSON.parse(metadataJson) as Record<string, unknown>) : null);
+  }, [metadataJson]);
+
+  useEffect(() => {
+    if (visible === true) show();
+    else if (visible === false) hide();
+  }, [visible]);
+
   useEffect(() => {
     init({ projectKey, endpoint, accent, locale, forceShow, allowReplayInPrivacyMode, nonce });
     return () => {
@@ -134,16 +166,22 @@ export function Pinwren(props: PinwrenProps): null {
 export type PinwrenControls = {
   /** True once the widget has loaded its configuration and shows on the page. */
   ready: boolean;
-  /** Open the menu, or `"comment"`, `"bug"` or `"panel"` directly. */
+  /** Open the menu, or `"comment"`, `"bug"`, `"panel"` or `"page"` (a comment on the whole page) directly. */
   open: (mode?: Mode) => void;
   close: () => void;
   identify: (user: PinwrenUser | null, options?: IdentifyOptions) => void;
   setPageScope: (scope: PageScope | null) => void;
+  /** Context for every report and comment (plain JSON object, ≤ 14 KB); `null` clears it. */
+  setMetadata: (metadata: Record<string, unknown> | null) => void;
+  /** Show the widget, overriding the project's visibility mode. */
+  show: () => void;
+  /** Hide the widget until `show()`. */
+  hide: () => void;
   /** Listen to a widget event; returns the unsubscribe function (call it in your effect's cleanup). */
   on: <E extends WidgetEvent>(event: E, handler: Handler<E>) => () => void;
 };
 
-const controls = { open, close, identify, setPageScope, on };
+const controls = { open, close, identify, setPageScope, setMetadata, show, hide, on };
 
 /** Control the widget from any component (works before it has loaded: calls are queued). */
 export function usePinwren(): PinwrenControls {

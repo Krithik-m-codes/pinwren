@@ -24,6 +24,7 @@ dashboard. The page's origin must be in the project's allowed origins.
 | `data-endpoint`                     | API origin, when it differs from where `widget.js` is served (e.g. a CDN)         |
 | `data-locale`                       | UI language (`en`, `es`, `fr`, `de`, `pt-BR`, `it`, `ja`, `hi`, `nl`, `zh`, `ru`) |
 | `data-accent`                       | Launcher colour, hex                                                              |
+| `data-theme`                        | `light` or `dark`; otherwise the visitor's system setting                         |
 | `data-url-pattern`                  | Page scope, e.g. `/product/:id` — pins are shared across every page matching it   |
 | `data-force-show`                   | Show the widget even where the project's visibility rules would hide it           |
 | `data-nonce`                        | CSP nonce for the scripts the widget adds                                         |
@@ -54,10 +55,12 @@ function in the browser. For React and Next.js use [`@pinwren/react`](https://ww
 | Call                             | What it does                                                                                                                                            |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `init(options)`                  | Start the widget (once per page). Options: `projectKey`, `endpoint`, `accent`, `locale`, `urlPattern`, `forceShow`, `allowReplayInPrivacyMode`, `nonce` |
-| `open(mode?)`                    | Open the menu, or `"comment"`, `"bug"`, `"panel"` directly                                                                                              |
+| `open(mode?)`                    | Open the menu, or `"comment"`, `"bug"`, `"panel"` or `"page"` (a comment on the whole page) directly                                                    |
 | `close()`                        | Close whatever is open                                                                                                                                  |
 | `identify(user, { signature? })` | Pre-fill the reporter from your app; `null` forgets them                                                                                                |
 | `setPageScope({ urlPattern })`   | Change the page scope (`null` clears it); the pins on the page are re-listed                                                                            |
+| `setMetadata(object)`            | Context (plain JSON object, ≤ 14 KB) sent with every report and comment; `null` clears it                                                               |
+| `show()` / `hide()`              | Show or hide the widget, overriding the project's visibility mode                                                                                       |
 | `on(event, handler)`             | `open`, `close`, `submit` (`{ id, number, kind }`), `error` (`{ message }`), `ready`. Returns unsubscribe                                               |
 | `destroy()`                      | Remove everything: UI, listeners, console/network wrappers, session replay                                                                              |
 

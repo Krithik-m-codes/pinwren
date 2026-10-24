@@ -5,20 +5,28 @@ import { bodyLimit } from "hono/body-limit";
 import { createMiddleware } from "hono/factory";
 import { decryptSecret, hmacSha256Hex, sha256Hex, safeEqualStr as timingSafeEqualStr } from "../crypto";
 import { ApiError, notFound } from "../errors";
+import {
+  jiraIssueEvent,
+  linearFresh,
+  linearIssueEvent,
+  verifyJiraSignature,
+  verifyLinearSignature,
+} from "../integrations/inbound";
 import { applyInboundState } from "../integrations/issues";
+import { hasFeature } from "../license";
 import { clientIp } from "../net";
 import { consume } from "../rate-limit";
 import { storage } from "../storage";
 
 // Routes that run without a dashboard session: logos (loaded by email clients and the widget on a
-// customer's site) and the GitHub/GitLab webhooks that close/reopen items. Mounted before the
+// customer's site) and the GitHub/GitLab/Linear/Jira webhooks that close/reopen items. Mounted before the
 // session middleware.
 
 type Integration = typeof issueIntegration.$inferSelect;
 
 const MAX_BODY = 1024 * 1024;
 
-async function candidates(provider: "github" | "gitlab", repo: unknown): Promise<Integration[]> {
+async function candidates(provider: Integration["provider"], repo: unknown): Promise<Integration[]> {
   if (typeof repo !== "string" || !repo || repo.length > 300) return [];
   return getDb()
     .select()
@@ -42,7 +50,7 @@ function secretOf(i: Integration): string | null {
 
 /** Deliveries per sender address and minute, counted before the body is read. */
 const INBOUND_PER_MIN = 120;
-/** How long a delivery id is remembered: longer than GitHub's and GitLab's redelivery windows. */
+/** How long a delivery id is remembered: longer than every provider's redelivery window. */
 const REPLAY_WINDOW_S = 7 * 24 * 3600;
 
 /** Rate limit, then a streamed size cap — both before any parsing or signature work. */
@@ -165,5 +173,61 @@ export const inbound = new Hono()
       return c.json({ ok: true, ignored: true });
     }
     const result = await applyInboundState(match, number, action === "close" ? "closed" : "open");
+    return c.json({ ok: true, ...(result ? { feedback: result } : { ignored: true }) });
+  })
+
+  /**
+   * Linear issue webhook. Verified with `Linear-Signature` (hex HMAC-SHA256 of the raw body with the signing
+   * secret Linear shows, pasted into the integration), refused when `webhookTimestamp` is over 5 minutes
+   * off, and acted on once per `Linear-Delivery`.
+   */
+  .post("/integrations/linear/webhook", ...inboundGuard, async (c) => {
+    const raw = await c.req.text();
+    const sig = c.req.header("linear-signature") ?? "";
+    if (!/^[0-9a-f]{64}$/.test(sig)) throw invalidSignature();
+    const body = parse(raw);
+    const data = obj(body.data);
+    const teamKey =
+      obj(data.team).key ?? (typeof data.identifier === "string" ? data.identifier.split("-")[0] : null);
+    const match = (await candidates("linear", teamKey)).find((i) => {
+      const secret = secretOf(i);
+      return !!secret && verifyLinearSignature(secret, raw, sig);
+    });
+    if (!match) throw invalidSignature();
+    if (!linearFresh(body)) throw new ApiError(401, "STALE_DELIVERY", "Delivery timestamp is too old");
+    if (!(await firstDelivery("linear", match.id, c.req.header("linear-delivery"), raw))) {
+      return c.json({ ok: true, duplicate: true });
+    }
+    const ev = linearIssueEvent(body);
+    if (!ev) return c.json({ ok: true, ignored: true });
+    const result = await applyInboundState(match, ev.number, ev.state);
+    return c.json({ ok: true, ...(result ? { feedback: result } : { ignored: true }) });
+  })
+
+  /**
+   * Jira Cloud webhook (Enterprise: needs the `jira` licence feature). Verified with `X-Hub-Signature`
+   * (`sha256=` HMAC of the raw body with the secret entered in Jira) and acted on once per
+   * `X-Atlassian-Webhook-Identifier`.
+   */
+  .post("/integrations/jira/webhook", ...inboundGuard, async (c) => {
+    const raw = await c.req.text();
+    const sig = c.req.header("x-hub-signature") ?? "";
+    if (!/^sha256=[0-9a-f]{64}$/.test(sig)) throw invalidSignature();
+    const body = parse(raw);
+    const issue = obj(body.issue);
+    const projectKey =
+      obj(obj(issue.fields).project).key ?? (typeof issue.key === "string" ? issue.key.split("-")[0] : null);
+    const match = (await candidates("jira", projectKey)).find((i) => {
+      const secret = secretOf(i);
+      return !!secret && verifyJiraSignature(secret, raw, sig);
+    });
+    if (!match) throw invalidSignature();
+    if (!(await firstDelivery("jira", match.id, c.req.header("x-atlassian-webhook-identifier"), raw))) {
+      return c.json({ ok: true, duplicate: true });
+    }
+    if (!(await hasFeature("jira"))) return c.json({ ok: true, ignored: true, reason: "license" });
+    const ev = jiraIssueEvent(body);
+    if (!ev) return c.json({ ok: true, ignored: true });
+    const result = await applyInboundState(match, ev.number, ev.state);
     return c.json({ ok: true, ...(result ? { feedback: result } : { ignored: true }) });
   });

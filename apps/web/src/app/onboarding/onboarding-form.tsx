@@ -1,12 +1,16 @@
 "use client";
 
+import { useState } from "react";
+import { Controller } from "react-hook-form";
 import { controlProps, Field, FormError, useZodForm } from "@/components/form";
+import { ProjectPresetPicker } from "@/components/project-preset-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import { onboardingForm } from "@/lib/form-schemas";
-import { errorMessage, useCreateProjectMutation } from "@/lib/store/api";
+import { errorMessage } from "@/lib/store/api";
+import { useCreateProjectWithPresetMutation } from "@/lib/store/api/onboarding";
 
 /** A unique-enough slug for the new workspace (Better Auth needs one; people never see it). */
 const workspaceSlug = (name: string) =>
@@ -21,24 +25,37 @@ const slugify = (s: string) =>
 
 /** First run: name the workspace (organisation), then the first project and its site. */
 export function OnboardingForm() {
-  const [createProject] = useCreateProjectMutation();
-  const form = useZodForm(onboardingForm, { defaultValues: { org: "", project: "", site: "" } });
+  const [createProject] = useCreateProjectWithPresetMutation();
+  const form = useZodForm(onboardingForm, {
+    defaultValues: { org: "", project: "", site: "", preset: "public-site" },
+  });
+  // A retry after the project step failed reuses the workspace made on the first try.
+  const [createdOrg, setCreatedOrg] = useState<string | null>(null);
   const { errors, isSubmitting } = form.formState;
 
-  const submit = form.handleSubmit(async ({ org, project, site }) => {
+  const submit = form.handleSubmit(async ({ org, project, site, preset }) => {
     try {
-      const { data, error } = await authClient.organization.create({
-        name: org,
-        slug: workspaceSlug(org),
-      });
-      if (error) throw new Error(error.message ?? "Could not create the workspace");
-      await authClient.organization.setActive({ organizationId: data.id });
+      let orgId = createdOrg;
+      if (!orgId) {
+        const { data, error } = await authClient.organization.create({
+          name: org,
+          slug: workspaceSlug(org),
+        });
+        if (error) throw new Error(error.message ?? "Could not create the workspace");
+        orgId = data.id;
+        setCreatedOrg(orgId);
+      }
+      await authClient.organization.setActive({ organizationId: orgId });
       const created = await createProject({
         name: project || site || "My site",
         allowedOrigins: site ? [site] : [],
+        preset,
       }).unwrap();
-      // A full load: the app's server components read the new active workspace from the session.
-      window.location.assign(new URL(`/projects/${created.project.id}`, window.location.href).href);
+      // A full load: the app's server components read the new active workspace from the session. The
+      // Install tab is the next step: copy the snippet onto the site.
+      window.location.assign(
+        new URL(`/projects/${created.project.id}?tab=install`, window.location.href).href,
+      );
     } catch (e) {
       form.setError("root", { message: errorMessage(e) });
     }
@@ -80,6 +97,19 @@ export function OnboardingForm() {
               {...controlProps("site", errors.site?.message, true)}
               {...form.register("site")}
               placeholder="www.example.com"
+            />
+          </Field>
+          <Field
+            id="preset"
+            label="What is this site for?"
+            help="Sets who sees pins on the page. You can change it later under Privacy & data."
+          >
+            <Controller
+              control={form.control}
+              name="preset"
+              render={({ field }) => (
+                <ProjectPresetPicker id="preset" value={field.value} onChange={field.onChange} />
+              )}
             />
           </Field>
           <FormError message={errors.root?.message} />

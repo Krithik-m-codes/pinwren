@@ -32,6 +32,10 @@ test.describe("inbox", () => {
     await page.keyboard.press("a");
     await page.getByRole("option", { name: "Avery Admin" }).click();
     await expect(page.getByTestId("assignee-picker")).toContainText("Avery Admin");
+    // Assignees are a multi-select: the picker stays open for more until Escape.
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("listbox", { name: "Suggestions" })).toHaveCount(0);
+    await expect(detail).toBeVisible();
     // e → resolve, u → undo, e again
     await page.keyboard.press("e");
     await expect(page.getByText("Resolved", { exact: true }).first()).toBeVisible();
@@ -72,8 +76,15 @@ test.describe("inbox", () => {
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toContain(`item=${items.pin.id}`);
-    const open = detail.getByRole("link", { name: "Open on page" });
-    await expect(open).toHaveAttribute("href", `https://e2e.example.com/pricing?pinwren=${items.pin.id}`);
+    // Open on page asks for a signed deep link (works even when pins are private) and opens it.
+    const linked = page.waitForResponse((r) => r.url().endsWith(`/api/feedback/${items.pin.id}/page-link`));
+    const popup = page.waitForEvent("popup");
+    await detail.getByTestId("open-on-page").click();
+    const { url } = (await (await linked).json()) as { url: string };
+    expect(url).toMatch(
+      new RegExp(`^https://e2e\\.example\\.com/pricing\\?pinwren=${items.pin.id}&pwt=[\\w.-]+$`),
+    );
+    await (await popup).close();
   });
 
   test("region comment shows its capture, anchor and the bug's attachments", async ({ page }) => {
@@ -121,7 +132,7 @@ test.describe("inbox", () => {
     await expect(page.getByText("Assigned 2").first()).toBeVisible();
     // Shift-click the checkbox of another row extends the selection.
     await page
-      .getByRole("checkbox", { name: `Select #${items.headline.number}` })
+      .getByRole("checkbox", { name: `Select #${items.headline.number}`, exact: true })
       .click({ modifiers: ["Shift"] });
     await expect(bar).not.toContainText("2 selected");
     await bar.getByRole("button", { name: "Clear selection" }).click();

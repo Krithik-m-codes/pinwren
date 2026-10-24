@@ -72,4 +72,12 @@ export const enReport = {
   sendWithout: "Send without screenshot",
   noShotNote: "No screenshot — the report will be sent without one.",
   screenCancelled: "Screen sharing was cancelled",
+
+  // Wave 5 (widget data): request errors, private items, page-level comments, re-pin, editor tools
+  toolHighlighter: "Highlight",
+  toolStep: "Step number",
+  repinHint: "Click where #{n} belongs, or drag to mark an area",
+  repinSaving: "Saving…",
+  repinDone: "#{n} moved",
+  repinFailed: "Couldn't move the pin — try again",
 };

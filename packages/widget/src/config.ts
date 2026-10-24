@@ -27,9 +27,27 @@ export type WidgetConfig = {
   panelActions: PanelAction[];
   /** F-021: mask every text field in screenshots, no performance metadata, coarse user agent. */
   privacyMode: boolean;
-  /** F-012 (wave-4 §4): where the widget shows at all. Widget-side only; `forceShow` overrides both. */
-  visibility: { environments: "all" | "non-production"; minViewportWidth: number };
+  /**
+   * F-012 (wave-4 §4, wave-5 §2): where and for whom the widget shows. Widget-side only; `forceShow` overrides
+   * every rule, a valid review link (`?pinwren_review=`) overrides `mode`.
+   */
+  visibility: {
+    environments: "all" | "non-production";
+    minViewportWidth: number;
+    mode: VisibilityMode;
+    urlPatterns: string[];
+    queryParam: string;
+  };
 };
+
+export type VisibilityMode = "always" | "identified" | "queryParam" | "urlPatterns" | "manual";
+export const VISIBILITY_MODES: readonly VisibilityMode[] = [
+  "always",
+  "identified",
+  "queryParam",
+  "urlPatterns",
+  "manual",
+];
 
 export type PanelAction = {
   id: string;
@@ -58,11 +76,17 @@ export const DEFAULT_CONFIG: WidgetConfig = {
   shortcuts: true,
   rightClickComment: false,
   readOnly: false,
-  visitorsCanResolve: true,
+  visitorsCanResolve: false,
   consent: { enabled: false, text: null, privacyUrl: null },
   panelActions: [],
   privacyMode: false,
-  visibility: { environments: "all", minViewportWidth: 0 },
+  visibility: {
+    environments: "all",
+    minViewportWidth: 0,
+    mode: "always",
+    urlPatterns: [],
+    queryParam: "pinwren",
+  },
 };
 
 type Obj = Record<string, unknown>;
@@ -106,6 +130,14 @@ export function resolveConfig(raw: unknown, accentOverride?: string): WidgetConf
   v.minViewportWidth = Number.isFinite(v.minViewportWidth)
     ? Math.min(10_000, Math.max(0, Math.round(v.minViewportWidth)))
     : 0;
+  if (!VISIBILITY_MODES.includes(v.mode)) v.mode = "always";
+  // `merge` keeps any object for an array default: only a real list of short strings counts.
+  v.urlPatterns = Array.isArray(v.urlPatterns)
+    ? v.urlPatterns
+        .filter((x): x is string => typeof x === "string" && !!x.trim() && x.length <= 500)
+        .slice(0, 50)
+    : [];
+  if (!/^[A-Za-z0-9_.-]{1,64}$/.test(v.queryParam)) v.queryParam = "pinwren";
   return c;
 }
 
@@ -183,6 +215,8 @@ export type CaptureCfg = {
   maskSelectors: string[];
   /** F-007 session replay (wave-4 §3): off by default; a rolling buffer of the last `seconds`. */
   replay: { enabled: boolean; seconds: number };
+  /** Take a masked screenshot of the visible area with every new comment (Page Review places it). */
+  screenshotOnComment: boolean;
 };
 
 export function resolveCapture(raw: unknown): CaptureCfg {
@@ -196,6 +230,7 @@ export function resolveCapture(raw: unknown): CaptureCfg {
     // A selector that doesn't parse would make the whole capture throw — drop it here instead.
     maskSelectors: masks.filter((m): m is string => typeof m === "string" && validSelector(m)).slice(0, 50),
     replay: resolveReplay(c.replay),
+    screenshotOnComment: c.screenshotOnComment === true,
   };
 }
 
@@ -225,6 +260,40 @@ export type ConsentRecord = { version: string; acceptedAt: string };
 export type ReporterPayload = NonNullable<WidgetFeedbackCreate["reporter"]> & {
   signature?: string | undefined;
 };
+
+/**
+ * Host-supplied context (`Pinwren.setMetadata`), sent with every report and comment. The server caps the whole
+ * `metadata` object at 16 KB of JSON; the widget keeps the host's part under this, leaving room for timings.
+ */
+export const MAX_HOST_METADATA_BYTES = 14_000;
+
+/** A plain JSON object within the cap, or null (with the reason) for anything else. */
+export function hostMetadata(raw: unknown): { ok: Record<string, unknown> | null; error?: string } {
+  if (raw === null || raw === undefined) return { ok: null };
+  if (typeof raw !== "object" || Array.isArray(raw) || Object.getPrototypeOf(raw) !== Object.prototype)
+    return { ok: null, error: "setMetadata takes a plain object (or null)" };
+  let json: string;
+  try {
+    json = JSON.stringify(raw);
+  } catch {
+    return { ok: null, error: "setMetadata: the object can't be turned into JSON" };
+  }
+  if (json.length > MAX_HOST_METADATA_BYTES)
+    return { ok: null, error: `setMetadata: keep it under ${MAX_HOST_METADATA_BYTES} bytes of JSON` };
+  // A copy, so later changes by the host don't leak into reports already being written.
+  return { ok: JSON.parse(json) as Record<string, unknown> };
+}
+
+/** The `metadata` to send: the host's fields plus the widget's own (which win on a clash), under 16 KB. */
+export function mergeMetadata(
+  host: Record<string, unknown> | null,
+  own: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  const out = { ...host, ...own };
+  if (!Object.keys(out).length) return undefined;
+  // Timings are the first thing to go when the host's part leaves no room for them.
+  return JSON.stringify(out).length <= 16_384 ? out : (host ?? undefined);
+}
 
 export type FeedbackPayload = Omit<WidgetFeedbackCreate, "reporter"> & {
   reporter?: ReporterPayload | undefined;

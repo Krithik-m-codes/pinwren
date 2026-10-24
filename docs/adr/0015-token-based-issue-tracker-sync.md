@@ -35,3 +35,27 @@ receive install events for private instances) and key management. Self-managed G
 - Tokens belong to a person; if they leave, an admin replaces the token (UI: "Replace").
 - No screenshot preview inside the issue (deliberate privacy trade-off).
 - Linear/Jira (F-078/F-079) can follow the same shape: config row + link row + job + verified inbound route.
+
+## Amendment (wave 5): Linear and Jira Cloud, chat channels
+
+Linear (F-078) and Jira Cloud (F-079) follow the same shape, added as `issue_provider` values in migration
+`0005_complete` with no new columns:
+
+- **Linear**: a personal API key (sent bare in `Authorization`, GraphQL at `api.linear.app`); `repo` holds the team
+  key. Issues are created in the team (labels matched by name to existing Linear labels); closing moves the issue to
+  the team's first `completed` state, reopening to its first `unstarted` (else `backlog`) state. Linear generates
+  the webhook signing secret itself, so the admin pastes it into the integration (`webhookSecret` on PATCH).
+  Inbound: `Linear-Signature` (hex HMAC-SHA256 of the raw body), `webhookTimestamp` within 5 minutes,
+  `Linear-Delivery` remembered for 7 days; `completed` / `canceled` states close the item, others reopen it.
+- **Jira Cloud** (REST v3, Enterprise `jira` licence feature per blueprint 07): `apiUrl` is the site URL,
+  `token` stores `email:apiToken` encrypted (Basic auth), `repo` the project key. Bugs use the project's Bug issue
+  type (else Task); the description is an ADF document whose text nodes are never parsed, so no escaping is
+  needed. State changes take the workflow transition into the `done` (closed) or `new` / `indeterminate` (open)
+  status category. Inbound: `X-Hub-Signature: sha256=…` with the Pinwren-generated secret pasted into Jira, and
+  `X-Atlassian-Webhook-Identifier` remembered for 7 days. Without the licence feature a Jira integration can't be
+  created and an existing one is inert (ADR 0019: configured work is kept, not deleted).
+- Links show the tracker's key (`ENG-12`, `WEB-7`); `issue_link.number` keeps the numeric part.
+
+Microsoft Teams (Workflows Adaptive Card), Telegram (bot token + chat id, stored as one encrypted Bot API URL) and
+ntfy (topic URL + optional access token in `webhook_endpoint.secret`) are `webhook_kind` values that reuse the
+webhook delivery, retry, log and auto-disable machinery; every chat URL is stored encrypted and shown masked.

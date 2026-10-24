@@ -19,7 +19,7 @@ describe("widget config", () => {
     expect(c.shortcuts).toBe(true);
     expect(c.rightClickComment).toBe(false);
     expect(c.readOnly).toBe(false);
-    expect(c.visitorsCanResolve).toBe(true);
+    expect(c.visitorsCanResolve).toBe(false);
     expect(c.consent).toEqual({ enabled: false, text: null, privacyUrl: null });
     expect(widgetConfig.parse({})).toEqual(c);
   });

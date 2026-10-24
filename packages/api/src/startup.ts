@@ -1,31 +1,29 @@
 import { env } from "./env";
 import { PRODUCTION_KEYS } from "./license/keys";
-import { issueSetupToken } from "./services/setup";
+import { mergeStalePages } from "./services/page-merge";
+import { hasAnyUser, promoteFirstAccount } from "./services/setup";
 import { encryptLegacyChatWebhookUrls } from "./webhooks/url";
 
 // One-off work at server start (called from the dashboard's instrumentation hook). Each step logs and
 // carries on: none of it may keep the server from starting.
 
-/** While no instance admin exists, print a fresh one-time setup token (ADR 0021). */
-export async function announceSetupToken(): Promise<void> {
+/**
+ * The first account administers the instance (ADR 0021 amendment, BugPin model). Instances upgraded from
+ * the setup-token flow whose token was never claimed get their oldest account promoted here; on a fresh
+ * instance this only says where to start. Every worker runs it; the advisory lock makes it idempotent.
+ */
+export async function ensureInstanceAdmin(): Promise<void> {
   try {
-    const token = await issueSetupToken();
-    if (!token) return;
-    const url = `${env().PINWREN_URL.replace(/\/$/, "")}/setup`;
-    console.warn(
-      [
-        "",
-        "[pinwren] ─────────────────────────────────────────────────────────────────────",
-        "[pinwren] This instance has no administrator yet.",
-        `[pinwren] Sign in (or create the first account), open ${url}`,
-        `[pinwren] and enter this one-time setup token:  ${token}`,
-        "[pinwren] Or set PINWREN_ADMIN_EMAILS. The token is printed again on every start until claimed.",
-        "[pinwren] ─────────────────────────────────────────────────────────────────────",
-        "",
-      ].join("\n"),
-    );
+    if (await promoteFirstAccount()) {
+      console.info("[pinwren] the first account is now the instance administrator");
+      return;
+    }
+    if (!(await hasAnyUser())) {
+      const url = `${env().PINWREN_URL.replace(/\/$/, "")}/sign-up`;
+      console.info(`[pinwren] no accounts yet: open ${url} to create the administrator account`);
+    }
   } catch (err) {
-    console.error("[pinwren] could not issue a setup token", err);
+    console.error("[pinwren] could not check the instance administrator", err);
   }
 }
 
@@ -50,5 +48,11 @@ export async function runStartupFixes(): Promise<void> {
     if (n) console.log(`[pinwren] encrypted ${n} Slack/Discord webhook URL(s) at rest`);
   } catch (err) {
     console.error("[pinwren] could not encrypt stored chat webhook URLs", err);
+  }
+  try {
+    const n = await mergeStalePages();
+    if (n) console.log(`[pinwren] re-grouped ${n} page(s) under the wave-5 URL rules`);
+  } catch (err) {
+    console.error("[pinwren] could not re-group pages", err);
   }
 }

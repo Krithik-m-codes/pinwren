@@ -45,6 +45,10 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     restart: unless-stopped
+    # Every variable in docker/.env reaches the app; environment: below wins for the same name.
+    env_file:
+      - path: .env
+        required: false
     ports:
       - "${PINWREN_BIND:-127.0.0.1}:${PINWREN_PORT:-3000}:3000"
     environment:
@@ -84,63 +88,44 @@ volumes:
 
 ### Passing more settings
 
-The compose file forwards **only the variables listed under `environment:`** to the container. Putting
-`SMTP_HOST` or `STORAGE_DRIVER` in `docker/.env` alone does nothing. Add them with an override file next to it,
-which Compose merges with the main one:
+Every variable you put in `docker/.env` reaches the app: the compose file loads it with `env_file` (the
+`.env` next to `compose.yml`, optional; this needs Docker Compose v2.24 or later). So SMTP, S3 storage or
+rate limits are just more lines in that file:
 
-```yaml title="docker/compose.override.yml"
-services:
-  pinwren:
-    environment:
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      EMAIL_FROM: ${EMAIL_FROM}
+```bash title="docker/.env"
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=apikey
+SMTP_PASSWORD=…
+EMAIL_FROM="Pinwren <feedback@example.com>"
+STORAGE_DRIVER=s3
+S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com
 ```
 
-```bash
-docker compose -f docker/compose.yml -f docker/compose.override.yml --env-file docker/.env up -d
-```
-
-Or point the service at a file of its own with `env_file:`:
-
-```yaml title="docker/compose.override.yml"
-services:
-  pinwren:
-    env_file: pinwren.env # SMTP_*, STORAGE_DRIVER, S3_*, … one per line
-```
-
-Every variable is listed in the [environment reference](/docs/self-hosting/environment). Email can also be set
-up in the dashboard instead (**Settings › Email**).
+Restart with the same `up -d` command after a change. Every variable is listed in the
+[environment reference](/docs/self-hosting/environment), and [`docker/.env.example`](https://github.com/Krithik-m-codes/pinwren/blob/main/docker/.env.example)
+has commented blocks for email, storage and HTTPS. You rarely need them, though: SMTP, security and the licence
+can all be set in the dashboard.
 
 ## First run
 
+The short version is below; [Getting started](/docs/self-hosting/getting-started) walks through every
+screen, from install to the first emailed report.
+
 1. Start the stack: `docker compose -f docker/compose.yml --env-file docker/.env up -d`. Migrations run on
    start.
-2. Open `PINWREN_URL` and create the first account. Anyone can create the first account; after that, sign-up
-   is closed except for invited people (set `PINWREN_DISABLE_SIGNUP=false` for open sign-up).
-3. Make yourself the instance admin, in one of two ways:
-   - **Setup token.** While the instance has no admin, every server start prints a one-time token to the log:
-
-     ```bash
-     docker compose -f docker/compose.yml --env-file docker/.env logs pinwren | grep "setup token"
-     # [pinwren] and enter this one-time setup token:  pws_…
-     ```
-
-     Signed in, open `PINWREN_URL/setup`, paste the `pws_…` token and choose **Claim administration**. The
-     first claim wins and every outstanding token is discarded. A token stays valid for 7 days or until it is
-     claimed; the server stores only its hash.
-
-   - **`PINWREN_ADMIN_EMAILS`.** List your address (comma-separated for several) in `docker/.env` and restart.
-     Listed accounts are instance admins, and no setup token is printed.
-
-   Being the first to sign up does not make anyone an admin.
-
-4. Name your workspace, create the first project and enter your site's domain.
+2. Open `PINWREN_URL` and create the first account. **The first account on a new server is its instance
+   admin**: it can set up email, security and the licence straight away, with nothing to copy from the logs.
+   Keep the server private until you have done this — the compose file binds it to `127.0.0.1`, so only your
+   reverse proxy reaches it. After the first account, sign-up is closed except for invited people (set
+   `PINWREN_DISABLE_SIGNUP=false` for open sign-up). `PINWREN_ADMIN_EMAILS` makes more people admins.
+3. Name your workspace, create the first project, enter your site's domain and say what the site is for: a
+   public website (bug reports stay private) or a staging / client review site (reviewers see each other's
+   pins).
+4. **Settings › Email**: enter your SMTP server and send a test email, so new reports reach the team.
 5. Copy the snippet from the project's **Install** tab into your site. The tab shows **Connected** once the
-   widget has loaded.
-6. Invite everyone else from **Settings › Members**.
+   widget has loaded, and lists any site it refused with an **Allow** button.
+6. Add everyone else from **Settings › Users**: create their account directly, or invite them by email.
 
 ## Before you go live
 

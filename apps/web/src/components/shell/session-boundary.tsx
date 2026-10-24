@@ -1,5 +1,6 @@
 import type { Entitlements } from "@pinwren/core";
 import { BrandTheme } from "@/components/brand";
+import { EmailSetupBanner } from "@/components/notifications/notification-parts";
 import type { Project, SavedView } from "@/lib/api";
 import { serverApi } from "@/lib/server/api";
 import { getOrgBranding } from "@/lib/server/org-data";
@@ -7,8 +8,10 @@ import { requireViewer } from "@/lib/server/session";
 import { HydrateQueries } from "@/lib/store/hydrate";
 import { ActivateWorkspace } from "./activate-workspace";
 import { CommandPalette } from "./command-palette";
+import { GlobalShortcuts } from "./global-shortcuts";
 import { LicenseBanner } from "./license-banner";
 import { RealtimeConnection } from "./realtime-connection";
+import { WorkspaceFromLink } from "./workspace-from-link";
 
 /**
  * The signed-in part of every app screen, streamed behind the layout's <Suspense>: checks the session on
@@ -41,8 +44,11 @@ export async function SessionBoundary({ children }: { children: React.ReactNode 
     >
       <BrandTheme accent={branding.accent} />
       <RealtimeConnection />
+      <WorkspaceFromLink orgId={me.orgId} />
       <LicenseBanner />
+      <EmailSetupBanner />
       <CommandPalette />
+      <GlobalShortcuts />
       {children}
     </HydrateQueries>
   );

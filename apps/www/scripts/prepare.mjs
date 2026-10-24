@@ -49,7 +49,19 @@ const GROUPS = [
     ],
   ],
   ["Security", ["PINWREN_TRUST_PROXY", "PINWREN_ENFORCE_HTTPS", "PINWREN_SESSION_DAYS"]],
-  ["Email (SMTP)", ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "SMTP_SECURE", "EMAIL_FROM"]],
+  [
+    "Email (SMTP)",
+    [
+      "SMTP_HOST",
+      "SMTP_PORT",
+      "SMTP_USER",
+      "SMTP_PASSWORD",
+      "SMTP_SECURE",
+      "SMTP_REQUIRE_TLS",
+      "SMTP_TLS_REJECT_UNAUTHORIZED",
+      "EMAIL_FROM",
+    ],
+  ],
   [
     "Storage",
     [
@@ -61,6 +73,10 @@ const GROUPS = [
       "S3_SECRET_ACCESS_KEY",
       "S3_FORCE_PATH_STYLE",
     ],
+  ],
+  [
+    "Sign-in providers",
+    ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"],
   ],
   ["Issue trackers", ["GITHUB_API_URL", "GITLAB_URL"]],
   ["Updates", ["PINWREN_UPDATE_CHECK", "PINWREN_UPDATE_REPO", "PINWREN_VERSION"]],
@@ -99,6 +115,9 @@ const DESCRIPTIONS = {
   SMTP_USER: "SMTP username.",
   SMTP_PASSWORD: "SMTP password.",
   SMTP_SECURE: "`true` for implicit TLS (port 465); `false` uses STARTTLS when the server offers it.",
+  SMTP_REQUIRE_TLS: "`true` refuses to send unless the server upgrades the connection with STARTTLS.",
+  SMTP_TLS_REJECT_UNAUTHORIZED:
+    "`false` accepts a self-signed or otherwise unverifiable server certificate (internal relays only).",
   EMAIL_FROM: 'Sender, e.g. `"Pinwren <feedback@example.com>"`.',
   STORAGE_DRIVER: "`fs` stores files under `PINWREN_DATA_DIR`; `s3` uses any S3-compatible bucket.",
   S3_ENDPOINT:
@@ -108,6 +127,12 @@ const DESCRIPTIONS = {
   S3_ACCESS_KEY_ID: "Access key. Required with `STORAGE_DRIVER=s3`.",
   S3_SECRET_ACCESS_KEY: "Secret key. Required with `STORAGE_DRIVER=s3`.",
   S3_FORCE_PATH_STYLE: "Path-style URLs (`endpoint/bucket/key`), needed by MinIO and most self-hosted S3.",
+  GOOGLE_CLIENT_ID:
+    "OAuth client id of a Google Cloud OAuth app. With `GOOGLE_CLIENT_SECRET`, the sign-in page offers Continue with Google. Callback: `PINWREN_URL/api/auth/callback/google`.",
+  GOOGLE_CLIENT_SECRET: "Client secret of that Google OAuth app. Set both or neither.",
+  GITHUB_CLIENT_ID:
+    "Client id of a GitHub OAuth app. With `GITHUB_CLIENT_SECRET`, the sign-in page offers Continue with GitHub. Callback: `PINWREN_URL/api/auth/callback/github`.",
+  GITHUB_CLIENT_SECRET: "Client secret of that GitHub OAuth app. Set both or neither.",
   GITHUB_API_URL: "GitHub API base URL. Each integration can override it (GitHub Enterprise Server).",
   GITLAB_URL: "GitLab base URL. Each integration can override it (self-managed GitLab).",
   PINWREN_UPDATE_CHECK:

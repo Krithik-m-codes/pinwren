@@ -4,6 +4,7 @@ import {
   feedbackListQuery,
   feedbackUpdate,
   reviewRoundUpdate,
+  roleCan,
 } from "@pinwren/core";
 import { apiToken, feedback, getDb, member, project, user } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
@@ -157,9 +158,14 @@ export const v1 = new Hono<{ Variables: TokenVars }>()
     return c.json({ projects: rows });
   })
 
-  .get("/feedback", scope("feedback:read"), zValidator("query", feedbackListQuery), async (c) =>
-    c.json(await listFeedback(c.var.orgId, c.req.valid("query"))),
-  )
+  .get("/feedback", scope("feedback:read"), zValidator("query", feedbackListQuery), async (c) => {
+    const q = c.req.valid("query");
+    // The trash is for Admins (wave-5 contract §3.7), whichever way it is asked for.
+    if (q.trash && !roleCan(c.var.role, "feedback.restore")) {
+      throw new ApiError(403, "FORBIDDEN_ROLE", "Your role doesn't allow this. Ask a workspace Admin.");
+    }
+    return c.json(await listFeedback(c.var.orgId, q));
+  })
   .get("/feedback/:id", scope("feedback:read"), async (c) =>
     c.json(await getFeedbackDetail(c.var.orgId, c.req.param("id"), audienceOf(c.var.role))),
   )

@@ -70,24 +70,26 @@ curl http://localhost:3000/api/health
 
 ### Create your account and first project
 
-Open `PINWREN_URL` and create the first account. The setup screen asks for a **workspace name**, a **first
-project** and your **website domain** — the domain becomes the project's first allowed site.
-
-Then claim the instance admin role, which unlocks email, security and licence settings. The server prints a
-one-time setup token to its log while no admin exists:
-
-```bash
-docker compose -f docker/compose.yml --env-file docker/.env logs pinwren | grep "setup token"
-# [pinwren] and enter this one-time setup token:  pws_…
-```
-
-Open `PINWREN_URL/setup` while signed in, paste the `pws_…` token and choose **Claim administration**. Or skip
-the token: set `PINWREN_ADMIN_EMAILS=you@example.com` in `docker/.env` and restart.
+Open `PINWREN_URL` and create the first account. **The first account on a new server is its instance
+admin**, so email, security and licence settings are open to you straight away — there is no setup token to
+find in the logs. (Keep the server private until you have signed up; the compose file only listens on
+`127.0.0.1`.) The setup screen then asks for a **workspace name**, a **first project**, your **website
+domain** — the project's first allowed site — and what the site is for: a **public website** keeps bug
+reports private, a **staging or client review** site shows reviewers each other's pins.
 
 <Callout title="Sign-up is closed after the first account">
-  Anyone else needs an invitation from **Settings › Members**. To let anyone sign up, set
+  Anyone else needs an invitation from **Settings › Users**. To let anyone sign up, set
   `PINWREN_DISABLE_SIGNUP=false` in `docker/.env` and restart.
 </Callout>
+
+</Step>
+<Step>
+
+### Set up email
+
+Open **Settings › Email**, enter your SMTP server (host, port, security, user, password and from address) and
+click **Send test email**. From then on every new report is emailed to the team, and reporters who left an
+address get a confirmation and updates. See [Email](/docs/integrations/email) for provider settings.
 
 </Step>
 <Step>
@@ -96,7 +98,8 @@ the token: set `PINWREN_ADMIN_EMAILS=you@example.com` in `docker/.env` and resta
 
 In the project's **Install** tab, under **Allowed sites**, list every hostname that will load the widget, for
 example `www.example.com`, `*.staging.example.com` or `localhost:5173`. Requests from any other origin are
-refused with `403 ORIGIN_NOT_ALLOWED`. The tab has a tester that tells you whether a URL is allowed.
+refused with `403 ORIGIN_NOT_ALLOWED`, and the tab lists them — "Blocked a request from https://… 2 min ago" —
+with an **Allow** button. It also has a tester that tells you whether a URL is allowed.
 
 </Step>
 <Step>
@@ -110,7 +113,8 @@ Copy the snippet from the **Install** tab and add it before `</body>` on every p
 ```
 
 The project key is public by design — it only works from your allowed sites. The Install tab also has
-Next.js and Google Tag Manager versions; for npm and React see [Install the widget](/docs/widget).
+Next.js, Google Tag Manager, npm and React versions, all prefilled with your key and server address, and a
+`npx pinwren doctor` command that checks the setup from your terminal.
 
 </Step>
 <Step>
@@ -119,7 +123,9 @@ Next.js and Google Tag Manager versions; for npm and React see [Install the widg
 
 Reload your site. The launcher appears in the bottom-right corner, and the Install tab switches from
 **Waiting for your site** to **Connected**. Press <kbd>C</kbd> (or open the launcher and choose comment),
-click an element, write a comment and send it. It appears in the dashboard inbox straight away.
+click an element, write a comment and send it. It appears in the dashboard inbox straight away. Report a bug
+the same way and the team gets an email with the screenshot, page, browser and a link. A checklist on the inbox
+tracks these first steps until they are all done.
 
 </Step>
 </Steps>
@@ -136,7 +142,7 @@ click an element, write a comment and send it. It appears in the dashboard inbox
   <Card title="Go to production" href="/docs/self-hosting">
     HTTPS, storage, backups and sizing.
   </Card>
-  <Card title="Connect GitHub or GitLab" href="/docs/integrations/github">
+  <Card title="Connect an issue tracker" href="/docs/integrations/github">
     Turn bug reports into issues that stay in sync.
   </Card>
 </Cards>

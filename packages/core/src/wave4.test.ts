@@ -16,7 +16,13 @@ const base = {
 
 describe("wave-4 config", () => {
   it("defaults visibility and replay", () => {
-    expect(parseWidgetConfig({}).visibility).toEqual({ environments: "all", minViewportWidth: 0 });
+    expect(parseWidgetConfig({}).visibility).toEqual({
+      environments: "all",
+      minViewportWidth: 0,
+      mode: "always",
+      urlPatterns: [],
+      queryParam: "pinwren",
+    });
     expect(parseCaptureConfig({}).replay).toEqual({ enabled: false, seconds: 60 });
   });
 

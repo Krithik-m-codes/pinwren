@@ -28,15 +28,16 @@ Hostnames are compared exactly, so `example.com` never matches `evil-example.com
 
 ### Project settings tabs
 
-| Tab                | What's in it                                                                                                                                                                                                                                                            |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Install**        | The snippet for HTML, Next.js (`next/script`) and Google Tag Manager; the allowed sites; a live "Waiting for your site" / last-seen check that turns green once the widget loads; the **Verified identity** secret — see [identity](/docs/widget/identity)              |
-| **Widget**         | Launcher, behaviour (modes, shortcuts, read-only), **Where it shows** (environments, minimum screen width), consent notice, widget branding and the active **Review round** — see [configuration](/docs/widget/configuration) and [visibility](/docs/widget/visibility) |
-| **Capture**        | Console and network capture, the screenshot-with-every-comment switch (not used by the widget yet), masked selectors, **Session replay** (on/off and length) — see [bug reports](/docs/widget/bug-reports)                                                              |
-| **Actions**        | Custom buttons on threads — see [panel actions](/docs/widget/panel-actions)                                                                                                                                                                                             |
-| **Issue trackers** | [GitHub](/docs/integrations/github) and [GitLab](/docs/integrations/gitlab) sync                                                                                                                                                                                        |
-| **Privacy & data** | Privacy mode, showing pins to visitors, retention, emailing the reporter, the rate limit                                                                                                                                                                                |
-| **Danger zone**    | Rotate the key, archive or restore the project (owners and admins only)                                                                                                                                                                                                 |
+| Tab                | What's in it                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Install**        | Snippets for HTML, Next.js, Google Tag Manager, npm (`@pinwren/widget`) and React (`@pinwren/react`), prefilled with the key and `PINWREN_URL`; a **Connected** / **Waiting for your site** check with test-report steps and a `npx pinwren doctor` command; the allowed sites, with refused sites listed and an **Allow** button; the **Verified identity** secret — see [identity](/docs/widget/identity) |
+| **Widget**         | Launcher, behaviour (modes, shortcuts, read-only), **Where it shows** (environments, minimum screen width), consent notice, widget branding, the active **Review round** and **Emails to reporters** — see [configuration](/docs/widget/configuration) and [visibility](/docs/widget/visibility)                                                                                                            |
+| **Review links**   | Links that show the widget to a client or reviewer, even where it is hidden; how many items came through each, last use, expiry and **Revoke** (admins) — see [review links](#review-links)                                                                                                                                                                                                                 |
+| **Capture**        | Console and network capture, the screenshot-with-every-comment switch (not used by the widget yet), masked selectors, **Session replay** (on/off and length) — see [bug reports](/docs/widget/bug-reports)                                                                                                                                                                                                  |
+| **Actions**        | Custom buttons on threads — see [panel actions](/docs/widget/panel-actions)                                                                                                                                                                                                                                                                                                                                 |
+| **Issue trackers** | [GitHub](/docs/integrations/github) and [GitLab](/docs/integrations/gitlab) sync                                                                                                                                                                                                                                                                                                                            |
+| **Privacy & data** | Privacy mode, showing pins to visitors, retention, the rate limit, **Export this project** and **Erase a reporter's data** (admins)                                                                                                                                                                                                                                                                         |
+| **Danger zone**    | Rotate the key, archive or restore the project (owners and admins only)                                                                                                                                                                                                                                                                                                                                     |
 
 The project header also links to the project's **Rounds** ([review rounds](/docs/dashboard/review-rounds)), **Pages**
 ([page review](/docs/dashboard/page-review)) and **Open inbox**.
@@ -49,13 +50,75 @@ action URLs are hidden from them. The server enforces the same rule: a change fr
 
 ### Privacy & data
 
-| Setting                            | Field                      | Notes                                                                                                                            |
-| ---------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Privacy mode**                   | `widgetConfig.privacyMode` | See [privacy & masking](/docs/widget/privacy). Turning it on shortens "keep forever" retention to 90 days                        |
-| **Show existing pins to visitors** | `publicRead`               | Reviewers see each other's comments on the page. Turn off for private bug reporting                                              |
-| **Retention**                      | `retentionDays`            | Keep forever, or 1–3,650 days (presets 30 days to 2 years). A daily job deletes older feedback with its screenshots and files    |
-| **Email the reporter**             | `notifyReporter`           | Email reporters who left an address about public replies and status changes — see [notifications](/docs/dashboard/notifications) |
-| **Reports and replies per minute** | `widgetRateLimitPerMin`    | Per visitor IP, 1–1,000, or the instance default `WIDGET_RATE_LIMIT_PER_MIN` (10). Over it, the widget gets `429 RATE_LIMITED`   |
+| Setting                            | Field                      | Notes                                                                                                                                                                  |
+| ---------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Privacy mode**                   | `widgetConfig.privacyMode` | See [privacy & masking](/docs/widget/privacy). Turning it on shortens "keep forever" retention to 90 days                                                              |
+| **Show existing pins to visitors** | `publicRead`               | Off by default: visitors can send feedback but see none. Turn on for review sites where reviewers should see each other's pins                                         |
+| **Retention**                      | `retentionDays`            | Keep forever, or 1–3,650 days (presets 30 days to 2 years). A daily job deletes older feedback with its screenshots and files                                          |
+| **Email the reporter**             | `notifyReporter`           | On the **Widget** tab now. On by default; which emails reporters get is under Settings › Notifications › Reporter — see [notifications](/docs/dashboard/notifications) |
+| **Reports and replies per minute** | `widgetRateLimitPerMin`    | Per visitor IP, 1–1,000, or the instance default `WIDGET_RATE_LIMIT_PER_MIN` (10). Over it, the widget gets `429 RATE_LIMITED`                                         |
+
+### Creating a project
+
+Admins create projects (**Projects › New project**, or the **+** next to Projects in the sidebar): a name, the
+site's domain, and **What is this site for?**
+
+| Choice                       | Sets                                                                                            |
+| ---------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Public website** (default) | Pins hidden from visitors (`publicRead` off), visitors can't resolve (`visitorsCanResolve` off) |
+| **Staging or client review** | Pins and public replies shown to visitors, visitors can resolve                                 |
+
+The API takes the same choice as `preset: "public-site" | "review"` on `POST /api/projects`. The new project
+opens on its **Install** tab.
+
+### Refused sites
+
+When a page that isn't on the allowed list loads the widget, the server refuses it (`403 ORIGIN_NOT_ALLOWED`)
+and remembers the origin. The Install tab lists the last ten — "Blocked a request from https://www.example.com,
+2 min ago" — with an **Allow** button that adds the site and clears it from the list.
+
+### Review links
+
+A review link lets a client or reviewer use the widget on your site without an account, even where the
+project's [visibility rules](/docs/widget/visibility) hide it from everyone else (BugPin-style guest review).
+
+1. Open the project's **Review links** tab and choose **New link**.
+2. Give it a name (for example "Acme sign-off round"), the page it opens (one of the project's allowed sites)
+   and when it stops working (7, 30 or 90 days, or never).
+3. Copy the link: it is shown **once**, because only a hash of its `pinwren_review` token is stored. Send it to
+   your reviewer.
+
+Whoever opens the link sees the widget for the rest of that browser tab. Before they send a comment or a bug
+report the widget asks for their name (the email is optional, and gets them the
+[reporter emails](/docs/dashboard/notifications) you have switched on). Everything they send is marked with the
+link's name:
+
+- the item's **Details** tab shows **Source: Review link · Acme sign-off round**, and its timeline reads
+  "Gina reported this via review link Acme sign-off round";
+- **Filter › Review link** in the inbox (or `?review=<link id>`) lists only what came through one link;
+- the Review links tab shows how many items came through each link and when it was last used — the count opens
+  the filtered inbox.
+
+**Revoke** switches a link off at once; items already sent keep their source. A revoked or expired link no longer
+shows the widget, and reports sent with it are accepted without a source. When pins are private (**Show
+existing pins to visitors** off on the Privacy & data tab), each guest sees only what they sent themselves.
+
+Review links are for admins. The widget's token check is rate-limited per visitor, and new links per workspace
+(50 an hour).
+
+### Export and erasure
+
+- **Export this project** (Privacy & data) prepares a zip in the background: `feedback.json` (every report with
+  its comments, activity and labels), `project.json` (settings, without secrets), `labels.json` and every
+  screenshot, attachment and replay under `assets/`. The download is kept for 7 days; a new export replaces it.
+  Files beyond 512 MB in all are left out and counted in `README.txt`.
+- **Erase a reporter's data** handles a deletion request: enter the email a reporter used in the widget,
+  **Find data** shows what would go (reports, replies on other reports, logged emails), and **Erase** removes
+  it from every project of the workspace, files included. A record that an erasure happened (who, when, how
+  much — not the address) is listed under the card.
+
+Both are for workspace admins (`GET/POST /api/projects/:id/export`, `GET /api/projects/:id/export/download`,
+`POST /api/privacy/erase { email, dryRun? }`).
 
 ### Rotating the key and archiving
 
@@ -64,30 +127,31 @@ action URLs are hidden from them. The server enforces the same rule: a change fr
 - **Archive** hides the project from your lists and stops its widget key; nothing is deleted. Restore it from the
   same tab.
 
-## Members and roles
+## Users and roles
 
-Your **workspace** holds the projects and the people who triage them. Owners and admins invite people from
-**Settings › Members** (**Invite people**: email address and role, then **Send invite**); the invitation links to `/accept-invitation/<id>`, where they sign in or create an account. Pending
-invitations are listed until they are accepted, cancelled or expire.
+Your **workspace** holds the projects and the people who triage them. Admins add people from **Settings › Users**:
+**Add user** creates the account at once (name, email, password, role), and **Invite by email** sends a link to join.
+Roles are **Admin**, **Editor** and **Viewer**:
 
-| Role       | Can                                                                                                             |
-| ---------- | --------------------------------------------------------------------------------------------------------------- |
-| **Viewer** | Read everything, change nothing — for clients and stakeholders who follow progress without triaging             |
-| **Member** | Triage feedback and comment                                                                                     |
-| **Admin**  | Also manage members, project settings and integrations (webhooks, issue trackers), branding and email templates |
-| **Owner**  | Full control, including the workspace itself                                                                    |
+| Role       | Can                                                                                                                    |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Admin**  | Everything: projects, users, integrations, branding, email templates, notification recipients and the workspace itself |
+| **Editor** | View, edit, assign and bulk-update reports, comment and add reports by hand; no deleting and no settings               |
+| **Viewer** | Read everything, change nothing — for clients and stakeholders who follow progress without triaging                    |
 
-Invitations can be for **Viewer**, **Member** or **Admin**; only an owner can make someone an owner, by changing
-the role in the member list afterwards. Owners and admins change a member's role from the list and remove members
-from its **⋯** menu (**Remove from workspace**).
+The **owner** is the Admin who created the workspace; ownership moves in **Settings › Workspace**. See
+[accounts, users and workspaces](/docs/dashboard/accounts) for adding users, password resets, two-factor sign-in,
+your profile and switching workspaces.
 
 A workspace can send `PINWREN_INVITES_PER_HOUR` invitations an hour (default 30); beyond that, inviting is refused
 until the hour is up. Sign-up on a self-hosted instance is closed to everyone but invited people once the first
-account exists (unless the operator sets `PINWREN_DISABLE_SIGNUP=false`), so an invitation is how people join.
+account exists (unless the operator sets `PINWREN_DISABLE_SIGNUP=false`), so Add User or an invitation is how
+people join.
 
-Viewers get read-only screens, and the server enforces it: any change they try is answered `403 READ_ONLY_ROLE`.
-They can still mark notifications read, set their notification preferences, create their own API tokens (which are
-read-only too) and keep personal [saved views](/docs/dashboard/saved-views).
+Viewers get read-only screens, and the server enforces it: any change they try is answered `403 READ_ONLY_ROLE`, and
+anything an Editor's role doesn't allow is answered `403 FORBIDDEN_ROLE`. Viewers can still mark notifications read,
+set their notification preferences, edit their own profile, create their own API tokens (which are read-only too) and
+keep personal [saved views](/docs/dashboard/saved-views).
 
 The people who leave feedback through the widget are not members and need no account; they are unlimited.
 
@@ -102,21 +166,32 @@ project under **Widget**; see [configuration](/docs/widget/configuration).
 
 ## Email templates
 
-**Settings › Email** lets admins rewrite every email the workspace sends. Each template is a subject and a Markdown
-body with `{{variable}}` placeholders; raw HTML is shown as text, never rendered, and variables are escaped. Every
-template has a live preview, **Send me this email** (a test to your own address only — at most 10 an hour per
-person and 30 per workspace) and **Reset to default**. Instance
-admins who aren't workspace admins see only the SMTP part of this page.
+**Settings › Notifications › Email templates** lets admins rewrite every email the workspace sends, to the team and to
+reporters. Each template is a subject and a Markdown body with `{{variable}}` placeholders; raw HTML is shown as text,
+never rendered, and variables are escaped. Every template has a live preview, **Send me this email** (a test to your
+own address only — at most 10 an hour per person and 30 per workspace) and **Reset to default**. New-report and
+assignment emails also show the report's screenshot and facts under your text, whatever the template says.
 
-| Template                          | Sent                                                 |
-| --------------------------------- | ---------------------------------------------------- |
-| **Invitation**                    | When someone is invited to the workspace             |
-| **New feedback**                  | To members who follow new feedback on a project      |
-| **Assigned to you**               | To the person an item was assigned to                |
-| **New reply**                     | To the team involved in an item when someone replies |
-| **Status changed**                | To assignees when an item's status changes           |
-| **Reply to the reporter**         | To the reporter when the team replies publicly       |
-| **Status update to the reporter** | To the reporter when the team changes the status     |
+| Template                              | Sent                                                                        |
+| ------------------------------------- | --------------------------------------------------------------------------- |
+| **Invitation**                        | When someone is invited to the workspace                                    |
+| **New feedback**                      | To the project's recipients (Notifications › General) when a report arrives |
+| **Assigned to you**                   | To the person an item was assigned to                                       |
+| **New reply**                         | To the team involved in an item when someone replies                        |
+| **Mentioned**                         | To a member @mentioned in a comment                                         |
+| **Status changed**                    | To assignees and followers when an item's status changes                    |
+| **Priority changed**                  | To assignees and followers when an item's priority changes                  |
+| **Feedback deleted**                  | To assignees and followers when an item is moved to the trash               |
+| **Notification digest**               | Hourly or daily, to people who chose a digest                               |
+| **Webhook disabled**                  | To Admins when a webhook is switched off after 3 days of failures           |
+| **Report received**                   | To the reporter right after they send it                                    |
+| **Reply to the reporter**             | To the reporter when the team replies publicly                              |
+| **Status update to the reporter**     | To the reporter when the team changes the status                            |
+| **Priority update to the reporter**   | To the reporter when the team changes the priority                          |
+| **Assignment update to the reporter** | To the reporter when someone on the team takes it on                        |
+
+Which of these go out, and to whom, is set in the other Notifications tabs — see
+[notifications](/docs/dashboard/notifications). Password reset and email verification emails use fixed wording.
 
 Variables:
 
@@ -124,22 +199,30 @@ Variables:
 | ----------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | `productName`                                                                       | Every template                                                  |
 | `projectName`, `number`, `kind`, `title`, `body`, `pageUrl`, `reporterName`, `link` | Team templates about an item                                    |
+| `priority`, `browser`, `consoleErrors`, `failedRequests`, `replay`, `screenshotUrl` | New feedback, Assigned to you                                   |
 | `assignerName`                                                                      | Assigned to you                                                 |
 | `authorName`, `reply`                                                               | New reply, Reply to the reporter                                |
+| `authorName`, `comment`                                                             | Mentioned                                                       |
 | `status`, `actorName`                                                               | Status changed (`status` also in Status update to the reporter) |
+| `priority`, `previousPriority`, `actorName`                                         | Priority changed                                                |
+| `period`, `count`, `summary`, `link`                                                | Notification digest                                             |
+| `webhookName`, `lastError`, `settingsUrl`                                           | Webhook disabled                                                |
 | `inviterName`, `orgName`, `role`, `acceptUrl`, `expiresAt`                          | Invitation                                                      |
-| `projectName`, `title`, `pageUrl`                                                   | Reporter templates                                              |
+| `projectName`, `title`, `pageUrl`, `threadUrl`                                      | Reporter templates (`threadUrl` opens their report on the page) |
 
 A placeholder that isn't available in a template is rejected when you save.
 
 ## Instance settings
 
-Three pages belong to whoever runs the server — the **instance admins**: the accounts whose addresses are in
-`PINWREN_ADMIN_EMAILS`, and the account that claimed the instance with the one-time setup token at `/setup` (see
-[first run](/docs/self-hosting#first-run)). Signing up first does not make anyone an instance admin.
+Three pages belong to whoever runs the server — the **instance admins**: the first account created on the server,
+anyone an instance admin names in **Settings › Security › Instance administrators**, and the accounts whose addresses
+are in `PINWREN_ADMIN_EMAILS` (see [the first account](/docs/dashboard/accounts#the-first-account)).
 
-- **Settings › Email** — the SMTP server, with **Send test email**. See [email](/docs/integrations/email).
-- **Settings › Security** — session lifetime (1–90 days, for new sign-ins), whether HTTPS is enforced and whether the
+- **Settings › Email** — the SMTP server, **Send test email** (tests the form before you save it) and **Recent
+  deliveries**, the log of what was sent, skipped or failed. See [email](/docs/integrations/email).
+- **Settings › Security** — the instance administrators, the sign-in methods (email sign-in links and passkeys on
+  or off; whether Google and GitHub are configured, with their callback URLs; see
+  [Other ways to sign in](/docs/dashboard/accounts#other-ways-to-sign-in)), session lifetime (1–90 days, for new sign-ins), whether HTTPS is enforced and whether the
   server trusts reverse proxies and how many hops (both read-only, set by `PINWREN_ENFORCE_HTTPS` and
   `PINWREN_TRUST_PROXY`), and the
   daily update check with **Check now**.

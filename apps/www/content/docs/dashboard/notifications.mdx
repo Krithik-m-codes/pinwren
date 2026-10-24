@@ -1,65 +1,127 @@
 ---
 title: Notifications
-description: In-app and email notifications for your team, per-project preferences, and emails to the people who reported.
+description: Who hears about a new report, follows and @mentions, the bell and the notifications page, digests, desktop alerts and emails to reporters.
 ---
 
 Pinwren tells the right people when something happens — in the dashboard's bell, by email, or both. Notifications
-are sent by background jobs, so a slow or broken mail server never delays a report.
+are sent by background jobs, so a slow or broken mail server never delays a report. Emails need SMTP — see
+[email](/docs/integrations/email); without it the bell still works, and **Settings › Notifications** says so.
 
-## What your team is told
+Everything lives in **Settings › Notifications**, in four tabs:
 
-| Notification       | Who gets it                                                                                                                                                                                    |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **New feedback**   | Members who follow new feedback on the project                                                                                                                                                 |
-| **Assigned**       | The member something was just assigned to                                                                                                                                                      |
-| **Reply**          | People involved in the item — its assignees and team members who already commented. A visitor's reply on an item nobody is involved in yet goes to everyone who follows replies on the project |
-| **Status changed** | The item's assignees                                                                                                                                                                           |
+| Tab                  | Who changes it | What it sets                                                                             |
+| -------------------- | -------------- | ---------------------------------------------------------------------------------------- |
+| **General**          | Admins         | Per project: which team members get new-report notifications, plus extra email addresses |
+| **Reporter**         | Admins         | Per project: which emails the reporter gets                                              |
+| **Email templates**  | Admins         | The wording of every team and reporter email                                             |
+| **My notifications** | Everyone       | Your own switches: what you're told about, email frequency, pause, desktop               |
 
-Nobody is notified about their own action. The bell in each page's header shows unread notifications with the project,
-number and title, links to the item, and has **Mark all read**. Read notifications are cleared after 90 days.
+Editors and Viewers can open General and Reporter to see how a project is set up.
 
-## Preferences
+## Who gets told what
 
-Each member chooses, per project, in **Settings › Notifications**:
+| Notification         | Who gets it                                                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **New report**       | The project's recipients (General: **All members**, or **Chosen members**) and its extra addresses                                                       |
+| **Assigned**         | The people just assigned                                                                                                                                 |
+| **@mentioned**       | The member mentioned in a comment (they don't get a second "reply" notification for it)                                                                  |
+| **Reply**            | The item's assignees, followers and team members who already commented. A visitor's reply on an item nobody follows goes to every member with Replies on |
+| **Status changed**   | Assignees and followers. A visitor's change on an item nobody follows goes to every member with Status on                                                |
+| **Priority changed** | Assignees and followers                                                                                                                                  |
+| **Deleted**          | Assignees and followers, when an Admin moves the item to the trash                                                                                       |
+| **Webhook disabled** | Workspace Admins, when a webhook is switched off after 3 days of failures                                                                                |
 
-| Column           | Meaning                             |
-| ---------------- | ----------------------------------- |
-| **New feedback** | Every new comment or bug report     |
-| **Assigned**     | Something is assigned to you        |
-| **Replies**      | Replies on items you're involved in |
-| **Status**       | Status changes on your items        |
-| **Email**        | Also send these by email            |
+Nobody is notified about their own action. Each person's switches under **My notifications** still apply on top.
 
-Everything is on by default. In-app notifications are always written for what you follow; **Email** decides whether
-they are also mailed. Emails need SMTP — see [email](/docs/integrations/email). Without it, emails are skipped and
-the bell still works.
+### Following an item
 
-## Emails to reporters
+You follow an item when you report it while signed in, are assigned to it, comment on it or are @mentioned — or when
+you click **Follow** in its header. Followers hear about replies, status and priority changes and deletion. **Unfollow**
+stops that (assignment still notifies you).
 
-When a reporter leaves an email address in the widget and the project has **Email the reporter** on (project
-settings › **Privacy & data**, `notifyReporter`), they get an email when:
+## The bell and the notifications page
 
-- the team posts a **public** reply on their feedback (internal notes never leave the dashboard), or
-- the team changes its **status** — not when they resolved it themselves from the page.
+The bell in every page's header shows the unread count — also in the browser tab's title, e.g. `(3) Inbox` — and the
+latest 30 notifications, each saying what happened and who did it ("New bug report from Maria", "Avery mentioned you"),
+with the project, number and title. Click one to open the item; **Mark all read** clears this workspace's bell only.
+Opening an item in the inbox marks its notifications read.
 
-Both emails use the "Reply to the reporter" and "Status update to the reporter" templates, which you can edit — see
-[settings](/docs/dashboard/settings#email-templates).
+The bell updates the moment a notification exists: the server pushes it to your open tabs over the real-time stream.
+
+**View all** opens the notifications page: **All** / **Unread**, a project filter and **Load older** to page back
+through history. Notifications about items in the trash disappear (except the one saying the item was deleted), and
+read notifications are cleared after 90 days.
+
+## My notifications
+
+**How you're notified** (for every workspace you're in):
+
+- **Email**: **Instantly** (one email per notification), **Hourly digest** or **Daily digest** — one email listing what
+  you haven't read yet, per workspace, with a link to the notifications page.
+- **Pause all email**: no notification emails at all, digests included. The bell keeps working.
+- **Desktop notifications** (this device only): a system notification while Pinwren is in a background tab. The
+  browser asks for permission; if you blocked it, allow notifications for the site in the browser's settings.
+
+**What you're notified about**, per project:
+
+| Column       | Meaning                                                            |
+| ------------ | ------------------------------------------------------------------ |
+| **New**      | New reports (when you're one of the project's recipients)          |
+| **Assigned** | Something is assigned to you                                       |
+| **Mentions** | Someone @mentions you                                              |
+| **Replies**  | Replies on items you're involved in or follow                      |
+| **Status**   | Status changes and deletions on items you're involved in or follow |
+| **Priority** | Priority changes on items you're involved in or follow             |
+| **Email**    | Also send these by email                                           |
+
+Everything is on by default. Every team email also has a **Manage notifications** link and a one-click unsubscribe that
+turns **Email** off for that project.
+
+## General: new-report recipients
+
+Per project, choose **All members** (everyone in the workspace, now and later) or **Chosen members**, and add up to
+20 **Other email addresses** — a client, a shared inbox — that get every new-report email without an account. Each of
+those emails has an **Unsubscribe** link that removes the address from the project.
+
+New-report emails show the screenshot, priority, page, browser and OS, console errors, failed requests and whether a
+session replay exists — see [email](/docs/integrations/email#what-the-emails-contain).
+
+## Reporter: emails to the person who reported
+
+When a reporter leaves an email address in the widget, they can hear back without an account. Per project:
+
+| Switch                 | Default | Sends                                                                     |
+| ---------------------- | ------- | ------------------------------------------------------------------------- |
+| **Email the reporter** | on      | The master switch. While it is on, every **public** team reply is emailed |
+| **Report received**    | on      | A confirmation right after they send it                                   |
+| **Status changes**     | on      | When the team resolves, closes or reopens it                              |
+| **Priority changes**   | off     | When the team sets or changes its priority                                |
+| **Assignment**         | off     | When someone on the team takes it on                                      |
+
+Internal notes never leave the dashboard, and nothing is sent about what reporters do themselves (resolving their own
+pin, for example). The emails link to the conversation on your page: a signed link that opens the widget on their
+report, even when pins are private. You can edit each email under **Email templates**.
 
 Reporter emails carry an **Unsubscribe** link in the footer and `List-Unsubscribe` / `List-Unsubscribe-Post` headers,
-so mail clients can offer one-click unsubscribe. The link (`/api/unsubscribe?token=…`, signed) opens a confirmation
-page — opening it alone unsubscribes nobody, so link scanners can't — and the button on it, or the mail client's
-one-click request, does. An address that unsubscribes goes on the workspace's suppression list, which every reporter
-email checks when it is sent, so mail already queued is stopped too.
+so mail clients can offer one-click unsubscribe. The link opens a confirmation page — opening it alone unsubscribes
+nobody, so link scanners can't — and the button on it, or the mail client's one-click request, does. An address that
+unsubscribes goes on the workspace's suppression list, which every reporter email checks when it is sent.
 
 ## API
 
 Under `/api`, with a dashboard session:
 
-| Endpoint                            | Does                                                                                                    |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `GET /api/notifications`            | `{ items, unreadCount }`; `?unread=1` for unread only, `?limit=` up to 100 (default 50)                 |
-| `POST /api/notifications/read`      | `{ "ids": [...] }` or `{ "all": true }` → `{ updated }`                                                 |
-| `GET /api/notification-preferences` | One row per project: `{ projectId, projectName, newFeedback, assigned, replies, statusChanges, email }` |
-| `PUT /api/notification-preferences` | `{ projectId, ...any of the five booleans }`                                                            |
+| Endpoint                                  | Does                                                                                                                                               |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/notifications`                  | `{ items, unreadCount, nextCursor }`; `?unread=1`, `?projectId=`, `?limit=` (1–100, default 50), `?before=<nextCursor>`                            |
+| `POST /api/notifications/read`            | `{ "ids": [...] }`, `{ "feedbackId": "…" }` or `{ "all": true }` → `{ updated }` (this workspace only)                                             |
+| `GET /api/notification-preferences`       | `{ preferences: [{ projectId, projectName, newFeedback, assigned, replies, statusChanges, mentioned, priorityChanges, email }], emailConfigured }` |
+| `PUT /api/notification-preferences`       | `{ projectId, ...any of the switches }`                                                                                                            |
+| `GET` / `PATCH /api/me/preferences`       | `{ emailDigest: "off" \| "hourly" \| "daily", emailPaused }`                                                                                       |
+| `POST` / `DELETE /api/feedback/:id/watch` | Follow / unfollow → `{ watching }`                                                                                                                 |
+| `GET /api/projects/:id/notifications`     | `{ notifications: { memberIds, emails, reporter: { enabled, received, statusChanged, priorityChanged, assigned } }, members }`                     |
+| `PATCH /api/projects/:id/notifications`   | Admins: any subset (`reporter` merges field by field); `400 INVALID_MEMBER` for someone outside the workspace                                      |
 
-Notification types are `feedback.created`, `feedback.assigned`, `feedback.status_changed` and `comment.created`.
+Notification types: `feedback.created`, `feedback.assigned`, `feedback.status_changed`, `feedback.priority_changed`,
+`feedback.deleted`, `comment.created`, `comment.mentioned`, `webhook.disabled`. The real-time stream
+(`GET /api/stream`) sends each new one to its recipient as a `notification.created` event.

@@ -5,6 +5,7 @@ import { Logo } from "@/components/logo";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getSession } from "@/lib/server/session";
 import { OnboardingForm } from "./onboarding-form";
+import { PendingInvitations } from "./pending-invitations";
 
 export const metadata: Metadata = { title: "Set up your workspace" };
 
@@ -21,9 +22,17 @@ export default function OnboardingPage() {
   );
 }
 
-/** Only for someone signed in (checked on the server); the form itself is a client component. */
+/**
+ * Only for someone signed in (checked on the server); the form itself is a client component. Invitations
+ * waiting for their address come first (wave-5 §3.1).
+ */
 async function SignedIn() {
   const session = await getSession();
-  if (!session) redirect("/sign-in");
-  return <OnboardingForm />;
+  if (!session) redirect("/sign-in?next=%2Fonboarding");
+  return (
+    <>
+      <PendingInvitations />
+      <OnboardingForm />
+    </>
+  );
 }

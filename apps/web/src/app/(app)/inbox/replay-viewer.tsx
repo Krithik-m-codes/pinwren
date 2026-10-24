@@ -203,10 +203,18 @@ export function ReplayViewer({
           </p>
         </div>
       )}
-      <figcaption className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Film className="size-3.5" /> Session replay
-        {durationMs !== null && <span className="tabular-nums">· {Math.round(durationMs / 1000)} s</span>}
-        <span>· inputs are masked when recorded</span>
+      <figcaption className="space-y-0.5 text-xs text-muted-foreground">
+        <span className="flex flex-wrap items-center gap-x-2">
+          <Film className="size-3.5" /> Session replay
+          {durationMs !== null && <span className="tabular-nums">· {Math.round(durationMs / 1000)} s</span>}
+          <span>· inputs are masked when recorded</span>
+        </span>
+        {/* The replay rebuilds the page from its DOM: images, fonts and styles still load from your
+            site, so ones it no longer serves (or serves only to signed-in visitors) appear blank. */}
+        <span className="block" data-testid="replay-assets-note">
+          Images, fonts and styles load from your site when the replay plays, so ones that have changed or
+          need a sign-in may look missing.
+        </span>
       </figcaption>
     </figure>
   );

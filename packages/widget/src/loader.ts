@@ -8,7 +8,8 @@
 // --- Public types (blueprint 05 §8). They live here so the npm declaration file is self-contained;
 // src/types.ts re-exports them for the widget's own modules. ---------------------------------------------
 
-export type Mode = "comment" | "bug" | "panel";
+/** `"page"` opens the composer for a comment on the whole page (no pin; wave-5 §3.3). */
+export type Mode = "comment" | "bug" | "panel" | "page";
 export type WidgetEvent = "open" | "close" | "submit" | "error" | "ready";
 
 /** What each event hands its handlers. */
@@ -54,6 +55,8 @@ export type PinwrenOptions = {
   urlPattern?: string | undefined;
   /** Privacy mode turns session replay off; set this to keep it on anyway (you take care of consent). */
   allowReplayInPrivacyMode?: boolean | undefined;
+  /** Light or dark widget UI; "auto" (the default) follows the visitor's system setting. */
+  theme?: "light" | "dark" | "auto" | undefined;
 };
 
 /** `window.Pinwren` once widget.js has loaded. */
@@ -64,6 +67,15 @@ export type PinwrenApi = {
   on: <E extends WidgetEvent>(event: E, handler: Handler<E>) => () => void;
   identify: (user: PinwrenUser | null, options?: IdentifyOptions) => void;
   setPageScope: (scope: PageScope | null) => void;
+  /**
+   * Context sent with every bug report and comment from now on (plan, account id, feature flags…): a plain JSON
+   * object of at most 14 KB, shown in the dashboard's Details. `null` clears it.
+   */
+  setMetadata: (metadata: Record<string, unknown> | null) => void;
+  /** Show the widget, whatever the project's visibility mode says (e.g. mode "manual"). */
+  show: () => void;
+  /** Hide the widget (launcher, pins, open cards) until `show()`. */
+  hide: () => void;
   destroy: () => void;
 };
 
@@ -162,6 +174,18 @@ export const identify = (user: PinwrenUser | null, options?: IdentifyOptions): v
 /** Group pins across pages of one template, e.g. `{ urlPattern: "/product/:id" }`; `null` clears it. */
 export const setPageScope = (scope: PageScope | null): void => {
   invoke("setPageScope", scope);
+};
+/** Context for every report and comment (plain JSON object, ≤ 14 KB); `null` clears it. */
+export const setMetadata = (metadata: Record<string, unknown> | null): void => {
+  invoke("setMetadata", metadata);
+};
+/** Show the widget, overriding the project's visibility mode. */
+export const show = (): void => {
+  invoke("show");
+};
+/** Hide the widget until `show()`. */
+export const hide = (): void => {
+  invoke("hide");
 };
 /** Remove the widget completely: UI, listeners, capture wrappers and session replay. */
 export const destroy = (): void => {

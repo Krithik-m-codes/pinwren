@@ -73,6 +73,9 @@ describe("viewer role", () => {
         "POST /api/tokens",
         "POST /api/views",
         "PUT /api/notification-preferences",
+        "PATCH /api/me/preferences",
+        "POST /api/feedback/:id/watch",
+        "DELETE /api/feedback/:id/watch",
       ].sort(),
     );
     expect(refused).toContain("PATCH /api/feedback/:id");

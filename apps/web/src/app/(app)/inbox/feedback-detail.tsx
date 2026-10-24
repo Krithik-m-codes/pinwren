@@ -1,8 +1,11 @@
 "use client";
 
-import { FEEDBACK_STATUSES, PRIORITIES, safeHref } from "@pinwren/core";
+import { FEEDBACK_KINDS, FEEDBACK_STATUSES, PRIORITIES, safeHref } from "@pinwren/core";
 import {
   BadgeCheck,
+  Bell,
+  BellOff,
+  Copy,
   Crosshair,
   Download,
   ExternalLink,
@@ -10,18 +13,25 @@ import {
   Film,
   ImageIcon,
   Link2,
+  Loader2,
   MoreHorizontal,
   Paperclip,
+  RotateCcw,
+  Shapes,
   SquareDashed,
+  Tag,
   Trash2,
+  Unlink,
+  UserRound,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ButtonLink } from "@/components/button-link";
-import { CaptureView, type Marker } from "@/components/capture-view";
+import { AnnotationsToggle, CaptureView, type Marker } from "@/components/capture-view";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { copyText } from "@/components/copy-button";
+import { DatePicker } from "@/components/date-picker";
 import {
   KIND_META,
   LocalDate,
@@ -38,9 +48,15 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -51,27 +67,36 @@ import {
   assetUrl,
   type FeedbackDetail,
   formatBytes,
+  type ItemLabel,
   type PresenceUser,
   screenshotOf,
 } from "@/lib/api";
 import { captureOf, isRegion, placeOn } from "@/lib/geometry";
-import { itemLink, withParam } from "@/lib/links";
+import { itemLink } from "@/lib/links";
 import {
   errorMessage,
   useDeleteFeedbackMutation,
   useFeedbackDetailQuery,
+  useLazyReproductionQuery,
+  useMarkItemNotificationsReadMutation,
+  usePageLinkMutation,
+  usePurgeFeedbackMutation,
+  useRestoreFeedbackMutation,
   useRoundsQuery,
   useUpdateFeedbackMutation,
+  useWatchFeedbackMutation,
 } from "@/lib/store/api";
-import type { FeedbackPatch } from "@/lib/store/api/feedback";
+import type { FeedbackFields, FeedbackPatch } from "@/lib/store/api/feedback";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { type DetailMenu, menuChanged } from "@/lib/store/slices/inbox";
 import { presenceWatched } from "@/lib/store/slices/realtime";
+import { useUrlParams } from "@/lib/use-url-params";
 import { useMounted } from "@/lib/use-synced-state";
 import { cn } from "@/lib/utils";
 import { useMembers, useViewer } from "@/lib/viewer";
-import { PresenceStack } from "./inbox-list";
+import { DueDate, PresenceStack } from "./inbox-list";
 import { ItemActions } from "./item-actions";
+import { AssigneesPicker, ItemSearchPicker, LabelChips, LabelPicker } from "./pickers";
 import { type ReplayHandle, ReplayViewer } from "./replay-viewer";
 import { CommentComposer, Timeline } from "./timeline";
 
@@ -80,15 +105,33 @@ const priorityItems = PRIORITIES.map((p) => ({ value: p, label: PRIORITY_META[p]
 const NO_ROUND = "none";
 const NOBODY: PresenceUser[] = [];
 
+/** A due date is the end of the chosen day, in the reader's time zone. */
+export function endOfDay(d: Date): string {
+  const end = new Date(d);
+  end.setHours(23, 59, 59, 0);
+  return end.toISOString();
+}
+
 /**
  * One item (blueprint 06 §3.2): header pickers, media (screenshot / session replay), attachments,
- * context tabs synced with the replay, and the timeline. Reports presence while open.
+ * context tabs synced with the replay, and the timeline. Reports presence while open, and reads the
+ * item's notifications (the bell) when it opens.
  */
-export function FeedbackDetailPanel({ id, onClose }: { id: string; onClose: () => void }) {
+export function FeedbackDetailPanel({
+  id,
+  onClose,
+  onDeleted,
+}: {
+  id: string;
+  onClose: () => void;
+  /** After a move to the trash (the inbox offers Undo). */
+  onDeleted?: (id: string) => void;
+}) {
   const detail = useFeedbackDetailQuery(id);
   const dispatch = useAppDispatch();
-  const { canWrite, userId } = useViewer();
+  const { userId } = useViewer();
   const watching = useAppSelector((s) => s.realtime.presence[id] ?? NOBODY);
+  const [markRead] = useMarkItemNotificationsReadMutation();
   // Presence comes from the live stream: hidden until hydrated (see InboxList).
   const ready = useMounted();
   const others = ready ? watching.filter((u) => u.id !== userId) : NOBODY;
@@ -100,6 +143,11 @@ export function FeedbackDetailPanel({ id, onClose }: { id: string; onClose: () =
       dispatch(presenceWatched(null));
     };
   }, [id, dispatch]);
+
+  // Opening an item reads its notifications. Best effort: the bell keeps them unread if this fails.
+  useEffect(() => {
+    void markRead(id);
+  }, [id, markRead]);
 
   if (detail.isLoading) {
     return (
@@ -117,58 +165,99 @@ export function FeedbackDetailPanel({ id, onClose }: { id: string; onClose: () =
     );
   }
   if (!detail.data) return <ErrorState error={detail.error} retry={() => void detail.refetch()} />;
-  return <DetailBody data={detail.data} onClose={onClose} canWrite={canWrite} others={others} />;
+  return <DetailBody data={detail.data} onClose={onClose} onDeleted={onDeleted} others={others} />;
 }
 
 function DetailBody({
   data,
   onClose,
-  canWrite,
+  onDeleted,
   others,
 }: {
   data: FeedbackDetail;
   onClose: () => void;
-  canWrite: boolean;
+  onDeleted: ((id: string) => void) | undefined;
   others: PresenceUser[];
 }) {
   const { feedback: f, assets } = data;
   const id = f.id;
   const dispatch = useAppDispatch();
+  const { setParams } = useUrlParams();
   const members = useMembers();
+  const viewer = useViewer();
+  const inTrash = !!f.deletedAt;
+  // In the trash an item is read-only until it is restored.
+  const canWrite = viewer.canWrite && !inTrash;
   const menu = useAppSelector((s) => s.inbox.menu);
   const [update] = useUpdateFeedbackMutation();
   const [remove, removal] = useDeleteFeedbackMutation();
+  const [restore, restoring] = useRestoreFeedbackMutation();
+  const [purge, purging] = usePurgeFeedbackMutation();
+  const [watch, watchState] = useWatchFeedbackMutation();
+  const [pageLink, linking] = usePageLinkMutation();
+  const [reproduction, repro] = useLazyReproductionQuery();
   const rounds = useRoundsQuery(f.projectId);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmPurge, setConfirmPurge] = useState(false);
+  const [dupOpen, setDupOpen] = useState(false);
   const replay = assets.find((a) => a.kind === "replay");
   const player = useRef<ReplayHandle | null>(null);
   const [replayAt, setReplayAt] = useState<number | null>(null);
 
   const Kind = KIND_META[f.kind].icon;
-  const memberItems = [
-    { value: "unassigned", label: "Unassigned" },
-    ...members.map((m) => ({ value: m.id, label: m.name })),
-  ];
   const roundItems = [
     { value: NO_ROUND, label: "No round" },
     ...(rounds.data?.rounds ?? [])
       .filter((r) => r.status === "active" || r.id === f.roundId)
       .map((r) => ({ value: r.id, label: r.name })),
   ];
-  const openOnPage = f.pageUrl ? withParam(f.pageUrl, "pinwren", f.id) : null;
-  const patch = (p: FeedbackPatch) => {
-    update({ ids: [id], patch: p })
+  const patch = (p: FeedbackPatch, optimistic?: FeedbackFields) => {
+    update({ ids: [id], patch: p, ...(optimistic ? { optimistic } : {}) })
       .unwrap()
       .catch((e: unknown) => toast.error(errorMessage(e)));
   };
   const setMenu = (m: DetailMenu) => dispatch(menuChanged(m));
   const reporter = f.reporterGuest?.name ?? f.reporterGuest?.email ?? "Anonymous visitor";
+  const assignees = f.assigneeIds
+    .map((uid) => members.find((m) => m.id === uid) ?? data.assignees.find((a) => a.id === uid))
+    .filter((m) => !!m);
+
+  /** A signed link that opens the thread on the page, even when pins are private (wave-5 contract §3.3). */
+  const openOnPage = () => {
+    // Open the tab now (inside the click) so the browser doesn't block it, then point it at the link.
+    const tab = window.open("about:blank", "_blank");
+    if (tab) tab.opener = null;
+    pageLink(id)
+      .unwrap()
+      .then(({ url }) => {
+        const safe = safeHref(url);
+        if (!safe) throw new Error("The page address isn't a web link");
+        if (tab) tab.location.href = safe;
+        else window.open(safe, "_blank", "noopener");
+      })
+      .catch((e: unknown) => {
+        tab?.close();
+        toast.error("Couldn't open the page", { description: errorMessage(e) });
+      });
+  };
+  const copyMarkdown = () => {
+    reproduction(id, true)
+      .unwrap()
+      .then((r) => copyText(r.markdown, "Copied as Markdown"))
+      .catch((e: unknown) => toast.error("Couldn't copy", { description: errorMessage(e) }));
+  };
+  const toggleWatch = () => {
+    watch({ id, watching: !data.watching })
+      .unwrap()
+      .then((r) => toast.success(r.watching ? "You follow this item" : "You no longer follow this item"))
+      .catch((e: unknown) => toast.error(errorMessage(e)));
+  };
 
   return (
     <article className="flex flex-col" aria-label={`Feedback #${f.number}`} data-testid="feedback-detail">
       <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background/90 px-4 py-2 backdrop-blur">
         <span className="font-mono text-xs text-muted-foreground tabular-nums">#{f.number}</span>
-        <Badge variant="secondary" className="gap-1">
+        <Badge variant="secondary" className="gap-1" data-testid="kind-badge">
           <Kind className="size-3" />
           {KIND_META[f.kind].label}
         </Badge>
@@ -180,19 +269,44 @@ function DetailBody({
         <span className="hidden truncate text-xs text-muted-foreground lg:inline">{f.projectName}</span>
         <div className="ml-auto flex items-center gap-0.5">
           <PresenceStack users={others} className="mr-1.5" />
+          {!inTrash && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleWatch}
+              disabled={watchState.isLoading}
+              aria-pressed={data.watching}
+              data-testid="follow"
+              title={
+                data.watching
+                  ? "You get notified about changes and replies. Click to stop."
+                  : "Get notified about changes and replies"
+              }
+            >
+              {data.watching ? <BellOff /> : <Bell />}
+              <span className="hidden sm:inline">{data.watching ? "Unfollow" : "Follow"}</span>
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={() => copyText(itemLink(f.id), "Link copied")}>
             <Link2 /> <span className="hidden sm:inline">Copy link</span>
           </Button>
-          {openOnPage && (
-            <ButtonLink href={openOnPage} external variant="ghost" size="sm">
-              <ExternalLink /> <span className="hidden sm:inline">Open on page</span>
-            </ButtonLink>
+          {f.pageUrl && !inTrash && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={openOnPage}
+              disabled={linking.isLoading}
+              data-testid="open-on-page"
+            >
+              {linking.isLoading ? <Loader2 className="animate-spin" /> : <ExternalLink />}
+              <span className="hidden sm:inline">Open on page</span>
+            </Button>
           )}
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="More actions" />}>
               <MoreHorizontal />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem onClick={() => copyText(`#${f.number}`, "Number copied")}>
                 Copy number
               </DropdownMenuItem>
@@ -201,27 +315,134 @@ function DetailBody({
                   Copy page URL
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem
+                onClick={copyMarkdown}
+                disabled={repro.isFetching}
+                data-testid="copy-markdown"
+              >
+                <Copy /> Copy as Markdown
+              </DropdownMenuItem>
               {canWrite && (
                 <>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setMenu("title")}>Rename</DropdownMenuItem>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <Shapes /> Change kind
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-40">
+                      <DropdownMenuRadioGroup
+                        value={f.kind}
+                        onValueChange={(v) => {
+                          const kind = FEEDBACK_KINDS.find((k) => k === v);
+                          if (kind && kind !== f.kind) patch({ kind });
+                        }}
+                      >
+                        {FEEDBACK_KINDS.map((k) => {
+                          const Icon = KIND_META[k].icon;
+                          return (
+                            <DropdownMenuRadioItem closeOnClick key={k} value={k}>
+                              <Icon /> {KIND_META[k].label}
+                            </DropdownMenuRadioItem>
+                          );
+                        })}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  {f.duplicateOf ? (
+                    <DropdownMenuItem onClick={() => patch({ duplicateOfId: null, status: "open" })}>
+                      <Unlink /> Not a duplicate
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={() => setDupOpen(true)} data-testid="mark-duplicate">
+                      Mark duplicate of…
+                    </DropdownMenuItem>
+                  )}
+                </>
+              )}
+              {viewer.isAdmin && !inTrash && (
+                <>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem variant="destructive" onClick={() => setConfirmDelete(true)}>
-                    <Trash2 /> Delete
+                    <Trash2 /> Move to trash
                   </DropdownMenuItem>
                 </>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+          {canWrite && (
+            <ItemSearchPicker
+              projectId={f.projectId}
+              excludeId={id}
+              open={dupOpen}
+              onOpenChange={setDupOpen}
+              label="Mark duplicate of"
+              trigger={<button type="button" className="sr-only" tabIndex={-1} />}
+              onPick={(original) => {
+                setDupOpen(false);
+                patch({ duplicateOfId: original.id, status: "duplicate" });
+                toast.success(`Marked as a duplicate of #${original.number}`);
+              }}
+            />
+          )}
           <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={onClose}>
             <X />
           </Button>
         </div>
       </header>
 
+      {inTrash && (
+        <div
+          className="flex flex-wrap items-center gap-2 border-b bg-destructive/5 px-4 py-2 text-sm"
+          data-testid="trash-banner"
+        >
+          <Trash2 className="size-4 shrink-0 text-destructive" />
+          <span className="mr-auto">
+            In the trash since <RelativeTime iso={f.deletedAt ?? f.updatedAt} />. It is purged with its files
+            30 days after it was deleted.
+          </span>
+          {viewer.isAdmin && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={restoring.isLoading}
+                onClick={() =>
+                  restore([id])
+                    .unwrap()
+                    .then(() => {
+                      toast.success("Restored");
+                      setParams({ trash: null });
+                    })
+                    .catch((e: unknown) => toast.error(errorMessage(e)))
+                }
+              >
+                <RotateCcw /> Restore
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setConfirmPurge(true)}
+              >
+                Delete forever
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="space-y-6 px-4 py-5 sm:px-5">
         <div>
-          <h2 className="text-lg leading-snug font-semibold text-balance break-words">
-            {f.title || firstLine(f.body)}
-          </h2>
+          <TitleField
+            key={f.title ?? ""}
+            title={f.title}
+            fallback={firstLine(f.body)}
+            editable={canWrite}
+            editing={canWrite && menu === "title"}
+            onEditingChange={(on) => setMenu(on ? "title" : null)}
+            onSave={(title) => patch({ title })}
+          />
           <p className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
             <span>{reporter}</span>
             {f.reporterGuest?.verified && (
@@ -238,6 +459,7 @@ function DetailBody({
             </span>
             {f.pageTitle && <span>· {f.pageTitle}</span>}
           </p>
+          <DuplicateLinks data={data} onOpen={(item) => setParams({ item })} />
         </div>
 
         {canWrite ? (
@@ -282,32 +504,69 @@ function DetailBody({
                 ))}
               </SelectContent>
             </Select>
-            <Select
-              items={memberItems}
-              value={f.assigneeIds[0] ?? "unassigned"}
+            <AssigneesPicker
+              value={f.assigneeIds}
               open={menu === "assignee"}
               onOpenChange={(o) => setMenu(o ? "assignee" : null)}
-              onValueChange={(v) => v && patch({ assigneeIds: v === "unassigned" ? [] : [v] })}
-            >
-              <SelectTrigger size="sm" aria-label="Assignee" data-testid="assignee-picker">
-                {data.assignees[0] ? (
-                  <UserAvatar
-                    name={data.assignees[0].name}
-                    image={data.assignees[0].image}
-                    className="size-4"
-                  />
-                ) : null}
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {memberItems.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
-                    {m.value !== "unassigned" && <UserAvatar name={m.label} className="size-4" />}
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              label="Assignees"
+              onChange={(ids) => patch({ assigneeIds: ids })}
+              trigger={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="max-w-56 font-normal"
+                  data-testid="assignee-picker"
+                >
+                  {assignees.length ? (
+                    <>
+                      <span className="flex -space-x-1">
+                        {assignees.slice(0, 3).map((a) => (
+                          <UserAvatar
+                            key={a.id}
+                            name={a.name}
+                            image={a.image}
+                            className="size-4 ring-1 ring-background"
+                          />
+                        ))}
+                      </span>
+                      <span className="truncate">
+                        {assignees.length === 1 ? assignees[0]?.name : `${assignees.length} assignees`}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <UserRound /> Unassigned
+                    </>
+                  )}
+                </Button>
+              }
+            />
+            <LabelPicker
+              projectId={f.projectId}
+              selected={f.labels}
+              canCreate={canWrite}
+              open={menu === "labels"}
+              onOpenChange={(o) => setMenu(o ? "labels" : null)}
+              label="Labels"
+              onChange={(labels: ItemLabel[]) => patch({ labelIds: labels.map((l) => l.id) }, { labels })}
+              trigger={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="max-w-64 font-normal"
+                  data-testid="label-picker"
+                >
+                  <Tag />
+                  {f.labels.length ? <LabelChips labels={f.labels} max={2} /> : "Labels"}
+                </Button>
+              }
+            />
+            <DatePicker
+              value={f.dueAt ? new Date(f.dueAt) : null}
+              onChange={(d) => patch({ dueAt: d ? endOfDay(d) : null })}
+              placeholder="Due date"
+              className="[&_button:first-child]:h-7 [&_button:first-child]:w-auto [&_button:first-child]:text-sm"
+            />
             {roundItems.length > 1 && (
               <Select
                 items={roundItems}
@@ -338,8 +597,18 @@ function DetailBody({
               <PriorityIcon priority={f.priority} /> {PRIORITY_META[f.priority].label}
             </Badge>
             <Badge variant="outline" className="h-7 gap-1.5 px-2.5 font-normal">
-              {data.assignees[0] ? data.assignees[0].name : "Unassigned"}
+              {assignees.length ? assignees.map((a) => a.name).join(", ") : "Unassigned"}
             </Badge>
+            {f.labels.length > 0 && (
+              <Badge variant="outline" className="h-7 gap-1.5 px-2.5 font-normal">
+                <LabelChips labels={f.labels} max={5} />
+              </Badge>
+            )}
+            {f.dueAt && (
+              <Badge variant="outline" className="h-7 gap-1.5 px-2.5 font-normal">
+                <DueDate iso={f.dueAt} status={f.status} />
+              </Badge>
+            )}
             {f.roundId && (
               <Badge variant="outline" className="h-7 px-2.5 font-normal">
                 {rounds.data?.rounds.find((r) => r.id === f.roundId)?.name ?? "In a round"}
@@ -366,10 +635,10 @@ function DetailBody({
           <h3 className="text-sm font-semibold">Activity</h3>
           <Timeline data={data} />
           {canWrite ? (
-            <CommentComposer feedbackId={id} />
+            <CommentComposer feedbackId={id} reach={data.replyReach} projectId={f.projectId} />
           ) : (
             <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-              You have read-only access, so you can&apos;t reply.
+              {inTrash ? "Restore the item to reply." : "You have read-only access, so you can't reply."}
             </p>
           )}
         </section>
@@ -378,21 +647,145 @@ function DetailBody({
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
-        title={`Delete #${f.number}?`}
-        description="The item moves to the trash and is purged with its files after 30 days."
+        title={`Move #${f.number} to the trash?`}
+        description="Admins can restore it from the trash for 30 days; after that it is purged with its files."
+        confirmLabel="Move to trash"
         pending={removal.isLoading}
         onConfirm={() => {
           remove([id])
             .unwrap()
             .then(() => {
-              toast.success("Feedback deleted");
               setConfirmDelete(false);
+              if (onDeleted) onDeleted(id);
+              else toast.success("Moved to the trash");
+              onClose();
+            })
+            .catch((e: unknown) => toast.error(errorMessage(e)));
+        }}
+      />
+      <ConfirmDialog
+        open={confirmPurge}
+        onOpenChange={setConfirmPurge}
+        title={`Delete #${f.number} forever?`}
+        description="It is removed with its comments, screenshots, replay and attachments. This can't be undone."
+        confirmLabel="Delete forever"
+        pending={purging.isLoading}
+        onConfirm={() => {
+          purge([id])
+            .unwrap()
+            .then(() => {
+              toast.success("Deleted forever");
+              setConfirmPurge(false);
               onClose();
             })
             .catch((e: unknown) => toast.error(errorMessage(e)));
         }}
       />
     </article>
+  );
+}
+
+/** The title, editable in place (click it, or `r`): Enter saves, Esc cancels, empty falls back to the body. */
+function TitleField({
+  title,
+  fallback,
+  editable,
+  editing,
+  onEditingChange,
+  onSave,
+}: {
+  title: string | null;
+  fallback: string;
+  editable: boolean;
+  editing: boolean;
+  onEditingChange: (on: boolean) => void;
+  onSave: (title: string | null) => void;
+}) {
+  const [value, setValue] = useState(title ?? "");
+  const shown = title || fallback;
+  if (!editing) {
+    return editable ? (
+      <h2 className="text-lg leading-snug font-semibold text-balance break-words">
+        <button
+          type="button"
+          className="-mx-1 rounded px-1 text-left hover:bg-muted/70 focus-visible:outline-2 focus-visible:outline-ring"
+          title="Rename (r)"
+          onClick={() => onEditingChange(true)}
+          data-testid="title"
+        >
+          {shown}
+        </button>
+      </h2>
+    ) : (
+      <h2 className="text-lg leading-snug font-semibold text-balance break-words" data-testid="title">
+        {shown}
+      </h2>
+    );
+  }
+  const save = () => {
+    const next = value.trim().slice(0, 200);
+    onEditingChange(false);
+    if ((next || null) !== (title || null)) onSave(next || null);
+  };
+  return (
+    <Input
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      maxLength={200}
+      // eslint-disable-next-line jsx-a11y/no-autofocus -- opened by a click or `r`, which hands focus here
+      autoFocus
+      aria-label="Title"
+      placeholder={fallback}
+      className="h-9 text-lg font-semibold"
+      onBlur={save}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          save();
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          setValue(title ?? "");
+          onEditingChange(false);
+        }
+      }}
+    />
+  );
+}
+
+/** "Duplicate of #12" and "Duplicates: #14, #20", both linking to the other item. */
+function DuplicateLinks({ data, onOpen }: { data: FeedbackDetail; onOpen: (id: string) => void }) {
+  const original = data.feedback.duplicateOf;
+  if (!original && !data.duplicates.length) return null;
+  const link = (r: { id: string; number: number; title: string }) => (
+    <button
+      key={r.id}
+      type="button"
+      className="font-medium text-foreground underline-offset-4 hover:underline"
+      onClick={() => onOpen(r.id)}
+      title={r.title}
+    >
+      #{r.number}
+    </button>
+  );
+  return (
+    <p
+      className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
+      data-testid="duplicates"
+    >
+      {original && (
+        <span className="inline-flex items-center gap-1">
+          <StatusIcon status="duplicate" className="size-3.5" /> Duplicate of {link(original)}
+          <span className="max-w-48 truncate">{original.title}</span>
+        </span>
+      )}
+      {data.duplicates.length > 0 && (
+        <span className="inline-flex flex-wrap items-center gap-1">
+          Duplicates: {data.duplicates.map((d, i) => [i > 0 ? ", " : null, link(d)])}
+        </span>
+      )}
+    </p>
   );
 }
 
@@ -437,6 +830,8 @@ function Media({
 function Screenshot({ data, shot }: { data: FeedbackDetail; shot: Asset }) {
   const f = data.feedback;
   const [showPin, setShowPin] = useState(true);
+  // The reporter's vector annotations (wave-5 §2), drawn over the unflattened capture; switchable.
+  const [showMarks, setShowMarks] = useState(true);
   // An annotated screenshot already carries the reporter's own marks; only overlay on a clean one.
   const placed = f.anchor && shot.kind === "screenshot" ? placeOn(f.anchor, captureOf(f.anchor)) : null;
   const markers: Marker[] = placed
@@ -457,6 +852,8 @@ function Screenshot({ data, shot }: { data: FeedbackDetail; shot: Asset }) {
           markers={markers}
           showMarkers={showPin}
           decorative
+          annotations={shot.annotations}
+          showAnnotations={showMarks}
         />
       </a>
       <figcaption className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -467,8 +864,11 @@ function Screenshot({ data, shot }: { data: FeedbackDetail; shot: Asset }) {
             · {f.environment.viewport.w}×{f.environment.viewport.h}
           </span>
         )}
+        <span className="ml-auto">
+          <AnnotationsToggle layer={shot.annotations} pressed={showMarks} onPressedChange={setShowMarks} />
+        </span>
         {placed && (
-          <span className="ml-auto flex items-center gap-2">
+          <span className="flex items-center gap-2">
             <label htmlFor={`show-pin-${f.id}`}>{isRegion(f.anchor) ? "Show region" : "Show pin"}</label>
             <Switch id={`show-pin-${f.id}`} size="sm" checked={showPin} onCheckedChange={setShowPin} />
           </span>
@@ -584,6 +984,19 @@ function ContextTabs({
               "—"
             )}
           </Meta>
+          {f.reviewLink && (
+            // A guest sent it through a review link (F-012): its name, and every item that came through it.
+            <Meta label="Source">
+              <Link
+                href={`/inbox?project=${f.projectId}&review=${f.reviewLink.id}`}
+                className="inline-flex items-center gap-1.5 underline-offset-4 hover:underline"
+                data-testid="review-link-source"
+              >
+                <Link2 className="size-3.5 text-muted-foreground" />
+                Review link · {f.reviewLink.label}
+              </Link>
+            </Meta>
+          )}
           <Meta label="Browser">
             {[f.environment?.browser, f.environment?.os].filter(Boolean).join(" · ") || "—"}
           </Meta>
@@ -627,13 +1040,24 @@ function ContextTabs({
               <span className="text-muted-foreground">No consent notice was shown</span>
             )}
           </Meta>
-          {f.metadata &&
-            Object.entries(f.metadata).map(([k, v]) => (
-              <Meta key={k} label={k}>
-                <code className="font-mono text-xs break-all">{JSON.stringify(v)}</code>
-              </Meta>
-            ))}
         </dl>
+        {f.metadata && Object.keys(f.metadata).length > 0 && (
+          // What the site attached with `Pinwren.setMetadata()` / `metadata` (plan, build, feature flags…).
+          <div className="mt-4 space-y-2" data-testid="host-metadata">
+            <h4 className="text-xs font-medium text-muted-foreground">From your site</h4>
+            <dl className="grid grid-cols-[6.5rem_1fr] gap-x-4 gap-y-2 text-sm sm:grid-cols-[8rem_1fr]">
+              {Object.entries(f.metadata).map(([k, v]) => (
+                <Meta key={k} label={k}>
+                  {typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? (
+                    <span className="break-all">{String(v)}</span>
+                  ) : (
+                    <code className="font-mono text-xs break-all">{JSON.stringify(v)}</code>
+                  )}
+                </Meta>
+              ))}
+            </dl>
+          </div>
+        )}
       </TabsContent>
       {a && (
         <TabsContent value="anchor" className="pt-2">

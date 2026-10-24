@@ -8,6 +8,10 @@ export const STREAM_EVENTS = [
   "feedback.updated",
   "feedback.deleted",
   "comment.created",
+  "comment.updated",
+  "comment.deleted",
+  /** Per user, never per project: only the recipient's own streams get it (wave-5 contract §4). */
+  "notification.created",
   "presence",
   "ping",
 ] as const;
@@ -72,6 +76,18 @@ export const streamCommentCreated = z.object({
   authorName: z.string().nullable(),
 });
 
+export const streamCommentChanged = z.object({ id: z.uuid(), feedbackId: z.uuid(), projectId: z.uuid() });
+
+export const streamNotificationCreated = z.object({
+  id: z.uuid(),
+  type: z.string(),
+  feedbackId: z.uuid().nullable(),
+  /** The organisation it belongs to: the bell ignores other workspaces' notifications. */
+  orgId: z.string(),
+  data: z.record(z.string(), z.unknown()),
+  createdAt: iso,
+});
+
 export const presenceUser = z.object({ id: z.string(), name: z.string(), image: z.string().nullable() });
 export type PresenceUser = z.infer<typeof presenceUser>;
 
@@ -86,5 +102,7 @@ export type StreamEvent =
   | { event: "feedback.updated"; data: z.infer<typeof streamFeedbackUpdated> }
   | { event: "feedback.deleted"; data: z.infer<typeof streamFeedbackDeleted> }
   | { event: "comment.created"; data: z.infer<typeof streamCommentCreated> }
+  | { event: "comment.updated" | "comment.deleted"; data: z.infer<typeof streamCommentChanged> }
+  | { event: "notification.created"; data: z.infer<typeof streamNotificationCreated> }
   | { event: "presence"; data: z.infer<typeof streamPresence> }
   | { event: "ping"; data: Record<string, never> };

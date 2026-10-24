@@ -3,7 +3,7 @@ import { emailTemplate, getDb } from "@pinwren/db";
 import { and, eq } from "drizzle-orm";
 import { emailBrand } from "../services/branding";
 import type { EmailMessage } from "./send";
-import { type Rendered, renderTemplate, TEMPLATES } from "./templates";
+import { type Rendered, type RenderOptions, renderTemplate, TEMPLATES } from "./templates";
 import { unsubscribeHeaders, unsubscribeUrl } from "./unsubscribe";
 
 /** The organisation's override of a template, or null for the default. */
@@ -19,6 +19,12 @@ export async function templateOverride(
 }
 
 /**
+ * A rendered email plus what the delivery log records about it. Spread into the `notify.email` job
+ * (`{ to, ...rendered }`), so every queued email says which template and workspace it came from.
+ */
+export type RenderedEmail = Rendered & { templateKey: EmailTemplateKey; orgId: string | null };
+
+/**
  * Render a template for an organisation: its override (if any) and its branding. A broken lookup
  * falls back to the built-in wording — an email is never lost to a settings problem.
  */
@@ -26,8 +32,8 @@ export async function renderEmail(
   orgId: string | null,
   key: EmailTemplateKey,
   vars: Record<string, string>,
-  options: { unsubscribeUrl?: string } = {},
-): Promise<Rendered> {
+  options: RenderOptions = {},
+): Promise<RenderedEmail> {
   let source: { subject: string; body: string } = TEMPLATES[key];
   if (orgId) {
     try {
@@ -36,7 +42,11 @@ export async function renderEmail(
       console.warn("[pinwren] email template lookup failed; using the default", err);
     }
   }
-  return renderTemplate(key, source, vars, await emailBrand(orgId), options);
+  return {
+    ...renderTemplate(key, source, vars, await emailBrand(orgId), options),
+    templateKey: key,
+    orgId,
+  };
 }
 
 /**

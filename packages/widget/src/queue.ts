@@ -17,6 +17,8 @@ export class HttpError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** The problem `code` the server sent (`READ_ONLY`, `ORIGIN_NOT_ALLOWED`…), when it sent one. */
+    readonly code?: string,
   ) {
     super(message);
   }

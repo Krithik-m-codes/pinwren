@@ -16,12 +16,23 @@ import { roundsApi } from "./rounds";
 
 export type WebhookCreate = {
   name?: string;
-  url: string;
+  /** Every kind except telegram. */
+  url?: string;
   kind: WebhookKind;
   events: WebhookEvent[];
   projectId?: string | null;
+  /** telegram */
+  botToken?: string;
+  chatId?: string;
+  /** ntfy, optional */
+  accessToken?: string;
 };
-export type WebhookPatch = Partial<Pick<Webhook, "active" | "events" | "projectId" | "name">>;
+export type WebhookPatch = Partial<Pick<Webhook, "active" | "events" | "projectId" | "name">> & {
+  url?: string;
+  botToken?: string;
+  chatId?: string;
+  accessToken?: string | null;
+};
 export type UpdateCheckResult = { checked: boolean; reason?: string; state?: SecuritySettings["update"] };
 type Draft = { subject?: string; body?: string };
 
@@ -167,12 +178,6 @@ export const adminApi = roundsApi.injectEndpoints({
         void dispatch(adminApi.util.upsertQueryData("license", undefined, data));
       },
       invalidatesTags: ["Entitlements"],
-    }),
-
-    /** First-run setup (ADR 0021): claim the instance with the token from the server log. */
-    claimSetup: build.mutation<{ instanceAdmin: true }, string>({
-      query: (token) => ({ url: "/setup/claim", method: "POST", body: { token } }),
-      invalidatesTags: ["Me", "Security"],
     }),
   }),
 });

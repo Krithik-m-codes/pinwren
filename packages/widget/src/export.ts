@@ -38,12 +38,15 @@ export const COLUMNS: [keyof ExportRow, string][] = [
   ["deepLink", "Deep link"],
 ];
 
-/** The page URL without our own `?pinwren=` deep-link parameter. */
+/** Our own parameters: deep link, page-link token, review link. Never part of a page's address. */
+const OWN_PARAMS = ["pinwren", "pwt", "pinwren_review"];
+
+/** The page URL without our own `?pinwren=` / `pwt=` / `pinwren_review=` parameters (≤ 2000 characters). */
 export function cleanPageUrl(href: string): string {
   try {
     const u = new URL(href);
-    u.searchParams.delete("pinwren");
-    return u.href;
+    for (const k of OWN_PARAMS) u.searchParams.delete(k);
+    return u.href.slice(0, 2000);
   } catch {
     return href;
   }

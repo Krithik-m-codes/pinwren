@@ -10,17 +10,24 @@ import { csrfGuard } from "./guards";
 import { clientIp, INTERNAL_REQUEST } from "./net";
 import { dashboard } from "./routes/dashboard";
 import { inbound } from "./routes/inbound";
+import { projectData } from "./routes/project-data";
+import { reviewLinks, reviewLinkWidget } from "./routes/review-links";
 import { setup } from "./routes/setup";
+import { signInMethods, signInSettings } from "./routes/sign-in-methods";
+import { account } from "./routes/me";
+import { members } from "./routes/members";
 import { mcpRoutes } from "./routes/mcp";
-import { unsubscribe } from "./routes/unsubscribe";
+import { pageLinks } from "./routes/page-links";
+import { teamUnsubscribe, unsubscribe } from "./routes/unsubscribe";
 import { v1 } from "./routes/v1";
 import { widget } from "./routes/widget";
+import { workspace } from "./routes/workspace";
 
 export { getAuth } from "./auth";
 export { env } from "./env";
 export { startJobs, stopJobs } from "./jobs";
 export { installPeerStamp } from "./net";
-export { announceSetupToken, checkReleaseKeys, runStartupFixes } from "./startup";
+export { checkReleaseKeys, ensureInstanceAdmin, runStartupFixes } from "./startup";
 
 /** Dashboard JSON and token API bodies; the widget (screenshots, replays) has its own, larger caps. */
 const API_MAX_BODY = 2 * 1024 * 1024;
@@ -101,15 +108,34 @@ export const app = new Hono()
   // Cookie-authenticated writes must come from our own pages, as JSON (ADR 0021).
   .use("/api/*", csrfGuard)
   .on(["GET", "POST"], "/api/auth/*", (c) => getAuth().handler(authRequest(c)))
-  // First-run instance-admin claim with the one-time setup token.
+  // Public first-run state (is there an account yet, may strangers sign up); no session.
   .route("/api", setup)
+  // Public: which sign-in methods the auth pages offer (email link, passkey, Google, GitHub).
+  .route("/api", signInMethods)
+  // The signed-in person's own account (profile, avatar, email, invitations): no workspace needed, so
+  // ahead of the dashboard's session middleware. Each route checks the session itself.
+  .route("/api", account)
   // Token-authenticated public API first: the session middleware below covers the rest of /api.
   .route("/api/v1", v1)
   // Logos and tracker webhooks: no session (verified by random id / signature).
   .route("/api", inbound)
   .route("/api", unsubscribe)
+  .route("/api", teamUnsubscribe)
   .route("/api", dashboard)
+  // Users and workspace settings (wave-5 §3.1); after `dashboard`, whose session and viewer guards
+  // (`use` on /api/*) run for them too.
+  .route("/api", members)
+  .route("/api", workspace)
+  // Settings › Security › Sign-in methods (instance admins); after `dashboard` for its session guard.
+  .route("/api/admin", signInSettings)
+  // Signed page links + re-pin (wave-5 §3.3); after `dashboard`, whose session middleware covers /api/*.
+  .route("/api", pageLinks)
+  // After the dashboard: its session and viewer guards (`use` on /api/*) run for these routes too.
+  .route("/api", projectData)
+  .route("/api", reviewLinks)
   .route("/w", widget)
+  // After the widget router: its key/Origin check sets `project` and adds the CORS headers.
+  .route("/w", reviewLinkWidget)
   // AI agents: MCP Streamable HTTP, token-authenticated (blueprint 04 §6).
   .route("/mcp", mcpRoutes(internalFetch))
   .notFound((c) => problem(c, 404, "NOT_FOUND", "Not found"))

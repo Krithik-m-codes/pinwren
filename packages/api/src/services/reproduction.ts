@@ -1,3 +1,4 @@
+import { kindLabel } from "@pinwren/core";
 import { diagnostics, feedback, feedbackAsset, getDb, page, project } from "@pinwren/db";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { notFound } from "../errors";
@@ -121,7 +122,7 @@ export async function reproductionContext(orgId: string, id: string) {
   const lines: string[] = [
     `# Reproduce #${f.number}: ${mdText(title, 120)}`,
     "",
-    `- **Project:** ${mdText(row.projectName)} · **Kind:** ${f.kind} · **Status:** ${f.status} · **Priority:** ${f.priority}`,
+    `- **Project:** ${mdText(row.projectName)} · **Kind:** ${kindLabel(f.kind)} · **Status:** ${f.status} · **Priority:** ${f.priority}`,
     `- **Page:** ${row.pageUrl ? `<${encodeURI(row.pageUrl).replace(/>/g, "%3E")}>` : "unknown"}`,
     `- **Environment:** ${mdText([env.browser, env.os].filter(Boolean).join(" on ") || env.userAgent || "unknown", 200)}` +
       (env.viewport?.w ? ` · viewport ${env.viewport.w}×${env.viewport.h ?? "?"}` : "") +

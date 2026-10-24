@@ -103,7 +103,6 @@ test.describe("project settings", () => {
     await page.getByRole("combobox", { name: "Retention" }).click();
     await page.getByRole("option", { name: "90 days" }).click();
     await expect(page.getByText("Feedback is kept for 90 days").first()).toBeVisible();
-    await page.getByRole("switch", { name: "Email the reporter" }).click();
     await page.getByRole("switch", { name: "Use the instance default" }).click();
     const limit = page.getByLabel("Reports and replies per minute");
     await limit.fill("25");
@@ -115,6 +114,7 @@ test.describe("project settings", () => {
     const { project } = (await r.json()) as { project: Record<string, unknown> };
     expect(project).toMatchObject({
       retentionDays: 90,
+      // On by default (BugPin model); the switch lives in Notifications › Reporter now.
       notifyReporter: true,
       widgetRateLimitPerMin: 25,
       captureConfig: { console: "errors", maskSelectors: [".customer-email"] },

@@ -1,7 +1,7 @@
 "use client";
 
 import { type FeedbackStatus, isClosedStatus } from "@pinwren/core";
-import { Columns3, Keyboard, List } from "lucide-react";
+import { Columns3, Keyboard, List, Trash2 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ButtonLink } from "@/components/button-link";
@@ -14,15 +14,23 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { FeedbackRow } from "@/lib/api";
-import { filtersFromParams, layoutFromParams, listArgs } from "@/lib/inbox-filters";
+import { filtersFromParams, layoutFromParams, listArgs, trashFromParams } from "@/lib/inbox-filters";
+import { undoChanges } from "@/lib/inbox-undo";
 import {
   errorMessage,
   useDeleteFeedbackMutation,
-  useListFeedbackQuery,
+  useListFeedbackInfiniteQuery,
   useProjectsQuery,
+  usePurgeFeedbackMutation,
+  useRestoreFeedbackMutation,
   useUpdateFeedbackMutation,
 } from "@/lib/store/api";
-import type { FeedbackPatch } from "@/lib/store/api/feedback";
+import {
+  type FeedbackFields,
+  type FeedbackPatch,
+  type ItemChange,
+  listItems,
+} from "@/lib/store/api/feedback";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   changeRecorded,
@@ -38,9 +46,10 @@ import { cn } from "@/lib/utils";
 import { useViewer } from "@/lib/viewer";
 import { BoardView } from "./board-view";
 import { FeedbackDetailPanel } from "./feedback-detail";
-import { InboxList } from "./inbox-list";
+import { type Feed, InboxList } from "./inbox-list";
 import { InboxToolbar } from "./inbox-toolbar";
 import { Kbd } from "./kbd";
+import { SetupChecklist } from "@/components/setup-checklist";
 
 const KEYS: [string, string][] = [
   ["⌘K", "Command palette"],
@@ -52,9 +61,12 @@ const KEYS: [string, string][] = [
   ["s", "Status menu"],
   ["p", "Priority menu"],
   ["a", "Assign menu"],
+  ["l", "Labels menu"],
+  ["r", "Rename the item"],
   ["c", "Comment"],
   ["u", "Undo the last change"],
   ["/", "Search"],
+  ["g m", "My work (assigned to me)"],
   ["m", "Move a board card to…"],
   ["?", "This help"],
 ];
@@ -66,40 +78,62 @@ const isTyping = (t: EventTarget | null) =>
   );
 
 /** Keys that change something: ignored for viewers. */
-const WRITE_KEYS = new Set(["x", "e", "s", "p", "a", "c", "u"]);
+const WRITE_KEYS = new Set(["x", "e", "s", "p", "a", "l", "r", "c", "u"]);
+
+/** How long the second key of a `g …` shortcut may follow the `g`. */
 
 /**
- * The triage inbox (blueprint 06 §3.1): filters in the URL, data from RTK Query (seeded by the server),
- * selection and pickers in the Redux `inbox` slice, live updates from the real-time stream.
+ * The triage inbox (blueprint 06 §3.1): filters in the URL, data from RTK Query (seeded by the server, a
+ * page at a time), selection and pickers in the Redux `inbox` slice, live updates from the real-time
+ * stream. `?trash=1` is the trash (Admins): restore or delete for good.
  */
 export function InboxView() {
   const { params, setParams } = useUrlParams();
   const isMobile = useIsMobile();
   const dispatch = useAppDispatch();
   const searchRef = useRef<HTMLInputElement>(null);
-  const { canWrite } = useViewer();
+  const { canWrite, isAdmin } = useViewer();
 
   const filters = filtersFromParams(params);
-  const layout = layoutFromParams(params);
-  const args = listArgs(filters, layout);
+  const trash = trashFromParams(params);
+  const layout = trash ? "list" : layoutFromParams(params);
+  const args = listArgs(filters, layout, trash);
   const selected = params.get("item");
   const projectId = filters.projectId;
 
   const projects = useProjectsQuery(undefined);
-  const list = useListFeedbackQuery(args);
-  const items = list.data?.items ?? [];
+  const list = useListFeedbackInfiniteQuery(args);
+  const items = listItems(list.data);
   const project = projects.data?.projects.find((p) => p.id === projectId);
   const [update] = useUpdateFeedbackMutation();
   const [remove, removal] = useDeleteFeedbackMutation();
+  const [restore] = useRestoreFeedbackMutation();
+  const [purge, purging] = usePurgeFeedbackMutation();
   const selection = useAppSelector((s) => s.inbox.selection);
   const lastChange = useAppSelector((s) => s.inbox.lastChange);
   const help = useAppSelector((s) => s.ui.shortcutsOpen);
   const [bulkDelete, setBulkDelete] = useState(false);
+  const [bulkPurge, setBulkPurge] = useState(false);
+
+  const feed: Feed = {
+    items,
+    total: list.data?.pages[0]?.total ?? null,
+    isLoading: list.isLoading,
+    isError: list.isError && !items.length,
+    isSuccess: list.isSuccess || items.length > 0,
+    error: list.error,
+    refetch: () => void list.refetch(),
+    hasMore: list.hasNextPage,
+    loadingMore: list.isFetchingNextPage,
+    loadMoreFailed: list.isFetchNextPageError,
+    loadMore: () => void list.fetchNextPage(),
+  };
 
   // Selection survives refetches but drops rows that left the list.
+  const ids = items.map((i) => i.id).join(",");
   useEffect(() => {
-    if (list.data) dispatch(selectionPruned(list.data.items.map((i) => i.id)));
-  }, [list.data, dispatch]);
+    if (list.data) dispatch(selectionPruned(ids ? ids.split(",") : []));
+  }, [ids, list.data, dispatch]);
 
   // Entering the inbox shows anything that arrived while it was away.
   useEffect(() => {
@@ -109,30 +143,47 @@ export function InboxView() {
   const undo = () => {
     if (!lastChange) return;
     dispatch(changeRecorded(null));
-    update({ ids: lastChange.ids, patch: lastChange.patch })
+    update({ each: lastChange.each })
       .unwrap()
       .then(() => toast("Change undone"))
       .catch((e: unknown) => toast.error(errorMessage(e)));
   };
 
-  const change = (ids: string[], patch: FeedbackPatch, label: string) => {
-    // Undo restores the previous value of the first item — for bulk changes the common case.
-    const first = items.find((i) => ids.includes(i.id));
-    if (first) {
-      const prev: FeedbackPatch = {};
-      if (patch.status) prev.status = first.status;
-      if (patch.priority) prev.priority = first.priority;
-      if (patch.assigneeIds) prev.assigneeIds = first.assigneeIds;
-      if (patch.roundId !== undefined) prev.roundId = first.roundId;
-      dispatch(changeRecorded({ ids, patch: prev, label }));
-    }
-    update({ ids, patch })
+  const change = (ids: string[], patch: FeedbackPatch, label: string, optimistic?: FeedbackFields) => {
+    // Undo puts every item back to its own previous value (not the first item's for all).
+    const back = undoChanges(items, ids, patch);
+    if (back.length) dispatch(changeRecorded({ each: back, label }));
+    update({ ids, patch, ...(optimistic ? { optimistic } : {}) })
       .unwrap()
       .then(() =>
         toast.success(label, { action: { label: "Undo (u)", onClick: () => latest.current.undo() } }),
       )
       .catch((e: unknown) => toast.error(errorMessage(e)));
   };
+
+  /** A change that differs per item (bulk labels keep each item's other labels). */
+  const changeEach = (each: ItemChange[], label: string) => {
+    const fields = Object.assign({}, ...each.map((c) => c.patch)) as FeedbackPatch;
+    const back = undoChanges(
+      items,
+      each.map((c) => c.id),
+      fields,
+    );
+    if (back.length) dispatch(changeRecorded({ each: back, label }));
+    update({ each })
+      .unwrap()
+      .then(() =>
+        toast.success(label, { action: { label: "Undo (u)", onClick: () => latest.current.undo() } }),
+      )
+      .catch((e: unknown) => toast.error(errorMessage(e)));
+  };
+
+  /** Restore from the trash: the trash view's action, and Undo on the delete toast. */
+  const restoreItems = (ids: string[]) =>
+    restore(ids)
+      .unwrap()
+      .then((n) => toast.success(n === 1 ? "Restored" : `${n} items restored`))
+      .catch((e: unknown) => toast.error(errorMessage(e)));
 
   const toggleCheck = (id: string, range = false) =>
     dispatch(selectionToggled({ id, range, order: items.map((i) => i.id) }));
@@ -144,6 +195,7 @@ export function InboxView() {
     items,
     selected,
     layout,
+    trash,
     selectionSize: selection.length,
     setParams,
     toggleCheck,
@@ -172,7 +224,13 @@ export function InboxView() {
       }
       if (isTyping(e.target)) return;
       const key = e.key;
-      if (!st.canWrite && WRITE_KEYS.has(key)) return;
+      // `g m` (My work) is global: components/shell/global-shortcuts.tsx swallows both keys first.
+      if (st.trash) {
+        // The trash is read-only: only moving around and help.
+        if (!["?", "/", "j", "k", "ArrowDown", "ArrowUp"].includes(key)) return;
+      } else if (!st.canWrite && WRITE_KEYS.has(key)) {
+        return;
+      }
       const idx = items.findIndex((i) => i.id === selected);
       const current = idx >= 0 ? items[idx] : undefined;
       const move = (to: FeedbackRow | undefined) => {
@@ -196,8 +254,14 @@ export function InboxView() {
         const now = current?.status;
         const to: FeedbackStatus = now && isClosedStatus(now) ? "open" : "resolved";
         st.change([selected], { status: to }, to === "resolved" ? "Resolved" : "Reopened");
-      } else if ((key === "s" || key === "p" || key === "a") && selected) {
-        dispatch(menuChanged(key === "s" ? "status" : key === "p" ? "priority" : "assignee"));
+      } else if ((key === "s" || key === "p" || key === "a" || key === "l") && selected) {
+        dispatch(
+          menuChanged(
+            key === "s" ? "status" : key === "p" ? "priority" : key === "a" ? "assignee" : "labels",
+          ),
+        );
+      } else if (key === "r" && selected) {
+        dispatch(menuChanged("title"));
       } else if (key === "c" && selected) {
         document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Comment"]')?.focus();
       } else {
@@ -216,26 +280,50 @@ export function InboxView() {
   }, [selected]);
 
   const detail = selected ? (
-    <FeedbackDetailPanel key={selected} id={selected} onClose={() => setParams({ item: null })} />
+    <FeedbackDetailPanel
+      key={selected}
+      id={selected}
+      onClose={() => setParams({ item: null })}
+      onDeleted={(id) =>
+        toast.success("Moved to the trash", {
+          action: { label: "Undo", onClick: () => void restoreItems([id]) },
+        })
+      }
+    />
   ) : null;
   const asSheet = isMobile || layout === "board";
 
   return (
     <div className="flex h-svh min-h-0 flex-col md:h-[calc(100svh-1rem)]">
-      <PageHeader title={project ? project.name : "Inbox"}>
-        <Tabs
-          value={layout}
-          onValueChange={(v) => setParams({ layout: v === "board" ? "board" : null, view: null, item: null })}
-        >
-          <TabsList className="h-7">
-            <TabsTrigger value="list" className="px-2" aria-label="List view">
-              <List /> <span className="hidden sm:inline">List</span>
-            </TabsTrigger>
-            <TabsTrigger value="board" className="px-2" aria-label="Board view">
-              <Columns3 /> <span className="hidden sm:inline">Board</span>
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+      <PageHeader title={trash ? "Trash" : project ? project.name : "Inbox"}>
+        {!trash && (
+          <Tabs
+            value={layout}
+            onValueChange={(v) =>
+              setParams({ layout: v === "board" ? "board" : null, view: null, item: null })
+            }
+          >
+            <TabsList className="h-7">
+              <TabsTrigger value="list" className="px-2" aria-label="List view">
+                <List /> <span className="hidden sm:inline">List</span>
+              </TabsTrigger>
+              <TabsTrigger value="board" className="px-2" aria-label="Board view">
+                <Columns3 /> <span className="hidden sm:inline">Board</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
+        {isAdmin && (
+          <Button
+            variant={trash ? "secondary" : "ghost"}
+            size="sm"
+            aria-pressed={trash}
+            onClick={() => setParams({ trash: trash ? null : "1", item: null, layout: null, saved: null })}
+            data-testid="trash-toggle"
+          >
+            <Trash2 /> <span className="hidden sm:inline">{trash ? "Leave trash" : "Trash"}</span>
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon-sm"
@@ -257,11 +345,20 @@ export function InboxView() {
         )}
       </PageHeader>
 
-      <InboxToolbar filters={filters} layout={layout} searchRef={searchRef} />
+      <SetupChecklist />
+
+      <InboxToolbar
+        filters={filters}
+        layout={layout}
+        trash={trash}
+        args={args}
+        total={feed.total}
+        searchRef={searchRef}
+      />
 
       {layout === "board" ? (
         <BoardView
-          list={list}
+          feed={feed}
           readOnly={!canWrite}
           onOpen={(id) => setParams({ item: id })}
           onMove={(id, to) => change([id], { status: to }, `Moved to ${STATUS_META[to].label}`)}
@@ -275,8 +372,10 @@ export function InboxView() {
             )}
           >
             <InboxList
-              list={list}
+              feed={feed}
+              args={args}
               filters={filters}
+              trash={trash}
               selected={selected}
               hasProjects={!!projects.data?.projects.length}
               onOpen={(id) => {
@@ -285,7 +384,13 @@ export function InboxView() {
               }}
               onCheck={toggleCheck}
               onChange={change}
+              onChangeEach={changeEach}
               onDelete={() => setBulkDelete(true)}
+              onRestore={() => {
+                const ids = [...selection];
+                void restoreItems(ids).then(() => dispatch(selectionCleared()));
+              }}
+              onPurge={() => setBulkPurge(true)}
             />
           </div>
           {detail && !asSheet && <div className="min-h-0 flex-1 overflow-y-auto">{detail}</div>}
@@ -308,16 +413,40 @@ export function InboxView() {
       <ConfirmDialog
         open={bulkDelete}
         onOpenChange={setBulkDelete}
-        title={`Delete ${selection.length} item${selection.length === 1 ? "" : "s"}?`}
-        description="They move to the trash and are purged with their files after 30 days."
+        title={`Move ${selection.length} item${selection.length === 1 ? "" : "s"} to the trash?`}
+        description="Admins can restore them from the trash for 30 days; after that they are purged with their files."
+        confirmLabel="Move to trash"
         pending={removal.isLoading}
         onConfirm={() => {
           const ids = [...selection];
           remove(ids)
             .unwrap()
             .then((n) => {
-              toast.success(n === 1 ? "Feedback deleted" : `${n} items deleted`);
+              toast.success(n === 1 ? "Moved to the trash" : `${n} items moved to the trash`, {
+                action: { label: "Undo", onClick: () => void restoreItems(ids) },
+              });
               setBulkDelete(false);
+              if (selected && ids.includes(selected)) setParams({ item: null });
+              dispatch(selectionCleared());
+            })
+            .catch((e: unknown) => toast.error(errorMessage(e)));
+        }}
+      />
+
+      <ConfirmDialog
+        open={bulkPurge}
+        onOpenChange={setBulkPurge}
+        title={`Delete ${selection.length} item${selection.length === 1 ? "" : "s"} forever?`}
+        description="They are removed with their comments, screenshots, replays and attachments. This can't be undone."
+        confirmLabel="Delete forever"
+        pending={purging.isLoading}
+        onConfirm={() => {
+          const ids = [...selection];
+          purge(ids)
+            .unwrap()
+            .then((n) => {
+              toast.success(n === 1 ? "Deleted forever" : `${n} items deleted forever`);
+              setBulkPurge(false);
               if (selected && ids.includes(selected)) setParams({ item: null });
               dispatch(selectionCleared());
             })
@@ -338,7 +467,12 @@ export function InboxView() {
                   {k.split(" / ").map((part, i) => (
                     <span key={part}>
                       {i > 0 && <span className="text-muted-foreground"> / </span>}
-                      <Kbd>{part}</Kbd>
+                      {part.split(" ").map((p, j) => (
+                        <span key={p}>
+                          {j > 0 && " "}
+                          <Kbd>{p}</Kbd>
+                        </span>
+                      ))}
                     </span>
                   ))}
                 </dt>

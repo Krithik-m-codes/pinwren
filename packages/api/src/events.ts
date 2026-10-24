@@ -4,6 +4,12 @@ import { publishDomainEvent } from "./realtime/publish";
 
 /** A domain event, fanned out by the `events.dispatch` job to notifications, email and webhooks. */
 export type DomainEvent = {
+  /**
+   * Stable id, set once by `emit()` (wave-5 contract §5). The dispatch job uses it to stay idempotent across
+   * retries (`notification.event_id`, `webhook_delivery.domain_event_id`) and as the webhook payload `id`.
+   * Jobs queued before wave 5 lack it, so consumers handle `undefined`.
+   */
+  id?: string;
   type: WebhookEvent;
   orgId: string;
   feedbackId: string;
@@ -14,7 +20,7 @@ export type DomainEvent = {
   at: string;
 };
 
-export type EventInput = Omit<DomainEvent, "at">;
+export type EventInput = Omit<DomainEvent, "at" | "id">;
 
 /**
  * Queue events for fan-out. Fire-and-forget: the response never waits on (or fails because of)
@@ -22,7 +28,8 @@ export type EventInput = Omit<DomainEvent, "at">;
  */
 export function emit(...events: EventInput[]): void {
   const at = new Date().toISOString();
-  for (const e of events) {
+  for (const input of events) {
+    const e = { ...input, id: crypto.randomUUID() };
     void enqueue(QUEUES.dispatch, { ...e, at });
     // Real-time inbox (SSE): same moment, not through the queue, so the dashboard sees it at once.
     publishDomainEvent(e).catch((err: unknown) => console.warn("[pinwren] realtime publish failed", err));
@@ -48,6 +55,12 @@ export function updateEvents(
     out.push({ ...base, type: "feedback.status_changed", changes: { status: changes.status } });
   if (changes.assigneeIds) {
     out.push({ ...base, type: "feedback.assigned", changes: { assigneeIds: changes.assigneeIds } });
+  }
+  if (changes.priority) {
+    out.push({ ...base, type: "feedback.priority_changed", changes: { priority: changes.priority } });
+  }
+  if (changes.labelIds) {
+    out.push({ ...base, type: "feedback.labels_changed", changes: { labelIds: changes.labelIds } });
   }
   return out;
 }

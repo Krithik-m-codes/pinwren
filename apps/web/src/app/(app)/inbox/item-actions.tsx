@@ -4,7 +4,7 @@ import { safeHref, substituteActionUrl } from "@pinwren/core";
 import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { PanelActionIcon } from "@/components/panel-action-icon";
-import { TRACKER_NAMES, TrackerIcon } from "@/components/tracker-icon";
+import { issueRef, TRACKER_NAMES, TrackerIcon } from "@/components/tracker-icon";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { FeedbackDetail } from "@/lib/api";
 import { errorMessage, useCreateIssueMutation, useRunPanelActionMutation } from "@/lib/store/api";
@@ -34,7 +34,7 @@ export function ItemActions({ data }: { data: FeedbackDetail }) {
   const sendToTracker = (integrationId: string) => {
     createIssue({ feedbackId: f.id, integrationId })
       .unwrap()
-      .then(({ issue }) => toast.success(`${TRACKER_NAMES[issue.provider]} issue #${issue.number} created`))
+      .then(({ issue }) => toast.success(`${TRACKER_NAMES[issue.provider]} issue ${issueRef(issue)} created`))
       .catch((e: unknown) => toast.error("Couldn't create the issue", { description: errorMessage(e) }));
   };
 
@@ -56,7 +56,7 @@ export function ItemActions({ data }: { data: FeedbackDetail }) {
             provider={l.provider}
             className={l.state === "open" ? "text-emerald-600" : "text-violet-600"}
           />
-          {TRACKER_NAMES[l.provider]} #{l.number}
+          {TRACKER_NAMES[l.provider]} {issueRef(l)}
           <span className="text-muted-foreground">· {l.state}</span>
         </a>
       ))}

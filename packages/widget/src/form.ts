@@ -9,11 +9,16 @@ import { avatar } from "./ui";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function identityFields(identity: Identity) {
+/**
+ * `requireName`: a guest who came through a review link (wave-5 §3.5) must say who they are, so the team
+ * knows whose sign-off it is; everyone else may stay anonymous.
+ */
+export function identityFields(identity: Identity, opts: { requireName?: boolean } = {}) {
   const saved = store.reporter();
   const id = { name: identity.name ?? saved.name, email: identity.email ?? saved.email };
+  const needName = !!opts.requireName && !identity.id;
   const name = h("input", {
-    placeholder: t("nameOptional"),
+    placeholder: needName ? t("yourName") : t("nameOptional"),
     "aria-label": t("yourName"),
     autocomplete: "name",
     maxlength: 120,
@@ -54,13 +59,22 @@ export function identityFields(identity: Identity) {
   }
   return {
     els: [who, fields] as const,
-    /** The email field when its value is invalid (revealed so it can be fixed), else null. */
-    invalid(): HTMLInputElement | null {
+    /**
+     * The field to fix, revealed, with the message to show: a missing required name, then an invalid
+     * email; null when both are fine.
+     */
+    invalid(): { el: HTMLInputElement; message: string } | null {
       const em = email.value.trim();
-      if (!em || EMAIL.test(em)) return null;
+      const bad =
+        needName && !name.value.trim()
+          ? { el: name, message: t("nameNeeded") }
+          : em && !EMAIL.test(em)
+            ? { el: email, message: t("badEmail") }
+            : null;
+      if (!bad) return null;
       fields.hidden = false;
       if (who) who.hidden = true;
-      return email;
+      return bad;
     },
     /**
      * Remember and return the reporter; undefined when there is nothing to send. A host-app identity

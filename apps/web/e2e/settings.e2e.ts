@@ -1,6 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { ADMIN, seed, shoot } from "./env";
+import { ADMIN, SITE_ORIGIN, seed, shoot } from "./env";
 import { expect, test } from "./fixtures";
 
 test.describe("settings", () => {
@@ -8,7 +9,7 @@ test.describe("settings", () => {
     await page.goto("/settings");
     await expect(page.getByLabel("Name", { exact: true })).toHaveValue(ADMIN.name);
     const nav = page.getByRole("navigation", { name: "Settings" });
-    for (const label of ["Members", "Notifications", "Integrations", "API tokens", "Email"]) {
+    for (const label of ["Workspace", "Users", "Notifications", "Integrations", "API tokens", "Email"]) {
       await expect(nav.getByRole("link", { name: label })).toBeVisible();
     }
     await shoot(page, "settings-profile", { fullPage: true });
@@ -26,10 +27,11 @@ test.describe("settings", () => {
     await page.getByRole("button", { name: "Send invite" }).click();
     await expect(page.getByText("Enter a valid email address")).toBeVisible();
     await page.getByLabel("Email address").fill(invitee);
-    await page.getByRole("combobox", { name: "Role" }).click();
+    await page.getByRole("combobox", { name: "Role", exact: true }).click();
     await page.getByRole("option", { name: "Admin" }).click();
     await page.getByRole("button", { name: "Send invite" }).click();
-    await expect(page.getByText(`Invitation sent to ${invitee}`)).toBeVisible();
+    // No SMTP in the e2e server: the dashboard says so instead of claiming it sent anything.
+    await expect(page.getByText(`Invitation created for ${invitee}`)).toBeVisible();
     const pending = page.getByRole("list", { name: "Pending invitations" });
     await expect(pending.getByText(invitee)).toBeVisible();
     await expect(pending.getByText(/Admin · invited/)).toBeVisible();
@@ -65,8 +67,8 @@ test.describe("settings", () => {
     await expect(member).toBeVisible();
     await expect(pending.getByText(invitee)).toHaveCount(0);
     await member.getByRole("combobox", { name: /Role of/ }).click();
-    await page.getByRole("option", { name: "Member" }).click();
-    await expect(page.getByText("Ivy Invitee is now member")).toBeVisible();
+    await page.getByRole("option", { name: "Editor" }).click();
+    await expect(page.getByText("Ivy Invitee is now an Editor")).toBeVisible();
     await member.getByRole("button", { name: /Actions for/ }).click();
     await page.getByRole("menuitem", { name: "Remove from workspace" }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Remove" }).click();
@@ -186,7 +188,7 @@ test.describe("settings", () => {
   });
 
   test("notification preferences matrix", async ({ page, request }) => {
-    await page.goto("/settings/notifications");
+    await page.goto("/settings/notifications?tab=mine");
     const box = page.getByRole("checkbox", { name: "Email for Marketing site" });
     await expect(box).toBeChecked();
     await box.click();
@@ -207,21 +209,36 @@ test.describe("settings", () => {
     await expect(page.getByText("A hostname like smtp.example.com")).toBeVisible();
     await page.getByLabel("SMTP host").fill("");
     await page.getByRole("button", { name: "Send test email" }).click();
-    await expect(page.getByRole("status")).toContainText(/Not sent|refused|Sent/);
+    await expect(page.getByTestId("smtp-test-result")).toContainText(/Not sent|refused|Sent/);
     await shoot(page, "settings-email", { fullPage: true });
   });
 
-  test("notification bell: unread count, open, mark read, jump to the item", async ({ page }) => {
-    const { projectId } = seed();
+  test("notification bell: unread count, open, mark read, jump to the item", async ({ page, request }) => {
+    const { projectId, publicKey } = seed();
+    // Its own report: earlier specs may already have marked every notification read.
+    const res = await request.post("/w/feedback", {
+      headers: { "x-pinwren-key": publicKey, origin: SITE_ORIGIN },
+      data: {
+        clientId: randomUUID(),
+        kind: "bug",
+        body: "Bell check: the search box loses focus",
+        page: { url: `${SITE_ORIGIN}/search`, title: "Search" },
+        environment: { userAgent: "e2e", viewport: { w: 1280, h: 800 }, dpr: 1 },
+        reporter: { name: "Dana" },
+      },
+    });
+    expect(res.ok()).toBe(true);
+    const created = ((await res.json()) as { feedback: { id: string } }).feedback;
     await page.goto(`/projects/${projectId}`);
     const bell = page.getByTestId("notifications-bell").filter({ visible: true });
     await expect(bell).toHaveAccessibleName(/unread/, { timeout: 30_000 });
     await bell.click();
     const pop = page.getByRole("dialog").filter({ hasText: "Notifications" });
-    await expect(pop.getByText("New feedback").first()).toBeVisible();
+    // "New bug report from Dana", "New change request from …": the kind and who sent it.
+    await expect(pop.getByText(/^New (bug report|change request|question|feedback)/).first()).toBeVisible();
     await shoot(page, "notifications-popover");
     await pop
-      .getByRole("button", { name: /New feedback/ })
+      .getByRole("button", { name: /New (bug report|change request|question|feedback)/ })
       .first()
       .click();
     await page.waitForURL(/\/inbox\?.*item=/);
@@ -230,6 +247,8 @@ test.describe("settings", () => {
     await page.getByRole("button", { name: "Mark all read" }).click();
     await expect(bell).toHaveAccessibleName("Notifications");
     await expect(page.getByRole("button", { name: "Mark all read" })).toBeDisabled();
+    // Other specs count the shared project's items.
+    expect((await request.delete(`/api/feedback/${created.id}`)).ok()).toBe(true);
   });
 
   test("settings at 375 px", async ({ page }) => {

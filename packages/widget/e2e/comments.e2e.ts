@@ -54,7 +54,7 @@ test("drag-select a region → composer → send → region overlay on the eleme
   await ready(page);
   await launcher(page).click();
   await shot(page, "01-menu");
-  await page.getByRole("menuitem", { name: /Add a comment/ }).click();
+  await page.getByRole("menuitem", { name: /Create new annotation/ }).click();
   await expect(page.locator("pinwren-root .hint")).toBeVisible();
 
   const h1 = await box(page.getByTestId("hero-title"));
@@ -124,8 +124,8 @@ test("click pin → thread → reply", async ({ page }) => {
     ],
   });
   await ready(page);
-  await page.getByRole("button", { name: /Comment 1 by Sarah Miller/ }).click();
-  const thread = page.getByRole("dialog", { name: "Comment #1" });
+  await page.getByRole("button", { name: /Other 1 by Sarah Miller/ }).click();
+  const thread = page.getByRole("dialog", { name: "Other #1" });
   await expect(thread).toBeVisible();
   await expect(thread).toContainText("Can this headline be shorter?");
   await expect(thread).toContainText("copy update ships Friday");
@@ -139,8 +139,10 @@ test("click pin → thread → reply", async ({ page }) => {
   await expect(thread).toBeHidden();
 });
 
-test("resolve hides the pin; Show resolved brings it back", async ({ page }) => {
+test("resolve turns the marker into a muted check; the sidebar filters by status", async ({ page }) => {
   const mock = await mockApi(page, {
+    // Off by default (private-by-default projects); a staging / review project turns it on.
+    widget: { visitorsCanResolve: true },
     items: [seed({ number: 1, anchor: anchorFor("hero-title", "h1", HERO, { xPct: 50, yPct: 50 }) })],
   });
   await ready(page);
@@ -149,22 +151,22 @@ test("resolve hides the pin; Show resolved brings it back", async ({ page }) => 
   await page.getByRole("button", { name: "Resolve" }).click();
   await expect(page.locator("pinwren-root .toast")).toHaveText("Resolved #1");
   expect(mock.items[0]?.status).toBe("resolved");
-  await expect(pins(page).first()).toBeHidden();
-
-  await launcher(page).click();
-  await page.getByRole("menuitem", { name: /View comments/ }).click();
-  await expect(page.locator("pinwren-root .panel")).toContainText("No comments here");
-  await page.getByRole("switch", { name: "Show resolved" }).click();
+  // Resolved markers stay on the page as a muted check.
   await expect(pins(page).first()).toBeVisible();
   await expect(pins(page).first()).toHaveClass(/resolved/);
   expect(mock.requests.some((r) => r.path.includes("include=closed"))).toBe(true);
-  await page.getByRole("button", { name: "Resolved", exact: true }).click();
-  await expect(page.locator("pinwren-root .panel .item")).toHaveCount(1);
+
+  await launcher(page).click();
+  await page.getByRole("menuitem", { name: /Show sidebar/ }).click();
+  const panel = page.getByRole("complementary", { name: "Feedback sidebar" });
+  await panel.getByRole("button", { name: "Open", exact: true }).click();
+  await expect(panel).toContainText("No matches");
+  await panel.getByRole("button", { name: "Resolved", exact: true }).click();
+  await expect(panel.locator(".fcard")).toHaveCount(1);
   await shot(page, "06-panel-resolved");
 
-  // Reopen from the thread.
-  await page.locator("pinwren-root .panel .item").click();
-  await page.getByRole("button", { name: "Reopen" }).click();
+  // Reopen from the card.
+  await panel.locator(".fcard").getByRole("button", { name: "Reopen" }).click();
   await expect.poll(() => mock.items[0]?.status).toBe("open");
 });
 
@@ -177,7 +179,7 @@ test("resolve needs visitorsCanResolve or the reporter token", async ({ page }) 
   });
   await ready(page);
   await pins(page).first().click();
-  await expect(page.getByRole("dialog", { name: "Comment #1" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Other #1" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Resolve" })).toHaveCount(0);
   await page.keyboard.press("Escape");
 
@@ -187,7 +189,7 @@ test("resolve needs visitorsCanResolve or the reporter token", async ({ page }) 
   await composer(page).getByLabel("Your comment").fill("Mine");
   await composer(page).getByRole("button", { name: "Send" }).click();
   await expect(page.locator("pinwren-root .toast")).toHaveText("#2 sent");
-  await page.getByRole("button", { name: /Comment 2 by/ }).click();
+  await page.getByRole("button", { name: /Other 2 by/ }).click();
   await page.getByRole("button", { name: "Resolve" }).click();
   await expect.poll(() => mock.items[1]?.status).toBe("resolved");
   const patch = mock.requests.find((r) => r.method === "PATCH");
@@ -260,8 +262,8 @@ test("read-only hides every create, reply and resolve control", async ({ page })
   });
   await ready(page);
   await launcher(page).click();
-  await expect(page.getByRole("menuitem", { name: /View comments/ })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: /Add a comment/ })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: /Show sidebar/ })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /Create new annotation/ })).toHaveCount(0);
   await expect(page.getByRole("menuitem", { name: /Report a bug/ })).toHaveCount(0);
   await page.keyboard.press("Escape");
   await page.keyboard.press("c");
@@ -270,7 +272,7 @@ test("read-only hides every create, reply and resolve control", async ({ page })
   await page.mouse.click(copy.x + 40, copy.y + 10, { button: "right" });
   await expect(composer(page)).toHaveCount(0);
   await pins(page).first().click();
-  const thread = page.getByRole("dialog", { name: "Comment #1" });
+  const thread = page.getByRole("dialog", { name: "Other #1" });
   await expect(thread).toBeVisible();
   await expect(thread.getByLabel("Reply", { exact: true })).toHaveCount(0);
   await expect(thread.getByRole("button", { name: "Resolve" })).toHaveCount(0);
@@ -306,19 +308,25 @@ test("panel lists page comments; Mine and search filter them", async ({ page }) 
   await expect(page.locator("pinwren-root .toast")).toHaveText("#4 sent");
 
   await launcher(page).click();
-  await page.getByRole("menuitem", { name: /View comments/ }).click();
-  const items = page.locator("pinwren-root .panel .item");
+  await page.getByRole("menuitem", { name: /Show sidebar/ }).click();
+  const items = page.locator("pinwren-root .panel .fcard");
   await expect(items).toHaveCount(4);
   await expect(page.locator("pinwren-root .panel")).toContainText("Not on this version of the page");
   await shot(page, "08-panel");
   await page.getByRole("button", { name: "Mine", exact: true }).click();
   await expect(items).toHaveCount(1);
   await expect(items.first()).toContainText("Kenya card needs a photo");
+  // Mine is its own toggle next to the status segment (SitePing's sidebar): turn it off again.
+  await page.getByRole("button", { name: "Mine", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Mine", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
   await page.getByRole("button", { name: "Open", exact: true }).click();
-  await page.getByLabel("Search comments").fill("tasting");
+  await page.getByLabel("Search feedback").fill("tasting");
   await expect(items).toHaveCount(1);
-  await items.first().click();
-  await expect(page.getByRole("dialog", { name: "Idea #2" })).toBeVisible();
+  await items.first().locator(".fmain").click();
+  await expect(page.getByRole("dialog", { name: "Change #2" })).toBeVisible();
 });
 
 test("pins stay attached to their elements when the page re-lays out", async ({ page }) => {
@@ -341,10 +349,10 @@ test("pins stay attached to their elements when the page re-lays out", async ({ 
     near(area.width, 0.5 * el.width);
     near(area.height, 0.3 * el.height);
     const h1 = await box(page.getByTestId("hero-title"));
-    const marker = await box(page.getByRole("button", { name: /Comment 2 by/ }));
-    // The point pin's tail (bottom-left corner) sits on the pinned point.
-    near(marker.x, h1.x + 0.25 * h1.width, 3);
-    near(marker.y + marker.height, h1.y + 0.5 * h1.height, 3);
+    const marker = await box(page.getByRole("button", { name: /Other 2 by/ }));
+    // The numbered marker (SitePing-style circle) is centred on the pinned point.
+    near(marker.x + marker.width / 2, h1.x + 0.25 * h1.width, 3);
+    near(marker.y + marker.height / 2, h1.y + 0.5 * h1.height, 3);
     if (width === 600) await shot(page, "09-relayout-600");
   }
 });
@@ -366,9 +374,9 @@ test("widget CSS survives a hostile page stylesheet", async ({ page }) => {
   });
   expect(style).toEqual({ position: "fixed", width: "52px", radius: "999px", bg: "rgb(91, 91, 214)" });
   await launcher(page).click();
-  await expect(page.getByRole("menuitem", { name: /Add a comment/ })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /Create new annotation/ })).toBeVisible();
   const item = await page
-    .getByRole("menuitem", { name: /Add a comment/ })
+    .getByRole("menuitem", { name: /Create new annotation/ })
     .evaluate((el) => getComputedStyle(el).display);
   expect(item).toBe("flex");
   await shot(page, "10-hostile-css");
@@ -385,8 +393,8 @@ test("deep link ?pinwren=<id> opens that thread", async ({ page }) => {
     ],
   });
   await ready(page, "/?pinwren=fb_7");
-  await expect(page.getByRole("dialog", { name: "Comment #7" })).toBeVisible();
-  await expect(page.getByRole("dialog", { name: "Comment #7" })).toContainText("Linked comment");
+  await expect(page.getByRole("dialog", { name: "Other #7" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Other #7" })).toContainText("Linked comment");
 });
 
 test("JS API: open, on, identify, close, destroy", async ({ page }) => {
@@ -494,7 +502,7 @@ test("small screens get a bottom-sheet composer", async ({ page }) => {
   });
   await ready(page);
   await launcher(page).click();
-  await page.getByRole("menuitem", { name: /Add a comment/ }).click();
+  await page.getByRole("menuitem", { name: /Create new annotation/ }).click();
   await clickOn(page, "hero-title");
   await expect(composer(page)).toHaveClass(/sheet/);
   // Wait out the slide-up animation before measuring.

@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { LAUNCHER_ICONS, LauncherPreview } from "./launcher-preview";
 import { useProjectPatch } from "./use-project";
 import { ActiveRoundCard } from "./active-round-card";
+import { ReporterEmailsCard } from "./reporter-emails-card";
 import { WidgetBrandingCard } from "./widget-branding-card";
 import { useSyncedState } from "@/lib/use-synced-state";
 import { sliderValue } from "@/lib/form";
@@ -392,6 +393,7 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
         </Card>
 
         <ActiveRoundCard project={project} />
+        <ReporterEmailsCard project={project} />
 
         <ConsentCard draft={draft} server={server} errors={errors} preview={preview} commit={commit} />
         <WidgetBrandingCard project={project} />

@@ -31,7 +31,12 @@ async function InboxData({ searchParams }: { searchParams: PageProps<"/inbox">["
   return (
     <HydrateQueries
       key={listQueryString(args)}
-      entries={list.ok ? [{ endpointName: "listFeedback", arg: args, value: list.data }] : []}
+      // The first page of the infinite list; "Load more" asks the API for the next ones.
+      entries={
+        list.ok
+          ? [{ endpointName: "listFeedback", arg: args, value: { pages: [list.data], pageParams: [null] } }]
+          : []
+      }
     >
       <InboxView />
     </HydrateQueries>

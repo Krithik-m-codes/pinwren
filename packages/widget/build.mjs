@@ -11,7 +11,7 @@ import { build } from "esbuild";
 // Script-tag bundles (blueprint 05 §1–§2, wave-4 §7):
 //
 //   widget.js                       the core, un-hashed (served with a short cache); it carries the manifest
-//   widget-<chunk>.<hash>.js        lazy chunks: panel, report, editor, capture, replay
+//   widget-<chunk>.<hash>.js        lazy chunks: panel, report, editor, capture, replay, flows
 //   widget-i18n-<code>.<hash>.js    one per non-English locale, loaded only for visitors in that language
 //
 // Chunk names are content-hashed, so a server or CDN can cache them forever (`immutable`). They are written
@@ -22,13 +22,13 @@ const pkgDir = fileURLToPath(new URL(".", import.meta.url));
 const dist = join(pkgDir, "dist");
 const outdirs = [dist, join(pkgDir, "..", "..", "apps", "web", "public")];
 const LOCALES = ["es", "fr", "de", "pt-BR", "it", "ja", "hi", "nl", "zh", "ru"];
-const CHUNKS = ["panel", "report", "editor", "capture", "replay"];
+const CHUNKS = ["panel", "report", "editor", "capture", "replay", "flows"];
 const src = join(pkgDir, "src");
 const pkg = JSON.parse(await readFile(join(pkgDir, "package.json"), "utf8"));
 
 // Gzip budgets in KB (blueprint 05 §2, wave-4 §7). Over budget is reported, not fatal — capture is SnapDOM's
 // own pre-minified bundle; the e2e suite enforces the hard limits.
-const BUDGET = { widget: 30, panel: 15, report: 15, editor: 30, capture: 75, replay: 60 };
+const BUDGET = { widget: 35, panel: 15, report: 15, editor: 30, capture: 75, replay: 60, flows: 10 };
 
 // Chunks share the core's modules through `window.__pinwrenLib` (src/lib.ts) instead of bundling copies:
 // an import of one of these from a chunk becomes a read of the object the core put there.

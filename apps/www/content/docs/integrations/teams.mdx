@@ -1,0 +1,58 @@
+---
+title: Microsoft Teams
+description: Post new feedback, status changes and comments to a Microsoft Teams channel as Adaptive Cards.
+---
+
+Pinwren posts to Teams through a **Workflows** webhook (the replacement for Office 365 connectors) — no app to
+install or bot to run.
+
+## Set it up
+
+<Steps>
+<Step>
+
+In the Teams channel, open **⋯ › Workflows** and pick the template **Post to a channel when a webhook request is
+received**. Name it, choose the team and channel, and copy the URL it shows (`https://….logic.azure.com/workflows/…`
+or `https://….environment.api.powerplatform.com/…`).
+
+</Step>
+<Step>
+
+In Pinwren, open **Settings › Integrations › Add webhook**, choose the type **Microsoft Teams**, paste the URL and
+pick the events and projects.
+
+</Step>
+<Step>
+
+Open the new webhook from the list and press **Send test event**. A "Test delivery" card appears in the channel.
+
+</Step>
+</Steps>
+
+## What a message looks like
+
+Each event is one [Adaptive Card](https://adaptivecards.io) (version 1.4, full width):
+
+- **Heading**: the event, with the new value for status and priority changes (`Priority changed → urgent`).
+- **Subtitle**: project, number and title (`Marketing site #142 — Checkout button does nothing`).
+- **Text**: the feedback, or for `comment.*` events the comment.
+- **Facts**: Kind, Status and Priority, plus Reporter and Page when known.
+- **Open #142**: a button to the item in the dashboard (sign-in required).
+
+## Safe with untrusted text
+
+- Adaptive Card text renders a little Markdown and expands `{{DATE(…)}}` functions. Formatting, link and template
+  characters in reports (`*`, `_`, `~`, `` ` ``, brackets, `<`, `>`, `#`, `|`, `{{`) are broken with a zero-width
+  space, so a report can't format the card or fake a link.
+- Mentions in Teams need explicit entities, which Pinwren never sends, so `@everyone` in a report notifies nobody.
+
+## Good to know
+
+- The workflow URL is a credential: Pinwren stores it encrypted and only ever shows it masked after you save. Paste a
+  new URL in the webhook's **URL** row to replace it, and delete the workflow in Teams if it leaks.
+- Deliveries retry and are logged like [webhooks](/docs/integrations/webhooks#retries), and switch off after three
+  days of continuous failure (every workspace Admin is notified). The log shows the status code and an error
+  category only, never the workflow's response.
+- A workflow answers `202 Accepted` before it posts; if a test succeeds but nothing shows, check the workflow's run
+  history in Power Automate.
+- `comment.created` includes **internal notes**; leave it out for channels outside your team.

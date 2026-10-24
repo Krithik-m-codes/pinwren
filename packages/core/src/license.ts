@@ -4,18 +4,29 @@ import { z } from "zod";
 // `base64url(payload JSON) "." base64url(Ed25519 signature of the first segment)`. Verification is
 // offline (no phone-home) against public keys compiled into the server, chosen by `kid`.
 
-export const LICENSE_FEATURES = [
+/**
+ * Features a licence switches on in this version. The Licence page shows only these as entitlements;
+ * the planned ones are listed under "Coming soon" until they ship (and move here).
+ */
+export const IMPLEMENTED_LICENSE_FEATURES = ["white_label"] as const;
+
+/** Named in licence files already (so issued licences keep working) but not built yet. */
+export const PLANNED_LICENSE_FEATURES = [
   "sso",
   "scim",
   "audit_log",
   "custom_roles",
-  "white_label",
   "jira",
   "legal_hold",
   "siem_stream",
   "priority_support",
 ] as const;
+
+export const LICENSE_FEATURES = [...IMPLEMENTED_LICENSE_FEATURES, ...PLANNED_LICENSE_FEATURES] as const;
 export type LicenseFeature = (typeof LICENSE_FEATURES)[number];
+
+export const isImplementedLicenseFeature = (f: string): boolean =>
+  (IMPLEMENTED_LICENSE_FEATURES as readonly string[]).includes(f);
 
 export const licensePayload = z.object({
   v: z.literal(1),

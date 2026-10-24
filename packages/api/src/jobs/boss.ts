@@ -8,8 +8,10 @@ import { env } from "../env";
 export const QUEUES = {
   /** Fan-out of a domain event: in-app notifications, emails, webhook deliveries. */
   dispatch: "events.dispatch",
-  /** Send one email. */
+  /** Send one email (and record it in the delivery log). */
   email: "notify.email",
+  /** Hourly: one digest email per person who chose hourly or daily digests. */
+  digest: "notify.digest",
   /** One webhook delivery attempt; failed attempts schedule the next one themselves. */
   webhook: "webhook.deliver",
   /** Daily: delete feedback past each project's retention, prune delivery logs. */
@@ -20,6 +22,8 @@ export const QUEUES = {
   issues: "issues.sync",
   /** Daily: look for a newer Pinwren release (skipped in privacy mode). */
   update: "update.check",
+  /** Build one project's data export (zip of JSON + files) on request (Project › Privacy & data). */
+  projectExport: "project.export",
 } as const;
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 
@@ -40,11 +44,14 @@ export function getBoss(): Promise<PgBoss> {
     await Promise.all([
       boss.createQueue(QUEUES.dispatch, { retryLimit: 3, retryDelay: 30, retryBackoff: true }),
       boss.createQueue(QUEUES.email, { retryLimit: 4, retryDelay: 60, retryBackoff: true }),
+      boss.createQueue(QUEUES.digest, { retryLimit: 1, retryDelay: 300 }),
       boss.createQueue(QUEUES.webhook, { retryLimit: 0, expireInSeconds: 120 }),
       boss.createQueue(QUEUES.retention, { retryLimit: 2, retryDelay: 600 }),
       boss.createQueue(QUEUES.cleanup, { retryLimit: 2, retryDelay: 600 }),
       boss.createQueue(QUEUES.issues, { retryLimit: 6, retryDelay: 30, retryBackoff: true }),
       boss.createQueue(QUEUES.update, { retryLimit: 0 }),
+      // The job records its own failure on the export; a retry would only repeat it.
+      boss.createQueue(QUEUES.projectExport, { retryLimit: 0, expireInSeconds: 3600 }),
     ]);
     return boss;
   })().catch((err: unknown) => {

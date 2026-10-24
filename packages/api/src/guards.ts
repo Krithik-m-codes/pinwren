@@ -16,8 +16,11 @@ const NO_COOKIE_AUTH = [
   /^\/api\/integrations\/(github|gitlab)\/webhook$/,
 ];
 
-/** Bodies here aren't the dashboard's JSON: Better Auth's own forms, and RFC 8058 one-click unsubscribe. */
-const ANY_CONTENT_TYPE = [/^\/api\/auth(\/|$)/, /^\/api\/unsubscribe$/];
+/**
+ * Bodies here aren't the dashboard's JSON: Better Auth's own forms, and RFC 8058 one-click unsubscribe
+ * (reporter emails, and team emails under /team).
+ */
+const ANY_CONTENT_TYPE = [/^\/api\/auth(\/|$)/, /^\/api\/unsubscribe(\/team)?$/];
 
 let ownOrigin: string | undefined;
 const appOrigin = () => (ownOrigin ??= new URL(env().PINWREN_URL).origin);
@@ -49,7 +52,12 @@ export function csrfVerdict(method: string, path: string, headers: Headers, orig
 export const csrfGuard = createMiddleware(async (c, next) => {
   const verdict = csrfVerdict(c.req.method, c.req.path, c.req.raw.headers, appOrigin());
   if (verdict === "cross_site") {
-    throw new ApiError(403, "CROSS_SITE_REQUEST", "Cross-site requests are not allowed");
+    // The usual cause on a fresh install is opening the dashboard on another address than PINWREN_URL.
+    throw new ApiError(
+      403,
+      "CROSS_SITE_REQUEST",
+      `Cross-site requests are not allowed. This server expects to be opened at ${appOrigin()} (PINWREN_URL).`,
+    );
   }
   if (verdict === "bad_content_type") {
     throw new ApiError(415, "UNSUPPORTED_MEDIA_TYPE", "Send the request body as application/json");

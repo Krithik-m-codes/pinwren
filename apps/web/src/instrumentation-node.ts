@@ -1,8 +1,8 @@
 import http from "node:http";
 import { resolve } from "node:path";
 import {
-  announceSetupToken,
   checkReleaseKeys,
+  ensureInstanceAdmin,
   env,
   installPeerStamp,
   runStartupFixes,
@@ -27,7 +27,7 @@ if (process.env.PINWREN_SKIP_MIGRATIONS !== "true") {
 checkReleaseKeys();
 // Not awaited: neither may hold up the first request.
 void runStartupFixes();
-void announceSetupToken();
+void ensureInstanceAdmin();
 
 // Background jobs (notifications, webhooks, retention) run in every server process; pg-boss hands
 // each job to one of them. Not awaited: a queue problem must never keep the server from starting.

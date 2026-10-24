@@ -18,21 +18,27 @@ describe("resolveConfig", () => {
       shortcuts: true,
       rightClickComment: false,
       readOnly: false,
-      visitorsCanResolve: true,
+      visitorsCanResolve: false,
       consent: { enabled: false, text: null, privacyUrl: null },
       panelActions: [],
       privacyMode: false,
-      visibility: { environments: "all", minViewportWidth: 0 },
+      visibility: {
+        environments: "all",
+        minViewportWidth: 0,
+        mode: "always",
+        urlPatterns: [],
+        queryParam: "pinwren",
+      },
     });
   });
 
   it("validates the visibility rules", () => {
     expect(
       resolveConfig({ visibility: { environments: "non-production", minViewportWidth: 768.4 } }).visibility,
-    ).toEqual({ environments: "non-production", minViewportWidth: 768 });
+    ).toMatchObject({ environments: "non-production", minViewportWidth: 768 });
     expect(
       resolveConfig({ visibility: { environments: "staging", minViewportWidth: -5 } }).visibility,
-    ).toEqual({
+    ).toMatchObject({
       environments: "all",
       minViewportWidth: 0,
     });

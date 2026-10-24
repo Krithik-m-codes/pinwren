@@ -14,13 +14,9 @@ export const {
   useUpdateBrandingMutation,
   useUploadBrandAssetMutation,
   useMembersQuery,
-  useFullOrgQuery,
   useInvitationsQuery,
   useInviteMemberMutation,
   useCancelInvitationMutation,
-  useUpdateMemberRoleMutation,
-  useRemoveMemberMutation,
-  useUpdateProfileMutation,
   useNotificationsQuery,
   useMarkNotificationsReadMutation,
   useNotificationPrefsQuery,
@@ -45,13 +41,22 @@ export const {
   useLazyTrackerWebhookSecretQuery,
   useDeleteTrackerMutation,
   // feedback
-  useListFeedbackQuery,
+  useListFeedbackInfiniteQuery,
   useProjectFeedbackQuery,
   useFeedbackDetailQuery,
   useFeedbackDetailsQuery,
-  useThumbnailQuery,
   useUpdateFeedbackMutation,
   useDeleteFeedbackMutation,
+  useRestoreFeedbackMutation,
+  usePurgeFeedbackMutation,
+  useLazyReproductionQuery,
+  useWatchFeedbackMutation,
+  usePageLinkMutation,
+  useMarkItemNotificationsReadMutation,
+  useLabelsQuery,
+  useCreateLabelMutation,
+  useUpdateLabelMutation,
+  useDeleteLabelMutation,
   useAddCommentMutation,
   useEditCommentMutation,
   useDeleteCommentMutation,
@@ -90,10 +95,17 @@ export const {
   useLicenseQuery,
   useUploadLicenseMutation,
   useRemoveLicenseMutation,
-  useClaimSetupMutation,
 } = api;
 
-/** Server-fetched data a client subtree starts with (see `HydrateQueries`). */
-export type HydrationEntries = Parameters<typeof api.util.upsertQueryEntries>[0];
+/**
+ * Server-fetched data a client subtree starts with (see `HydrateQueries`): an endpoint, its argument and the
+ * cached value (`{ pages, pageParams }` for the infinite `listFeedback`). Spelled out because RTK's own
+ * `upsertQueryEntries` parameter type collapses to `never` once the API has an infinite query.
+ */
+export type HydrationEntries = {
+  endpointName: keyof typeof api.endpoints;
+  arg: unknown;
+  value: unknown;
+}[];
 
 export { type ApiError, errorMessage, isApiError, isForbidden } from "./base";

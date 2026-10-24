@@ -5,7 +5,7 @@ description: Add Pinwren to any website with one script tag, from npm, or as a R
 
 The widget is a single script, `widget.js`, served by your Pinwren server. It renders inside a closed Shadow
 DOM attached to its own `<pinwren-root>` element, so it can't be styled or broken by your page's CSS, and it
-never throws into your code. The core is under 30 KB gzip (about 25 KB with brotli); the side panel, bug report form, screenshot engine,
+never throws into your code. The core is under 35 KB gzip (about 27 KB with brotli); the side panel, bug report form, screenshot engine,
 annotation editor and each language load only when a visitor needs them.
 
 <Callout title="Before you start">
@@ -125,6 +125,7 @@ The hook returns `{ ready, open, close, identify, setPageScope, on }`.
 | `data-url-pattern`                  | No       | Group this page's pins with every page that matches a pattern such as `/product/:id` — see [Visibility & page scope](/docs/widget/visibility#page-scope). |
 | `data-nonce`                        | No       | A CSP nonce the widget copies onto the chunk and locale scripts it adds (the script's own `nonce` works too).                                             |
 | `data-allow-replay-in-privacy-mode` | No       | Keep [session replay](/docs/widget/bug-reports#session-replay) on for a project in privacy mode; you take care of consent.                                |
+| `data-theme`                        | No       | `light` or `dark` to force the widget's theme; otherwise it follows the visitor's system setting.                                                         |
 
 ## Content Security Policy
 
