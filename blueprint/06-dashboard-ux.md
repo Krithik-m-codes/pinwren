@@ -5,7 +5,7 @@
 **"Calm, dense, fast."** Reference points: Linear (speed, keyboard, density), Vercel dashboard (clarity, typography), Raycast (command palette). Not a marketing page — a tool used for hours.
 
 - **Typography:** Inter Variable (UI) + JetBrains Mono (code, selectors, IDs). Scale: 12 / 13 / 14 (base) / 16 / 20 / 24 / 32. Tabular numerals for counts and tables.
-- **Colour:** neutral zinc scale; one accent (default indigo `#5B5BD6`, org-customisable); semantic tokens for status (open = blue, in progress = amber, in review = violet, resolved = green, won't fix = zinc, duplicate = zinc-dashed) and priority (urgent = red, high = orange, medium = yellow, low = slate). All colours defined as CSS variables with light and dark values; contrast checked in CI (axe).
+- **Colour:** neutral scale tinted toward the brand navy; one accent (default Pinwren orange `#D63A1C`, org-customisable; brand/README.md); semantic tokens for status (open = blue, in progress = amber, in review = violet, resolved = green, won't fix = zinc, duplicate = zinc-dashed) and priority (urgent = red, high = orange, medium = yellow, low = slate). All colours defined as CSS variables with light and dark values; contrast checked in CI (axe).
 - **Density:** 32 px list rows (compact) / 40 px (comfortable), user-toggle.
 - **Motion:** 120–180 ms ease-out for panels and list inserts (Motion), disabled under `prefers-reduced-motion`.
 - **Components:** shadcn/ui on Base UI primitives in `packages/ui`. **No browser-native pickers or controls** (date, select, colour, file) — use the design-system components everywhere.

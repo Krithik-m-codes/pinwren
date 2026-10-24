@@ -1,9 +1,9 @@
 <div align="center">
 
-<!-- Logo placeholder: add docs/assets/logo.svg (and a -dark variant), then replace this comment with a
-     <picture> element. -->
-
-<h1>Pinwren</h1>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="brand/pinwren-logo-dark.svg">
+  <img src="brand/pinwren-logo.svg" alt="Pinwren" width="360">
+</picture>
 
 **Pinned feedback and annotated bug reports for any website — self-hosted.**
 
@@ -208,16 +208,17 @@ Decisions are recorded in [`docs/adr/`](docs/adr) and the
 
 ## Packages
 
-| Path              | Package           | Licence  | What it is                                                                            |
-| ----------------- | ----------------- | -------- | ------------------------------------------------------------------------------------- |
-| `apps/web`        | `@pinwren/web`    | AGPL-3.0 | Next.js 16 dashboard; mounts the API at `/api` and `/w`                               |
-| `apps/www`        | `@pinwren/www`    | AGPL-3.0 | The website: landing page, docs (Fumadocs) and the live demo with an in-memory API    |
-| `packages/api`    | `@pinwren/api`    | AGPL-3.0 | Hono API: auth, dashboard and widget routes, jobs, email, webhooks, trackers, storage |
-| `packages/core`   | `@pinwren/core`   | AGPL-3.0 | Zod schemas and wire types, origin matching, security helpers                         |
-| `packages/db`     | `@pinwren/db`     | AGPL-3.0 | Drizzle schema and SQL migrations (Postgres)                                          |
-| `packages/widget` | `@pinwren/widget` | MIT      | The embeddable widget, on npm: `widget.js` (≈33 KB gzip) plus lazily loaded chunks    |
-| `docker`          | —                 | AGPL-3.0 | Dockerfile and the self-host compose file (development uses the root `compose.yaml`)  |
-| `loadtest`        | —                 | AGPL-3.0 | k6 scenario and sizing notes ([results](loadtest/README.md))                          |
+| Path              | Package           | Licence  | What it is                                                                              |
+| ----------------- | ----------------- | -------- | --------------------------------------------------------------------------------------- |
+| `apps/web`        | `@pinwren/web`    | AGPL-3.0 | Next.js 16 dashboard; mounts the API at `/api` and `/w`                                 |
+| `apps/www`        | `@pinwren/www`    | AGPL-3.0 | The website: landing page, docs (Fumadocs) and the live demo with an in-memory API      |
+| `packages/api`    | `@pinwren/api`    | AGPL-3.0 | Hono API: auth, dashboard and widget routes, jobs, email, webhooks, trackers, storage   |
+| `packages/core`   | `@pinwren/core`   | AGPL-3.0 | Zod schemas and wire types, origin matching, security helpers                           |
+| `packages/db`     | `@pinwren/db`     | AGPL-3.0 | Drizzle schema and SQL migrations (Postgres)                                            |
+| `packages/widget` | `@pinwren/widget` | MIT      | The embeddable widget, on npm: `widget.js` (≈33 KB gzip) plus lazily loaded chunks      |
+| `docker`          | —                 | AGPL-3.0 | Dockerfile and the self-host compose file (development uses the root `compose.yaml`)    |
+| `loadtest`        | —                 | AGPL-3.0 | k6 scenario and sizing notes ([results](loadtest/README.md))                            |
+| `brand`           | —                 | —        | Logo (SVG, PNG, favicons), palette and usage rules ([brand/README.md](brand/README.md)) |
 
 ## Development
 
