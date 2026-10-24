@@ -1,6 +1,6 @@
 # @pinwren/widget
 
-The [Pinwren](https://pinwren.dev) feedback widget: Figma-style comments pinned to any element of your site,
+The [Pinwren](https://pinwren.xride-labs.in) feedback widget: Figma-style comments pinned to any element of your site,
 and annotated bug reports with console, network and (optionally) session replay — sent to your self-hosted
 or cloud Pinwren server. MIT licensed.
 

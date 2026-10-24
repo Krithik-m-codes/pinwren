@@ -12,7 +12,12 @@ const NEW_SANDBOXES_PER_MINUTE = 60;
 
 export function problem(status: number, code: string, title: string) {
   return Response.json(
-    { type: `https://pinwren.dev/errors/${code.toLowerCase().replaceAll("_", "-")}`, title, status, code },
+    {
+      type: `https://pinwren.xride-labs.in/errors/${code.toLowerCase().replaceAll("_", "-")}`,
+      title,
+      status,
+      code,
+    },
     { status, headers: { "content-type": "application/problem+json", "cache-control": "no-store" } },
   );
 }

@@ -15,7 +15,7 @@ describe("playground settings", () => {
   });
 
   it("applies position, capture and feature switches to the project config", () => {
-    const base = demoConfig("https://pinwren.dev");
+    const base = demoConfig("https://pinwren.xride-labs.in");
     const cfg = withPlayground(base, {
       ...DEFAULT_SETTINGS,
       position: "bottom-left",

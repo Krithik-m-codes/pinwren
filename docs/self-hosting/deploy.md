@@ -5,13 +5,13 @@
 Put Pinwren on a VPS from start to finish — DNS, Docker Compose or a Portainer stack, nginx with a Let's Encrypt certificate, the first account, email, backups and upgrades.
 
 This page takes a fresh Linux server to a working Pinwren at `https://feedback.example.com`. Replace that name with
-your own everywhere below. The [getting-started walkthrough](https://pinwren.dev/docs/self-hosting/getting-started) covers the same
+your own everywhere below. The [getting-started walkthrough](https://pinwren.xride-labs.in/docs/self-hosting/getting-started) covers the same
 first run in more detail, and every step links to its reference page.
 
 ## What you need
 
 - **A server** with Docker and Docker Compose v2.24 or later. 1–2 vCPU and 1 GB of memory carry thousands of daily
-  widget visitors; see the [sizing guide](https://pinwren.dev/docs/self-hosting/scaling#sizing-guide).
+  widget visitors; see the [sizing guide](https://pinwren.xride-labs.in/docs/self-hosting/scaling#sizing-guide).
 - **A domain name** you can add a DNS record to.
 - **An SMTP account** for email (any provider: Brevo, Postmark, Amazon SES, Mailgun, your own server). You can
   add it after the install.
@@ -20,7 +20,7 @@ first run in more detail, and every step links to its reference page.
 
 Add an `A` record (and `AAAA` for IPv6) for `feedback.example.com` with your server's public address. Behind
 Cloudflare, either use **DNS only** or keep the proxy and set `PINWREN_TRUST_PROXY=2` (Cloudflare plus nginx);
-see [client addresses](https://pinwren.dev/docs/self-hosting/reverse-proxy#client-addresses).
+see [client addresses](https://pinwren.xride-labs.in/docs/self-hosting/reverse-proxy#client-addresses).
 
 ## 2. Start Pinwren
 
@@ -92,7 +92,7 @@ volumes:
 ```
 
 Under **Environment variables** add `PINWREN_URL`, `PINWREN_SECRET` (48 random bytes, base64) and
-`POSTGRES_PASSWORD`, then **Deploy the stack**. Any other [variable](https://pinwren.dev/docs/self-hosting/environment) — `SMTP_*`,
+`POSTGRES_PASSWORD`, then **Deploy the stack**. Any other [variable](https://pinwren.xride-labs.in/docs/self-hosting/environment) — `SMTP_*`,
 `S3_*`, `PINWREN_ADMIN_EMAILS` — goes in the same list and, for the app to see it, also into the
 `environment:` block of the `pinwren` service.
 
@@ -154,12 +154,12 @@ sudo certbot --nginx -d feedback.example.com
 ```
 
 The full nginx example with brotli compression for the widget is under
-[Reverse proxy › nginx](https://pinwren.dev/docs/self-hosting/reverse-proxy#nginx). On a server that already runs **Traefik** or
-**Caddy**, use [its section](https://pinwren.dev/docs/self-hosting/reverse-proxy) instead: Caddy gets the certificate by itself,
+[Reverse proxy › nginx](https://pinwren.xride-labs.in/docs/self-hosting/reverse-proxy#nginx). On a server that already runs **Traefik** or
+**Caddy**, use [its section](https://pinwren.xride-labs.in/docs/self-hosting/reverse-proxy) instead: Caddy gets the certificate by itself,
 and Traefik attaches the app through labels.
 
 Once HTTPS works, you may set `PINWREN_ENFORCE_HTTPS=true` to redirect plain HTTP and send HSTS
-([details](https://pinwren.dev/docs/self-hosting/reverse-proxy#enforce-https)).
+([details](https://pinwren.xride-labs.in/docs/self-hosting/reverse-proxy#enforce-https)).
 
 ## 4. Create the admin account
 
@@ -184,7 +184,7 @@ add your login, then **Send test email**:
 
 The from address must be one your provider lets you send as. Who gets which email is set under
 **Settings › Notifications** (General, Reporter, Email templates); every attempt is listed under **Settings ›
-Email › Recent deliveries**. More in [Email](https://pinwren.dev/docs/integrations/email).
+Email › Recent deliveries**. More in [Email](https://pinwren.xride-labs.in/docs/integrations/email).
 
 ## 6. Add the widget
 
@@ -209,7 +209,7 @@ docker compose -f docker/compose.yml cp pinwren:/data "./pinwren-data-$(date +%F
 ```
 
 Copy both off the server, keep several days, and practise a restore once: see
-[Backups](https://pinwren.dev/docs/self-hosting/backups).
+[Backups](https://pinwren.xride-labs.in/docs/self-hosting/backups).
 
 ## Upgrades
 
@@ -225,10 +225,10 @@ docker compose -f docker/compose.yml --env-file docker/.env up -d
 ```
 
 On Portainer, change the `PINWREN_IMAGE` variable and choose **Update the stack** with **Re-pull image**. Admins
-see **Update available** in the account menu when a release is out. More in [Upgrades](https://pinwren.dev/docs/self-hosting/upgrades).
+see **Update available** in the account menu when a release is out. More in [Upgrades](https://pinwren.xride-labs.in/docs/self-hosting/upgrades).
 
 ## Sizing
 
 The image runs `PINWREN_WORKERS` Node processes (default `2`); set it to about the number of CPU cores the
-container gets. See [Scaling](https://pinwren.dev/docs/self-hosting/scaling) for measured throughput and for splitting web and
+container gets. See [Scaling](https://pinwren.xride-labs.in/docs/self-hosting/scaling) for measured throughput and for splitting web and
 background jobs.

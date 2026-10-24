@@ -27,7 +27,7 @@ Docker. The SDK/MCP/CLI section runs from the host only (`SMOKE_SKIP_PACKAGES=1`
    private key in your password manager, commit only the public key). Until then every official image build
    fails on purpose.
 2. **Trademark** — search "Pinwren" in USPTO / EUIPO / your market before buying domains or announcing.
-3. **Domains** — `pinwren.dev` (site) is the placeholder in `apps/www/src/lib/site.ts`; change it there if you
+3. **Domains** — `pinwren.xride-labs.in` (site) is the placeholder in `apps/www/src/lib/site.ts`; change it there if you
    pick another.
 4. **npm** — in the `@pinwren` org, either add a **trusted publisher** for `Krithik-m-codes/pinwren`
    (workflow `release-please.yml`, environment `npm`) or create an automation token and save it as the

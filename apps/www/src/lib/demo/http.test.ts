@@ -9,7 +9,7 @@ let store: typeof Store;
 const key = (n: number) => `pk_demo_${String(n).padStart(16, "0")}`;
 
 function req(headers: Record<string, string> = {}) {
-  return new Request("https://pinwren.dev/demo-api/w/feedback", { headers });
+  return new Request("https://pinwren.xride-labs.in/demo-api/w/feedback", { headers });
 }
 
 beforeEach(async () => {

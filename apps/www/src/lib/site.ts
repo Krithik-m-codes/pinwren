@@ -1,6 +1,6 @@
 // Every public URL the website links to, in one place. Change the domain or repository here only.
 
-export const SITE_URL = "https://pinwren.dev";
+export const SITE_URL = "https://pinwren.xride-labs.in";
 export const SITE_NAME = "Pinwren";
 export const SITE_TAGLINE = "Pinned feedback and annotated bug reports for any website — self-hosted.";
 export const SITE_DESCRIPTION =

@@ -1,6 +1,6 @@
 # @pinwren/sdk
 
-Typed client for the [Pinwren](https://pinwren.dev) public REST API (`/api/v1`): read and triage feedback,
+Typed client for the [Pinwren](https://pinwren.xride-labs.in) public REST API (`/api/v1`): read and triage feedback,
 comment, and work with review rounds from scripts, CI jobs and your own tools. ESM and CommonJS, full
 TypeScript types, no runtime dependencies. MIT.
 

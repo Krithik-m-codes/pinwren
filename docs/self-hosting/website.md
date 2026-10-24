@@ -7,7 +7,7 @@ Run your own copy of this site (landing page, docs and the live demo in apps/www
 The site you are reading is `apps/www` in the repository: a Next.js app with the landing page, these docs, the
 changelog and the live demo on `/demo`. It needs **no database** — the demo keeps its sandboxes in memory and
 resets them every 10 minutes. You only need this page if you want to publish your own copy, for example a fork
-or an internal mirror; running Pinwren itself is covered in [Deploy on your server](https://pinwren.dev/docs/self-hosting/deploy).
+or an internal mirror; running Pinwren itself is covered in [Deploy on your server](https://pinwren.xride-labs.in/docs/self-hosting/deploy).
 
 Before you build, set your domain and links in
 [`apps/www/src/lib/site.ts`](https://github.com/Krithik-m-codes/pinwren/blob/main/apps/www/src/lib/site.ts)
@@ -89,11 +89,11 @@ container.
 
 The demo needs no configuration. These optional variables tune it:
 
-| Variable                        | Default     | Effect                                                                                                                      |
-| ------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `DEMO_RESET_MINUTES`            | `10`        | How long a visitor's demo feedback is kept.                                                                                 |
-| `DEMO_MAX_SANDBOXES`            | `2000`      | Live sandboxes in memory; the least recently used is dropped to make room.                                                  |
-| `DEMO_MAX_SANDBOX_BYTES`        | `6291456`   | Bytes stored per sandbox (6 MiB).                                                                                           |
-| `DEMO_MAX_TOTAL_BYTES`          | `201326592` | Bytes across all sandboxes (192 MiB).                                                                                       |
-| `DEMO_TRUST_PLATFORM_IP_HEADER` | unset       | A header your platform sets itself with the visitor's address (Vercel: `x-vercel-forwarded-for`).                           |
-| `PINWREN_TRUST_PROXY`           | unset       | Reverse proxies in front of the site, as for the [app](https://pinwren.dev/docs/self-hosting/environment#client-addresses). |
+| Variable                        | Default     | Effect                                                                                                                                |
+| ------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `DEMO_RESET_MINUTES`            | `10`        | How long a visitor's demo feedback is kept.                                                                                           |
+| `DEMO_MAX_SANDBOXES`            | `2000`      | Live sandboxes in memory; the least recently used is dropped to make room.                                                            |
+| `DEMO_MAX_SANDBOX_BYTES`        | `6291456`   | Bytes stored per sandbox (6 MiB).                                                                                                     |
+| `DEMO_MAX_TOTAL_BYTES`          | `201326592` | Bytes across all sandboxes (192 MiB).                                                                                                 |
+| `DEMO_TRUST_PLATFORM_IP_HEADER` | unset       | A header your platform sets itself with the visitor's address (Vercel: `x-vercel-forwarded-for`).                                     |
+| `PINWREN_TRUST_PROXY`           | unset       | Reverse proxies in front of the site, as for the [app](https://pinwren.xride-labs.in/docs/self-hosting/environment#client-addresses). |

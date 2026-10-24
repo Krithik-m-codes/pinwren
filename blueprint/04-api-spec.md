@@ -17,7 +17,7 @@ Error format everywhere (RFC 9457 problem details):
 
 ```json
 {
-  "type": "https://pinwren.dev/errors/origin-not-allowed",
+  "type": "https://pinwren.xride-labs.in/errors/origin-not-allowed",
   "title": "Origin not allowed",
   "status": 403,
   "code": "ORIGIN_NOT_ALLOWED",

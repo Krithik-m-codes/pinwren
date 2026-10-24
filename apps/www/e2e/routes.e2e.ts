@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { SITE_URL } from "../src/lib/site";
 import { collectErrors, ROUTES } from "./helpers";
 
 for (const route of ROUTES) {
@@ -9,7 +10,10 @@ for (const route of ROUTES) {
     await expect(page.locator("h1").first()).toBeVisible();
     await expect(page).toHaveTitle(/Pinwren/);
     // Canonical URL and a social image on every page.
-    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", /^https:\/\/pinwren\.dev/);
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+      "href",
+      new RegExp(`^${SITE_URL.replaceAll(".", "\\.")}`),
+    );
     await expect(page.locator('meta[property="og:image"]').first()).toHaveAttribute(
       "content",
       /^https?:\/\//,
@@ -27,10 +31,10 @@ test("unknown pages return the 404 page", async ({ page }) => {
 
 test("SEO files: sitemap, robots, OG images, JSON-LD", async ({ page, request }) => {
   const sitemap = await (await request.get("/sitemap.xml")).text();
-  expect(sitemap).toContain("https://pinwren.dev/docs/quickstart");
-  expect(sitemap).toContain("https://pinwren.dev/pricing");
+  expect(sitemap).toContain("https://pinwren.xride-labs.in/docs/quickstart");
+  expect(sitemap).toContain("https://pinwren.xride-labs.in/pricing");
   const robots = await (await request.get("/robots.txt")).text();
-  expect(robots).toContain("Sitemap: https://pinwren.dev/sitemap.xml");
+  expect(robots).toContain("Sitemap: https://pinwren.xride-labs.in/sitemap.xml");
   for (const img of ["/opengraph-image", "/docs-og/quickstart/image.png", "/docs-og/image.png"]) {
     const r = await request.get(img);
     expect(r.status(), img).toBe(200);

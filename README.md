@@ -288,7 +288,7 @@ Pinwren uses two licences:
 
 <!-- Links: the repository, website and npm package are defined once here. -->
 
-[site]: https://pinwren.dev
+[site]: https://pinwren.xride-labs.in
 [issues]: https://github.com/Krithik-m-codes/pinwren/issues
 [ci]: https://github.com/Krithik-m-codes/pinwren/actions/workflows/ci.yml
 [codeql]: https://github.com/Krithik-m-codes/pinwren/actions/workflows/codeql.yml

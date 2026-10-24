@@ -1,6 +1,6 @@
 {
   "name": "@pinwren/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Pinwren command line: install the widget, check an instance, list open feedback",
   "keywords": [
     "pinwren",
@@ -12,7 +12,7 @@
   ],
   "license": "MIT",
   "author": "Krithik-m-codes (https://github.com/Krithik-m-codes)",
-  "homepage": "https://pinwren.dev",
+  "homepage": "https://pinwren.xride-labs.in",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Krithik-m-codes/pinwren.git",

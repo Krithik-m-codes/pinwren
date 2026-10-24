@@ -12,7 +12,7 @@ function report(extra: Partial<WidgetFeedbackCreate> = {}): WidgetFeedbackCreate
     clientId: randomUUID(),
     kind: "comment",
     body: "Hello",
-    page: { url: "https://pinwren.dev/demo" },
+    page: { url: "https://pinwren.xride-labs.in/demo" },
     environment: { userAgent: "test", viewport: { w: 1, h: 1 }, dpr: 1 },
     ...extra,
   });
@@ -160,7 +160,7 @@ describe("wave 5: playground sandbox", () => {
 
   it("lists every page with its URL, and lets only the reporter delete", () => {
     const v = store.visitor(key(2));
-    const made = store.createFeedback(v, report({ page: { url: "https://pinwren.dev/about" } }));
+    const made = store.createFeedback(v, report({ page: { url: "https://pinwren.xride-labs.in/about" } }));
     if (!made.ok) throw new Error("create failed");
     const all = store.listPins(v, "", true, "http://localhost:3200");
     expect(all).toHaveLength(7);

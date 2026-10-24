@@ -21,7 +21,7 @@ export function proxy(request: NextRequest) {
   if (d.action === "refuse") {
     return NextResponse.json(
       {
-        type: "https://pinwren.dev/errors/https-required",
+        type: "https://pinwren.xride-labs.in/errors/https-required",
         title: "This server only accepts HTTPS",
         status: 403,
         code: "HTTPS_REQUIRED",

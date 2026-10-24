@@ -18,7 +18,12 @@ export const forbidden = (msg = "Not allowed") => new ApiError(403, "FORBIDDEN",
 
 export function problem(c: Context, status: ContentfulStatusCode, code: string, title: string) {
   return c.json(
-    { type: `https://pinwren.dev/errors/${code.toLowerCase().replaceAll("_", "-")}`, title, status, code },
+    {
+      type: `https://pinwren.xride-labs.in/errors/${code.toLowerCase().replaceAll("_", "-")}`,
+      title,
+      status,
+      code,
+    },
     status,
     { "content-type": "application/problem+json" },
   );

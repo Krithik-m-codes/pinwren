@@ -68,7 +68,7 @@ export function ogCard({
         <span>·</span>
         <span>Self-hosted</span>
         <span>·</span>
-        <span>pinwren.dev</span>
+        <span>pinwren.xride-labs.in</span>
       </div>
     </div>,
     OG_SIZE,

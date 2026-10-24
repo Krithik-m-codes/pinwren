@@ -1,6 +1,6 @@
 # @pinwren/mcp
 
-[Model Context Protocol](https://modelcontextprotocol.io) server for [Pinwren](https://pinwren.dev): let AI
+[Model Context Protocol](https://modelcontextprotocol.io) server for [Pinwren](https://pinwren.xride-labs.in): let AI
 coding agents (Claude Code, Cursor, Windsurf, VS Code…) read website feedback and bug reports, reproduce
 them from the captured diagnostics and session replay, and resolve them. MIT.
 

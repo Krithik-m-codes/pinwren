@@ -1,6 +1,6 @@
 {
   "name": "@pinwren/widget",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Pinwren feedback widget: Figma-style pinned comments and annotated bug reports for any website",
   "keywords": [
     "feedback",
@@ -18,7 +18,7 @@
   ],
   "license": "MIT",
   "author": "Krithik-m-codes (https://github.com/Krithik-m-codes)",
-  "homepage": "https://pinwren.dev",
+  "homepage": "https://pinwren.xride-labs.in",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Krithik-m-codes/pinwren.git",

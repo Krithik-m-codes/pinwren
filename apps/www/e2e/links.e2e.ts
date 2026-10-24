@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
+import { SITE_URL } from "../src/lib/site";
 
 // Crawls every page in the sitemap, collects each internal link (href="/…") and checks that the target
 // answers below 400 and, for links with a #fragment, that the target page has an element with that id.
 test("every internal link resolves", async ({ request }) => {
   test.setTimeout(300_000);
   const sitemap = await (await request.get("/sitemap.xml")).text();
-  const pages = [...sitemap.matchAll(/<loc>https:\/\/pinwren\.dev([^<]*)<\/loc>/g)].map((m) => m[1] || "/");
+  const loc = new RegExp(`<loc>${SITE_URL.replaceAll(".", "\\.")}([^<]*)</loc>`, "g");
+  const pages = [...sitemap.matchAll(loc)].map((m) => m[1] || "/");
   expect(pages.length).toBeGreaterThan(30);
 
   const cache = new Map<string, { status: number; body: string }>();

@@ -1,6 +1,6 @@
 # @pinwren/react
 
-React bindings for the [Pinwren](https://pinwren.dev) feedback widget: a `<Pinwren>` component and a
+React bindings for the [Pinwren](https://pinwren.xride-labs.in) feedback widget: a `<Pinwren>` component and a
 `usePinwren()` hook. Works with Next.js (App Router and Pages), Vite, Remix and any React 18+ app. MIT.
 
 ```sh

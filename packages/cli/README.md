@@ -1,6 +1,6 @@
 # @pinwren/cli
 
-Command line for [Pinwren](https://pinwren.dev): add the feedback widget to a site, check that an install
+Command line for [Pinwren](https://pinwren.xride-labs.in): add the feedback widget to a site, check that an install
 works, and see open feedback per project. One self-contained file, no dependencies, Node.js ≥ 20. MIT.
 
 ```sh
