@@ -1,6 +1,7 @@
 # Pinwren — single self-hostable image: dashboard, API, widget bundles, migrations.
 #   docker build -f docker/Dockerfile -t pinwren .
-FROM node:22-alpine AS base
+# Base images are pinned by digest (tag kept for readability); Dependabot's docker updates refresh it.
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS base
 RUN corepack enable
 WORKDIR /repo
 
@@ -32,7 +33,7 @@ RUN if [ "$PINWREN_RELEASE" = "1" ]; then node docker/check-release-keys.mjs; fi
 RUN pnpm --filter @pinwren/widget build && pnpm --filter @pinwren/web build
 
 # --- runtime ---------------------------------------------------------------------------------------------
-FROM node:22-alpine AS runtime
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS runtime
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \

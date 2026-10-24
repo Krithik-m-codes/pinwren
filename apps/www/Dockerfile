@@ -1,7 +1,8 @@
 # Pinwren website (landing page, docs, live demo) — a standalone Next.js server, no database.
 #   docker build -f apps/www/Dockerfile -t pinwren-www .
 #   docker run --rm -p 3200:3000 pinwren-www
-FROM node:22-alpine AS base
+# Base images are pinned by digest (tag kept for readability); Dependabot's docker updates refresh it.
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS base
 RUN corepack enable
 WORKDIR /repo
 
@@ -22,7 +23,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @pinwren/widget build && pnpm --filter @pinwren/www build
 
 # --- runtime -----------------------------------------------------------------------------------------------
-FROM node:22-alpine AS runtime
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS runtime
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \

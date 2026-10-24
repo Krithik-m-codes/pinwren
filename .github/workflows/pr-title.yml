@@ -18,6 +18,9 @@ concurrency:
 
 jobs:
   conventional-title:
+    # Dependabot always writes "chore(deps): Bump x from 1 to 2": the type and scope come from
+    # .github/dependabot.yml, but the capital B is fixed. Its PRs land as hidden chores either way.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

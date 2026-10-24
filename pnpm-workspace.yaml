@@ -16,3 +16,10 @@ minimumReleaseAgeExclude:
   - "@better-auth/prisma-adapter@1.7.12"
   - "@better-auth/telemetry@1.7.12"
   - better-auth@1.7.12
+# Security overrides for transitive dev tooling (pnpm audit). Remove each once its parent ships the fix.
+overrides:
+  # shadcn CLI > @modelcontextprotocol/sdk > express: DoS via trailing bytes (GHSA, fixed in 2.4.0).
+  "body-parser@>=2.0.0 <2.4.0": "^2.4.0"
+  # drizzle-kit > @esbuild-kit/core-utils pins esbuild 0.18, whose dev server answers any website
+  # (GHSA-67mh-4wv8-2f99). drizzle-kit only uses it to load TypeScript config.
+  "@esbuild-kit/core-utils>esbuild": "^0.25.0"

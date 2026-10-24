@@ -54,11 +54,11 @@ updates:
         patterns: ["docker/*"]
     open-pull-requests-limit: 5
 
-  # Base images in docker/Dockerfile (node:22-alpine) and the compose files (postgres:17-alpine).
-  # Digest and patch refreshes only: moving to a new Node or Postgres major is a deliberate change that
-  # has to match .nvmrc / engines and the upgrade notes for self-hosters.
+  # Base images in docker/Dockerfile and apps/www/Dockerfile (node:22-alpine, pinned by digest) and the
+  # compose files (postgres:17-alpine). Digest and patch refreshes only: moving to a new Node or Postgres
+  # major is a deliberate change that has to match .nvmrc / engines and the upgrade notes for self-hosters.
   - package-ecosystem: docker
-    directory: /docker
+    directories: ["/docker", "/apps/www"]
     schedule:
       interval: weekly
     commit-message:
