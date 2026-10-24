@@ -1,6 +1,6 @@
 {
   "name": "@pinwren/mcp",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Model Context Protocol server for Pinwren: let AI coding agents read, reproduce and resolve feedback",
   "keywords": [
     "pinwren",
