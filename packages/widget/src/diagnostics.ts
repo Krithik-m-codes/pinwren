@@ -1,4 +1,5 @@
 import type { CaptureCfg } from "./config";
+import { trimTrailingSlashes } from "./slashes";
 
 // Console + failed-network ring buffers (blueprint F-005/F-006), sized by the project's `capture` config.
 // Wrappers are transparent: they call the original first, never change arguments or results, and never throw.
@@ -87,7 +88,7 @@ function wrap<O extends object, K extends keyof O>(
 export function installDiagnostics(cfg: Pick<CaptureCfg, "console" | "network">, endpoint = "") {
   if (installed) return;
   installed = true;
-  own = endpoint ? `${endpoint.replace(/\/+$/, "")}/w/` : "";
+  own = endpoint ? `${trimTrailingSlashes(endpoint)}/w/` : "";
   const live = { on: true };
 
   try {

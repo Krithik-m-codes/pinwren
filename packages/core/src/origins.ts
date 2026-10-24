@@ -1,3 +1,5 @@
+import { trimTrailingSlashes } from "./strings";
+
 /**
  * Origin allowlist matching, shared by the API (enforcement) and the dashboard (preview).
  *
@@ -8,11 +10,13 @@
  * Hostnames are compared exactly, so `example.com` never matches `evil-example.com`.
  */
 export function normalizePattern(pattern: string): string {
-  return pattern
-    .trim()
-    .toLowerCase()
-    .replace(/^[a-z]+:\/\//, "")
-    .replace(/\/.*$/, "");
+  return (
+    pattern
+      .trim()
+      .toLowerCase()
+      .replace(/^[a-z]+:\/\//, "")
+      .split("/", 1)[0] ?? ""
+  );
 }
 
 export function originMatches(origin: string, pattern: string): boolean {
@@ -82,6 +86,6 @@ export function normalizePageUrl(raw: string, extra: readonly string[] = []): st
   }
   url.searchParams.sort();
   if (url.pathname.length > 1 && url.pathname.endsWith("/"))
-    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+    url.pathname = trimTrailingSlashes(url.pathname) || "/";
   return url.toString();
 }

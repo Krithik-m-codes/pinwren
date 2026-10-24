@@ -2,6 +2,7 @@ import { setNonce } from "./chunks";
 import { hostMetadata } from "./config";
 import { identityOf, urlPatternOf } from "./identity";
 import * as lib from "./lib";
+import { trimTrailingSlashes } from "./slashes";
 import type { Identity } from "./store";
 import type {
   IdentifyOptions,
@@ -90,7 +91,7 @@ const init = safe((o: PinwrenOptions) => {
     console.warn("[pinwren] init needs a projectKey and an endpoint");
     return;
   }
-  const endpoint = o.endpoint.replace(/\/+$/, "");
+  const endpoint = trimTrailingSlashes(o.endpoint);
   if (o.urlPattern !== undefined) scope = urlPatternOf(o.urlPattern);
   const w = new PinwrenWidget({
     projectKey: o.projectKey,

@@ -7,4 +7,5 @@ export * from "./roles";
 export * from "./rounds";
 export * from "./schemas";
 export * from "./security";
+export * from "./strings";
 export * from "./url-pattern";

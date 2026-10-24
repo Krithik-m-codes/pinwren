@@ -10,7 +10,14 @@ const attr = (s: string) => s.replaceAll("&", "&amp;").replaceAll('"', "&quot;")
 export function normalizeUrl(raw: string): string {
   const u = new URL(raw.trim());
   if (u.protocol !== "https:" && u.protocol !== "http:") throw new Error("Use an http(s):// URL");
-  return u.origin + u.pathname.replace(/\/+$/, "");
+  return u.origin + trimTrailingSlashes(u.pathname);
+}
+
+/** A loop, not `/\/+$/`: that regex is quadratic on long runs of `/` (CodeQL js/polynomial-redos). */
+function trimTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47 /* / */) end--;
+  return s.slice(0, end);
 }
 
 export function assertProjectKey(key: string): string {

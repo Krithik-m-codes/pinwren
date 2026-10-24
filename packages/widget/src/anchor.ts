@@ -7,8 +7,10 @@ import { finder } from "@medv/finder";
 /** Class names produced by CSS-in-JS / CSS modules / hashing — useless across deploys. */
 const UNSTABLE_CLASS =
   /^(css|sc|jsx|emotion|svelte|astro)-[\w-]{4,}$|_[a-z0-9]{5,}$|^[a-z]{1,3}[A-Z0-9]\w{5,}$|[[:\]/]/;
-/** Generated ids: React useId (`:r1:`), UUIDs, long digit runs. */
-const UNSTABLE_ID = /^:r|[0-9a-f]{8}-[0-9a-f]{4}|\d{4,}/i;
+/** Generated ids: React useId (`:r1:` — a prefix), UUIDs and long digit runs (anywhere in the id). */
+const UNSTABLE_ID = {
+  test: (id: string) => id.startsWith(":r") || /[0-9a-f]{8}-[0-9a-f]{4}/i.test(id) || /\d{4}/.test(id),
+};
 
 const normalize = (s: string) => s.replace(/\s+/g, " ").trim();
 

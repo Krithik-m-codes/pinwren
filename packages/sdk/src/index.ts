@@ -57,6 +57,13 @@ function queryString(q: Query | undefined): string {
 
 const enc = encodeURIComponent;
 
+/** A loop, not `/\/+$/`: that regex is quadratic on long runs of `/` (CodeQL js/polynomial-redos). */
+function trimTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47 /* / */) end--;
+  return s.slice(0, end);
+}
+
 /**
  * Typed client for the Pinwren public API (`/api/v1`).
  *
@@ -75,7 +82,7 @@ export class Pinwren {
   constructor(options: PinwrenOptions) {
     if (!options.url) throw new TypeError("Pinwren: `url` is required");
     if (!options.token) throw new TypeError("Pinwren: `token` is required");
-    this.url = options.url.replace(/\/+$/, "");
+    this.url = trimTrailingSlashes(options.url);
     this.#token = options.token;
     this.#fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.#timeoutMs = options.timeoutMs ?? 30_000;

@@ -1,4 +1,4 @@
-import { type Permission, roleCan } from "@pinwren/core";
+import { type Permission, roleCan, trimTrailingSlashes } from "@pinwren/core";
 import { createMiddleware } from "hono/factory";
 import type { SessionVars } from "./context";
 import { ApiError } from "./errors";
@@ -65,7 +65,7 @@ const ALLOWED = VIEWER_ALLOWED_MUTATIONS.map((a) => ({ method: a.method, re: toR
 
 export function viewerMayCall(method: string, path: string): boolean {
   if (!MUTATING.has(method.toUpperCase())) return true;
-  const p = path.replace(/\/+$/, "") || "/";
+  const p = trimTrailingSlashes(path) || "/";
   return ALLOWED.some((a) => (a.method === "*" || a.method === method.toUpperCase()) && a.re.test(p));
 }
 

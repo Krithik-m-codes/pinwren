@@ -28,6 +28,20 @@ describe("anchors", () => {
     expect(resolveAnchor(anchor)?.element).toBe(h1);
   });
 
+  it("keeps stable ids and drops generated ones (useId prefix, UUIDs, digit runs)", () => {
+    const h1 = document.querySelector("h1") as Element;
+    const idOf = (id: string) => {
+      h1.id = id;
+      return captureAnchor(h1, 0, 0).attrs?.id;
+    };
+    expect(idOf("pricing-hero")).toBe("pricing-hero");
+    expect(idOf("hero-r2")).toBe("hero-r2"); // `:r` only counts at the start
+    expect(idOf(":r1:")).toBeUndefined();
+    expect(idOf("el-3f2a9c1b-77aa-4f00")).toBeUndefined();
+    expect(idOf("node-12345")).toBeUndefined();
+    h1.removeAttribute("id");
+  });
+
   it("ignores hashed CSS-in-JS class names in the selector", () => {
     const btn = document.querySelector("button") as Element;
     expect(captureAnchor(btn, 0, 0).css).not.toContain("css-1x2y3z");

@@ -8,6 +8,8 @@
 // Patterns match the URL's path only — origin, query and hash are ignored — and a trailing slash is
 // optional on both sides. A pattern written as a full URL (`https://x.com/a/:b`) uses its path.
 
+import { cutAt, trimTrailingSlashes } from "./strings";
+
 const MAX_PATTERN = 500;
 
 /** The path a pattern applies to, normalised: leading `/`, no trailing `/`, no query/hash. */
@@ -17,9 +19,9 @@ function patternPath(pattern: string): string | null {
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(p)) {
     p = p.replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]*/i, "");
   }
-  p = p.replace(/[?#].*$/, "");
+  p = cutAt(p, "?#");
   if (!p.startsWith("/")) p = `/${p}`;
-  return p.length > 1 ? p.replace(/\/+$/, "") : p;
+  return p.length > 1 ? trimTrailingSlashes(p) || "/" : p;
 }
 
 /**
@@ -50,7 +52,7 @@ export function urlPath(url: string): string {
   try {
     return new URL(url).pathname;
   } catch {
-    return url.replace(/[?#].*$/, "") || "/";
+    return cutAt(url, "?#") || "/";
   }
 }
 

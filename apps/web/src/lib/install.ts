@@ -2,6 +2,8 @@
 // the project key and the server's configured public URL (PINWREN_URL), and the allowlist entry for a
 // refused origin.
 
+import { trimTrailingSlashes as trimSlash } from "@pinwren/core";
+
 export const INSTALL_METHODS = ["html", "next", "gtm", "npm", "react"] as const;
 export type InstallMethod = (typeof INSTALL_METHODS)[number];
 
@@ -22,8 +24,6 @@ export const INSTALL_HINTS: Record<InstallMethod, string> = {
   react:
     "Render it once near the root of your app. It renders nothing itself and loads the widget from your Pinwren server.",
 };
-
-const trimSlash = (url: string) => url.replace(/\/+$/, "");
 
 export function installSnippets(publicUrl: string, projectKey: string): Record<InstallMethod, string> {
   const base = trimSlash(publicUrl);

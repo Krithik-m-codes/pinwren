@@ -120,7 +120,10 @@ export function load(endpoint: string, opts: { nonce?: string | undefined } = {}
   const ready = api();
   if (ready) return Promise.resolve(ready);
   if (loading) return loading;
-  const base = endpoint.replace(/\/+$/, "");
+  // A loop, not /\/+$/ (quadratic on long runs of "/"); kept inline so this entry stays import-free.
+  let end = endpoint.length;
+  while (end > 0 && endpoint.charCodeAt(end - 1) === 47) end--;
+  const base = endpoint.slice(0, end);
   loading = new Promise<PinwrenApi>((resolve, reject) => {
     // Another copy of this loader (say, @pinwren/react's bundled one) may have added the script already.
     const existing = document.querySelector<HTMLScriptElement>("script[data-pinwren-loader]");

@@ -1,6 +1,7 @@
 import {
   API_TOKEN_SCOPES,
   apiTokenCreate,
+  cutAt,
   emailSettingsUpdate,
   emailTemplateUpdate,
   ISSUE_PROVIDERS,
@@ -41,7 +42,7 @@ export const hostInput = z
   .string()
   .trim()
   .toLowerCase()
-  .transform((v) => v.replace(/^https?:\/\//, "").replace(/\/.*$/, ""))
+  .transform((v) => cutAt(v.replace(/^https?:\/\//, ""), "/"))
   .refine((v) => v === "" || /^(\*\.)?[a-z0-9.-]+(:\d{1,5})?$/.test(v), {
     message: "Enter a domain like www.example.com, *.example.com or localhost:3000",
   });

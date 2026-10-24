@@ -13,6 +13,7 @@ import {
   appRoleOf,
   projectUpdate,
   roleCan,
+  trimTrailingSlashes,
   widgetBranding,
   widgetConfig,
 } from "@pinwren/core";
@@ -106,7 +107,7 @@ const projectOut = ({ actionSecret, identitySecret, ...p }: ProjectRow, role: st
     hasActionSecret: actionSecret !== null,
     hasIdentitySecret: identitySecret !== null,
     // The configured public URL (PINWREN_URL): install snippets use it, not the browser's address.
-    publicUrl: env().PINWREN_URL.replace(/\/+$/, ""),
+    publicUrl: trimTrailingSlashes(env().PINWREN_URL),
   };
 };
 

@@ -30,6 +30,7 @@ import { type Box, isRegion, type PinPct, pinBox, placeCard, regionPin } from ".
 import type { Recorder, ReplayModule } from "./replay";
 import type { ReplayOffer, ReportModule } from "./report";
 import { findQuote, pageSelection, textRects, toTextRange } from "./selection";
+import { trimTrailingSlashes } from "./slashes";
 import { type Identity, store } from "./store";
 import { STYLES } from "./styles";
 import type { Mode, WidgetEvent } from "./types";
@@ -1727,7 +1728,7 @@ function samePath(a: string, b: string): boolean {
   try {
     const x = new URL(a);
     const y = new URL(b);
-    return x.origin === y.origin && x.pathname.replace(/\/+$/, "") === y.pathname.replace(/\/+$/, "");
+    return x.origin === y.origin && trimTrailingSlashes(x.pathname) === trimTrailingSlashes(y.pathname);
   } catch {
     return false;
   }

@@ -1,4 +1,4 @@
-import type { IssueProvider } from "@pinwren/core";
+import { type IssueProvider, trimTrailingSlashes } from "@pinwren/core";
 import { env } from "../env";
 import { type OutboundFetch, outboundErrorText, safeFetch } from "../outbound/safe-fetch";
 
@@ -64,10 +64,10 @@ function jiraSite(cfg: Pick<TrackerConfig, "apiUrl">): string {
 /** REST base: GitHub's API root, GitLab's `/api/v4` under the instance URL, or the Jira site's REST v3. */
 export function apiBase(cfg: Pick<TrackerConfig, "provider" | "apiUrl">): string {
   const e = env();
-  if (cfg.provider === "github") return (cfg.apiUrl ?? e.GITHUB_API_URL).replace(/\/+$/, "");
+  if (cfg.provider === "github") return trimTrailingSlashes(cfg.apiUrl ?? e.GITHUB_API_URL);
   if (cfg.provider === "linear") return LINEAR_API_URL;
   if (cfg.provider === "jira") return `${jiraSite(cfg)}/rest/api/3`;
-  const root = (cfg.apiUrl ?? e.GITLAB_URL).replace(/\/+$/, "").replace(/\/api\/v4$/, "");
+  const root = trimTrailingSlashes(cfg.apiUrl ?? e.GITLAB_URL).replace(/\/api\/v4$/, "");
   return `${root}/api/v4`;
 }
 
