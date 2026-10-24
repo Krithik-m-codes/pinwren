@@ -7,6 +7,11 @@ export const STATE_FILE = join(AUTH_DIR, "admin.json");
 export const SEED_FILE = join(AUTH_DIR, "seed.json");
 export const SHOTS = join(__dirname, "__screenshots__");
 export const SITE_ORIGIN = "https://e2e.example.com";
+/** The database the e2e server uses (CI sets DATABASE_URL; locally it's the dev Postgres). */
+export const E2E_DATABASE_URL =
+  process.env.E2E_DATABASE_URL ??
+  process.env.DATABASE_URL ??
+  "postgres://pinwren:pinwren@127.0.0.1:5433/pinwren";
 
 /** Listed in PINWREN_ADMIN_EMAILS (playwright.config.ts) so the instance-admin screens are reachable. */
 export const ADMIN = { name: "Avery Admin", email: "e2e-admin@example.com", password: "e2e-password-123" };

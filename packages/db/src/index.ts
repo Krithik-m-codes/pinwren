@@ -12,6 +12,20 @@ function createDb(url: string) {
 
 export type Database = ReturnType<typeof createDb>;
 
+/**
+ * Tests only: forget the sign-in / sign-up attempts the auth rate limiter has counted, so an end-to-end
+ * suite can create many accounts from one address. Opens and closes its own connection (a pool would keep
+ * the test runner alive).
+ */
+export async function clearAuthRateLimits(url: string): Promise<void> {
+  const sql = postgres(url, { max: 1 });
+  try {
+    await sql`delete from auth_rate_limit`;
+  } finally {
+    await sql.end();
+  }
+}
+
 // One pool per process. Next.js dev reloads modules, so keep it on globalThis.
 const globalForDb = globalThis as unknown as { __pinwrenDb?: Database };
 

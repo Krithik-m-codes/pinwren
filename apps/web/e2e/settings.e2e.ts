@@ -103,9 +103,17 @@ test.describe("settings", () => {
         });
       });
       await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+      // A receiver left open by a failed test must not keep the test runner alive (CI hung on this).
+      server.unref();
       url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/hooks/pinwren`;
     });
-    test.afterAll(() => new Promise<void>((r) => server.close(() => r())));
+    test.afterAll(
+      () =>
+        new Promise<void>((r) => {
+          server.closeAllConnections();
+          server.close(() => r());
+        }),
+    );
 
     test("create a webhook, send a test, see it in the delivery log, redeliver, rotate the secret", async ({
       page,

@@ -1,4 +1,6 @@
+import { clearAuthRateLimits } from "@pinwren/db";
 import { test as base, expect } from "@playwright/test";
+import { E2E_DATABASE_URL } from "./env";
 
 // Dev-only noise that isn't ours to fix here: Next's instant-navigation validator flags every route
 // behind the client-side session gate (AppShell renders children only after the session loads).
@@ -14,7 +16,17 @@ const IGNORED = [
 ];
 
 /** Every test fails on a browser console error or uncaught exception (e.g. Base UI misuse warnings). */
-export const test = base.extend<{ consoleErrors: string[] }>({
+export const test = base.extend<{ consoleErrors: string[]; authLimits: undefined }>({
+  // The suite signs up and signs in far more often than the auth rate limiter allows one address (20
+  // sign-ups per 10 minutes): start every test with a clean allowance instead of loosening the limits.
+  authLimits: [
+    // eslint-disable-next-line no-empty-pattern -- Playwright fixtures must destructure their first argument.
+    async ({}, use) => {
+      await clearAuthRateLimits(E2E_DATABASE_URL);
+      await use(undefined);
+    },
+    { auto: true },
+  ],
   // The API refuses cookie-authenticated writes without a same-origin Origin header (CSRF, ADR 0021).
   // Browsers always send it; Playwright's API client doesn't, so the tests' direct API calls add it.
   request: async ({ playwright, baseURL, storageState }, provide) => {

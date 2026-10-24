@@ -248,8 +248,14 @@ test.describe("wave 4", () => {
     const { projectId } = seed();
     await page.goto(`/inbox?project=${projectId}&status=all`);
     await page.getByTestId("filter-menu").click();
-    await page.getByRole("menuitem", { name: "Priority" }).click();
-    await page.getByRole("menuitemradio", { name: "High" }).click();
+    // The submenu opens on hover. A hover that lands while the menu is still animating in is ignored, and
+    // clicking the trigger can toggle it shut mid-animation: hover until the submenu is really open.
+    const high = page.getByRole("menuitemradio", { name: "High" });
+    await expect(async () => {
+      await page.getByRole("menuitem", { name: "Priority" }).hover();
+      await expect(high).toBeVisible({ timeout: 1_500 });
+    }).toPass({ timeout: 15_000 });
+    await high.click();
     await page.keyboard.press("Escape");
     const chips = page.getByRole("list", { name: "Active filters" });
     await expect(chips).toContainText("Priority: High");

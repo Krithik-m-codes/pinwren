@@ -28,11 +28,16 @@ test.beforeAll(async () => {
     });
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  // A receiver left open by a failed test must not keep the test runner alive (CI hung on this).
+  server.unref();
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
 
 test.afterAll(async ({ request }) => {
-  await new Promise<void>((r) => server.close(() => r()));
+  await new Promise<void>((r) => {
+    server.closeAllConnections();
+    server.close(() => r());
+  });
   const res = await request.get("/api/webhooks");
   const { webhooks } = (await res.json()) as { webhooks: { id: string }[] };
   for (const w of webhooks) await request.delete(`/api/webhooks/${w.id}`);

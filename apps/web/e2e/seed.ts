@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { chromium, type FullConfig, request } from "@playwright/test";
-import { ADMIN, AUTH_DIR, SEED_FILE, type Seed, SITE_ORIGIN, STATE_FILE } from "./env";
+import { clearAuthRateLimits } from "@pinwren/db";
+import { ADMIN, AUTH_DIR, E2E_DATABASE_URL, SEED_FILE, type Seed, SITE_ORIGIN, STATE_FILE } from "./env";
 
 /** A small fake marketing site — rendered once to get a real screenshot and real element boxes. */
 const SITE_HTML = `<!doctype html><html><head><style>
@@ -56,6 +57,7 @@ const tinyPdf = `data:application/pdf;base64,${Buffer.from(
 export default async function seed(config: FullConfig) {
   const baseURL = config.projects[0]?.use.baseURL ?? "http://localhost:3100";
   mkdirSync(AUTH_DIR, { recursive: true });
+  await clearAuthRateLimits(E2E_DATABASE_URL);
 
   // 1. Real screenshot + element boxes of the fake page at 1280×800.
   const browser = await chromium.launch();

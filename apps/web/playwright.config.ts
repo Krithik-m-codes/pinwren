@@ -12,6 +12,8 @@ export default defineConfig({
   // The fresh-install journey wipes and restarts its own server: run it with -c playwright.journey.config.ts.
   testIgnore: "journey.e2e.ts",
   timeout: 60_000,
+  // CI: fail with a summary instead of being cancelled silently by the job timeout if anything hangs.
+  ...(process.env.CI ? { globalTimeout: 40 * 60_000 } : {}),
   expect: { timeout: 10_000 },
   // One workspace is shared, and some flows (board moves, bulk edits) change the same items.
   fullyParallel: false,
@@ -30,10 +32,17 @@ export default defineConfig({
     url: `${BASE}/api/health`,
     reuseExistingServer: true,
     timeout: 120_000,
+    gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },
+    // The same flags as the API smoke (CLAUDE.md), so a server Playwright starts itself (CI) behaves like
+    // the one developers usually reuse locally.
     env: {
       PINWREN_ADMIN_EMAILS: "smoke-admin@example.com,e2e-admin@example.com",
       // The seed signs up fresh accounts; sign-up is otherwise closed after the first one (ADR 0021).
       PINWREN_DISABLE_SIGNUP: "false",
+      // Webhook, panel-action and tracker specs post to receivers on 127.0.0.1, which the outbound guard
+      // refuses unless allowed.
+      PINWREN_OUTBOUND_ALLOWLIST: "127.0.0.1",
+      PINWREN_TRUST_PROXY: "1",
     },
   },
 });

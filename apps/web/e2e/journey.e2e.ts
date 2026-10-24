@@ -88,13 +88,17 @@ test.describe.serial("fresh install journey", () => {
       }
     });
     await new Promise<void>((resolve) => server.listen(SITE_PORT, resolve));
+    server.unref();
     admin = await browser.newContext({ permissions: ["clipboard-read", "clipboard-write"] });
     dash = await admin.newPage();
   });
 
   test.afterAll(async () => {
     await admin.close();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await new Promise<void>((resolve) => {
+      server.closeAllConnections();
+      server.close(() => resolve());
+    });
   });
 
   test("1. the first account becomes the administrator", async () => {

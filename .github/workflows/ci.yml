@@ -92,7 +92,9 @@ jobs:
   dashboard-e2e:
     name: Dashboard E2E (Playwright + Postgres)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # ~70 specs against `next dev`, which compiles each route on first visit. Playwright's own global
+    # timeout (40 min in CI) fires first, so a hang still ends with a report.
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:17-alpine

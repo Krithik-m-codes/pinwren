@@ -26,8 +26,18 @@ async function fakeServer(handler: (req: Seen) => { status: number; json: unknow
     });
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  // A receiver left open by a failed test must not keep the test runner alive (CI hung on this).
+  server.unref();
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  return { base, seen, close: () => new Promise<void>((r) => server.close(() => r())) };
+  return {
+    base,
+    seen,
+    close: () =>
+      new Promise<void>((r) => {
+        server.closeAllConnections();
+        server.close(() => r());
+      }),
+  };
 }
 
 test.describe("wave 3", () => {
