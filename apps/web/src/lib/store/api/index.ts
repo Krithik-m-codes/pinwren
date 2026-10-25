@@ -62,6 +62,8 @@ export const {
   useDeleteCommentMutation,
   useRunPanelActionMutation,
   useCreateIssueMutation,
+  useTranslateFeedbackMutation,
+  useApplyAiTriageMutation,
   // rounds + views
   useRoundsQuery,
   useCreateRoundMutation,

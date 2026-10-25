@@ -11,8 +11,10 @@ import {
   comment,
   diagnostics,
   feedback,
+  feedbackAi,
   feedbackAsset,
   feedbackLabel,
+  feedbackTranslation,
   feedbackWatcher,
   getDb,
   issueIntegration,
@@ -333,70 +335,73 @@ export async function getFeedbackDetail(
   });
   const original = related.find((r) => r.id === row.f.duplicateOfId);
 
-  const [assets, comments, events, diag, assignees, issues, trackers] = await Promise.all([
-    db
-      .select({
-        id: feedbackAsset.id,
-        kind: feedbackAsset.kind,
-        contentType: feedbackAsset.contentType,
-        bytes: feedbackAsset.bytes,
-        name: feedbackAsset.name,
-        meta: feedbackAsset.meta,
-        annotations: feedbackAsset.annotations,
-        capture: feedbackAsset.capture,
-      })
-      .from(feedbackAsset)
-      .where(eq(feedbackAsset.feedbackId, id))
-      .orderBy(asc(feedbackAsset.createdAt)),
-    db
-      .select({
-        id: comment.id,
-        body: comment.body,
-        visibility: comment.visibility,
-        createdAt: comment.createdAt,
-        editedAt: comment.editedAt,
-        mentions: comment.mentions,
-        authorGuest: comment.authorGuest,
-        author: { id: user.id, name: user.name, image: user.image },
-      })
-      .from(comment)
-      .leftJoin(user, eq(user.id, comment.authorId))
-      .where(eq(comment.feedbackId, id))
-      .orderBy(asc(comment.createdAt)),
-    db
-      .select({
-        id: activity.id,
-        type: activity.type,
-        data: activity.data,
-        createdAt: activity.createdAt,
-        actorKind: activity.actorKind,
-        actorName: user.name,
-      })
-      .from(activity)
-      .leftJoin(user, eq(user.id, activity.actorId))
-      .where(eq(activity.feedbackId, id))
-      .orderBy(asc(activity.createdAt)),
-    db.select().from(diagnostics).where(eq(diagnostics.feedbackId, id)),
-    userNames(row.f.assigneeIds),
-    db
-      .select({
-        id: issueLink.id,
-        integrationId: issueLink.integrationId,
-        provider: issueLink.provider,
-        number: issueLink.number,
-        url: issueLink.url,
-        state: issueLink.state,
-      })
-      .from(issueLink)
-      .where(eq(issueLink.feedbackId, id))
-      .orderBy(asc(issueLink.createdAt)),
-    // Trackers the item can be sent to ("Send to GitHub/GitLab"); never the token.
-    db
-      .select({ id: issueIntegration.id, provider: issueIntegration.provider, repo: issueIntegration.repo })
-      .from(issueIntegration)
-      .where(and(eq(issueIntegration.projectId, row.f.projectId), eq(issueIntegration.active, true)))
-      .orderBy(asc(issueIntegration.provider)),
-  ]);
+  const [assets, comments, events, diag, assignees, issues, trackers, aiRows, translations] =
+    await Promise.all([
+      db
+        .select({
+          id: feedbackAsset.id,
+          kind: feedbackAsset.kind,
+          contentType: feedbackAsset.contentType,
+          bytes: feedbackAsset.bytes,
+          name: feedbackAsset.name,
+          meta: feedbackAsset.meta,
+          annotations: feedbackAsset.annotations,
+          capture: feedbackAsset.capture,
+        })
+        .from(feedbackAsset)
+        .where(eq(feedbackAsset.feedbackId, id))
+        .orderBy(asc(feedbackAsset.createdAt)),
+      db
+        .select({
+          id: comment.id,
+          body: comment.body,
+          visibility: comment.visibility,
+          createdAt: comment.createdAt,
+          editedAt: comment.editedAt,
+          mentions: comment.mentions,
+          authorGuest: comment.authorGuest,
+          author: { id: user.id, name: user.name, image: user.image },
+        })
+        .from(comment)
+        .leftJoin(user, eq(user.id, comment.authorId))
+        .where(eq(comment.feedbackId, id))
+        .orderBy(asc(comment.createdAt)),
+      db
+        .select({
+          id: activity.id,
+          type: activity.type,
+          data: activity.data,
+          createdAt: activity.createdAt,
+          actorKind: activity.actorKind,
+          actorName: user.name,
+        })
+        .from(activity)
+        .leftJoin(user, eq(user.id, activity.actorId))
+        .where(eq(activity.feedbackId, id))
+        .orderBy(asc(activity.createdAt)),
+      db.select().from(diagnostics).where(eq(diagnostics.feedbackId, id)),
+      userNames(row.f.assigneeIds),
+      db
+        .select({
+          id: issueLink.id,
+          integrationId: issueLink.integrationId,
+          provider: issueLink.provider,
+          number: issueLink.number,
+          url: issueLink.url,
+          state: issueLink.state,
+        })
+        .from(issueLink)
+        .where(eq(issueLink.feedbackId, id))
+        .orderBy(asc(issueLink.createdAt)),
+      // Trackers the item can be sent to ("Send to GitHub/GitLab"); never the token.
+      db
+        .select({ id: issueIntegration.id, provider: issueIntegration.provider, repo: issueIntegration.repo })
+        .from(issueIntegration)
+        .where(and(eq(issueIntegration.projectId, row.f.projectId), eq(issueIntegration.active, true)))
+        .orderBy(asc(issueIntegration.provider)),
+      db.select().from(feedbackAi).where(eq(feedbackAi.feedbackId, id)),
+      db.select().from(feedbackTranslation).where(eq(feedbackTranslation.feedbackId, id)),
+    ]);
 
   // Activity rows store ids (assignees, labels, the duplicated item); resolve them so the timeline can
   // read them. A label or item deleted since resolves to null.
@@ -493,6 +498,20 @@ export async function getFeedbackDetail(
     comments,
     activity: activityOut,
     diagnostics: diag[0] ?? null,
+    ai: aiRows[0]
+      ? {
+          ...aiRows[0],
+          duplicateCandidate: aiRows[0].duplicateCandidateId
+            ? ((
+                await db
+                  .select({ id: feedback.id, number: feedback.number, title: feedback.title })
+                  .from(feedback)
+                  .where(eq(feedback.id, aiRows[0].duplicateCandidateId))
+              )[0] ?? null)
+            : null,
+        }
+      : null,
+    translations,
   };
 }
 
