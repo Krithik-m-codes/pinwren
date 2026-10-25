@@ -10,6 +10,7 @@ import { getBoss, QUEUES } from "./boss";
 import { dispatchEvent } from "./dispatch";
 import { runDigest } from "./digest";
 import { applyRetention, cleanupTrash } from "./maintenance";
+import { type AiEnrichJob, runAiEnrichmentJob } from "./ai";
 
 export { enqueue, getBoss, QUEUES } from "./boss";
 
@@ -67,6 +68,11 @@ export function startJobs(): Promise<void> {
       QUEUES.projectExport,
       { pollingIntervalSeconds: 2 },
       each(runProjectExport),
+    );
+    await boss.work<AiEnrichJob>(
+      QUEUES.aiEnrich,
+      { batchSize: 3, pollingIntervalSeconds: 1, localConcurrency: 2 },
+      each(runAiEnrichmentJob),
     );
     // Cron schedules are stored in Postgres; pg-boss creates each occurrence once across processes.
     await boss.schedule(QUEUES.retention, "15 3 * * *");

@@ -4,8 +4,11 @@ import type {
   EmailTemplate,
   EmailTestResult,
   LicenseInfo,
+  OrgAiSettings,
+  ProjectAiConfig,
   RenderedEmail,
   SecuritySettings,
+  TestAiResult,
   Webhook,
   WebhookDelivery,
   WebhookEvent,
@@ -178,6 +181,42 @@ export const adminApi = roundsApi.injectEndpoints({
         void dispatch(adminApi.util.upsertQueryData("license", undefined, data));
       },
       invalidatesTags: ["Entitlements"],
+    }),
+
+    aiSettings: build.query<OrgAiSettings, undefined>({
+      query: () => "/settings/ai",
+      providesTags: ["AiSettings"],
+    }),
+    updateAiSettings: build.mutation<OrgAiSettings, Partial<OrgAiSettings> & { apiKey?: string | undefined }>(
+      {
+        query: (body) => ({ url: "/settings/ai", method: "PUT", body }),
+        async onQueryStarted(_b, { dispatch, queryFulfilled }) {
+          const data = await fulfilled(queryFulfilled);
+          if (data === null) return;
+          void dispatch(adminApi.util.upsertQueryData("aiSettings", undefined, data));
+        },
+        invalidatesTags: ["AiSettings"],
+      },
+    ),
+    testAiSettings: build.mutation<
+      TestAiResult,
+      (Partial<OrgAiSettings> & { apiKey?: string | undefined }) | undefined
+    >({
+      query: (body) => ({ url: "/settings/ai/test", method: "POST", body: body ?? {} }),
+    }),
+
+    projectAi: build.query<ProjectAiConfig, string>({
+      query: (id) => `/projects/${id}/ai`,
+      providesTags: (_r, _e, id) => [{ type: "ProjectAi", id }],
+    }),
+    updateProjectAi: build.mutation<ProjectAiConfig, { id: string; patch: Partial<ProjectAiConfig> }>({
+      query: ({ id, patch }) => ({ url: `/projects/${id}/ai`, method: "PATCH", body: patch }),
+      async onQueryStarted({ id }, { dispatch, queryFulfilled }) {
+        const data = await fulfilled(queryFulfilled);
+        if (data === null) return;
+        void dispatch(adminApi.util.upsertQueryData("projectAi", id, data));
+      },
+      invalidatesTags: (_r, _e, { id }) => [{ type: "ProjectAi", id }],
     }),
   }),
 });

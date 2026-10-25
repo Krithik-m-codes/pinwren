@@ -8,6 +8,7 @@ import {
   ISSUE_AUTO_CREATE,
   ISSUE_PROVIDERS,
   PRIORITIES,
+  type ProjectAiConfig,
   type RejectedOrigin,
   REVIEW_ROUND_STATUSES,
   VIEW_LAYOUTS,
@@ -114,6 +115,14 @@ export const project = pgTable(
      * at most 10, written at most once a minute per origin. The Install tab lists them with "Allow".
      */
     rejectedOrigins: jsonb("rejected_origins").$type<RejectedOrigin[]>().notNull().default([]),
+    aiConfig: jsonb("ai_config").$type<ProjectAiConfig>().notNull().default({
+      enabled: false,
+      autoSummary: true,
+      autoSeverity: true,
+      detectDuplicates: true,
+      generateRepro: true,
+      allowReplayInAi: false,
+    }),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps,
   },
@@ -232,6 +241,57 @@ export const diagnostics = pgTable("diagnostics", {
   console: jsonb("console"),
   network: jsonb("network"),
 });
+
+export const feedbackAi = pgTable(
+  "feedback_ai",
+  {
+    feedbackId: uuid("feedback_id")
+      .primaryKey()
+      .references(() => feedback.id, { onDelete: "cascade" }),
+    orgId: orgId(),
+    // F-110: Auto-summary & refined title
+    suggestedTitle: text("suggested_title"),
+    summary: text("summary"),
+    // F-111: Triage suggestions
+    suggestedPriority: priorityEnum("suggested_priority"),
+    suggestedKind: feedbackKindEnum("suggested_kind"),
+    // F-112: Duplicate detection
+    duplicateCandidateId: uuid("duplicate_candidate_id").references((): AnyPgColumn => feedback.id, {
+      onDelete: "set null",
+    }),
+    duplicateConfidence: integer("duplicate_confidence"),
+    duplicateReason: text("duplicate_reason"),
+    // F-113: Synthesized reproduction steps
+    reproductionSteps: text("reproduction_steps")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    // Telemetry & state
+    status: text("status", { enum: ["pending", "completed", "failed", "skipped"] })
+      .notNull()
+      .default("pending"),
+    model: text("model"),
+    tokensUsed: integer("tokens_used"),
+    error: text("error"),
+    ...timestamps,
+  },
+  (t) => [index("feedback_ai_org_idx").on(t.orgId)],
+);
+
+export const feedbackTranslation = pgTable(
+  "feedback_translation",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    feedbackId: uuid("feedback_id")
+      .notNull()
+      .references(() => feedback.id, { onDelete: "cascade" }),
+    targetLocale: text("target_locale").notNull(),
+    title: text("title"),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("feedback_translation_locale_uq").on(t.feedbackId, t.targetLocale)],
+);
 
 export const feedbackAsset = pgTable(
   "feedback_asset",

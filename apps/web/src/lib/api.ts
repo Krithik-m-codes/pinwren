@@ -195,6 +195,34 @@ export type FeedbackDetail = {
     console: { level: string; message: string; at: number }[] | null;
     network: { method: string; url: string; status: number; durationMs: number; at: number }[] | null;
   } | null;
+  ai?:
+    | {
+        feedbackId: string;
+        suggestedTitle?: string | null | undefined;
+        summary?: string | null | undefined;
+        suggestedPriority?: Priority | null | undefined;
+        suggestedKind?: FeedbackKind | null | undefined;
+        duplicateCandidateId?: string | null | undefined;
+        duplicateCandidate?: { id: string; number: number; title: string | null } | null | undefined;
+        duplicateConfidence?: number | null | undefined;
+        duplicateReason?: string | null | undefined;
+        reproductionSteps?: string[] | undefined;
+        status: "pending" | "completed" | "failed" | "skipped";
+        model?: string | null | undefined;
+        tokensUsed?: number | null | undefined;
+        error?: string | null | undefined;
+      }
+    | null
+    | undefined;
+  translations?:
+    | {
+        id: string;
+        targetLocale: string;
+        title?: string | null | undefined;
+        body: string;
+        createdAt?: string | undefined;
+      }[]
+    | undefined;
 };
 
 export type Invitation = {
@@ -483,3 +511,26 @@ export type LicenseInfo = Entitlements & {
 };
 
 export type PresenceUser = { id: string; name: string; image: string | null };
+
+export type {
+  AiProviderType,
+  AiProviderConfig,
+  ProjectAiConfig,
+  AiEnrichmentResponse,
+  AiTranslationRequest,
+  AiTranslationResponse,
+} from "@pinwren/core";
+
+export type OrgAiSettings = {
+  provider: "anthropic" | "openai" | "ollama";
+  model: string;
+  baseUrl?: string | undefined;
+  enabled: boolean;
+  hasKey: boolean;
+};
+
+export type TestAiResult = {
+  ok: boolean;
+  latencyMs?: number | undefined;
+  error?: string | undefined;
+};

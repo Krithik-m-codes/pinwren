@@ -62,6 +62,8 @@ export const {
   useDeleteCommentMutation,
   useRunPanelActionMutation,
   useCreateIssueMutation,
+  useTranslateFeedbackMutation,
+  useApplyAiTriageMutation,
   // rounds + views
   useRoundsQuery,
   useCreateRoundMutation,
@@ -95,6 +97,11 @@ export const {
   useLicenseQuery,
   useUploadLicenseMutation,
   useRemoveLicenseMutation,
+  useAiSettingsQuery,
+  useUpdateAiSettingsMutation,
+  useTestAiSettingsMutation,
+  useProjectAiQuery,
+  useUpdateProjectAiMutation,
 } = api;
 
 /**

@@ -855,3 +855,55 @@ export const securitySettingsUpdate = z.object({
 
 /** The one-time setup token printed to the server log, claimed by a signed-in user. */
 export const setupClaim = z.object({ token: z.string().trim().min(20).max(200) });
+
+// --- AI Triage & Enrichment (WP-27) -------------------------------------------------------------------
+
+export const AI_PROVIDERS = ["anthropic", "openai", "ollama"] as const;
+export const aiProvider = z.enum(AI_PROVIDERS);
+export type AiProviderType = z.infer<typeof aiProvider>;
+
+export const projectAiConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  autoSummary: z.boolean().default(true),
+  autoSeverity: z.boolean().default(true),
+  detectDuplicates: z.boolean().default(true),
+  generateRepro: z.boolean().default(true),
+  allowReplayInAi: z.boolean().default(false),
+});
+export type ProjectAiConfig = z.infer<typeof projectAiConfigSchema>;
+
+export const aiProviderConfigSchema = z.object({
+  provider: aiProvider,
+  model: z.string().min(1),
+  apiKey: z.string().optional(),
+  baseUrl: z
+    .url({ protocol: /^https?$/ })
+    .optional()
+    .or(z.literal("")),
+  enabled: z.boolean().default(true),
+});
+export type AiProviderConfig = z.infer<typeof aiProviderConfigSchema>;
+
+export const aiEnrichmentResponseSchema = z.object({
+  suggestedTitle: z.string().optional().nullable(),
+  summary: z.string().optional().nullable(),
+  suggestedPriority: priority.optional().nullable(),
+  suggestedKind: feedbackKind.optional().nullable(),
+  duplicateCandidateId: z.uuid().optional().nullable(),
+  duplicateConfidence: z.number().int().min(0).max(100).optional().nullable(),
+  duplicateReason: z.string().optional().nullable(),
+  reproductionSteps: z.array(z.string()).default([]),
+});
+export type AiEnrichmentResponse = z.infer<typeof aiEnrichmentResponseSchema>;
+
+export const aiTranslationRequestSchema = z.object({
+  targetLocale: z.string().trim().min(2).max(10),
+});
+export type AiTranslationRequest = z.infer<typeof aiTranslationRequestSchema>;
+
+export const aiTranslationResponseSchema = z.object({
+  targetLocale: z.string(),
+  title: z.string().optional().nullable(),
+  body: z.string(),
+});
+export type AiTranslationResponse = z.infer<typeof aiTranslationResponseSchema>;
