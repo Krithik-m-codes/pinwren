@@ -95,6 +95,11 @@ export const {
   useLicenseQuery,
   useUploadLicenseMutation,
   useRemoveLicenseMutation,
+  useAiSettingsQuery,
+  useUpdateAiSettingsMutation,
+  useTestAiSettingsMutation,
+  useProjectAiQuery,
+  useUpdateProjectAiMutation,
 } = api;
 
 /**

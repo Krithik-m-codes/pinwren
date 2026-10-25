@@ -7,6 +7,7 @@ import {
   Mail,
   Palette,
   ShieldCheck,
+  Sparkles,
   UserRound,
   Users,
   Webhook,
@@ -71,6 +72,13 @@ export const SETTINGS_PAGES: readonly SettingsPage[] = [
     icon: Palette,
     access: "org",
     keywords: ["logo", "colour"],
+  },
+  {
+    href: "/settings/ai",
+    label: "AI",
+    icon: Sparkles,
+    access: "org",
+    keywords: ["ai", "llm", "claude", "openai", "ollama", "triage", "summary"],
   },
   {
     href: "/settings/email",

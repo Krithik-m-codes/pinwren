@@ -483,3 +483,26 @@ export type LicenseInfo = Entitlements & {
 };
 
 export type PresenceUser = { id: string; name: string; image: string | null };
+
+export type {
+  AiProviderType,
+  AiProviderConfig,
+  ProjectAiConfig,
+  AiEnrichmentResponse,
+  AiTranslationRequest,
+  AiTranslationResponse,
+} from "@pinwren/core";
+
+export type OrgAiSettings = {
+  provider: "anthropic" | "openai" | "ollama";
+  model: string;
+  baseUrl?: string | undefined;
+  enabled: boolean;
+  hasKey: boolean;
+};
+
+export type TestAiResult = {
+  ok: boolean;
+  latencyMs?: number | undefined;
+  error?: string | undefined;
+};
