@@ -43,6 +43,13 @@
       "when": 1792668908518,
       "tag": "0005_complete",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792918414446,
+      "tag": "0006_sudden_screwball",
+      "breakpoints": true
     }
   ]
 }
