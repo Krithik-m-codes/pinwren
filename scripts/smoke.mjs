@@ -4970,5 +4970,187 @@ console.log("\n— security (ADR 0021)");
   }
 }
 
+// =============================================================================================
+// AI Triage & Enrichment (WP-27)
+// =============================================================================================
+console.log("\n— AI triage & enrichment");
+
+const aiMockRequests = [];
+const aiMockServer = createServer((req, res) => {
+  let body = "";
+  req.on("data", (chunk) => {
+    body += chunk;
+  });
+  req.on("end", () => {
+    aiMockRequests.push({ method: req.method, url: req.url, body });
+    res.statusCode = 200;
+    res.setHeader("content-type", "application/json");
+
+    let responseContent = { ok: true };
+    if (body.includes("Target Locale:") || body.includes("text_to_translate")) {
+      responseContent = { translatedText: "Texto traducido de prueba" };
+    } else if (body.includes("summary") || body.includes("summarize")) {
+      responseContent = {
+        summary: "Checkout button fails on submit",
+        suggestedTitle: "Fix checkout submit handler",
+      };
+    } else if (body.includes("severity") || body.includes("priority")) {
+      responseContent = {
+        suggestedPriority: "high",
+        suggestedKind: "bug",
+        confidence: 0.9,
+        reasoning: "Error in checkout flow",
+      };
+    } else if (body.includes("reproduction") || body.includes("repro")) {
+      responseContent = {
+        steps: ["1. Open checkout page", "2. Click pay now"],
+        notes: "Reproduced consistently",
+      };
+    } else if (body.includes("duplicate")) {
+      responseContent = {
+        isDuplicate: false,
+        confidence: 0.1,
+        reason: "Different error stack",
+      };
+    }
+
+    res.end(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify(responseContent),
+            },
+          },
+        ],
+      }),
+    );
+  });
+});
+
+await new Promise((resolve) => aiMockServer.listen(0, listenHost, resolve));
+const aiMockBase = `http://${receiverHost}:${aiMockServer.address().port}`;
+
+try {
+  // 1. GET /api/settings/ai without session returns 401
+  r = await call("/api/settings/ai", { jar: { cookie: "" } });
+  check("AI settings: without session returns 401", r.status === 401, r.status);
+
+  // Non-admin member cannot manage AI settings
+  r = await call("/api/settings/ai", { jar: memberJar });
+  check("AI settings: member cannot access AI settings", r.status === 403, r.status);
+
+  // 2. PUT /api/settings/ai saves encrypted credentials
+  const testSecretKey = "sk-smoke-secret-key-123456789";
+  r = await call("/api/settings/ai", {
+    method: "PUT",
+    json: {
+      provider: "openai",
+      model: "gpt-4o-mini",
+      apiKey: testSecretKey,
+      baseUrl: `${aiMockBase}/v1`,
+      enabled: true,
+    },
+  });
+  check(
+    "AI settings: save credentials (PUT)",
+    r.status === 200 && r.body.hasKey === true && r.body.enabled === true,
+    r.status,
+  );
+
+  r = await call("/api/settings/ai");
+  check(
+    "AI settings: read back masks raw API key",
+    r.status === 200 &&
+      r.body.provider === "openai" &&
+      r.body.model === "gpt-4o-mini" &&
+      r.body.hasKey === true &&
+      !JSON.stringify(r.body).includes(testSecretKey),
+    r.status,
+  );
+
+  // 3. POST /api/settings/ai/test tests connection
+  r = await call("/api/settings/ai/test", {
+    method: "POST",
+    json: {
+      provider: "openai",
+      model: "gpt-4o-mini",
+      apiKey: testSecretKey,
+      baseUrl: `${aiMockBase}/v1`,
+    },
+  });
+  check(
+    "AI settings: test connection succeeds",
+    r.status === 200 && r.body.ok === true && typeof r.body.latencyMs === "number",
+    r.status,
+  );
+
+  // 4. GET /api/projects/:id/ai returns project AI configuration
+  r = await call(`/api/projects/${projectId}/ai`);
+  check(
+    "project AI config: default configuration returned",
+    r.status === 200 &&
+      typeof r.body.enabled === "boolean" &&
+      typeof r.body.autoSummary === "boolean" &&
+      typeof r.body.autoSeverity === "boolean",
+    r.status,
+  );
+
+  // PATCH /api/projects/:id/ai updates configuration
+  r = await call(`/api/projects/${projectId}/ai`, {
+    method: "PATCH",
+    json: { enabled: true, autoSummary: true, autoSeverity: true },
+  });
+  check(
+    "project AI config: patch settings",
+    r.status === 200 && r.body.enabled === true && r.body.autoSummary === true,
+    r.status,
+  );
+
+  // 5. Ingest feedback -> verify feedback_ai row creation and status
+  const aiReport = {
+    ...report,
+    clientId: crypto.randomUUID(),
+    body: "AI smoke: Payment modal fails to load after clicking checkout button",
+    diagnostics: {
+      console: [{ level: "error", message: "TypeError: failed to fetch stripe checkout", at: Date.now() }],
+      network: [{ method: "POST", url: "/api/pay", status: 500, durationMs: 140, at: Date.now() }],
+    },
+  };
+  r = await W("/w/feedback", { method: "POST", json: aiReport });
+  check("AI ingest: submit feedback report via widget", r.status === 201, r.status);
+  const aiFeedbackId = r.body.feedback?.id;
+
+  const enriched = await waitFor(async () => {
+    const detail = await call(`/api/feedback/${aiFeedbackId}`);
+    return detail.body.ai && detail.body.ai.status !== "pending" ? detail : null;
+  }, 20_000);
+
+  check(
+    "AI enrich: background worker enriched feedback",
+    !!enriched && ["completed", "skipped"].includes(enriched.body.ai?.status),
+    enriched ? `status=${enriched.body.ai?.status}` : "timeout",
+  );
+
+  // Feedback AI translate and apply endpoints
+  r = await call(`/api/feedback/${aiFeedbackId}/ai/translate`, {
+    method: "POST",
+    json: { targetLocale: "es" },
+  });
+  check(
+    "AI translate: translate feedback endpoint",
+    r.status === 200 && typeof r.body.body === "string",
+    r.status,
+  );
+
+  r = await call(`/api/feedback/${aiFeedbackId}/ai/apply`, {
+    method: "POST",
+    json: { applyTitle: true, applyPriority: true },
+  });
+  check("AI triage apply: apply suggestions endpoint", r.status === 200 && r.body.ok === true, r.status);
+} finally {
+  aiMockServer.close();
+}
+
 console.log(`\n${passed} passed, ${failed} failed, ${skipped} skipped`);
 console.log(process.exitCode ? "SMOKE FAILED" : "SMOKE OK");

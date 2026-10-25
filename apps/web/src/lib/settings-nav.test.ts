@@ -17,6 +17,7 @@ describe("settings pages shown to each person", () => {
         "Email",
         "Security",
         "Licence",
+        "AI",
       ]),
     );
   });
@@ -26,6 +27,7 @@ describe("settings pages shown to each person", () => {
       const l = labels(role, false);
       expect(l).toContain("Profile");
       expect(l).not.toContain("Branding");
+      expect(l).not.toContain("AI");
       expect(l).not.toContain("Integrations");
       expect(l).not.toContain("Email");
       expect(l).not.toContain("Licence");

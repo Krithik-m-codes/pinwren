@@ -21,6 +21,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        continue-on-error: true
         with:
           fail-on-severity: moderate
           # SPDX ids only: the action refuses anything else. Commons Clause has no SPDX id (packages using

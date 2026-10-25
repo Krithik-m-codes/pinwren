@@ -24,6 +24,8 @@ export const QUEUES = {
   update: "update.check",
   /** Build one project's data export (zip of JSON + files) on request (Project › Privacy & data). */
   projectExport: "project.export",
+  /** AI enrichment: auto-summary, severity, duplicates, repro steps. */
+  aiEnrich: "ai.enrich",
 } as const;
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 
@@ -52,6 +54,7 @@ export function getBoss(): Promise<PgBoss> {
       boss.createQueue(QUEUES.update, { retryLimit: 0 }),
       // The job records its own failure on the export; a retry would only repeat it.
       boss.createQueue(QUEUES.projectExport, { retryLimit: 0, expireInSeconds: 3600 }),
+      boss.createQueue(QUEUES.aiEnrich, { retryLimit: 2, retryDelay: 60, retryBackoff: true }),
     ]);
     return boss;
   })().catch((err: unknown) => {

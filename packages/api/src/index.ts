@@ -20,6 +20,7 @@ import { mcpRoutes } from "./routes/mcp";
 import { pageLinks } from "./routes/page-links";
 import { teamUnsubscribe, unsubscribe } from "./routes/unsubscribe";
 import { v1 } from "./routes/v1";
+import { aiRoutes } from "./routes/ai";
 import { widget } from "./routes/widget";
 import { workspace } from "./routes/workspace";
 
@@ -130,6 +131,7 @@ export const app = new Hono()
   .route("/api/admin", signInSettings)
   // Signed page links + re-pin (wave-5 §3.3); after `dashboard`, whose session middleware covers /api/*.
   .route("/api", pageLinks)
+  .route("/api", aiRoutes)
   // After the dashboard: its session and viewer guards (`use` on /api/*) run for these routes too.
   .route("/api", projectData)
   .route("/api", reviewLinks)

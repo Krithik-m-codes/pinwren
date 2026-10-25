@@ -1,6 +1,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
+import { FooterSupport } from "@/components/site/support-buttons";
 import {
   GITHUB_DISCUSSIONS_URL,
   GITHUB_ISSUES_URL,
@@ -57,7 +58,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
 export function SiteFooter() {
   return (
     <footer className="mt-auto border-t bg-muted/30">
-      <div className="container-page grid gap-10 py-14 md:grid-cols-[1.3fr_repeat(4,1fr)]">
+      <div className="container-page grid gap-10 py-14 md:grid-cols-[1.3fr_repeat(5,1fr)]">
         <div className="space-y-3">
           <Logo />
           <p className="max-w-xs text-sm text-muted-foreground">
@@ -92,6 +93,7 @@ export function SiteFooter() {
             </ul>
           </nav>
         ))}
+        <FooterSupport />
       </div>
       <div className="border-t">
         <div className="container-page flex flex-col gap-2 py-5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">

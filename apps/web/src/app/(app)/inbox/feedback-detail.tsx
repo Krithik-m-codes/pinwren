@@ -5,6 +5,7 @@ import {
   BadgeCheck,
   Bell,
   BellOff,
+  Check,
   Copy,
   Crosshair,
   Download,
@@ -12,12 +13,14 @@ import {
   FileText,
   Film,
   ImageIcon,
+  Languages,
   Link2,
   Loader2,
   MoreHorizontal,
   Paperclip,
   RotateCcw,
   Shapes,
+  Sparkles,
   SquareDashed,
   Tag,
   Trash2,
@@ -83,6 +86,7 @@ import {
   usePurgeFeedbackMutation,
   useRestoreFeedbackMutation,
   useRoundsQuery,
+  useTranslateFeedbackMutation,
   useUpdateFeedbackMutation,
   useWatchFeedbackMutation,
 } from "@/lib/store/api";
@@ -94,6 +98,9 @@ import { useUrlParams } from "@/lib/use-url-params";
 import { useMounted } from "@/lib/use-synced-state";
 import { cn } from "@/lib/utils";
 import { useMembers, useViewer } from "@/lib/viewer";
+import { AiDuplicateBanner } from "./ai-duplicate-banner";
+import { AiReproSteps } from "./ai-repro-steps";
+import { AiSummaryCard } from "./ai-summary-card";
 import { DueDate, PresenceStack } from "./inbox-list";
 import { ItemActions } from "./item-actions";
 import { AssigneesPicker, ItemSearchPicker, LabelChips, LabelPicker } from "./pickers";
@@ -196,6 +203,11 @@ function DetailBody({
   const [watch, watchState] = useWatchFeedbackMutation();
   const [pageLink, linking] = usePageLinkMutation();
   const [reproduction, repro] = useLazyReproductionQuery();
+  const [translate, translating] = useTranslateFeedbackMutation();
+  const [activeTranslation, setActiveTranslation] = useState<{
+    title?: string | null | undefined;
+    body: string;
+  } | null>(null);
   const rounds = useRoundsQuery(f.projectId);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmPurge, setConfirmPurge] = useState(false);
@@ -251,6 +263,17 @@ function DetailBody({
       .unwrap()
       .then((r) => toast.success(r.watching ? "You follow this item" : "You no longer follow this item"))
       .catch((e: unknown) => toast.error(errorMessage(e)));
+  };
+  const handleTranslate = (locale = "en") => {
+    translate({ id, targetLocale: locale })
+      .unwrap()
+      .then((res) => {
+        setActiveTranslation({ title: res.title, body: res.body });
+        toast.success(`Translated to ${locale.toUpperCase()}`);
+      })
+      .catch((e: unknown) => {
+        toast.error("Translation failed", { description: errorMessage(e) });
+      });
   };
 
   return (
@@ -321,6 +344,13 @@ function DetailBody({
                 data-testid="copy-markdown"
               >
                 <Copy /> Copy as Markdown
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleTranslate()}
+                disabled={translating.isLoading}
+                data-testid="translate-report"
+              >
+                <Languages /> Translate report
               </DropdownMenuItem>
               {canWrite && (
                 <>
@@ -460,6 +490,35 @@ function DetailBody({
             {f.pageTitle && <span>· {f.pageTitle}</span>}
           </p>
           <DuplicateLinks data={data} onOpen={(item) => setParams({ item })} />
+          {data.ai?.duplicateCandidateId && !f.duplicateOf && (
+            <div className="mt-3">
+              <AiDuplicateBanner
+                candidateId={data.ai.duplicateCandidateId}
+                candidateNumber={data.ai.duplicateCandidate?.number}
+                candidateTitle={data.ai.duplicateCandidate?.title}
+                confidence={data.ai.duplicateConfidence}
+                reason={data.ai.duplicateReason}
+                onLinkDuplicate={
+                  canWrite
+                    ? (candId) => {
+                        patch({ duplicateOfId: candId, status: "duplicate" });
+                        toast.success("Linked as duplicate");
+                      }
+                    : undefined
+                }
+                onViewCandidate={(candId) => setParams({ item: candId })}
+              />
+            </div>
+          )}
+          {data.ai?.summary && (
+            <div className="mt-3">
+              <AiSummaryCard
+                summary={data.ai.summary}
+                suggestedTitle={data.ai.suggestedTitle}
+                onApplyTitle={canWrite ? (title) => patch({ title }) : undefined}
+              />
+            </div>
+          )}
         </div>
 
         {canWrite ? (
@@ -504,6 +563,21 @@ function DetailBody({
                 ))}
               </SelectContent>
             </Select>
+            {data.ai?.suggestedPriority && data.ai.suggestedPriority !== f.priority && (
+              <button
+                type="button"
+                onClick={() => {
+                  const sp = data.ai?.suggestedPriority;
+                  if (sp) patch({ priority: sp });
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-xs font-medium text-purple-700 hover:bg-purple-500/20 dark:text-purple-300"
+                title="Accept AI suggested priority"
+              >
+                <Sparkles className="size-3 text-purple-500" />
+                <span>Suggest: {PRIORITY_META[data.ai.suggestedPriority].label}</span>
+                <Check className="size-3" />
+              </button>
+            )}
             <AssigneesPicker
               value={f.assigneeIds}
               open={menu === "assignee"}
@@ -619,7 +693,29 @@ function DetailBody({
 
         {canWrite && <ItemActions data={data} />}
 
-        <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{f.body}</p>
+        {activeTranslation && (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary">
+            <span className="flex items-center gap-1.5 font-medium">
+              <Languages className="size-3.5" />
+              Showing translated report
+            </span>
+            <button
+              type="button"
+              onClick={() => setActiveTranslation(null)}
+              className="underline hover:text-primary/80"
+            >
+              Show original
+            </button>
+          </div>
+        )}
+
+        <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">
+          {activeTranslation?.body ?? f.body}
+        </p>
+
+        {data.ai?.reproductionSteps && data.ai.reproductionSteps.length > 0 && (
+          <AiReproSteps steps={data.ai.reproductionSteps} />
+        )}
 
         <Media data={data} replay={replay} player={player} onReplayTime={setReplayAt} />
 

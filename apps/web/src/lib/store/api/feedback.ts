@@ -404,5 +404,33 @@ export const feedbackApi = projectsApi.injectEndpoints({
     presenceHeartbeat: build.mutation<{ ok: true }, string | null>({
       query: (feedbackId) => ({ url: "/presence", method: "POST", body: { feedbackId } }),
     }),
+    translateFeedback: build.mutation<
+      { targetLocale: string; title: string | null; body: string },
+      { id: string; targetLocale: string }
+    >({
+      query: ({ id, targetLocale }) => ({
+        url: `/feedback/${id}/ai/translate`,
+        method: "POST",
+        body: { targetLocale },
+      }),
+      invalidatesTags: (_r, _e, { id }) => [{ type: "Feedback", id }],
+    }),
+    applyAiTriage: build.mutation<
+      { ok: true; applied: string[] },
+      {
+        id: string;
+        applyTitle?: boolean | undefined;
+        applyPriority?: boolean | undefined;
+        applyKind?: boolean | undefined;
+        linkDuplicate?: boolean | undefined;
+      }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/feedback/${id}/ai/apply`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (_r, _e, { id }) => [{ type: "Feedback", id }],
+    }),
   }),
 });
