@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 import { ButtonLink } from "@/components/button-link";
 import { CodeSnippet } from "@/components/code-snippet";
@@ -22,16 +23,14 @@ export function Hero() {
       <div className="bg-dots absolute inset-0 -z-10 [mask-image:radial-gradient(70%_60%_at_50%_0%,black,transparent)] opacity-60" />
       <div className="container-page grid items-center gap-14 pt-14 pb-24 lg:grid-cols-[1fr_1.05fr] lg:pt-20 lg:pb-28">
         <div className="max-w-xl min-w-0">
-          <a
-            href={`${GITHUB_URL}/releases`}
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/docs/self-hosting"
             className="inline-flex items-center gap-2 rounded-full border bg-background/80 py-1 pr-3 pl-1 text-xs font-medium text-muted-foreground shadow-xs transition-colors hover:text-foreground"
           >
             <span className="rounded-full bg-brand px-2 py-0.5 text-brand-foreground">v{VERSION}</span>
             Open source · self-hosted
             <ArrowRight className="size-3" aria-hidden />
-          </a>
+          </Link>
           <h1 className="mt-6 text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-[3.4rem] lg:leading-[1.05]">
             Point at the page. <span className="text-brand">Fix what’s wrong.</span>
           </h1>
