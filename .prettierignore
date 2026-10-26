@@ -27,3 +27,7 @@ apps/www/src/generated
 # Runtime data
 /data
 .dev.log
+
+# Written by release-please on every release
+CHANGELOG.md
+**/CHANGELOG.md
