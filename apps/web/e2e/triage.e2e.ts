@@ -32,7 +32,7 @@ test.describe("triage", () => {
     await expect(page.getByRole("list", { name: "Active filters" })).toContainText(`Label: ${name}`);
   });
 
-  test("renames with r, and sets a due date", async ({ page }) => {
+  test("renames with r, and sets a due date", async ({ page, request }) => {
     const { projectId, items } = seed();
     await page.goto(`/inbox?project=${projectId}&status=all&item=${items.pin.id}`);
     await expect(page.getByTestId("feedback-detail")).toBeVisible();
@@ -52,6 +52,15 @@ test.describe("triage", () => {
     await title.fill("Is the trial 14 or 30 days?");
     await title.press("Enter");
     await expect(page.getByTestId("title")).toHaveText("Is the trial 14 or 30 days?");
+    // The UI shows it before the save lands, and ending the test cancels a save in flight: wait for it.
+    await expect
+      .poll(async () => {
+        const res = (await (await request.get(`/api/feedback/${items.pin.id}`)).json()) as {
+          feedback: { title: string | null };
+        };
+        return res.feedback.title;
+      })
+      .toBe("Is the trial 14 or 30 days?");
   });
 
   test("bulk priority, undone item by item", async ({ page }) => {
