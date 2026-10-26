@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/Krithik-m-codes/pinwren/compare/widget-v0.2.0...widget-v0.3.0) (2026-10-26)
+
+
+### Features
+
+* **widget:** screenshot quality setting and a "Reduce capture quality" switch ([ca31591](https://github.com/Krithik-m-codes/pinwren/commit/ca315911a06644b01cd3363488d90aff169c3a6e))
+
 ## [0.2.0](https://github.com/Krithik-m-codes/pinwren/compare/widget-v0.1.1...widget-v0.2.0) (2026-10-26)
 
 
