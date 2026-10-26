@@ -72,7 +72,7 @@
     "@types/node": "^22",
     "@zumer/snapdom": "^3.3.6",
     "esbuild": "^0.28.2",
-    "happy-dom": "^20.0.0",
-    "vitest": "^4.0.0"
+    "happy-dom": "^21.0.4",
+    "vitest": "^5.0.5"
   }
 }
