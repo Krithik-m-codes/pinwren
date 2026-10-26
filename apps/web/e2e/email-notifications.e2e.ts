@@ -87,10 +87,14 @@ test.describe("email and notifications", () => {
     await page.goto("/settings/notifications?tab=mine");
     await page.getByRole("button", { name: "Daily digest", exact: true }).click();
     await expect(page.getByText(/One email a day/)).toBeVisible();
-    let prefs = (await (await request.get("/api/me/preferences")).json()) as {
-      preferences: { emailDigest: string; emailPaused: boolean };
-    };
-    expect(prefs.preferences.emailDigest).toBe("daily");
+    // The UI updates first; the save lands a moment later.
+    const prefs = async () =>
+      (
+        (await (await request.get("/api/me/preferences")).json()) as {
+          preferences: { emailDigest: string; emailPaused: boolean };
+        }
+      ).preferences;
+    await expect.poll(async () => (await prefs()).emailDigest).toBe("daily");
     await page.getByRole("switch", { name: "Pause all email" }).click();
     await expect(page.getByRole("switch", { name: "Pause all email" })).toBeChecked();
     await expect(page.getByRole("checkbox", { name: "Mentions for Marketing site" })).toBeVisible();
@@ -98,8 +102,7 @@ test.describe("email and notifications", () => {
     await page.getByRole("switch", { name: "Pause all email" }).click();
     await page.getByRole("button", { name: "Instantly", exact: true }).click();
     await expect(page.getByText(/One email per notification/)).toBeVisible();
-    prefs = (await (await request.get("/api/me/preferences")).json()) as typeof prefs;
-    expect(prefs.preferences).toEqual({ emailDigest: "off", emailPaused: false });
+    await expect.poll(prefs).toEqual({ emailDigest: "off", emailPaused: false });
   });
 
   test("bell → View all → notifications page with tabs, project filter and paging", async ({
