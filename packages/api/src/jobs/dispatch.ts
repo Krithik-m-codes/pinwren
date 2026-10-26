@@ -406,16 +406,17 @@ export async function dispatchEvent(e: DomainEvent): Promise<void> {
   // Integrations first: a broken mail setup must not hold back webhooks or issue sync. Issue sync
   // only queues jobs, which retry on their own.
   await webhooks(e, ctx, commentInfo);
-  if (e.type === "feedback.created") {
-    await autoCreateIssues(ctx);
-    await enqueue(QUEUES.aiEnrich, {
-      feedbackId: e.feedbackId,
-      orgId: e.orgId,
-      projectId: ctx.payload.projectId,
-    });
-  }
+  if (e.type === "feedback.created") await autoCreateIssues(ctx);
   if (e.type === "feedback.status_changed" && e.actor.kind !== "integration") {
     await syncIssueState(e.feedbackId, newStatus(e, ctx));
   }
   await notifications(e, ctx, commentInfo);
+  // Last, so enrichment can never hold back the bell or the emails; once per item if this event is retried.
+  if (e.type === "feedback.created") {
+    await enqueue(
+      QUEUES.aiEnrich,
+      { feedbackId: e.feedbackId, orgId: e.orgId, projectId: ctx.payload.projectId },
+      { singletonKey: `ai:${e.feedbackId}`, singletonSeconds: 3600 },
+    );
+  }
 }

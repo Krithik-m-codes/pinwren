@@ -26,8 +26,8 @@ type FormValues = z.infer<typeof schema>;
 const MODEL_PRESETS: Record<"anthropic" | "openai" | "ollama", { defaultModel: string; presets: string[] }> =
   {
     anthropic: {
-      defaultModel: "claude-3-5-haiku-latest",
-      presets: ["claude-3-5-haiku-latest", "claude-3-5-sonnet-latest"],
+      defaultModel: "claude-haiku-5-5",
+      presets: ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"],
     },
     openai: {
       defaultModel: "gpt-4o-mini",
@@ -181,7 +181,7 @@ export function AiSettingsForm({
               <div className="grid gap-3 pt-1 sm:grid-cols-3">
                 {(
                   [
-                    { id: "anthropic", label: "Anthropic", desc: "Claude 3.5 Haiku & Sonnet" },
+                    { id: "anthropic", label: "Anthropic", desc: "Claude Haiku, Sonnet & Opus" },
                     { id: "openai", label: "OpenAI-compatible", desc: "OpenAI, Groq, OpenRouter" },
                     { id: "ollama", label: "Ollama (Local)", desc: "Self-hosted local models" },
                   ] as const

@@ -1,10 +1,12 @@
-import { createAiClient, translateText, type AiClient } from "@pinwren/ai";
+import { createAiClient, translateText, type AiClient, type AiFetch } from "@pinwren/ai";
 import { type AiProviderConfig, type AiProviderType, type ProjectAiConfig } from "@pinwren/core";
 import { feedback, feedbackAi, feedbackTranslation, getDb, orgSetting, project } from "@pinwren/db";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { decryptSecret, encryptSecret } from "../crypto";
 import { ApiError, notFound } from "../errors";
+import { OutboundError, outboundErrorText, safeFetch } from "../outbound/safe-fetch";
+import { type Actor, updateFeedback } from "./feedback";
 
 export type StoredOrgAiSettings = {
   provider: AiProviderType;
@@ -25,7 +27,7 @@ export type PublicOrgAiSettings = {
 export function defaultModelForProvider(provider: AiProviderType): string {
   switch (provider) {
     case "anthropic":
-      return "claude-3-5-haiku-latest";
+      return "claude-haiku-5-5";
     case "openai":
       return "gpt-4o-mini";
     case "ollama":
@@ -118,18 +120,7 @@ export async function getAiClientForOrg(orgId: string): Promise<AiClient> {
   const provider = stored?.provider || (process.env.AI_PROVIDER as AiProviderType | undefined) || "anthropic";
   const model = stored?.model || process.env.AI_MODEL || defaultModelForProvider(provider);
   const baseUrl = stored?.baseUrl || process.env.AI_BASE_URL || undefined;
-
-  let apiKey: string | undefined;
-  if (stored?.encryptedApiKey) {
-    try {
-      apiKey = decryptSecret(stored.encryptedApiKey);
-    } catch {
-      // If decryption fails, fall back to env key
-      apiKey = process.env.AI_API_KEY;
-    }
-  } else {
-    apiKey = process.env.AI_API_KEY;
-  }
+  const apiKey = storedApiKey(stored);
 
   if (provider !== "ollama" && !apiKey) {
     throw new ApiError(400, "AI_NOT_CONFIGURED", `No API key configured for AI provider '${provider}'`);
@@ -140,32 +131,71 @@ export async function getAiClientForOrg(orgId: string): Promise<AiClient> {
     model,
     apiKey,
     baseUrl,
+    fetch: aiFetch(!stored?.baseUrl),
   });
 }
 
-export async function testAiConnection(options: {
-  provider: AiProviderType;
-  model: string;
-  apiKey?: string | undefined;
-  baseUrl?: string | undefined;
-}): Promise<{ ok: boolean; latencyMs: number }> {
+function storedApiKey(stored: StoredOrgAiSettings | undefined): string | undefined {
+  if (!stored?.encryptedApiKey) return process.env.AI_API_KEY;
+  try {
+    return decryptSecret(stored.encryptedApiKey);
+  } catch {
+    // If decryption fails, fall back to env key
+    return process.env.AI_API_KEY;
+  }
+}
+
+/**
+ * Provider calls go through the outbound guard like every other URL a user typed (ADR 0021). A base URL
+ * from the operator's environment (`AI_BASE_URL`, or the provider's public default) is trusted, so it can
+ * point at an Ollama on the private network; one typed into Settings › AI must be public or allowlisted.
+ */
+function aiFetch(trusted: boolean): AiFetch {
+  // The provider's own abort signal enforces its timeout; this ceiling only backs it up.
+  return (url, init) => safeFetch(url, { ...init, trusted, timeoutMs: 120_000, maxBytes: 4 * 1024 * 1024 });
+}
+
+export async function testAiConnection(
+  orgId: string,
+  options: {
+    provider: AiProviderType;
+    model: string;
+    apiKey?: string | undefined;
+    baseUrl?: string | undefined;
+  },
+): Promise<{ ok: boolean; latencyMs?: number; error?: string }> {
+  const [row] = await getDb()
+    .select({ value: orgSetting.value })
+    .from(orgSetting)
+    .where(and(eq(orgSetting.orgId, orgId), eq(orgSetting.key, "ai")));
+  const stored = row?.value as StoredOrgAiSettings | undefined;
+  const storedProvider = stored?.provider ?? process.env.AI_PROVIDER ?? "anthropic";
+  // "Test" right after saving sends no key: use the saved one while the provider is unchanged.
+  const apiKey = options.apiKey || (storedProvider === options.provider ? storedApiKey(stored) : undefined);
+  const baseUrl = options.baseUrl || process.env.AI_BASE_URL || undefined;
+
   const client = createAiClient({
     provider: options.provider,
     model: options.model,
-    apiKey: options.apiKey,
-    baseUrl: options.baseUrl,
+    apiKey,
+    baseUrl,
     timeoutMs: 10000,
+    fetch: aiFetch(!options.baseUrl),
   });
 
   const testSchema = z.object({ ok: z.boolean() });
   const start = Date.now();
-
-  await client.complete('Respond ONLY with the json {"ok": true}', testSchema, {
-    system: 'You are a healthcheck endpoint. Output ONLY valid json {"ok": true}.',
-  });
-
-  const latencyMs = Date.now() - start;
-  return { ok: true, latencyMs };
+  try {
+    await client.complete('Respond ONLY with the json {"ok": true}', testSchema, {
+      system: 'You are a healthcheck endpoint. Output ONLY valid json {"ok": true}.',
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof OutboundError ? outboundErrorText(err) : (err as Error).message,
+    };
+  }
+  return { ok: true, latencyMs: Date.now() - start };
 }
 
 export async function getProjectAiConfig(projectId: string, orgId: string): Promise<ProjectAiConfig> {
@@ -215,6 +245,14 @@ export async function translateFeedbackReport(
   orgId: string,
   targetLocale: string,
 ): Promise<{ targetLocale: string; title: string | null; body: string }> {
+  // The org check comes first: the translation cache is keyed by feedback id alone.
+  const [item] = await getDb()
+    .select({ id: feedback.id, title: feedback.title, body: feedback.body })
+    .from(feedback)
+    .where(and(eq(feedback.id, feedbackId), eq(feedback.orgId, orgId)));
+
+  if (!item) throw notFound("Feedback");
+
   const [cached] = await getDb()
     .select()
     .from(feedbackTranslation)
@@ -229,13 +267,6 @@ export async function translateFeedbackReport(
       body: cached.body,
     };
   }
-
-  const [item] = await getDb()
-    .select({ id: feedback.id, title: feedback.title, body: feedback.body })
-    .from(feedback)
-    .where(and(eq(feedback.id, feedbackId), eq(feedback.orgId, orgId)));
-
-  if (!item) throw notFound("Feedback");
 
   const client = await getAiClientForOrg(orgId);
 
@@ -280,6 +311,7 @@ export async function translateFeedbackReport(
 export async function applyAiTriageSuggestions(
   feedbackId: string,
   orgId: string,
+  actor: Actor,
   options: {
     applyTitle?: boolean | undefined;
     applyPriority?: boolean | undefined;
@@ -294,28 +326,18 @@ export async function applyAiTriageSuggestions(
 
   if (!aiData) throw notFound("AI enrichment data");
 
-  const updates: Partial<typeof feedback.$inferInsert> = {};
-
-  if (options.applyTitle && aiData.suggestedTitle) {
-    updates.title = aiData.suggestedTitle;
-  }
-  if (options.applyPriority && aiData.suggestedPriority) {
-    updates.priority = aiData.suggestedPriority;
-  }
-  if (options.applyKind && aiData.suggestedKind) {
-    updates.kind = aiData.suggestedKind;
-  }
+  // The normal update path, so an applied suggestion gets the same activity row, events, webhooks and
+  // duplicate-target checks as the same change made by hand.
+  const patch: Parameters<typeof updateFeedback>[3] = {};
+  if (options.applyTitle && aiData.suggestedTitle) patch.title = aiData.suggestedTitle;
+  if (options.applyPriority && aiData.suggestedPriority) patch.priority = aiData.suggestedPriority;
+  if (options.applyKind && aiData.suggestedKind) patch.kind = aiData.suggestedKind;
   if (options.linkDuplicate && aiData.duplicateCandidateId) {
-    updates.duplicateOfId = aiData.duplicateCandidateId;
-    updates.status = "duplicate";
+    patch.duplicateOfId = aiData.duplicateCandidateId;
+    patch.status = "duplicate";
   }
 
-  if (Object.keys(updates).length > 0) {
-    await getDb()
-      .update(feedback)
-      .set(updates)
-      .where(and(eq(feedback.id, feedbackId), eq(feedback.orgId, orgId)));
-  }
+  if (Object.keys(patch).length > 0) await updateFeedback(orgId, actor, feedbackId, patch);
 
   return { ok: true };
 }

@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { AiProvider, CompleteOptions } from "../types";
+import type { AiFetch, AiProvider, CompleteOptions } from "../types";
 import { DEFAULT_AI_TIMEOUT_MS, parseJsonWithSchema } from "./base";
 
 export class AnthropicProvider implements AiProvider {
@@ -7,9 +7,16 @@ export class AnthropicProvider implements AiProvider {
   readonly model: string;
   private readonly apiKey?: string | undefined;
   private readonly baseUrl: string;
+  private readonly fetch: AiFetch;
 
-  constructor(options: { model: string; apiKey?: string | undefined; baseUrl?: string | undefined }) {
+  constructor(options: {
+    model: string;
+    apiKey?: string | undefined;
+    baseUrl?: string | undefined;
+    fetch?: AiFetch | undefined;
+  }) {
     this.model = options.model;
+    this.fetch = options.fetch ?? ((url, init) => fetch(url, init));
     this.apiKey = options.apiKey;
     this.baseUrl = options.baseUrl?.replace(/\/+$/, "") || "https://api.anthropic.com";
   }
@@ -24,7 +31,7 @@ export class AnthropicProvider implements AiProvider {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const response = await fetch(`${this.baseUrl}/v1/messages`, {
+      const response = await this.fetch(`${this.baseUrl}/v1/messages`, {
         method: "POST",
         headers: {
           "x-api-key": this.apiKey,
@@ -43,8 +50,7 @@ export class AnthropicProvider implements AiProvider {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Anthropic API error (${response.status}): ${errorText}`);
+        throw new Error(`Anthropic API error (HTTP ${response.status})`);
       }
 
       const data = (await response.json()) as {

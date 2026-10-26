@@ -27,7 +27,7 @@ vi.mock("../context", async (importOriginal) => {
 vi.mock("../services/ai", () => ({
   getOrgAiSettings: vi.fn().mockResolvedValue({
     provider: "anthropic",
-    model: "claude-3-5-haiku-latest",
+    model: "claude-haiku-5-5",
     enabled: true,
     hasKey: true,
   }),
@@ -96,7 +96,7 @@ describe("AI API Routes", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         provider: "anthropic",
-        model: "claude-3-5-haiku-latest",
+        model: "claude-haiku-5-5",
         apiKey: "sk-test",
       }),
     });

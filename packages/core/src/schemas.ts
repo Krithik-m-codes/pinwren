@@ -897,7 +897,12 @@ export const aiEnrichmentResponseSchema = z.object({
 export type AiEnrichmentResponse = z.infer<typeof aiEnrichmentResponseSchema>;
 
 export const aiTranslationRequestSchema = z.object({
-  targetLocale: z.string().trim().min(2).max(10),
+  // A BCP 47 tag (`de`, `pt-BR`, `zh-Hant`): it is cached per value and written into the prompt.
+  targetLocale: z
+    .string()
+    .trim()
+    .regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/, "a language tag such as de or pt-BR")
+    .max(20),
 });
 export type AiTranslationRequest = z.infer<typeof aiTranslationRequestSchema>;
 
