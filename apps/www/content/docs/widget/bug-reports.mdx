@@ -30,9 +30,23 @@ Switch with the bar above the screenshot:
 | **Element**      | Click one element on the page to capture just that.                                                                                                                                                         |
 | **Screen share** | One frame of a browser screen share the reporter approves. Pixel-exact, including cross-origin iframes and canvases. Only offered where the browser supports `getDisplayMedia` — desktop browsers on https. |
 
-Screenshots render at up to 2× device pixel ratio and are sent as WebP (JPEG where the browser can't encode
-WebP). The widget itself and anything marked `data-pinwren-ignore` are left out; masked elements appear as
-solid grey blocks ([Privacy & masking](/docs/widget/privacy)).
+Screenshots are sent as WebP (JPEG where the browser can't encode WebP). The widget itself and anything marked
+`data-pinwren-ignore` are left out; masked elements appear as solid grey blocks
+([Privacy & masking](/docs/widget/privacy)).
+
+### Screenshot quality
+
+The project's **Capture → Screenshot quality** decides how sharp screenshots are:
+
+| Quality      | Captured at      | Sent as                                    | Use it for                              |
+| ------------ | ---------------- | ------------------------------------------ | --------------------------------------- |
+| **High**     | Up to 3× density | WebP/JPEG quality 95                       | Design review, fine text, retina detail |
+| **Standard** | Up to 2× density | WebP/JPEG quality 85 (default)             | Most sites                              |
+| **Low**      | 1× density       | WebP/JPEG quality 60, at most 1280 px wide | Slow connections, very long pages       |
+
+Unless you turn off **Let reporters reduce quality**, the report form also has a **Reduce capture quality**
+switch: that one screenshot is sent as Low, whatever the project's setting. Pinned comments with a screenshot
+follow the project's quality.
 
 If DOM capture fails or takes longer than 8 seconds, the dialog says so and offers **Capture with screen
 share** or **Send without screenshot**.

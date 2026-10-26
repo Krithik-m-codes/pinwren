@@ -59,10 +59,17 @@ describe("capture config", () => {
     expect(parseCaptureConfig(undefined)).toEqual({
       console: "warnings",
       network: "failures",
+      quality: "standard",
+      allowReduceQuality: true,
       screenshotOnComment: false,
       maskSelectors: [],
       replay: { enabled: false, seconds: 60 },
     });
+  });
+  it("takes a screenshot quality and nothing else", () => {
+    expect(parseCaptureConfig({ quality: "high" }).quality).toBe("high");
+    expect(captureConfig.safeParse({ quality: "ultra" }).success).toBe(false);
+    expect(parseCaptureConfig({ allowReduceQuality: false }).allowReduceQuality).toBe(false);
   });
   it("validates", () => {
     expect(captureConfig.safeParse({ console: "loud" }).success).toBe(false);

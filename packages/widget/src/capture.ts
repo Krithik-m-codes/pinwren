@@ -3,6 +3,7 @@
 // editor is a separate chunk (widget-editor.js, wave-4 §7) that downloads alongside it.
 import { snapdom } from "@zumer/snapdom";
 import { blockGeometry, MASKS, maskedRects, paintBlocks, type Rect } from "./mask";
+import { QUALITY, type Quality } from "./quality";
 
 export type CaptureMode = "visible" | "full" | "element";
 
@@ -22,9 +23,14 @@ const MAX_SIDE = 16_000; // browsers refuse larger canvases
 const MAX_PIXELS = 36e6;
 
 /** Capture the visible viewport, the whole page, or one element. `masks` are the project's extra selectors. */
-async function capture(mode: CaptureMode, masks: string[], el?: Element): Promise<HTMLCanvasElement> {
+async function capture(
+  mode: CaptureMode,
+  masks: string[],
+  el?: Element,
+  quality: Quality = "standard",
+): Promise<HTMLCanvasElement> {
   const target = mode === "element" && el ? el : document.documentElement;
-  let scale = Math.min(devicePixelRatio || 1, 2);
+  let scale = Math.min(devicePixelRatio || 1, QUALITY[quality].scale);
   const r = target.getBoundingClientRect();
   // The area the canvas will show, in viewport coordinates — needed to place the mask blocks.
   let origin: Rect = { left: 0, top: 0, width: innerWidth, height: innerHeight };

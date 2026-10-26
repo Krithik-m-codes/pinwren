@@ -173,6 +173,7 @@ export default {
   files_other: "{n} pièces jointes",
   replayRow: "Relecture de session · {s} dernières s",
   replayInclude: "Inclure la relecture de session",
+  reduceQuality: "Réduire la qualité de la capture",
   sendReport: "Envoyer le rapport",
   sending: "Envoi en cours…",
   bugSent: "Rapport de bug #{n} envoyé — merci !",

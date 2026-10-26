@@ -213,6 +213,10 @@ export type CaptureCfg = {
   console: "off" | "errors" | "warnings" | "all";
   network: "off" | "failures";
   maskSelectors: string[];
+  /** Screenshot sharpness: `high` keeps full detail, `low` is small and fast (the reporter can pick `low`). */
+  quality: "high" | "standard" | "low";
+  /** Offer the reporter a "Reduce capture quality" switch. */
+  allowReduceQuality: boolean;
   /** F-007 session replay (wave-4 §3): off by default; a rolling buffer of the last `seconds`. */
   replay: { enabled: boolean; seconds: number };
   /** Take a masked screenshot of the visible area with every new comment (Page Review places it). */
@@ -227,6 +231,8 @@ export function resolveCapture(raw: unknown): CaptureCfg {
   return {
     console: pick(c.console, ["off", "errors", "warnings", "all"], "warnings"),
     network: pick(c.network, ["off", "failures"], "failures"),
+    quality: pick(c.quality, ["high", "standard", "low"], "standard"),
+    allowReduceQuality: c.allowReduceQuality !== false,
     // A selector that doesn't parse would make the whole capture throw — drop it here instead.
     maskSelectors: masks.filter((m): m is string => typeof m === "string" && validSelector(m)).slice(0, 50),
     replay: resolveReplay(c.replay),

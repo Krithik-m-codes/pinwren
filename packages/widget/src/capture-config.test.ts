@@ -17,3 +17,17 @@ describe("capture.replay (wave-4 §3)", () => {
     expect(resolveCapture({ replay: { enabled: true, seconds: Number.NaN } }).replay.seconds).toBe(60);
   });
 });
+
+describe("capture.quality", () => {
+  it("defaults to standard, with the reporter switch on", () => {
+    const c = resolveCapture(undefined);
+    expect(c.quality).toBe("standard");
+    expect(c.allowReduceQuality).toBe(true);
+  });
+  it("accepts high and low and ignores anything else", () => {
+    expect(resolveCapture({ quality: "high" }).quality).toBe("high");
+    expect(resolveCapture({ quality: "low" }).quality).toBe("low");
+    expect(resolveCapture({ quality: "ultra" }).quality).toBe("standard");
+    expect(resolveCapture({ allowReduceQuality: false }).allowReduceQuality).toBe(false);
+  });
+});

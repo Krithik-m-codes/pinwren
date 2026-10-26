@@ -184,7 +184,7 @@ The rules run in the browser only; `data-force-show` overrides them. Details in
 
 ## Capture
 
-Set on the **Capture** tab: **Diagnostics**, **Session replay** and **Masked elements**.
+Set on the **Capture** tab: **Diagnostics** (including screenshot quality), **Session replay** and **Masked elements**.
 
 <TypeTable
   type={{
@@ -208,8 +208,20 @@ Set on the **Capture** tab: **Diagnostics**, **Session replay** and **Masked ele
     screenshotOnComment: {
       type: "boolean",
       description:
-        "Stored with the project (the Capture tab's “Screenshot with every comment” switch), but the widget doesn't read it yet: comments are sent without a screenshot. Bug reports always offer one.",
+        "Pinned comments also capture the visible page (the Capture tab's “Screenshot with every comment” switch), masked like any screenshot; Page Review places the item on it. Bug reports always offer a screenshot.",
       default: "false",
+    },
+    quality: {
+      type: '"high" | "standard" | "low"',
+      description:
+        "How sharp screenshots are. high captures at up to 3× pixel density and encodes at high quality (largest uploads); standard at up to 2×; low at 1× and no wider than 1280 px (smallest).",
+      default: '"standard"',
+    },
+    allowReduceQuality: {
+      type: "boolean",
+      description:
+        "Show a “Reduce capture quality” switch in the bug-report form. Switching it on sends that one screenshot as low, whatever the project's quality.",
+      default: "true",
     },
     "replay.enabled": {
       type: "boolean",

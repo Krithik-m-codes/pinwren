@@ -18,6 +18,7 @@ import { cleanPageUrl } from "./export";
 import { consentBlock, identityFields } from "./form";
 import { addEnglish, t, tn } from "./i18n";
 import * as I from "./icons";
+import type { Quality } from "./quality";
 import { idbKV } from "./idb";
 import { enReport } from "./locales/en-report";
 import { Picker } from "./picker";
@@ -183,6 +184,8 @@ export class BugReport {
   private Ed: EditorModule["Editor"] | null = null;
   /** Whether the reporter keeps the session replay in this report (they can leave it out). */
   private withReplay = true;
+  /** The reporter switched on "Reduce capture quality": this report's screenshot is sent small. */
+  private reduced = false;
   private base: HTMLCanvasElement | null = null;
   private baseUrl: string | null = null;
   private editor: Editor | null = null;
@@ -215,7 +218,10 @@ export class BugReport {
     try {
       this.mod = await loadModule(this.ctx.assets);
       const at = geometryOf("visible");
-      this.base = await timeout(this.mod.capture("visible", this.ctx.capture.maskSelectors), CAPTURE_TIMEOUT);
+      this.base = await timeout(
+        this.mod.capture("visible", this.ctx.capture.maskSelectors, undefined, this.quality),
+        CAPTURE_TIMEOUT,
+      );
       this.geometry = at;
       await editor;
       this.state = "ready";
@@ -511,6 +517,7 @@ export class BugReport {
       try {
         if (!this.Ed) throw new Error("The annotation editor didn't load");
         this.editor = new this.Ed(this.base, shapes, t("textPlaceholder"));
+        this.editor.quality = this.quality;
         this.editor.onChange = () => {
           this.renderTools();
           this.saveSoon();
@@ -740,7 +747,10 @@ export class BugReport {
     this.setShot("capturing");
     try {
       const at = geometryOf(mode);
-      this.base = await timeout(m.capture(mode, this.ctx.capture.maskSelectors, el), CAPTURE_TIMEOUT);
+      this.base = await timeout(
+        m.capture(mode, this.ctx.capture.maskSelectors, el, this.quality),
+        CAPTURE_TIMEOUT,
+      );
       this.mode = mode;
       this.geometry = at;
       this.baseUrl = null;
@@ -845,6 +855,37 @@ export class BugReport {
       ),
       ...(this.attachments.length ? [row(I.clip, tn("files", this.attachments.length), true)] : []),
       ...(this.ctx.replay ? [this.replayRow(this.ctx.replay.seconds)] : []),
+      ...(this.ctx.capture.allowReduceQuality && this.state === "ready" ? [this.qualityRow()] : []),
+    );
+  }
+
+  /** The sharpness this report's screenshot is taken and sent at: the project's, or `low` when reduced. */
+  private get quality(): Quality {
+    return this.reduced ? "low" : this.ctx.capture.quality;
+  }
+
+  /** "Reduce capture quality" with a switch: a smaller, faster upload for this report (BugPin's toggle). */
+  private qualityRow() {
+    const on = this.reduced;
+    return h(
+      "li",
+      { class: on ? "on" : "off" },
+      icon(I.view),
+      h("span", { class: "grow" }, t("reduceQuality")),
+      h("button", {
+        type: "button",
+        class: "sw",
+        role: "switch",
+        "aria-checked": String(on),
+        "aria-label": t("reduceQuality"),
+        "data-quality": "toggle",
+        onclick: () => {
+          this.reduced = !this.reduced;
+          if (this.editor) this.editor.quality = this.quality;
+          this.renderSummary();
+          this.summary.querySelector<HTMLElement>("[data-quality]")?.focus();
+        },
+      }),
     );
   }
 

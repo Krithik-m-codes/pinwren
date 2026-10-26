@@ -97,6 +97,32 @@ export function CaptureTab({ project }: { project: ProjectDetail }) {
                 onCheckedChange={(screenshotOnComment) => commit({ screenshotOnComment })}
               />
             </SettingRow>
+            <SettingRow
+              label="Screenshot quality"
+              description="High keeps full detail (larger uploads); Low is small and fast. Standard suits most sites."
+            >
+              <Segmented
+                label="Screenshot quality"
+                value={c.quality}
+                onChange={(quality) => commit({ quality })}
+                options={[
+                  { value: "high", label: "High" },
+                  { value: "standard", label: "Standard" },
+                  { value: "low", label: "Low" },
+                ]}
+              />
+            </SettingRow>
+            <SettingRow
+              label="Let reporters reduce quality"
+              htmlFor="allow-reduce-quality"
+              description='Adds a "Reduce capture quality" switch to the report form, for people on a slow connection. It sends that one screenshot as Low.'
+            >
+              <Switch
+                id="allow-reduce-quality"
+                checked={c.allowReduceQuality}
+                onCheckedChange={(allowReduceQuality) => commit({ allowReduceQuality })}
+              />
+            </SettingRow>
           </SettingGroup>
         </CardContent>
       </Card>

@@ -173,6 +173,7 @@ export default {
   files_other: "{n} bijlagen",
   replayRow: "Sessie-opname · laatste {s} s",
   replayInclude: "Sessie-opname meesturen",
+  reduceQuality: "Opnamekwaliteit verlagen",
   sendReport: "Melding versturen",
   sending: "Versturen…",
   bugSent: "Bugmelding #{n} verstuurd — bedankt!",

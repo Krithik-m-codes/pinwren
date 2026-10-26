@@ -166,6 +166,8 @@ export class PinwrenWidget {
     console: "warnings",
     network: "failures",
     maskSelectors: [],
+    quality: "standard",
+    allowReduceQuality: true,
     replay: { enabled: false, seconds: 60 },
     screenshotOnComment: false,
   };
@@ -1222,6 +1224,7 @@ export class PinwrenWidget {
               this.cfg.privacyMode
                 ? [...this.capture.maskSelectors, ...PRIVACY_MASKS]
                 : this.capture.maskSelectors,
+              this.capture.quality,
             ),
           )
           .catch(() => null)

@@ -207,7 +207,14 @@ export type WidgetConfig = z.infer<typeof widgetConfig>;
 /** What the dashboard may send: any subset, merged into the stored config. */
 export type WidgetConfigInput = z.input<typeof widgetConfig>;
 
+/** How sharp the screenshots a reporter sends are: `high` keeps full detail, `low` is small and fast. */
+export const CAPTURE_QUALITIES = ["high", "standard", "low"] as const;
+export type CaptureQuality = (typeof CAPTURE_QUALITIES)[number];
+
 export const captureConfig = z.object({
+  quality: z.enum(CAPTURE_QUALITIES).default("standard"),
+  /** Show reporters a "Reduce capture quality" switch in the report form (it forces `low` for that report). */
+  allowReduceQuality: z.boolean().default(true),
   console: z.enum(CONSOLE_CAPTURE_LEVELS).default("warnings"),
   network: z.enum(NETWORK_CAPTURE_MODES).default("failures"),
   screenshotOnComment: z.boolean().default(false),

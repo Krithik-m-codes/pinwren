@@ -173,6 +173,7 @@ export default {
   files_other: "{n} Anhänge",
   replayRow: "Sitzungsaufzeichnung · letzte {s} s",
   replayInclude: "Sitzungsaufzeichnung mitsenden",
+  reduceQuality: "Aufnahmequalität verringern",
   sendReport: "Bericht senden",
   sending: "Wird gesendet…",
   bugSent: "Fehlerbericht #{n} gesendet — danke!",

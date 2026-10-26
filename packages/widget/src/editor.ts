@@ -22,6 +22,8 @@ import {
   vectorLayer,
 } from "./shapes";
 
+import { QUALITY, type Quality } from "./quality";
+
 const MAX_DATA_URL = 10_500_000; // the API accepts 11 MB of data URL
 type TextShape = Extract<Shape, { tool: "text" }>;
 
@@ -37,6 +39,8 @@ export class Editor {
   size: Size = "m";
   /** Called after every change of tool, colour, size or shapes, so the toolbar and draft can follow. */
   onChange: (() => void) | null = null;
+  /** How the screenshot is encoded when it is sent; the report form changes it with its quality switch. */
+  quality: Quality = "standard";
 
   constructor(
     private readonly base: HTMLCanvasElement,
@@ -292,9 +296,17 @@ export class Editor {
       src.height = crop.h;
       src.getContext("2d")?.drawImage(this.canvas, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
     }
-    let out = encode(src, 0.85);
+    const { q, maxWidth } = QUALITY[this.quality];
+    if (maxWidth && src.width > maxWidth) {
+      const small = document.createElement("canvas");
+      small.width = maxWidth;
+      small.height = Math.round((src.height * maxWidth) / src.width);
+      small.getContext("2d")?.drawImage(src, 0, 0, small.width, small.height);
+      src = small;
+    }
+    let out = encode(src, q);
     // Very tall full-page captures: lower the quality, then halve the size until it fits.
-    if (out.length > MAX_DATA_URL) out = encode(src, 0.6);
+    if (out.length > MAX_DATA_URL) out = encode(src, Math.min(q, 0.6));
     while (out.length > MAX_DATA_URL && src.width > 400) {
       const half = document.createElement("canvas");
       half.width = Math.round(src.width / 2);

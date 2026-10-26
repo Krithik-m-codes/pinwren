@@ -7,6 +7,7 @@ import { FLOWS_CSS as CSS } from "./flows-styles";
 import { t } from "./i18n";
 import * as I from "./icons";
 import { type Pick, Picker } from "./picker";
+import type { Quality } from "./quality";
 
 // The lazy widget-flows.js chunk: the less common flows, kept out of widget.js (wave-5 §3.3).
 //   - attachments in the comment composer (the bug report has its own, in widget-report.js)
@@ -144,6 +145,7 @@ const SHOT_MS = 8000;
 export async function commentShot(
   assets: string,
   masks: string[],
+  quality: Quality = "standard",
 ): Promise<{ screenshot: string; capture: CaptureGeometry } | null> {
   const capture: CaptureGeometry = {
     vw: Math.max(1, Math.min(20_000, Math.round(innerWidth))),
@@ -154,13 +156,16 @@ export async function commentShot(
   let timer = 0;
   try {
     const canvas = await Promise.race([
-      loadChunk<CaptureModule>(assets, "capture").then((m) => m.capture("visible", masks)),
+      loadChunk<CaptureModule>(assets, "capture").then((m) =>
+        m.capture("visible", masks, undefined, quality),
+      ),
       new Promise<never>((_, reject) => {
         timer = window.setTimeout(() => reject(new Error("Screenshot timed out")), SHOT_MS);
       }),
     ]);
     // WebP, or JPEG where the browser can't encode it; the API takes at most 11 MB of data URL.
-    for (const q of [0.8, 0.5]) {
+    const first = { high: 0.92, standard: 0.8, low: 0.55 }[quality];
+    for (const q of [first, Math.min(first, 0.5)]) {
       const webp = canvas.toDataURL("image/webp", q);
       const screenshot = webp.startsWith("data:image/webp") ? webp : canvas.toDataURL("image/jpeg", q);
       if (screenshot.length <= 10_500_000) return { screenshot, capture };

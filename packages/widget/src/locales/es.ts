@@ -173,6 +173,7 @@ export default {
   files_other: "{n} adjuntos",
   replayRow: "Repetición de la sesión · últimos {s} s",
   replayInclude: "Incluir la repetición de la sesión",
+  reduceQuality: "Reducir la calidad de la captura",
   sendReport: "Enviar informe",
   sending: "Enviando…",
   bugSent: "Informe de error #{n} enviado — ¡gracias!",

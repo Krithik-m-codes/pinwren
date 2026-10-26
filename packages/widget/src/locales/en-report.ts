@@ -32,6 +32,7 @@ export const enReport = {
   files_other: "{n} attachments",
   replayRow: "Session replay · last {s} s",
   replayInclude: "Include the session replay",
+  reduceQuality: "Reduce capture quality",
   sendReport: "Send report",
   sending: "Sending…",
   bugSent: "Bug report #{n} sent — thank you!",

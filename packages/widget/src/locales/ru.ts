@@ -192,6 +192,7 @@ export default {
   files_other: "{n} вложения",
   replayRow: "Запись сеанса · последние {s} с",
   replayInclude: "Приложить запись сеанса",
+  reduceQuality: "Снизить качество снимка",
   sendReport: "Отправить отчёт",
   sending: "Отправка…",
   bugSent: "Отчёт об ошибке №{n} отправлен — спасибо!",
