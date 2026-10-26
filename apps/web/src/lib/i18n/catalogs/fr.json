@@ -1,0 +1,21 @@
+{
+  "nav.search": "Rechercher",
+  "nav.inbox": "Boîte de réception",
+  "nav.projects": "Projets",
+  "nav.settings": "Paramètres",
+  "nav.myWork": "Mon travail",
+  "language.label": "Langue",
+  "language.description": "La langue de ce tableau de bord. Automatique suit celle de votre navigateur.",
+  "language.auto": "Automatique (navigateur)",
+  "language.saveFailed": "Impossible d'enregistrer votre langue",
+  "user.updateAvailable": "Mise à jour disponible",
+  "user.readOnly": "Accès en lecture seule",
+  "user.readOnlyHint": "Votre rôle est Lecteur : vous pouvez tout voir, mais rien modifier.",
+  "user.accountMenu": "Menu du compte",
+  "user.profileSettings": "Profil et paramètres",
+  "user.theme": "Thème",
+  "user.themeLight": "Clair",
+  "user.themeDark": "Sombre",
+  "user.themeSystem": "Système",
+  "user.signOut": "Se déconnecter"
+}

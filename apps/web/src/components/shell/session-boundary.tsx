@@ -1,4 +1,7 @@
 import type { Entitlements } from "@pinwren/core";
+import { I18nProvider } from "@/lib/i18n/provider";
+import { loadCatalog, requestLocale } from "@/lib/i18n/server";
+import type { UserPreferences } from "@/lib/store/api/notifications";
 import { BrandTheme } from "@/components/brand";
 import { EmailSetupBanner } from "@/components/notifications/notification-parts";
 import type { Project, SavedView } from "@/lib/api";
@@ -24,12 +27,15 @@ export async function SessionBoundary({ children }: { children: React.ReactNode 
   const { me } = viewer;
   // Everything a screen below reads on its first render is seeded here (not only in the sidebar, which
   // streams in its own boundary): server HTML and client hydration then see the same data.
-  const [branding, entitlements, projects, views] = await Promise.all([
+  const [branding, entitlements, projects, views, prefs] = await Promise.all([
     getOrgBranding(me.orgId),
     serverApi<Entitlements>("/me/entitlements"),
     serverApi<{ projects: Project[] }>("/projects"),
     serverApi<{ views: SavedView[] }>("/views"),
+    serverApi<{ preferences: UserPreferences }>("/me/preferences"),
   ]);
+  const locale = await requestLocale(prefs.ok ? prefs.data.preferences.locale : null);
+  const catalog = await loadCatalog(locale);
   return (
     <HydrateQueries
       entries={[
@@ -42,14 +48,16 @@ export async function SessionBoundary({ children }: { children: React.ReactNode 
         ...(views.ok ? [{ endpointName: "views" as const, arg: undefined, value: views.data }] : []),
       ]}
     >
-      <BrandTheme accent={branding.accent} />
-      <RealtimeConnection />
-      <WorkspaceFromLink orgId={me.orgId} />
-      <LicenseBanner />
-      <EmailSetupBanner />
-      <CommandPalette />
-      <GlobalShortcuts />
-      {children}
+      <I18nProvider locale={locale} catalog={catalog}>
+        <BrandTheme accent={branding.accent} />
+        <RealtimeConnection />
+        <WorkspaceFromLink orgId={me.orgId} />
+        <LicenseBanner />
+        <EmailSetupBanner />
+        <CommandPalette />
+        <GlobalShortcuts />
+        {children}
+      </I18nProvider>
     </HydrateQueries>
   );
 }

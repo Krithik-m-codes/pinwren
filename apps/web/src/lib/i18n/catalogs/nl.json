@@ -1,0 +1,21 @@
+{
+  "nav.search": "Zoeken",
+  "nav.inbox": "Inbox",
+  "nav.projects": "Projecten",
+  "nav.settings": "Instellingen",
+  "nav.myWork": "Mijn werk",
+  "language.label": "Taal",
+  "language.description": "De taal van dit dashboard. Automatisch volgt je browser.",
+  "language.auto": "Automatisch (browser)",
+  "language.saveFailed": "Je taal kon niet worden opgeslagen",
+  "user.updateAvailable": "Update beschikbaar",
+  "user.readOnly": "Alleen-lezen toegang",
+  "user.readOnlyHint": "Je rol is Kijker: je kunt alles zien, maar niets wijzigen.",
+  "user.accountMenu": "Accountmenu",
+  "user.profileSettings": "Profiel en instellingen",
+  "user.theme": "Thema",
+  "user.themeLight": "Licht",
+  "user.themeDark": "Donker",
+  "user.themeSystem": "Systeem",
+  "user.signOut": "Uitloggen"
+}

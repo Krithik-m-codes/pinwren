@@ -210,13 +210,18 @@ export const notifications = new Hono<{ Variables: SessionVars }>()
 
   .get("/me/preferences", async (c) => {
     const [row] = await getDb()
-      .select({ emailDigest: userPreference.emailDigest, emailPaused: userPreference.emailPaused })
+      .select({
+        emailDigest: userPreference.emailDigest,
+        emailPaused: userPreference.emailPaused,
+        locale: userPreference.locale,
+      })
       .from(userPreference)
       .where(eq(userPreference.userId, c.var.userId));
     return c.json({
       preferences: {
         emailDigest: row?.emailDigest ?? EMAIL_DIGEST_FREQUENCIES[0],
         emailPaused: !!row?.emailPaused,
+        locale: row?.locale ?? null,
       },
     });
   })
@@ -231,7 +236,11 @@ export const notifications = new Hono<{ Variables: SessionVars }>()
         target: userPreference.userId,
         set: { ...set, updatedAt: new Date() },
       })
-      .returning({ emailDigest: userPreference.emailDigest, emailPaused: userPreference.emailPaused });
+      .returning({
+        emailDigest: userPreference.emailDigest,
+        emailPaused: userPreference.emailPaused,
+        locale: userPreference.locale,
+      });
     if (!row) throw new Error("preference upsert failed");
     return c.json({ preferences: row });
   })

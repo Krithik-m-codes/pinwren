@@ -496,10 +496,16 @@ export const notificationsRead = z.union([
 export const EMAIL_DIGEST_FREQUENCIES = ["off", "hourly", "daily"] as const;
 export type EmailDigestFrequency = (typeof EMAIL_DIGEST_FREQUENCIES)[number];
 
-/** `PATCH /api/me/preferences`: account-wide email settings (`user_preference`). */
+/** Languages the dashboard (and the widget) ship in; the first is the source language. */
+export const LOCALES = ["en", "es", "fr", "de", "pt-BR", "it", "ja", "hi", "nl", "zh", "ru"] as const;
+export type AppLocale = (typeof LOCALES)[number];
+
+/** `PATCH /api/me/preferences`: account-wide settings (`user_preference`). */
 export const userPreferenceUpdate = z.object({
   emailDigest: z.enum(EMAIL_DIGEST_FREQUENCIES).optional(),
   emailPaused: z.boolean().optional(),
+  /** The dashboard language; null = follow the browser. */
+  locale: z.enum(LOCALES).nullable().optional(),
 });
 export type UserPreferenceUpdate = z.infer<typeof userPreferenceUpdate>;
 

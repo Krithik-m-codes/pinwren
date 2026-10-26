@@ -1,0 +1,21 @@
+{
+  "nav.search": "Buscar",
+  "nav.inbox": "Caixa de entrada",
+  "nav.projects": "Projetos",
+  "nav.settings": "Configurações",
+  "nav.myWork": "Meu trabalho",
+  "language.label": "Idioma",
+  "language.description": "O idioma deste painel. Automático segue o do seu navegador.",
+  "language.auto": "Automático (navegador)",
+  "language.saveFailed": "Não foi possível salvar seu idioma",
+  "user.updateAvailable": "Atualização disponível",
+  "user.readOnly": "Acesso somente leitura",
+  "user.readOnlyHint": "Sua função é Leitor: você pode ver tudo, mas não alterar nada.",
+  "user.accountMenu": "Menu da conta",
+  "user.profileSettings": "Perfil e configurações",
+  "user.theme": "Tema",
+  "user.themeLight": "Claro",
+  "user.themeDark": "Escuro",
+  "user.themeSystem": "Sistema",
+  "user.signOut": "Sair"
+}

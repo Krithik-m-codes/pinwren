@@ -1,0 +1,21 @@
+{
+  "nav.search": "खोजें",
+  "nav.inbox": "इनबॉक्स",
+  "nav.projects": "प्रोजेक्ट",
+  "nav.settings": "सेटिंग्स",
+  "nav.myWork": "मेरा काम",
+  "language.label": "भाषा",
+  "language.description": "इस डैशबोर्ड की भाषा। स्वचालित आपके ब्राउज़र की भाषा का पालन करती है।",
+  "language.auto": "स्वचालित (ब्राउज़र)",
+  "language.saveFailed": "आपकी भाषा सहेजी नहीं जा सकी",
+  "user.updateAvailable": "अपडेट उपलब्ध है",
+  "user.readOnly": "केवल-पढ़ने की पहुँच",
+  "user.readOnlyHint": "आपकी भूमिका दर्शक है: आप सब कुछ देख सकते हैं, पर कुछ बदल नहीं सकते।",
+  "user.accountMenu": "खाता मेनू",
+  "user.profileSettings": "प्रोफ़ाइल और सेटिंग्स",
+  "user.theme": "थीम",
+  "user.themeLight": "लाइट",
+  "user.themeDark": "डार्क",
+  "user.themeSystem": "सिस्टम",
+  "user.signOut": "साइन आउट"
+}

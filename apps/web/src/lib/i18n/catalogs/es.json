@@ -1,0 +1,21 @@
+{
+  "nav.search": "Buscar",
+  "nav.inbox": "Bandeja de entrada",
+  "nav.projects": "Proyectos",
+  "nav.settings": "Ajustes",
+  "nav.myWork": "Mi trabajo",
+  "language.label": "Idioma",
+  "language.description": "El idioma de este panel. Automático sigue el de tu navegador.",
+  "language.auto": "Automático (navegador)",
+  "language.saveFailed": "No se pudo guardar tu idioma",
+  "user.updateAvailable": "Actualización disponible",
+  "user.readOnly": "Acceso de solo lectura",
+  "user.readOnlyHint": "Tu rol es Lector: puedes verlo todo, pero no cambiar nada.",
+  "user.accountMenu": "Menú de la cuenta",
+  "user.profileSettings": "Perfil y ajustes",
+  "user.theme": "Tema",
+  "user.themeLight": "Claro",
+  "user.themeDark": "Oscuro",
+  "user.themeSystem": "Sistema",
+  "user.signOut": "Cerrar sesión"
+}

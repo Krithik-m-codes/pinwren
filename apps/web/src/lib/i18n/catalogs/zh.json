@@ -1,0 +1,21 @@
+{
+  "nav.search": "搜索",
+  "nav.inbox": "收件箱",
+  "nav.projects": "项目",
+  "nav.settings": "设置",
+  "nav.myWork": "我的工作",
+  "language.label": "语言",
+  "language.description": "此控制台的语言。“自动”将跟随您的浏览器。",
+  "language.auto": "自动（浏览器）",
+  "language.saveFailed": "无法保存您的语言设置",
+  "user.updateAvailable": "有可用更新",
+  "user.readOnly": "只读访问",
+  "user.readOnlyHint": "您的角色是查看者：可以查看所有内容，但不能做任何更改。",
+  "user.accountMenu": "账户菜单",
+  "user.profileSettings": "个人资料和设置",
+  "user.theme": "主题",
+  "user.themeLight": "浅色",
+  "user.themeDark": "深色",
+  "user.themeSystem": "跟随系统",
+  "user.signOut": "退出登录"
+}

@@ -438,6 +438,8 @@ export const userPreference = pgTable("user_preference", {
   emailDigest: emailDigestEnum("email_digest").notNull().default("off"),
   /** Stops every team notification email (the bell still fills). */
   emailPaused: boolean("email_paused").notNull().default(false),
+  /** The dashboard language (`LOCALES` in core); null = follow the browser. */
+  locale: text("locale"),
   lastDigestAt: timestamp("last_digest_at", { withTimezone: true }),
   /** Storage key of an uploaded avatar; `user.image` then points at `/api/avatars/:userId`. */
   avatarKey: text("avatar_key"),

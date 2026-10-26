@@ -1,0 +1,21 @@
+{
+  "nav.search": "Suchen",
+  "nav.inbox": "Posteingang",
+  "nav.projects": "Projekte",
+  "nav.settings": "Einstellungen",
+  "nav.myWork": "Meine Aufgaben",
+  "language.label": "Sprache",
+  "language.description": "Die Sprache dieses Dashboards. „Automatisch“ folgt deinem Browser.",
+  "language.auto": "Automatisch (Browser)",
+  "language.saveFailed": "Deine Sprache konnte nicht gespeichert werden",
+  "user.updateAvailable": "Update verfügbar",
+  "user.readOnly": "Schreibgeschützter Zugriff",
+  "user.readOnlyHint": "Deine Rolle ist Betrachter: Du kannst alles sehen, aber nichts ändern.",
+  "user.accountMenu": "Kontomenü",
+  "user.profileSettings": "Profil und Einstellungen",
+  "user.theme": "Design",
+  "user.themeLight": "Hell",
+  "user.themeDark": "Dunkel",
+  "user.themeSystem": "System",
+  "user.signOut": "Abmelden"
+}

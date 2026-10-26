@@ -1,0 +1,21 @@
+{
+  "nav.search": "検索",
+  "nav.inbox": "受信トレイ",
+  "nav.projects": "プロジェクト",
+  "nav.settings": "設定",
+  "nav.myWork": "自分の作業",
+  "language.label": "言語",
+  "language.description": "このダッシュボードの言語です。「自動」はブラウザの設定に従います。",
+  "language.auto": "自動（ブラウザ）",
+  "language.saveFailed": "言語を保存できませんでした",
+  "user.updateAvailable": "アップデートがあります",
+  "user.readOnly": "読み取り専用アクセス",
+  "user.readOnlyHint": "あなたのロールは閲覧者です。すべて閲覧できますが、変更はできません。",
+  "user.accountMenu": "アカウントメニュー",
+  "user.profileSettings": "プロフィールと設定",
+  "user.theme": "テーマ",
+  "user.themeLight": "ライト",
+  "user.themeDark": "ダーク",
+  "user.themeSystem": "システム",
+  "user.signOut": "ログアウト"
+}

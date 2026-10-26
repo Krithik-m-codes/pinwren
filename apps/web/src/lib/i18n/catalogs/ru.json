@@ -1,0 +1,21 @@
+{
+  "nav.search": "Поиск",
+  "nav.inbox": "Входящие",
+  "nav.projects": "Проекты",
+  "nav.settings": "Настройки",
+  "nav.myWork": "Моя работа",
+  "language.label": "Язык",
+  "language.description": "Язык этой панели. «Автоматически» — как в вашем браузере.",
+  "language.auto": "Автоматически (браузер)",
+  "language.saveFailed": "Не удалось сохранить язык",
+  "user.updateAvailable": "Доступно обновление",
+  "user.readOnly": "Доступ только для чтения",
+  "user.readOnlyHint": "Ваша роль — Наблюдатель: вы можете всё просматривать, но ничего менять.",
+  "user.accountMenu": "Меню аккаунта",
+  "user.profileSettings": "Профиль и настройки",
+  "user.theme": "Тема",
+  "user.themeLight": "Светлая",
+  "user.themeDark": "Тёмная",
+  "user.themeSystem": "Системная",
+  "user.signOut": "Выйти"
+}

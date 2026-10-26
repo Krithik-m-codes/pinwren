@@ -1,0 +1,21 @@
+{
+  "nav.search": "Cerca",
+  "nav.inbox": "Posta in arrivo",
+  "nav.projects": "Progetti",
+  "nav.settings": "Impostazioni",
+  "nav.myWork": "Il mio lavoro",
+  "language.label": "Lingua",
+  "language.description": "La lingua di questa dashboard. Automatica segue quella del browser.",
+  "language.auto": "Automatica (browser)",
+  "language.saveFailed": "Impossibile salvare la lingua",
+  "user.updateAvailable": "Aggiornamento disponibile",
+  "user.readOnly": "Accesso in sola lettura",
+  "user.readOnlyHint": "Il tuo ruolo è Lettore: puoi vedere tutto, ma non modificare nulla.",
+  "user.accountMenu": "Menu dell'account",
+  "user.profileSettings": "Profilo e impostazioni",
+  "user.theme": "Tema",
+  "user.themeLight": "Chiaro",
+  "user.themeDark": "Scuro",
+  "user.themeSystem": "Sistema",
+  "user.signOut": "Esci"
+}

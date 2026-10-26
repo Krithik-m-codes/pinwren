@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { UserAvatar } from "@/components/user-avatar";
 import { isViewerRole, type MeResponse } from "@/lib/api";
 import { signOut } from "@/lib/auth-client";
+import { useT } from "@/lib/i18n/provider";
 
 /** Footer of the sidebar: update notice (instance admins), the account menu and theme switch. */
 export function UserMenu({
@@ -30,6 +31,7 @@ export function UserMenu({
   update: MeResponse["update"];
 }) {
   const { setTheme } = useTheme();
+  const t = useT();
   const viewer = isViewerRole(role);
   return (
     <>
@@ -43,7 +45,7 @@ export function UserMenu({
         >
           <ArrowUpCircle className="size-3.5 shrink-0 text-primary" />
           <span className="min-w-0 flex-1 truncate">
-            Update available <span className="text-muted-foreground">· {update.latest}</span>
+            {t("user.updateAvailable")} <span className="text-muted-foreground">· {update.latest}</span>
           </span>
         </a>
       )}
@@ -57,9 +59,9 @@ export function UserMenu({
               />
             }
           >
-            <Eye className="size-3.5 shrink-0" /> Read-only access
+            <Eye className="size-3.5 shrink-0" /> {t("user.readOnly")}
           </TooltipTrigger>
-          <TooltipContent>Your role is Viewer: you can see everything but change nothing.</TooltipContent>
+          <TooltipContent>{t("user.readOnlyHint")}</TooltipContent>
         </Tooltip>
       )}
       <DropdownMenu>
@@ -68,7 +70,7 @@ export function UserMenu({
             <SidebarMenuButton
               size="lg"
               className="data-popup-open:bg-sidebar-accent"
-              aria-label="Account menu"
+              aria-label={t("user.accountMenu")}
             >
               <UserAvatar name={user.name} image={user.image} className="size-7" />
               <div className="min-w-0 text-left">
@@ -80,19 +82,19 @@ export function UserMenu({
         />
         <DropdownMenuContent side="top" align="start" className="w-56">
           <DropdownMenuItem render={<Link href="/settings" />} data-testid="profile-settings">
-            <Settings /> Profile &amp; settings
+            <Settings /> {t("user.profileSettings")}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuLabel>Theme</DropdownMenuLabel>
+            <DropdownMenuLabel>{t("user.theme")}</DropdownMenuLabel>
             <DropdownMenuItem onClick={() => setTheme("light")}>
-              <Sun /> Light
+              <Sun /> {t("user.themeLight")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setTheme("dark")}>
-              <Moon /> Dark
+              <Moon /> {t("user.themeDark")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setTheme("system")}>
-              <Monitor /> System
+              <Monitor /> {t("user.themeSystem")}
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
@@ -103,7 +105,7 @@ export function UserMenu({
               window.location.assign(new URL("/sign-in", window.location.href).href);
             }}
           >
-            <LogOut /> Sign out
+            <LogOut /> {t("user.signOut")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

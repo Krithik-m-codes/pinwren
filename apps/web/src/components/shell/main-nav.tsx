@@ -4,14 +4,16 @@ import { FolderKanban, Inbox, Search, Settings, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import { useT } from "@/lib/i18n/provider";
+import type { Key } from "@/lib/i18n/en";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { paletteToggled } from "@/lib/store/slices/ui";
 
 const NAV = [
-  { href: "/inbox", label: "Inbox", icon: Inbox },
-  { href: "/projects", label: "Projects", icon: FolderKanban },
-  { href: "/settings", label: "Settings", icon: Settings },
-] as const;
+  { href: "/inbox", label: "nav.inbox", icon: Inbox },
+  { href: "/projects", label: "nav.projects", icon: FolderKanban },
+  { href: "/settings", label: "nav.settings", icon: Settings },
+] as const satisfies readonly { href: string; label: Key; icon: unknown }[];
 
 /** Top-level navigation with the current section highlighted (the path is request data, so this streams). */
 export function MainNav() {
@@ -22,6 +24,7 @@ export function MainNav() {
 /** The same links without a highlight — what the prerendered shell shows until the path is known. */
 export function NavLinks({ pathname = null }: { pathname?: string | null }) {
   const dispatch = useAppDispatch();
+  const t = useT();
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -31,7 +34,7 @@ export function NavLinks({ pathname = null }: { pathname?: string | null }) {
           aria-keyshortcuts="Control+K Meta+K"
         >
           <Search />
-          <span>Search</span>
+          <span>{t("nav.search")}</span>
           <kbd className="ml-auto rounded border bg-muted px-1 font-mono text-[10px]">⌘K</kbd>
         </SidebarMenuButton>
       </SidebarMenuItem>
@@ -42,7 +45,7 @@ export function NavLinks({ pathname = null }: { pathname?: string | null }) {
             render={<Link href={href} />}
           >
             <Icon />
-            <span>{label}</span>
+            <span>{t(label)}</span>
           </SidebarMenuButton>
           {href === "/inbox" && (
             // Items assigned to the signed-in member, every project (`g m` anywhere).
@@ -53,7 +56,7 @@ export function NavLinks({ pathname = null }: { pathname?: string | null }) {
               data-testid="my-work"
             >
               <UserRound />
-              <span>My work</span>
+              <span>{t("nav.myWork")}</span>
             </SidebarMenuButton>
           )}
         </SidebarMenuItem>

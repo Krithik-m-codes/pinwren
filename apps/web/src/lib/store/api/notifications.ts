@@ -1,4 +1,5 @@
 import type {
+  AppLocale,
   EmailDeliveryStatus,
   EmailDigestFrequency,
   EmailSettingsUpdate,
@@ -15,7 +16,12 @@ import { api } from "./index";
 
 export type NotificationsPage = { items: NotificationItem[]; unreadCount: number; nextCursor: string | null };
 export type NotificationsPageArgs = { unread: boolean; projectId: string | null };
-export type UserPreferences = { emailDigest: EmailDigestFrequency; emailPaused: boolean };
+export type UserPreferences = {
+  emailDigest: EmailDigestFrequency;
+  emailPaused: boolean;
+  /** The dashboard language; null = follow the browser. */
+  locale: AppLocale | null;
+};
 export type ProjectNotificationsResponse = {
   notifications: ProjectNotifications;
   members: { userId: string; name: string; email: string }[];
