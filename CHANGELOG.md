@@ -8,6 +8,51 @@ From the first release on, release-please adds a section per version from the Co
 `main`; the widget's own changes are also listed in [`packages/widget/CHANGELOG.md`](packages/widget/CHANGELOG.md)
 once it is published.
 
+## 0.1.0 (2026-10-26)
+
+
+### Features
+
+* **ai:** document AI triage, forward its settings, fix what the model is shown ([5cb16c4](https://github.com/Krithik-m-codes/pinwren/commit/5cb16c4155e452e0af4a876b2c385afab2df435b))
+* **ai:** triage and enrichment implementation ([#13](https://github.com/Krithik-m-codes/pinwren/issues/13)) ([6f1b4fb](https://github.com/Krithik-m-codes/pinwren/commit/6f1b4fb161cc6892922c8280c3c80cc9c83cdfc8))
+* **api:** Hono API with Better Auth, dashboard routes and public widget routes ([4ecf132](https://github.com/Krithik-m-codes/pinwren/commit/4ecf1320b8683c43f5a8a89658816473d98d6cad))
+* **api:** wave 4 — realtime, rounds, views, replay, identity, viewer role, licences, SDK/MCP/CLI ([64f16fa](https://github.com/Krithik-m-codes/pinwren/commit/64f16fa0bafeec111a0d4a0d93479e85e04f4d41))
+* **api:** wave-1 backend — widget contract, email, notifications, webhooks, API tokens, S3 ([308a3c4](https://github.com/Krithik-m-codes/pinwren/commit/308a3c48800c4db226ec5aaa99aa852b1611d359))
+* **brand:** add the Pinwren logo, icons, social preview and brand guide ([9c34f11](https://github.com/Krithik-m-codes/pinwren/commit/9c34f112f0ce6f839dacf40fdf3c78f5a0668af2))
+* complete v1 — BugPin admin model, SitePing widget UX, email and notifications ([b2016b7](https://github.com/Krithik-m-codes/pinwren/commit/b2016b71d09a8b54dcb4c3d0c11902cc93f5789c))
+* **core,db:** shared schemas, origin matching, Postgres schema and migrations ([fb37415](https://github.com/Krithik-m-codes/pinwren/commit/fb37415f9ac8bfe2d68dd680cc0151f4eb599771))
+* **docker:** self-host image and compose; smoke test and demo site ([08bacdc](https://github.com/Krithik-m-codes/pinwren/commit/08bacdc94eddfacb039d85afe914be05b6232ae7))
+* **license:** add production licence key pinwren-2026 ([d4c461f](https://github.com/Krithik-m-codes/pinwren/commit/d4c461f4153bbd18367868e6570382142bc3a667))
+* wave-3 admin parity — trackers, panel actions, branding, privacy, templates, security ([8ba1b3e](https://github.com/Krithik-m-codes/pinwren/commit/8ba1b3ec51e6a9043668fa3f42eed9c040701b41))
+* **web:** dashboard for every wave-2 feature ([1a7836a](https://github.com/Krithik-m-codes/pinwren/commit/1a7836a4fcacd6c4b77f0268e9e12dc14ad2dd2c))
+* **web:** Next.js dashboard — auth, onboarding, inbox, projects, settings ([98a3dbb](https://github.com/Krithik-m-codes/pinwren/commit/98a3dbbf44f2b2df4d064fc85236b5980b9629ac))
+* **web:** rebrand the dashboard and emails with the new logo and palette ([79599e3](https://github.com/Krithik-m-codes/pinwren/commit/79599e38655f454ee3797c532cde2adcc831d8a6))
+* **web:** v1 dashboard — Redux Toolkit, server-rendered shell, wave-4 screens ([1f173d2](https://github.com/Krithik-m-codes/pinwren/commit/1f173d2336d888e049c64e5f79e9d6d4263f5f1d))
+* **widget:** default to the Pinwren orange accent and the new mark ([41effc0](https://github.com/Krithik-m-codes/pinwren/commit/41effc043bfb0088b7e57c168871e9816bffad6d))
+* **widget:** embeddable widget with pinned comments, bug reports and screenshot editor ([f7ea760](https://github.com/Krithik-m-codes/pinwren/commit/f7ea760cb1c7cbaf8cd50f62046962980fd9d724))
+* **widget:** Figma-style comments and full bug-report parity ([3854011](https://github.com/Krithik-m-codes/pinwren/commit/3854011c7bef35ed6e30e701a5f6b1b03b1b0d0e))
+* **widget:** v1 chunks, session replay, identity, visibility and @pinwren/react ([0102b1c](https://github.com/Krithik-m-codes/pinwren/commit/0102b1cc399840040bea3cafa992ff8997805315))
+* **widget:** wave-3 parity — lazy panel/report chunks, actions, branding, privacy, export ([e92f829](https://github.com/Krithik-m-codes/pinwren/commit/e92f829534e27737bc1ed74794b5ab6098644009))
+* **www:** marketing site, live demo and documentation ([f1f93ed](https://github.com/Krithik-m-codes/pinwren/commit/f1f93edf560ab225c399633986c18925d7e3dac7))
+* **www:** rebrand the website and docs with the new logo and palette ([3f2b429](https://github.com/Krithik-m-codes/pinwren/commit/3f2b429a83913775def4c6534584255ba11ff992))
+
+
+### Bug Fixes
+
+* **ai:** guard outbound calls, scope translations, apply through the update path ([6d9e867](https://github.com/Krithik-m-codes/pinwren/commit/6d9e867760390f21e5c8702815fde0a38346772c))
+* cap report metadata, align the body limit, publish every package ([7d8a8fe](https://github.com/Krithik-m-codes/pinwren/commit/7d8a8fe2a2806ebfe6219de02ac21492c22cca1a))
+* lock project settings saves; generate route types before lint ([2a6c8f4](https://github.com/Krithik-m-codes/pinwren/commit/2a6c8f4d36cd7bdc9c668cae1f943a14ec081950))
+* make realtime resume, session lifetime and the sign-in limiter work across workers ([a6af078](https://github.com/Krithik-m-codes/pinwren/commit/a6af0782548335c796d37e1a183881a36c277245))
+* **security:** close the CodeQL alerts (ReDoS, regex anchor, JSON-LD escape, demo page) ([ebb0ecc](https://github.com/Krithik-m-codes/pinwren/commit/ebb0ecc613127166ba5a597b5f6c51be7239a157))
+* **security:** pre-release hardening from the independent review ([2400367](https://github.com/Krithik-m-codes/pinwren/commit/240036717db121b42fa38e4b32415fc5d6ac5559))
+* **types:** add react and react-dom types to root devDependencies ([fd41850](https://github.com/Krithik-m-codes/pinwren/commit/fd41850a66a10e757ad88229c61f3237fedd9a91))
+* **www:** route hero pill button to self-hosting docs ([aa91f94](https://github.com/Krithik-m-codes/pinwren/commit/aa91f94846b1bc501b088b6d89a1fc0cd2281561))
+
+
+### Performance
+
+* **api:** remove hot-row lock waits and run cluster workers ([e46b63b](https://github.com/Krithik-m-codes/pinwren/commit/e46b63b0dbffa4818278caec515d17abc69546a4))
+
 ## [Unreleased]
 
 The first public release, 0.1.0. Pinwren was developed privately as "Annota" and renamed before publishing.
