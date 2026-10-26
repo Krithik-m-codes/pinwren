@@ -95,6 +95,19 @@ never followed.
 `GITHUB_API_URL` and `GITLAB_URL` come from you, not from a user, so they may point at private addresses without
 the allowlist (timeouts, size caps and no-redirects still apply).
 
+## AI triage
+
+Optional. Set these to configure the AI provider once for the whole instance; an admin can instead choose it under
+**Settings → AI**, and what is saved there wins. See [AI triage](/docs/dashboard/ai-triage).
+
+| Variable             | Meaning                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------- |
+| `AI_PROVIDER`        | `anthropic` (default), `openai` or `ollama`                                           |
+| `AI_MODEL`           | The model name                                                                        |
+| `AI_API_KEY`         | The provider key                                                                      |
+| `AI_BASE_URL`        | Provider endpoint. From you, not a user, so it may be a private address (like Ollama) |
+| `PINWREN_EU_PRIVACY` | `true` switches AI enrichment off for every project                                   |
+
 ## Intake and invitation limits
 
 | Variable                         | Default | Limit                                                                                                               |
@@ -126,7 +139,7 @@ passed to Pinwren itself.
 | `PINWREN_BIND`      | `127.0.0.1`      | Host address the port is bound to. `0.0.0.0` exposes it on every interface (not recommended without a proxy). |
 
 Besides the three required values, the compose file forwards `PINWREN_TRUST_PROXY`, `PINWREN_DISABLE_SIGNUP`,
-`PINWREN_ADMIN_EMAILS`, `PINWREN_OUTBOUND_ALLOWLIST`, `PINWREN_WORKERS` and `PINWREN_LICENSE_FILE` from
+`PINWREN_ADMIN_EMAILS`, `PINWREN_OUTBOUND_ALLOWLIST`, `PINWREN_WORKERS`, `PINWREN_LICENSE_FILE` and the AI variables from
 `docker/.env`. It sets `PINWREN_TRUST_PROXY=1` by default, because it expects one reverse proxy in front. Set
 `PINWREN_TRUST_PROXY=0` if clients reach the container directly, and a higher number if there are more proxies
 — see [Client addresses](#client-addresses).

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type * as Db from "@pinwren/db";
-import { runAiEnrichmentJob } from "./ai";
+import { consoleErrorLines, failedRequests, runAiEnrichmentJob } from "./ai";
 
 beforeAll(() => {
   process.env.DATABASE_URL ??= "postgres://unused@127.0.0.1:1/none";
@@ -91,5 +91,36 @@ describe("runAiEnrichmentJob", () => {
       projectId: "proj-1",
     });
     expect(res.status).toBe("completed");
+  });
+});
+
+describe("what the model is shown of a report's diagnostics", () => {
+  it("turns captured console entries into lines and drops plain logs", () => {
+    const lines = consoleErrorLines([
+      { level: "error", message: "TypeError: x is undefined", at: 1 },
+      { level: "log", message: "hello", at: 2 },
+      { level: "warn", message: "deprecated" },
+      "raw string",
+    ]);
+    expect(lines).toEqual(["error: TypeError: x is undefined", "warn: deprecated", "raw string"]);
+    expect(consoleErrorLines(null)).toEqual([]);
+  });
+
+  it("keeps only failed requests and strips the query string", () => {
+    const out = failedRequests([
+      { method: "GET", url: "https://a.test/ok?token=1", status: 200 },
+      { method: "POST", url: "https://a.test/pay?token=secret#x", status: 500, durationMs: 140 },
+      { method: "GET", url: "https://a.test/aborted", status: 0 },
+      { nonsense: true },
+    ]);
+    expect(out).toEqual([
+      { method: "POST", url: "https://a.test/pay", status: 500, durationMs: 140 },
+      { method: "GET", url: "https://a.test/aborted", status: 0 },
+    ]);
+  });
+
+  it("caps how much is sent", () => {
+    const many = Array.from({ length: 50 }, (_, i) => ({ level: "error", message: `e${i}` }));
+    expect(consoleErrorLines(many)).toHaveLength(20);
   });
 });

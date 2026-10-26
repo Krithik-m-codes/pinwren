@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "board",
+    "ai-triage",
     "page-review",
     "review-rounds",
     "saved-views",

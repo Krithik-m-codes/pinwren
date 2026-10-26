@@ -1,0 +1,70 @@
+---
+title: AI triage
+description: Optional summaries, priority suggestions, duplicate detection, reproduction steps and translation, using the model provider you choose.
+---
+
+AI triage is **off by default** and does nothing until an admin turns it on twice: once for the workspace (choose a
+provider and key), once per project. Pinwren never sends a report to a model you haven't configured.
+
+## 1. Choose a provider
+
+**Settings → AI** (workspace admins only).
+
+| Provider              | Use it for                                                                 | Needs                                     |
+| --------------------- | -------------------------------------------------------------------------- | ----------------------------------------- |
+| **Anthropic**         | Claude models (`claude-haiku-5-5` is the default and the cheapest)         | An API key                                |
+| **OpenAI-compatible** | OpenAI, Groq, OpenRouter, Azure, or any server with `/v1/chat/completions` | An API key, and a base URL for non-OpenAI |
+| **Ollama (local)**    | Models on your own hardware: reports never leave your network              | The address of your Ollama                |
+
+Set the **model**, paste the **API key**, then **Test connection** and **Save changes**. The key is encrypted at rest
+(AES-256-GCM) and is never shown again; **Change key** replaces it. Turn **Enable AI features** on.
+
+A base URL you type here must be a public address. To use a model on your private network (Ollama on another
+machine, a self-hosted gateway), either set `AI_BASE_URL` in the environment (see below) or add the host to
+`PINWREN_OUTBOUND_ALLOWLIST`.
+
+## 2. Turn it on for a project
+
+**Project → AI triage**:
+
+| Switch                          | What it adds to each new report                                                               |
+| ------------------------------- | --------------------------------------------------------------------------------------------- |
+| **Enable AI triage**            | Runs the options below in the background after a report arrives                               |
+| **Executive summaries**         | A one-paragraph summary and a suggested title                                                 |
+| **Priority & kind suggestions** | A suggested priority (shown as a **Suggest:** chip next to the priority) and kind             |
+| **Duplicate detection**         | Compares the report with the 10 most recent items in the project and flags a likely duplicate |
+| **Reproduction steps**          | Numbered steps to reproduce, from the report and its console errors and failed requests       |
+
+Nothing is applied on its own. On the item you see the summary, the suggested priority and a duplicate banner, and you
+choose: **Apply title**, click the **Suggest:** chip to set the priority, or **Link as duplicate**. Each is an
+ordinary change: it appears on the timeline, fires webhooks and can be undone like any edit. The suggested kind is
+stored and available through the API; the dashboard does not show it yet.
+
+## Translate a report
+
+On any item, **More actions → Translate report** shows the report in English, with **Show original** to switch back.
+Translations are saved, so asking again costs nothing. It works as soon as a provider is configured, even with
+project AI triage off.
+
+## What the provider receives
+
+The report's title and text, the page URL, the element it points at, error-level console entries, and failed requests
+(method, status and URL **without its query string**). **Never sent:** screenshots, session replays, request or
+response bodies, the reporter's name and email.
+
+AI is skipped entirely for a project with **Privacy mode** on, and for the whole instance when
+`PINWREN_EU_PRIVACY=true`. An AI failure (a bad key, a timeout) is retried twice and then given up on; the item simply has no AI
+section, and the email and notification for the new report are never held back.
+
+## Environment defaults
+
+For an instance where the operator configures the provider once, instead of in the dashboard:
+
+| Variable      | Meaning                                                                         |
+| ------------- | ------------------------------------------------------------------------------- |
+| `AI_PROVIDER` | `anthropic` (default), `openai` or `ollama`                                     |
+| `AI_MODEL`    | The model name                                                                  |
+| `AI_API_KEY`  | The key                                                                         |
+| `AI_BASE_URL` | An endpoint on your private network. Trusted: it skips the public-address check |
+
+Whatever an admin saves under Settings → AI wins over these.

@@ -30,6 +30,11 @@ services:
       PINWREN_WORKERS: ${PINWREN_WORKERS:-2}
       # Enterprise licence file inside the container (e.g. /data/pinwren.lic); empty = upload in Settings.
       PINWREN_LICENSE_FILE: ${PINWREN_LICENSE_FILE:-}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      PINWREN_EU_PRIVACY: ${PINWREN_EU_PRIVACY:-}
     volumes:
       - pinwren-data:/data
     depends_on:

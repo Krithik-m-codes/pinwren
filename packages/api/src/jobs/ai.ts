@@ -10,6 +10,48 @@ export type AiEnrichJob = {
   projectId: string;
 };
 
+const MAX_LOG_LINES = 20;
+
+/** Error-level console entries the widget captured ({ level, message }), as short lines for the prompt. */
+export function consoleErrorLines(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const lines: string[] = [];
+  for (const entry of raw as unknown[]) {
+    if (typeof entry === "string") {
+      lines.push(entry.slice(0, 300));
+    } else if (entry && typeof entry === "object") {
+      const { level, message } = entry as { level?: unknown; message?: unknown };
+      if (typeof message === "string" && (level === "error" || level === "warn" || level === undefined)) {
+        lines.push(`${typeof level === "string" ? level : "error"}: ${message.slice(0, 300)}`);
+      }
+    }
+    if (lines.length >= MAX_LOG_LINES) break;
+  }
+  return lines;
+}
+
+/** Failed requests only, without query strings (they can carry tokens). */
+export function failedRequests(
+  raw: unknown,
+): { method: string; url: string; status: number; durationMs?: number }[] {
+  if (!Array.isArray(raw)) return [];
+  const out: { method: string; url: string; status: number; durationMs?: number }[] = [];
+  for (const entry of raw as unknown[]) {
+    if (!entry || typeof entry !== "object") continue;
+    const n = entry as { method?: unknown; url?: unknown; status?: unknown; durationMs?: unknown };
+    if (typeof n.method !== "string" || typeof n.url !== "string" || typeof n.status !== "number") continue;
+    if (n.status > 0 && n.status < 400) continue;
+    out.push({
+      method: n.method,
+      url: n.url.split(/[?#]/)[0]?.slice(0, 300) ?? "",
+      status: n.status,
+      ...(typeof n.durationMs === "number" ? { durationMs: n.durationMs } : {}),
+    });
+    if (out.length >= MAX_LOG_LINES) break;
+  }
+  return out;
+}
+
 export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
   status: "completed" | "skipped" | "failed";
   reason?: string;
@@ -95,9 +137,8 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
 
   const [diag] = await getDb().select().from(diagnostics).where(eq(diagnostics.feedbackId, job.feedbackId));
 
-  const consoleLogs = diag?.console as string[] | undefined;
-  const networkLogs = diag?.network as
-    { method: string; url: string; status: number; durationMs?: number }[] | undefined;
+  const consoleLogs = consoleErrorLines(diag?.console);
+  const networkLogs = failedRequests(diag?.network);
 
   try {
     // 5. Execute enabled AI tasks

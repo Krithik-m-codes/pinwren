@@ -137,25 +137,14 @@ export function AiTab({ project: p }: { project: ProjectDetail }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Data Protection & Privacy</CardTitle>
+          <CardTitle>What the AI provider receives</CardTitle>
           <CardDescription>
-            Control whether sensitive session recording events can be forwarded to the AI provider.
+            The title and text of the report, the page URL, the element it points at, and the console errors
+            and failed requests (URL, method and status) captured with it. Screenshots, session replays,
+            request and response bodies, and the name and email of the reporter are never sent. With Privacy
+            mode on, or PINWREN_EU_PRIVACY=true, nothing is sent at all.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <SettingRow
-            label="Send session replays to AI"
-            htmlFor="allow-replay-in-ai"
-            description="By default, session replays and network payloads are excluded from AI prompts to protect sensitive data. Toggle on only if reproduction synthesis needs full replay logs."
-          >
-            <Switch
-              id="allow-replay-in-ai"
-              checked={config.allowReplayInAi}
-              disabled={!config.enabled || isUpdating}
-              onCheckedChange={(allowReplayInAi) => handleToggle({ allowReplayInAi }, "Replay data sharing")}
-            />
-          </SettingRow>
-        </CardContent>
       </Card>
     </div>
   );

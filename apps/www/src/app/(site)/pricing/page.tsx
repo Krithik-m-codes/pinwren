@@ -1,12 +1,10 @@
-import { Check, Minus, Heart, Users } from "lucide-react";
+import { Check, Minus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ButtonLink } from "@/components/button-link";
 import { PlanCards } from "@/components/pricing/plan-cards";
+import { SupportButtons } from "@/components/site/support-buttons";
 import { cn } from "@/lib/utils";
-
-const BUY_ME_COFFEE_URL = "https://www.buymeacoffee.com/krithikm92f";
-const GITHUB_SPONSORS_URL = "https://github.com/sponsors/Krithik-m-codes";
 
 export const metadata: Metadata = {
   title: "Pricing",
@@ -208,28 +206,7 @@ export default function PricingPage() {
         <p className="mb-6 text-muted-foreground">
           Pinwren is free to self-host forever. If it saves you time, consider supporting the project:
         </p>
-        <div className="flex flex-wrap justify-center gap-3">
-          <a
-            href={BUY_ME_COFFEE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg border border-orange-500/30 bg-orange-500/10 px-4 py-2.5 text-sm font-medium text-orange-600 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
-            aria-label="Buy me a coffee"
-          >
-            <Heart className="size-4" aria-hidden />
-            Buy me a coffee
-          </a>
-          <a
-            href={GITHUB_SPONSORS_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg border border-purple-500/30 bg-purple-500/10 px-4 py-2.5 text-sm font-medium text-purple-600 transition-colors hover:bg-purple-500/20 dark:text-purple-400"
-            aria-label="Sponsor on GitHub"
-          >
-            <Users className="size-4" aria-hidden />
-            Sponsor us
-          </a>
-        </div>
+        <SupportButtons className="justify-center" />
         <p className="mt-4 text-xs text-muted-foreground">
           Coffee fuels late-night fixes. Sponsorships fund features, docs, and maintenance.
         </p>

@@ -33,11 +33,10 @@ export function SupportButtons({ variant = "inline", className, showLabels = tru
         target="_blank"
         rel="noopener noreferrer"
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm font-medium text-orange-600 transition-colors hover:bg-orange-500/20 dark:text-orange-400",
+          "bg-brand-soft text-brand-ink inline-flex items-center gap-1.5 rounded-lg border border-brand/30 px-3 py-2 text-sm font-medium transition-colors hover:bg-brand/20",
           isStacked && "w-full justify-center",
           isMinimal && "px-2 py-1.5 text-xs",
         )}
-        aria-label="Buy me a coffee"
       >
         <Heart className="size-4" aria-hidden />
         {showLabels && <span>Buy me a coffee</span>}
@@ -50,14 +49,13 @@ export function SupportButtons({ variant = "inline", className, showLabels = tru
         target="_blank"
         rel="noopener noreferrer"
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-sm font-medium text-purple-600 transition-colors hover:bg-purple-500/20 dark:text-purple-400",
+          "inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent",
           isStacked && "w-full justify-center",
           isMinimal && "px-2 py-1.5 text-xs",
         )}
-        aria-label="Sponsor on GitHub"
       >
         <Users className="size-4" aria-hidden />
-        {showLabels && <span>Sponsor us</span>}
+        {showLabels && <span>Sponsor on GitHub</span>}
         {!isMinimal && <ExternalLink className="size-3 opacity-60" aria-hidden />}
       </a>
     </div>
@@ -75,7 +73,7 @@ export function FooterSupport() {
             href={BUY_ME_COFFEE_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-orange-500"
+            className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
           >
             <Heart className="size-4" aria-hidden />
             <span>Buy me a coffee</span>
@@ -87,7 +85,7 @@ export function FooterSupport() {
             href={GITHUB_SPONSORS_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-purple-500"
+            className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
           >
             <Users className="size-4" aria-hidden />
             <span>Sponsor on GitHub</span>

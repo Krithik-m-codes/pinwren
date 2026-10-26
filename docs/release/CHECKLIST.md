@@ -1,21 +1,22 @@
 # Pinwren 0.1.0 — release checklist
 
-Status as of 2026-10-22. Everything below "Verified" was run on the release candidate, not assumed. Nothing has
-been pushed or published yet.
+Status as of 2026-10-26. Everything below "Verified" was run on the release candidate (main at the time of
+writing), not assumed. The code is pushed and the packages are on npm at 0.1.1; the 0.1.0 app release (tag, GitHub
+release, Docker image on GHCR) is the open release-please PR.
 
 ## Verified
 
-| Check                                                      | Result                                                             |
-| ---------------------------------------------------------- | ------------------------------------------------------------------ |
-| `pnpm verify` (format, lint, typecheck, unit tests, build) | ✅ green — 358 unit tests across 10 packages, 13 typecheck tasks   |
-| API smoke (`scripts/smoke.mjs`, dev server)                | ✅ 327 / 327, incl. 34 attack checks                               |
-| API smoke against the production Docker image (2 workers)  | ✅ 288 pass; 11 expected differences (below)                       |
-| Dashboard Playwright                                       | ✅ 33 / 33                                                         |
-| Widget Playwright / React                                  | ✅ 59 / 59, React check ✅                                         |
-| Website + docs Playwright (axe, link checker)              | ✅ 78 / 78                                                         |
-| Load test, hardened image, 4 CPU / 4 workers               | ✅ all thresholds, ~130 req/s, p95 46 / 76 / 83 ms, 0 errors       |
-| npm packages (`pnpm pack`, manifests, real install)        | ✅ widget, react, sdk, mcp, cli install and run from tarballs      |
-| Independent security review                                | ✅ 3 high, 4 medium, 7 low found — all fixed and tested (ADR 0021) |
+| Check                                                      | Result                                                                         |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `pnpm verify` (format, lint, typecheck, unit tests, build) | ✅ green on TypeScript 6, ESLint 10, Vitest 5                                  |
+| API smoke (`scripts/smoke.mjs`, dev server, fresh start)   | ✅ 607 / 607, incl. the attack checks and the AI triage section                |
+| API smoke against the production Docker image (2 workers)  | ✅ 561 pass; 11 expected differences (below)                                   |
+| Dashboard Playwright                                       | ✅ 73 / 73 (CI retries twice and reports flaky tests)                          |
+| Widget Playwright                                          | ✅ 68 / 68                                                                     |
+| Website + docs Playwright (axe, link checker)              | ✅ 85 / 85                                                                     |
+| Load test, hardened image, 4 CPU / 4 workers               | ✅ all thresholds (run on 2026-10-22, before the AI feature)                   |
+| npm packages                                               | ✅ widget, react, sdk, mcp, cli published at 0.1.1 with the final homepage     |
+| Independent security reviews                               | ✅ pre-release review (ADR 0021) and a review of the AI triage work, all fixed |
 
 The 11 Docker-only smoke differences are by design: 10 licence checks sign with the development key, which a
 production build refuses; one webhook check targets the host loopback, which the outbound guard blocks in
@@ -27,8 +28,7 @@ Docker. The SDK/MCP/CLI section runs from the host only (`SMOKE_SKIP_PACKAGES=1`
    private key in your password manager, commit only the public key). Until then every official image build
    fails on purpose.
 2. **Trademark** — search "Pinwren" in USPTO / EUIPO / your market before buying domains or announcing.
-3. **Domains** — `pinwren.xride-labs.in` (site) is the placeholder in `apps/www/src/lib/site.ts`; change it there if you
-   pick another.
+3. **Domains** — the site is `pinwren.xride-labs.in` (`apps/www/src/lib/site.ts`).
 4. **npm** — in the `@pinwren` org, either add a **trusted publisher** for `Krithik-m-codes/pinwren`
    (workflow `release-please.yml`, environment `npm`) or create an automation token and save it as the
    `NPM_TOKEN` secret in a GitHub environment named `npm`.
@@ -38,12 +38,11 @@ Docker. The SDK/MCP/CLI section runs from the host only (`SMOKE_SKIP_PACKAGES=1`
 
 ## Release steps (after your go-ahead)
 
-1. `git push origin main` — pushes all local commits to the public repo. CI runs.
-2. release-please opens a release PR (root app + `@pinwren/widget`, `sdk`, `mcp`, `cli`, `react`, all `0.1.0`).
-   Fold the CHANGELOG's "Unreleased" notes into it, review, merge.
-3. Merging tags the releases; the workflow publishes the packages to npm (SDK before MCP) with provenance and
-   the multi-arch Docker image to GHCR.
-4. Deploy `apps/www` (its own `Dockerfile`, or Vercel) to the site domain.
+1. Merge the open release-please PR ("chore: release main").
+2. Merging tags `v0.1.0` and creates the GitHub release; the workflow builds and publishes the multi-arch Docker
+   image to GHCR (the official build fails on purpose without the production licence key, which is in the repo).
+   Packages already on npm at their version are skipped.
+3. Deploy `apps/www` (its own `Dockerfile`, or Vercel) to the site domain.
 
 ## Known gaps shipping in 0.1.0 (documented, not blockers)
 
@@ -51,6 +50,8 @@ Docker. The SDK/MCP/CLI section runs from the host only (`SMOKE_SKIP_PACKAGES=1`
 - **`widget-capture` chunk** is ~90 KB gzip (SnapDOM itself is ~88 KB); serve brotli (~76 KB). Loaded only when
   someone reports a bug.
 - **Dashboard is English-only**; the widget ships 11 languages.
+- **AI triage** is optional and off by default. The dashboard shows the suggested priority but not the suggested
+  kind (stored, available through the API). Jira and Linear sync have not been tried against real accounts.
 - **CSP allows inline scripts** (no third-party scripts): Next's nonces don't work with prerendered static
   shells — ADR 0021.
 - **S3 storage** was tested against a simulated S3, not a real bucket — try your bucket before relying on it.
