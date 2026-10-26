@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@better-auth/passkey": "^1.7.12",
-    "@hono/zod-validator": "^0.7.0",
+    "@hono/zod-validator": "^0.9.1",
     "@pinwren/ai": "workspace:*",
     "@pinwren/core": "workspace:*",
     "@pinwren/db": "workspace:*",
