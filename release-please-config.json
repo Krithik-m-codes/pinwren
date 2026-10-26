@@ -58,8 +58,7 @@
       "package-name": "pinwren",
       "include-component-in-tag": false,
       "changelog-path": "CHANGELOG.md",
-      "extra-files": ["packages/api/src/env.ts"],
-      "release-as": "0.1.0"
+      "extra-files": ["packages/api/src/env.ts"]
     },
     "packages/widget": {
       "release-type": "node",
