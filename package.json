@@ -1,6 +1,6 @@
 {
   "name": "pinwren",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Self-hostable visual feedback: pinned comments and annotated bug reports for any website, with a triage dashboard.",
   "license": "AGPL-3.0-only",

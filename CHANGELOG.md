@@ -8,6 +8,13 @@ From the first release on, release-please adds a section per version from the Co
 `main`; the widget's own changes are also listed in [`packages/widget/CHANGELOG.md`](packages/widget/CHANGELOG.md)
 once it is published.
 
+## [0.2.0](https://github.com/Krithik-m-codes/pinwren/compare/v0.1.0...v0.2.0) (2026-10-26)
+
+
+### Features
+
+* **widget:** screenshot quality setting and a "Reduce capture quality" switch ([ca31591](https://github.com/Krithik-m-codes/pinwren/commit/ca315911a06644b01cd3363488d90aff169c3a6e))
+
 ## 0.1.0 (2026-10-26)
 
 
