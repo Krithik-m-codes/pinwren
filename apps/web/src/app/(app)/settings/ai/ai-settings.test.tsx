@@ -6,9 +6,7 @@ import { AiSettingsForm } from "./ai-settings-form";
 describe("AiSettingsForm", () => {
   it("renders provider radio options", () => {
     render(
-      <AiSettingsForm
-        initialConfig={{ provider: "anthropic", model: "claude-3-5-haiku-latest", enabled: true }}
-      />,
+      <AiSettingsForm initialConfig={{ provider: "anthropic", model: "claude-haiku-5-5", enabled: true }} />,
     );
     expect(screen.getByText("Anthropic")).toBeDefined();
     expect(screen.getByText("OpenAI-compatible")).toBeDefined();

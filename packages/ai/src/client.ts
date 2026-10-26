@@ -13,6 +13,7 @@ export function createAiClient(options: AiClientOptions): AiClient {
         model: options.model,
         apiKey: options.apiKey,
         baseUrl: options.baseUrl,
+        fetch: options.fetch,
       });
       break;
     case "openai":
@@ -20,12 +21,14 @@ export function createAiClient(options: AiClientOptions): AiClient {
         model: options.model,
         apiKey: options.apiKey,
         baseUrl: options.baseUrl,
+        fetch: options.fetch,
       });
       break;
     case "ollama":
       provider = new OllamaProvider({
         model: options.model,
         baseUrl: options.baseUrl,
+        fetch: options.fetch,
       });
       break;
     default: {

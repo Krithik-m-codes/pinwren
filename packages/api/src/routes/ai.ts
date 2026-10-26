@@ -75,7 +75,7 @@ export const aiRoutes = new Hono<{ Variables: SessionVars }>()
         baseUrl = baseUrl ?? stored.baseUrl;
       }
 
-      const res = await testAiConnection({
+      const res = await testAiConnection(c.var.orgId, {
         provider,
         model,
         apiKey,
@@ -120,7 +120,12 @@ export const aiRoutes = new Hono<{ Variables: SessionVars }>()
     async (c) => {
       const feedbackId = c.req.param("id");
       const options = c.req.valid("json");
-      const result = await applyAiTriageSuggestions(feedbackId, c.var.orgId, options);
+      const result = await applyAiTriageSuggestions(
+        feedbackId,
+        c.var.orgId,
+        { kind: "user", userId: c.var.userId },
+        options,
+      );
       return c.json(result);
     },
   );

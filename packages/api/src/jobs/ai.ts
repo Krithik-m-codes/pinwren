@@ -123,6 +123,7 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
     }
 
     let duplicate;
+    let duplicateId: string | null = null;
     if (p.aiConfig.detectDuplicates) {
       // Find candidate open items in the same project
       const candidates = await getDb()
@@ -147,6 +148,9 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
         target: { title: item.title, body: item.body, url: item.pageUrl },
         candidates,
       });
+      // Only an id from the list the model was shown: a made-up one could name another project's item.
+      const candidateId = duplicate.candidateId;
+      if (duplicate.isDuplicate && candidates.some((c) => c.id === candidateId)) duplicateId = candidateId;
     }
 
     let repro;
@@ -170,7 +174,7 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
         summary: summary?.summary,
         suggestedPriority: triage?.priority,
         suggestedKind: triage?.kind,
-        duplicateCandidateId: duplicate?.isDuplicate ? duplicate.candidateId : null,
+        duplicateCandidateId: duplicateId,
         duplicateConfidence: duplicate?.confidence,
         duplicateReason: duplicate?.reason,
         reproductionSteps: repro?.reproductionSteps ?? [],
@@ -184,7 +188,7 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
           summary: summary?.summary,
           suggestedPriority: triage?.priority,
           suggestedKind: triage?.kind,
-          duplicateCandidateId: duplicate?.isDuplicate ? duplicate.candidateId : null,
+          duplicateCandidateId: duplicateId,
           duplicateConfidence: duplicate?.confidence,
           duplicateReason: duplicate?.reason,
           reproductionSteps: repro?.reproductionSteps ?? [],

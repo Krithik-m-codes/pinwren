@@ -1,11 +1,13 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type * as Context from "../context";
 
-beforeAll(() => {
+beforeAll(async () => {
   process.env.DATABASE_URL ??= "postgres://unused@127.0.0.1:1/none";
   process.env.PINWREN_URL ??= "http://localhost:3100";
   process.env.PINWREN_SECRET ??= "x".repeat(48);
-});
+  // The first import loads the whole app; do it here, not inside the first test's 5 s budget.
+  await import("../index");
+}, 120_000);
 
 vi.mock("../context", async (importOriginal) => {
   const actual = await importOriginal<typeof Context>();
@@ -27,7 +29,7 @@ vi.mock("../context", async (importOriginal) => {
 vi.mock("../services/ai", () => ({
   getOrgAiSettings: vi.fn().mockResolvedValue({
     provider: "anthropic",
-    model: "claude-3-5-haiku-latest",
+    model: "claude-haiku-5-5",
     enabled: true,
     hasKey: true,
   }),
@@ -96,7 +98,7 @@ describe("AI API Routes", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         provider: "anthropic",
-        model: "claude-3-5-haiku-latest",
+        model: "claude-haiku-5-5",
         apiKey: "sk-test",
       }),
     });
