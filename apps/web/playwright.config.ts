@@ -13,8 +13,10 @@ export default defineConfig({
   testIgnore: "journey.e2e.ts",
   timeout: 60_000,
   // CI: fail with a summary instead of being cancelled silently by the job timeout if anything hangs.
-  ...(process.env.CI ? { globalTimeout: 40 * 60_000 } : {}),
-  expect: { timeout: 10_000 },
+  // `next dev` compiles each route on first visit, which is slow on a shared runner: allow it more time
+  // and one more go (a retried pass is reported as flaky, so it stays visible).
+  ...(process.env.CI ? { globalTimeout: 40 * 60_000, retries: 2 } : {}),
+  expect: { timeout: process.env.CI ? 20_000 : 10_000 },
   // One workspace is shared, and some flows (board moves, bulk edits) change the same items.
   fullyParallel: false,
   workers: 1,
