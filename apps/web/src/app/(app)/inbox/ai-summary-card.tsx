@@ -2,6 +2,7 @@
 
 import { Check, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n/provider";
 
 export function AiSummaryCard({
   summary,
@@ -12,11 +13,12 @@ export function AiSummaryCard({
   suggestedTitle?: string | null | undefined;
   onApplyTitle?: ((title: string) => void) | undefined;
 }) {
+  const t = useT();
   return (
     <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-foreground">
       <div className="flex items-center gap-2 font-medium text-primary">
         <Sparkles className="size-4" />
-        <span>AI Executive Summary</span>
+        <span>{t("inbox1.aiExecutiveSummary")}</span>
       </div>
 
       <p className="leading-relaxed text-muted-foreground">{summary}</p>
@@ -25,7 +27,7 @@ export function AiSummaryCard({
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-primary/10 pt-2">
           <div className="min-w-0">
             <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-              Suggested title:{" "}
+              {t("inbox1.suggestedTitle")}{" "}
             </span>
             <span className="font-medium text-foreground">{suggestedTitle}</span>
           </div>
@@ -38,7 +40,7 @@ export function AiSummaryCard({
               onClick={() => onApplyTitle(suggestedTitle)}
             >
               <Check className="size-3" />
-              Apply title
+              {t("inbox1.applyTitle")}
             </Button>
           )}
         </div>

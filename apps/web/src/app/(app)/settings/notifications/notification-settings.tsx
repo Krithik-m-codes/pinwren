@@ -3,6 +3,7 @@
 import type { Route } from "next";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useT } from "@/lib/i18n/provider";
 import { useViewer } from "@/lib/viewer";
 import { EmailTemplates } from "../email/email-templates";
 import { MyNotifications } from "./my-notifications";
@@ -17,6 +18,7 @@ type Tab = (typeof TABS)[number];
  * and each person's own switches (My notifications). Admins change the first three; everyone reads them.
  */
 export function NotificationSettings() {
+  const t = useT();
   const { isAdmin } = useViewer();
   const router = useRouter();
   const pathname = usePathname();
@@ -31,10 +33,10 @@ export function NotificationSettings() {
       onValueChange={(v) => router.replace(`${pathname}?tab=${String(v)}` as Route, { scroll: false })}
     >
       <TabsList className="max-w-full overflow-x-auto">
-        <TabsTrigger value="general">General</TabsTrigger>
-        <TabsTrigger value="reporter">Reporter</TabsTrigger>
-        {isAdmin && <TabsTrigger value="templates">Email templates</TabsTrigger>}
-        <TabsTrigger value="mine">My notifications</TabsTrigger>
+        <TabsTrigger value="general">{t("settings2.tabGeneral")}</TabsTrigger>
+        <TabsTrigger value="reporter">{t("settings2.tabReporter")}</TabsTrigger>
+        {isAdmin && <TabsTrigger value="templates">{t("settings2.emailTemplates")}</TabsTrigger>}
+        <TabsTrigger value="mine">{t("settings2.tabMine")}</TabsTrigger>
       </TabsList>
       <TabsContent value="general" className="mt-2">
         <ProjectGeneral />

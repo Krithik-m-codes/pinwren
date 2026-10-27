@@ -10,9 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ProjectDetail } from "@/lib/api";
 import { errorMessage, useRotateProjectKeyMutation } from "@/lib/store/api";
+import { useT } from "@/lib/i18n/provider";
 import { useProjectPatch } from "./use-project";
 
 export function DangerTab({ project: p }: { project: ProjectDetail }) {
+  const t = useT();
   const router = useRouter();
   const save = useProjectPatch(p.id);
   const [confirm, setConfirm] = useState<"rotate" | "archive" | null>(null);
@@ -22,8 +24,8 @@ export function DangerTab({ project: p }: { project: ProjectDetail }) {
       .unwrap()
       .then(() => {
         setConfirm(null);
-        toast.success("New key generated", {
-          description: "Update the snippet on your site — the old key stopped working.",
+        toast.success(t("projects2.newKeyGenerated"), {
+          description: t("projects2.newKeyGeneratedDescription"),
         });
       })
       .catch((e: unknown) => toast.error(errorMessage(e)));
@@ -33,42 +35,40 @@ export function DangerTab({ project: p }: { project: ProjectDetail }) {
   return (
     <Card className="max-w-3xl ring-destructive/20">
       <CardHeader>
-        <CardTitle>Danger zone</CardTitle>
-        <CardDescription>These take effect on your site immediately.</CardDescription>
+        <CardTitle>{t("projects2.dangerZone")}</CardTitle>
+        <CardDescription>{t("projects2.dangerZoneDescription")}</CardDescription>
       </CardHeader>
       <CardContent>
         <SettingGroup>
           <SettingRow
-            label="Rotate the project key"
+            label={t("projects2.rotateProjectKey")}
             description={
               <>
-                Current key <code className="font-mono text-foreground">{p.publicKey}</code>. The old key
-                stops working at once, so the widget is offline until you update the snippet.
+                {t("projects2.currentKey")} <code className="font-mono text-foreground">{p.publicKey}</code>.{" "}
+                {t("projects2.oldKeyStopsAtOnce")}
               </>
             }
           >
             <Button variant="outline" onClick={() => setConfirm("rotate")}>
-              <KeyRound /> Rotate key
+              <KeyRound /> {t("projects2.rotateKey")}
             </Button>
           </SettingRow>
           <SettingRow
-            label={archived ? "Restore this project" : "Archive this project"}
-            description={
-              archived
-                ? "Turns the widget back on and lists the project again. Feedback was kept."
-                : "Switches the widget off and hides the project. Feedback is kept and you can restore it any time."
-            }
+            label={archived ? t("projects2.restoreThisProject") : t("projects2.archiveThisProject")}
+            description={archived ? t("projects2.restoreDescription") : t("projects2.archiveDescription")}
           >
             {archived ? (
               <Button
                 variant="outline"
-                onClick={() => save.mutate({ patch: { archived: false }, message: "Project restored" })}
+                onClick={() =>
+                  save.mutate({ patch: { archived: false }, message: t("projects2.projectRestored") })
+                }
               >
-                <ArchiveRestore /> Restore
+                <ArchiveRestore /> {t("projects2.restore")}
               </Button>
             ) : (
               <Button variant="destructive" onClick={() => setConfirm("archive")}>
-                <Archive /> Archive
+                <Archive /> {t("projects2.archive")}
               </Button>
             )}
           </SettingRow>
@@ -77,22 +77,22 @@ export function DangerTab({ project: p }: { project: ProjectDetail }) {
       <ConfirmDialog
         open={confirm === "rotate"}
         onOpenChange={(o) => setConfirm(o ? "rotate" : null)}
-        title="Rotate the project key?"
-        description="The widget on your site stops working until you replace the key in the snippet."
-        confirmLabel="Rotate key"
+        title={t("projects2.rotateProjectKeyQuestion")}
+        description={t("projects2.rotateConfirmDescription")}
+        confirmLabel={t("projects2.rotateKey")}
         pending={rotation.isLoading}
         onConfirm={rotate}
       />
       <ConfirmDialog
         open={confirm === "archive"}
         onOpenChange={(o) => setConfirm(o ? "archive" : null)}
-        title={`Archive ${p.name}?`}
-        description="The widget stops loading on your site and the project leaves your lists. You can restore it from this page."
-        confirmLabel="Archive project"
+        title={t("projects2.archiveNameQuestion", { name: p.name })}
+        description={t("projects2.archiveConfirmDescription")}
+        confirmLabel={t("projects2.archiveProject")}
         pending={save.isPending}
         onConfirm={() =>
           save.mutate(
-            { patch: { archived: true }, message: "Project archived" },
+            { patch: { archived: true }, message: t("projects2.projectArchived") },
             {
               onSuccess: () => {
                 setConfirm(null);

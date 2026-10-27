@@ -18,6 +18,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { assetUrl, type FeedbackRow, type Member } from "@/lib/api";
+import { useT } from "@/lib/i18n/provider";
 import { useMembers } from "@/lib/viewer";
 import { cn } from "@/lib/utils";
 import { DueDate, type Feed } from "./inbox-list";
@@ -41,6 +42,7 @@ export function BoardView({
   onOpen: (id: string) => void;
   onMove: (id: string, to: FeedbackStatus) => void;
 }) {
+  const t = useT();
   const members = useMembers();
   const [over, setOver] = useState<FeedbackStatus | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
@@ -53,8 +55,9 @@ export function BoardView({
       {list.hasMore && (
         <p className="flex items-center justify-center gap-3 border-b px-3 py-1.5 text-xs text-muted-foreground">
           <span className="tabular-nums">
-            Showing {items.length}
-            {list.total !== null ? ` of ${list.total}` : ""} items
+            {list.total !== null
+              ? t("inbox2.boardShowingOf", { count: items.length, total: list.total })
+              : t("inbox2.boardShowing", { count: items.length })}
           </span>
           <Button
             variant="outline"
@@ -63,7 +66,11 @@ export function BoardView({
             onClick={list.loadMore}
             data-testid="load-more"
           >
-            {list.loadingMore ? "Loading…" : list.loadMoreFailed ? "Couldn't load more. Retry" : "Load more"}
+            {list.loadingMore
+              ? t("inbox2.loading")
+              : list.loadMoreFailed
+                ? t("inbox2.loadMoreFailed")
+                : t("inbox2.loadMore")}
           </Button>
         </p>
       )}
@@ -73,7 +80,7 @@ export function BoardView({
           return (
             <section
               key={status}
-              aria-label={STATUS_META[status].label}
+              aria-label={t(STATUS_META[status].labelKey)}
               data-column={status}
               onDragOver={(e) => {
                 if (readOnly || !e.dataTransfer.types.includes(DRAG_TYPE)) return;
@@ -98,7 +105,7 @@ export function BoardView({
             >
               <header className="flex items-center gap-2 px-3 pt-3 pb-2">
                 <StatusIcon status={status} />
-                <h2 className="text-sm font-medium">{STATUS_META[status].label}</h2>
+                <h2 className="text-sm font-medium">{t(STATUS_META[status].labelKey)}</h2>
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {list.isLoading ? "" : column.length}
                 </span>
@@ -112,7 +119,7 @@ export function BoardView({
                 )}
                 {list.isSuccess && column.length === 0 && (
                   <li className="grid h-20 place-items-center rounded-lg border border-dashed px-3 text-center text-xs text-muted-foreground">
-                    Drop here
+                    {t("inbox2.dropHere")}
                   </li>
                 )}
                 {column.map((item) => (
@@ -153,6 +160,7 @@ function BoardCard({
   menuOpen: boolean;
   onMenuOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const Kind = KIND_META[item.kind].icon;
   const [dragging, setDragging] = useState(false);
   return (
@@ -181,7 +189,10 @@ function BoardCard({
             onMenuOpenChange(true);
           }
         }}
-        aria-label={`#${item.number} ${item.title || item.body}${readOnly ? "" : ". Press m to move."}`}
+        aria-label={t(readOnly ? "inbox2.cardLabel" : "inbox2.cardLabelMoveHint", {
+          number: item.number,
+          title: item.title || item.body,
+        })}
         className="block w-full rounded-lg p-2.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         {item.screenshotAssetId && (
@@ -201,19 +212,21 @@ function BoardCard({
         )}
         <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
           <span className="font-mono tabular-nums">#{item.number}</span>
-          <Kind className="size-3.5" aria-label={KIND_META[item.kind].label} />
+          <Kind className="size-3.5" aria-label={t(KIND_META[item.kind].labelKey)} />
           <PriorityIcon priority={item.priority} />
           {item.commentCount > 0 && (
             <span className="flex items-center gap-0.5 tabular-nums">
               <MessageSquare className="size-3.5" /> {item.commentCount}
             </span>
           )}
-          {item.attachmentCount > 0 && <Paperclip className="size-3.5" aria-label="Has attachments" />}
+          {item.attachmentCount > 0 && (
+            <Paperclip className="size-3.5" aria-label={t("inbox2.hasAttachments")} />
+          )}
           <span className="ml-auto">
             {assignee ? (
               <UserAvatar name={assignee.name} image={assignee.image} className="size-5" />
             ) : (
-              <span className="sr-only">Unassigned</span>
+              <span className="sr-only">{t("inbox2.unassigned")}</span>
             )}
           </span>
         </div>
@@ -225,7 +238,7 @@ function BoardCard({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                aria-label={`Move #${item.number} to…`}
+                aria-label={t("inbox2.moveCardTo", { number: item.number })}
                 className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100"
               />
             }
@@ -234,10 +247,10 @@ function BoardCard({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
             <DropdownMenuGroup>
-              <DropdownMenuLabel>Move to…</DropdownMenuLabel>
+              <DropdownMenuLabel>{t("inbox2.moveTo")}</DropdownMenuLabel>
               {FEEDBACK_STATUSES.filter((s) => s !== item.status).map((s) => (
                 <DropdownMenuItem key={s} onClick={() => onMove(s)}>
-                  <StatusIcon status={s} /> {STATUS_META[s].label}
+                  <StatusIcon status={s} /> {t(STATUS_META[s].labelKey)}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuGroup>

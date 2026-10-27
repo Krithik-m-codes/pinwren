@@ -15,6 +15,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { UserAvatar } from "@/components/user-avatar";
 import type { FeedbackRow, ItemLabel } from "@/lib/api";
+import { useT } from "@/lib/i18n/provider";
 import {
   errorMessage,
   useCreateLabelMutation,
@@ -121,6 +122,7 @@ export function LabelPicker({
   onChange: (labels: ItemLabel[]) => void;
   canCreate: boolean;
 }) {
+  const t = useT();
   const labels = useLabelsQuery(projectId, { skip: !open });
   const [createLabel, creating] = useCreateLabelMutation();
   const [search, setSearch] = useState("");
@@ -160,27 +162,25 @@ export function LabelPicker({
           <CommandInput
             value={search}
             onValueChange={setSearch}
-            placeholder={canCreate ? "Find or create a label…" : "Find a label…"}
-            aria-label="Find a label"
+            placeholder={canCreate ? t("inbox1.findOrCreateLabel") : t("inbox1.findLabel")}
+            aria-label={t("inbox1.findLabelAria")}
           />
           <CommandList>
             {labels.isLoading && (
               <p className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-                <Loader2 className="size-3.5 animate-spin" /> Loading labels…
+                <Loader2 className="size-3.5 animate-spin" /> {t("inbox1.loadingLabels")}
               </p>
             )}
             {labels.isError && (
               <p className="px-3 py-2 text-sm text-destructive">
                 {errorMessage(labels.error)}{" "}
                 <button type="button" className="underline" onClick={() => void labels.refetch()}>
-                  Retry
+                  {t("inbox1.retry")}
                 </button>
               </p>
             )}
             {labels.isSuccess && (
-              <CommandEmpty>
-                {all.length ? "No label matches." : "This project has no labels yet."}
-              </CommandEmpty>
+              <CommandEmpty>{all.length ? t("inbox1.noLabelMatches") : t("inbox1.noLabelsYet")}</CommandEmpty>
             )}
             {all.length > 0 && (
               <CommandGroup>
@@ -206,7 +206,7 @@ export function LabelPicker({
                   onSelect={create}
                 >
                   {creating.isLoading ? <Loader2 className="animate-spin" /> : <Plus />}
-                  <span className="truncate">Create “{name.slice(0, 40)}”</span>
+                  <span className="truncate">{t("inbox1.createLabel", { name: name.slice(0, 40) })}</span>
                 </CommandItem>
               </CommandGroup>
             )}
@@ -228,6 +228,7 @@ export function AssigneesPicker({
   align = "start",
   side = "bottom",
 }: PopoverProps & { value: readonly string[]; onChange: (ids: string[]) => void }) {
+  const t = useT();
   const members = useMembers();
   const chosen = new Set(value);
   return (
@@ -235,12 +236,12 @@ export function AssigneesPicker({
       <PopoverTrigger render={trigger} aria-label={label} />
       <PopoverContent align={align} side={side} className="w-60 p-0">
         <Command>
-          <CommandInput placeholder="Find a member…" aria-label="Find a member" />
+          <CommandInput placeholder={t("inbox1.findMember")} aria-label={t("inbox1.findMemberAria")} />
           <CommandList>
-            <CommandEmpty>No member matches.</CommandEmpty>
+            <CommandEmpty>{t("inbox1.noMemberMatches")}</CommandEmpty>
             <CommandGroup>
               <CommandItem value="Unassigned" data-checked={value.length === 0} onSelect={() => onChange([])}>
-                Unassigned
+                {t("inbox1.unassigned")}
               </CommandItem>
               {members.map((m) => (
                 <CommandItem
@@ -283,11 +284,12 @@ export function ItemSearchPicker({
   excludeId: string;
   onPick: (item: FeedbackRow) => void;
 }) {
+  const t = useT();
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
   useEffect(() => {
-    const t = setTimeout(() => setQ(search.trim()), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setQ(search.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
   }, [search]);
   const results = useListFeedbackInfiniteQuery(
     { projectId, status: "all", limit: 20, ...(q ? { q } : {}) },
@@ -308,20 +310,22 @@ export function ItemSearchPicker({
           <CommandInput
             value={search}
             onValueChange={setSearch}
-            placeholder="Search by #number or words…"
-            aria-label="Search items"
+            placeholder={t("inbox1.searchItemsPlaceholder")}
+            aria-label={t("inbox1.searchItemsAria")}
           />
           <CommandList>
             {results.isFetching && !items.length && (
               <p className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-                <Loader2 className="size-3.5 animate-spin" /> Searching…
+                <Loader2 className="size-3.5 animate-spin" /> {t("inbox1.searching")}
               </p>
             )}
             {results.isError && (
               <p className="px-3 py-2 text-sm text-destructive">{errorMessage(results.error)}</p>
             )}
             {results.isSuccess && !items.length && !results.isFetching && (
-              <p className="px-3 py-6 text-center text-sm text-muted-foreground">No other item matches.</p>
+              <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                {t("inbox1.noOtherItemMatches")}
+              </p>
             )}
             {items.length > 0 && (
               <CommandGroup>

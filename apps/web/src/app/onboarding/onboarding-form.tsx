@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import { onboardingForm } from "@/lib/form-schemas";
+import { useT } from "@/lib/i18n/provider";
 import { errorMessage } from "@/lib/store/api";
 import { useCreateProjectWithPresetMutation } from "@/lib/store/api/onboarding";
 
@@ -25,6 +26,7 @@ const slugify = (s: string) =>
 
 /** First run: name the workspace (organisation), then the first project and its site. */
 export function OnboardingForm() {
+  const t = useT();
   const [createProject] = useCreateProjectWithPresetMutation();
   const form = useZodForm(onboardingForm, {
     defaultValues: { org: "", project: "", site: "", preset: "public-site" },
@@ -41,7 +43,7 @@ export function OnboardingForm() {
           name: org,
           slug: workspaceSlug(org),
         });
-        if (error) throw new Error(error.message ?? "Could not create the workspace");
+        if (error) throw new Error(error.message ?? t("other1.couldNotCreateWorkspace"));
         orgId = data.id;
         setCreatedOrg(orgId);
       }
@@ -64,34 +66,32 @@ export function OnboardingForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-xl">Set up your workspace</CardTitle>
-        <CardDescription>
-          A workspace holds your team and projects. Each project is one website.
-        </CardDescription>
+        <CardTitle className="text-xl">{t("other1.setUpYourWorkspace")}</CardTitle>
+        <CardDescription>{t("other1.workspaceDescription")}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-5">
-          <Field id="org" label="Workspace name" error={errors.org?.message}>
+          <Field id="org" label={t("other1.workspaceName")} error={errors.org?.message}>
             <Input
               {...controlProps("org", errors.org?.message)}
               {...form.register("org")}
-              placeholder="Acme Studio"
+              placeholder={t("other1.workspaceNamePlaceholder")}
               // eslint-disable-next-line jsx-a11y/no-autofocus -- onboarding is a single form; start in its first field
               autoFocus
             />
           </Field>
-          <Field id="project" label="First project" error={errors.project?.message}>
+          <Field id="project" label={t("other1.firstProject")} error={errors.project?.message}>
             <Input
               {...controlProps("project", errors.project?.message)}
               {...form.register("project")}
-              placeholder="Marketing site"
+              placeholder={t("other1.firstProjectPlaceholder")}
             />
           </Field>
           <Field
             id="site"
-            label="Website domain"
+            label={t("other1.websiteDomain")}
             error={errors.site?.message}
-            help="Only this domain will be allowed to send feedback. You can add more later."
+            help={t("other1.websiteDomainHelp")}
           >
             <Input
               {...controlProps("site", errors.site?.message, true)}
@@ -99,11 +99,7 @@ export function OnboardingForm() {
               placeholder="www.example.com"
             />
           </Field>
-          <Field
-            id="preset"
-            label="What is this site for?"
-            help="Sets who sees pins on the page. You can change it later under Privacy & data."
-          >
+          <Field id="preset" label={t("other1.whatIsSiteFor")} help={t("other1.siteForHelp")}>
             <Controller
               control={form.control}
               name="preset"
@@ -114,7 +110,7 @@ export function OnboardingForm() {
           </Field>
           <FormError message={errors.root?.message} />
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Setting up…" : "Continue"}
+            {isSubmitting ? t("other1.settingUp") : t("other1.continue")}
           </Button>
         </form>
       </CardContent>

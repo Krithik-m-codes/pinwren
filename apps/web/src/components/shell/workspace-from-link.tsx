@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
+import { useT } from "@/lib/i18n/provider";
 import { here } from "@/lib/routes";
 
 /**
@@ -14,6 +15,7 @@ import { here } from "@/lib/routes";
  * address again without `org`; otherwise say the item belongs to a workspace you can't open.
  */
 export function WorkspaceFromLink({ orgId }: { orgId: string }) {
+  const t = useT();
   const params = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
@@ -45,7 +47,7 @@ export function WorkspaceFromLink({ orgId }: { orgId: string }) {
       <div className="fixed inset-0 z-50 grid place-items-center bg-background/80 backdrop-blur-sm" aria-busy>
         <div className="grid justify-items-center gap-3 text-sm text-muted-foreground">
           <Logo className="animate-pulse opacity-60" />
-          Opening the item&apos;s workspace…
+          {t("components2.openingWorkspace")}
         </div>
       </div>
     );
@@ -58,9 +60,7 @@ export function WorkspaceFromLink({ orgId }: { orgId: string }) {
       className="flex flex-wrap items-center gap-2 border-b bg-muted px-4 py-2 text-sm"
     >
       <Lock className="size-4 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 flex-1">
-        You don&apos;t have access to this item&apos;s workspace. Ask one of its Admins to add you.
-      </span>
+      <span className="min-w-0 flex-1">{t("components2.workspaceDenied")}</span>
       <Button
         variant="ghost"
         size="sm"
@@ -71,7 +71,7 @@ export function WorkspaceFromLink({ orgId }: { orgId: string }) {
           router.replace(here(pathname, next));
         }}
       >
-        Dismiss
+        {t("components2.dismiss")}
       </Button>
     </div>
   );

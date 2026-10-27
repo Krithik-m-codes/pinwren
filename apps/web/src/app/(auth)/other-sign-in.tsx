@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { authClient, signIn } from "@/lib/auth-client";
+import { useT } from "@/lib/i18n/provider";
 import { safeNext } from "@/lib/next-path";
 import { magicLinkForm, PROVIDER_NAMES, signInErrorMessage } from "@/lib/sign-in-forms";
 import type { OAuthProvider } from "@/lib/store/api/sign-in";
@@ -47,10 +48,11 @@ export function SignInErrorNotice() {
 }
 
 function Divider() {
+  const t = useT();
   return (
     <div className="flex items-center gap-3 text-xs text-muted-foreground" aria-hidden>
       <span className="h-px flex-1 bg-border" />
-      or
+      {t("other1.or")}
       <span className="h-px flex-1 bg-border" />
     </div>
   );
@@ -69,6 +71,7 @@ export function OtherSignIn({
   nextParam: string | null;
   onEmailLink?: () => void;
 }) {
+  const t = useT();
   const router = useRouter();
   const methods = useSignInMethods();
   const [pending, setPending] = useState<OAuthProvider | "passkey" | null>(null);
@@ -92,7 +95,7 @@ export function OtherSignIn({
       ...callbacks(nextParam, mode === "sign-up" ? "/sign-up" : "/sign-in"),
     });
     if (err) {
-      setError(err.message ?? `Couldn't reach ${PROVIDER_NAMES[provider]}`);
+      setError(err.message ?? t("other1.couldntReachProvider", { provider: PROVIDER_NAMES[provider] }));
       setPending(null);
     }
   };
@@ -105,8 +108,8 @@ export function OtherSignIn({
     if (err) {
       setError(
         /cancel|not allowed|abort/i.test(err.message ?? "")
-          ? "No passkey was used. Try again, or sign in another way."
-          : (err.message ?? "That passkey didn't work"),
+          ? t("other1.noPasskeyUsed")
+          : (err.message ?? t("other1.passkeyDidntWork")),
       );
       return;
     }
@@ -126,7 +129,9 @@ export function OtherSignIn({
           onClick={() => void social(p)}
         >
           <ProviderIcon provider={p} className="size-4" />
-          {pending === p ? "Redirecting…" : `Continue with ${PROVIDER_NAMES[p]}`}
+          {pending === p
+            ? t("other1.redirecting")
+            : t("other1.continueWithProvider", { provider: PROVIDER_NAMES[p] })}
         </Button>
       ))}
       {passkey && (
@@ -137,7 +142,8 @@ export function OtherSignIn({
           disabled={pending !== null}
           onClick={() => void withPasskey()}
         >
-          <Fingerprint /> {pending === "passkey" ? "Waiting for your passkey…" : "Sign in with a passkey"}
+          <Fingerprint />{" "}
+          {pending === "passkey" ? t("other1.waitingForPasskey") : t("other1.signInWithPasskey")}
         </Button>
       )}
       {emailLink && (
@@ -148,7 +154,7 @@ export function OtherSignIn({
           disabled={pending !== null}
           onClick={onEmailLink}
         >
-          <Mail /> Email me a sign-in link
+          <Mail /> {t("other1.emailMeSignInLink")}
         </Button>
       )}
       <FormError message={error ?? undefined} />
@@ -158,13 +164,14 @@ export function OtherSignIn({
 
 /** The email-link form, then "check your inbox". */
 export function EmailLinkStep({ nextParam, onBack }: { nextParam: string | null; onBack: () => void }) {
+  const t = useT();
   const [sentTo, setSentTo] = useState<string | null>(null);
   const form = useZodForm(magicLinkForm, { defaultValues: { email: "" } });
   const { errors, isSubmitting } = form.formState;
   const submit = form.handleSubmit(async ({ email }) => {
     const { error } = await signIn.magicLink({ email, ...callbacks(nextParam, "/sign-in") });
     if (error) {
-      form.setError("root", { message: error.message ?? "Couldn't send the link" });
+      form.setError("root", { message: error.message ?? t("other1.couldntSendLink") });
       return;
     }
     setSentTo(email);
@@ -175,19 +182,18 @@ export function EmailLinkStep({ nextParam, onBack }: { nextParam: string | null;
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
-            <MailCheck className="size-5 text-primary" /> Check your inbox
+            <MailCheck className="size-5 text-primary" /> {t("other1.checkYourInbox")}
           </CardTitle>
           <CardDescription className="text-pretty">
-            If {sentTo} can sign in here, a link is on its way. It works once, for 10 minutes. Open it in this
-            browser.
+            {t("other1.signInLinkSent", { email: sentTo })}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-2">
           <Button type="button" variant="outline" onClick={() => setSentTo(null)}>
-            Send another link
+            {t("other1.sendAnotherLink")}
           </Button>
           <Button type="button" variant="ghost" onClick={onBack}>
-            Sign in another way
+            {t("other1.signInAnotherWay")}
           </Button>
         </CardContent>
       </Card>
@@ -197,12 +203,12 @@ export function EmailLinkStep({ nextParam, onBack }: { nextParam: string | null;
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-xl">Sign in with an email link</CardTitle>
-        <CardDescription>We&apos;ll email you a link that signs you in, no password needed.</CardDescription>
+        <CardTitle className="text-xl">{t("other1.signInWithEmailLink")}</CardTitle>
+        <CardDescription>{t("other1.signInLinkDescription")}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
-          <Field id="link-email" label="Email" error={errors.email?.message}>
+          <Field id="link-email" label={t("other1.email")} error={errors.email?.message}>
             <Input
               {...controlProps("link-email", errors.email?.message)}
               {...form.register("email")}
@@ -214,10 +220,10 @@ export function EmailLinkStep({ nextParam, onBack }: { nextParam: string | null;
           </Field>
           <FormError message={errors.root?.message} />
           <Button type="submit" disabled={isSubmitting} className="w-full">
-            {isSubmitting ? "Sending…" : "Email me a link"}
+            {isSubmitting ? t("other1.sending") : t("other1.emailMeALink")}
           </Button>
           <Button type="button" variant="ghost" onClick={onBack}>
-            Use my password instead
+            {t("other1.usePasswordInstead")}
           </Button>
         </form>
       </CardContent>

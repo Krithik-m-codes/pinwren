@@ -7,9 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import type { ProjectAiConfig, ProjectDetail } from "@/lib/api";
+import { useT } from "@/lib/i18n/provider";
 import { errorMessage, useProjectAiQuery, useUpdateProjectAiMutation } from "@/lib/store/api";
 
 export function AiTab({ project: p }: { project: ProjectDetail }) {
+  const t = useT();
   const query = useProjectAiQuery(p.id);
   const [updateAi, { isLoading: isUpdating }] = useUpdateProjectAiMutation();
 
@@ -31,9 +33,9 @@ export function AiTab({ project: p }: { project: ProjectDetail }) {
   const handleToggle = async (patch: Partial<ProjectAiConfig>, label: string) => {
     try {
       await updateAi({ id: p.id, patch }).unwrap();
-      toast.success(`${label} updated`);
+      toast.success(t("projects1.aiLabelUpdated", { label }));
     } catch (e: unknown) {
-      toast.error(`Failed to update ${label}`, { description: errorMessage(e) });
+      toast.error(t("projects1.aiFailedToUpdate", { label }), { description: errorMessage(e) });
     }
   };
 
@@ -43,10 +45,9 @@ export function AiTab({ project: p }: { project: ProjectDetail }) {
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" />
           <div>
-            <p className="font-semibold">EU Privacy Mode is enabled</p>
+            <p className="font-semibold">{t("projects1.euPrivacyEnabled")}</p>
             <p className="mt-1 text-xs text-amber-700 dark:text-amber-300/90">
-              When EU Privacy Mode is active on this project, background AI enrichment is automatically
-              bypassed for privacy compliance to prevent any diagnostic transmission.
+              {t("projects1.euPrivacyDescription")}
             </p>
           </div>
         </div>
@@ -56,79 +57,82 @@ export function AiTab({ project: p }: { project: ProjectDetail }) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="size-4 text-primary" />
-            AI Triage & Enrichment
+            {t("projects1.aiTriageEnrichment")}
           </CardTitle>
-          <CardDescription>
-            Configure automated triage, duplicate checks, and executive summaries for incoming reports on this
-            project.
-          </CardDescription>
+          <CardDescription>{t("projects1.aiTriageDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <SettingGroup>
             <SettingRow
-              label="Enable AI triage"
+              label={t("projects1.enableAiTriage")}
               htmlFor="project-ai-enabled"
-              description="Run background AI enrichment on newly received feedback reports."
+              description={t("projects1.enableAiTriageDescription")}
             >
               <Switch
                 id="project-ai-enabled"
                 checked={config.enabled}
                 disabled={isUpdating}
-                onCheckedChange={(enabled) => handleToggle({ enabled }, "AI triage")}
+                onCheckedChange={(enabled) => handleToggle({ enabled }, t("projects1.aiTriage"))}
               />
             </SettingRow>
 
             <SettingRow
-              label="Executive summaries"
+              label={t("projects1.executiveSummaries")}
               htmlFor="project-ai-summary"
-              description="Synthesize a concise summary and suggested headline for each report."
+              description={t("projects1.executiveSummariesDescription")}
             >
               <Switch
                 id="project-ai-summary"
                 checked={config.autoSummary}
                 disabled={!config.enabled || isUpdating}
-                onCheckedChange={(autoSummary) => handleToggle({ autoSummary }, "Executive summary")}
+                onCheckedChange={(autoSummary) =>
+                  handleToggle({ autoSummary }, t("projects1.executiveSummary"))
+                }
               />
             </SettingRow>
 
             <SettingRow
-              label="Priority & kind suggestions"
+              label={t("projects1.prioritySuggestions")}
               htmlFor="project-ai-severity"
-              description="Analyze report content and errors to recommend priority and report type."
+              description={t("projects1.prioritySuggestionsDescription")}
             >
               <Switch
                 id="project-ai-severity"
                 checked={config.autoSeverity}
                 disabled={!config.enabled || isUpdating}
-                onCheckedChange={(autoSeverity) => handleToggle({ autoSeverity }, "Severity suggestions")}
+                onCheckedChange={(autoSeverity) =>
+                  handleToggle({ autoSeverity }, t("projects1.severitySuggestions"))
+                }
               />
             </SettingRow>
 
             <SettingRow
-              label="Duplicate detection"
+              label={t("projects1.duplicateDetection")}
               htmlFor="project-ai-duplicates"
-              description="Scan existing feedback items to warn about potential duplicate submissions."
+              description={t("projects1.duplicateDetectionDescription")}
             >
               <Switch
                 id="project-ai-duplicates"
                 checked={config.detectDuplicates}
                 disabled={!config.enabled || isUpdating}
                 onCheckedChange={(detectDuplicates) =>
-                  handleToggle({ detectDuplicates }, "Duplicate detection")
+                  handleToggle({ detectDuplicates }, t("projects1.duplicateDetection"))
                 }
               />
             </SettingRow>
 
             <SettingRow
-              label="Reproduction steps"
+              label={t("projects1.reproductionSteps")}
               htmlFor="project-ai-repro"
-              description="Convert user session actions into an actionable step-by-step checklist."
+              description={t("projects1.reproductionStepsDescription")}
             >
               <Switch
                 id="project-ai-repro"
                 checked={config.generateRepro}
                 disabled={!config.enabled || isUpdating}
-                onCheckedChange={(generateRepro) => handleToggle({ generateRepro }, "Reproduction synthesis")}
+                onCheckedChange={(generateRepro) =>
+                  handleToggle({ generateRepro }, t("projects1.reproductionSynthesis"))
+                }
               />
             </SettingRow>
           </SettingGroup>
@@ -137,13 +141,8 @@ export function AiTab({ project: p }: { project: ProjectDetail }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>What the AI provider receives</CardTitle>
-          <CardDescription>
-            The title and text of the report, the page URL, the element it points at, and the console errors
-            and failed requests (URL, method and status) captured with it. Screenshots, session replays,
-            request and response bodies, and the name and email of the reporter are never sent. With Privacy
-            mode on, or PINWREN_EU_PRIVACY=true, nothing is sent at all.
-          </CardDescription>
+          <CardTitle>{t("projects1.aiProviderReceives")}</CardTitle>
+          <CardDescription>{t("projects1.aiProviderReceivesDescription")}</CardDescription>
         </CardHeader>
       </Card>
     </div>

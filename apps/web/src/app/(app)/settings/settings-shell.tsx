@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
+import { useT } from "@/lib/i18n/provider";
 import { SETTINGS_PAGES, visibleSettingsPages } from "@/lib/settings-nav";
 import { useMeQuery } from "@/lib/store/api";
 import { cn } from "@/lib/utils";
 
 /** Settings: one main column with a section nav — a rail on desktop, a scrolling strip on phones. */
 export function SettingsShell({ children }: { children: React.ReactNode }) {
+  const t = useT();
   const pathname = usePathname();
   const me = useMeQuery(undefined).data;
   // Hide what the user can't change: branding and templates are for workspace admins, SMTP and
@@ -21,14 +23,18 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
       <PageHeader
         title={
           <span>
-            Settings<span className="text-muted-foreground"> / {current?.label}</span>
+            {t("settings2.settings")}
+            <span className="text-muted-foreground"> / {current && t(current.labelKey)}</span>
           </span>
         }
       />
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 pb-16 md:flex-row md:gap-8">
-        <nav aria-label="Settings" className="-mx-4 shrink-0 overflow-x-auto px-4 md:mx-0 md:w-48 md:px-0">
+        <nav
+          aria-label={t("settings2.settings")}
+          className="-mx-4 shrink-0 overflow-x-auto px-4 md:mx-0 md:w-48 md:px-0"
+        >
           <ul className="flex gap-1 md:flex-col">
-            {nav.map(({ href, label, icon: Icon, access }) => {
+            {nav.map(({ href, labelKey, icon: Icon, access }) => {
               const active = pathname === href;
               return (
                 <li key={href}>
@@ -41,10 +47,10 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
                     )}
                   >
                     <Icon className="size-4" />
-                    {label}
+                    {t(labelKey)}
                     {access === "instance" && (
                       <span className="ml-auto hidden text-[10px] tracking-wide text-muted-foreground uppercase md:inline">
-                        Admin
+                        {t("settings2.adminBadge")}
                       </span>
                     )}
                   </Link>

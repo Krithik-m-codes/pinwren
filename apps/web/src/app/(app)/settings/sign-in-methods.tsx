@@ -4,7 +4,7 @@ import { Fingerprint, KeyRound, Link2, Pencil, Trash2 } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { timeAgo } from "@/components/feedback-meta";
+import { useTimeAgo } from "@/components/feedback-meta";
 import { controlProps, Field, FormError, useZodForm } from "@/components/form";
 import { ProviderIcon } from "@/components/provider-icon";
 import { EmptyState, ErrorState } from "@/components/states";
@@ -22,6 +22,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
+import type { TFn } from "@/lib/i18n/english";
+import { useT } from "@/lib/i18n/provider";
 import { passkeyNameForm, PROVIDER_NAMES, providerName, signInErrorMessage } from "@/lib/sign-in-forms";
 import { errorMessage } from "@/lib/store/api";
 import { useAppDispatch } from "@/lib/store/hooks";
@@ -60,10 +62,13 @@ function useLinkError(): string | null {
 // --- Passkeys ---------------------------------------------------------------------------------------
 
 /** A passkey's label: its own name, else the device type. */
-const passkeyLabel = (p: Passkey) =>
-  p.name?.trim() || (p.deviceType === "multiDevice" ? "Synced passkey" : "Passkey on a security key");
+const passkeyLabel = (p: Passkey, t: TFn) =>
+  p.name?.trim() ||
+  (p.deviceType === "multiDevice" ? t("settings2.syncedPasskey") : t("settings2.passkeyOnSecurityKey"));
 
 export function PasskeysCard() {
+  const t = useT();
+  const timeAgo = useTimeAgo();
   const methods = useSignInMethodsQuery(undefined);
   const q = usePasskeysQuery(undefined);
   const [open, setOpen] = useState<"add" | { rename: Passkey } | { remove: Passkey } | null>(null);
@@ -75,23 +80,19 @@ export function PasskeysCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          Passkeys
+          {t("settings2.passkeys")}
           {passkeys.length > 0 && (
             <Badge variant="secondary" className="font-normal" data-testid="passkey-count">
               {passkeys.length}
             </Badge>
           )}
         </CardTitle>
-        <CardDescription className="text-pretty">
-          Sign in with your fingerprint, face, screen lock or a security key instead of a password. Saved in
-          your password manager or on this device.
-        </CardDescription>
+        <CardDescription className="text-pretty">{t("settings2.passkeysDesc")}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         {!enabled && (
           <p className="rounded-lg bg-muted p-3 text-sm text-pretty text-muted-foreground">
-            Passkeys are switched off on this server (Settings › Security). You can still remove the ones you
-            have.
+            {t("settings2.passkeysOff")}
           </p>
         )}
         {q.isLoading && <Skeleton className="h-11" />}
@@ -99,29 +100,29 @@ export function PasskeysCard() {
         {q.data && passkeys.length === 0 && (
           <EmptyState
             icon={Fingerprint}
-            title="No passkeys yet"
-            description={enabled ? "Add one to sign in without typing a password." : undefined}
+            title={t("settings2.noPasskeysYet")}
+            description={enabled ? t("settings2.addOneToSignIn") : undefined}
             className="py-6"
           />
         )}
         {passkeys.length > 0 && (
-          <ul className="-my-1 divide-y" aria-label="Passkeys">
+          <ul className="-my-1 divide-y" aria-label={t("settings2.passkeys")}>
             {passkeys.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center gap-3 py-2.5" data-testid="passkey-row">
                 <span className="grid size-8 place-items-center rounded-full bg-muted">
                   <Fingerprint className="size-4 text-muted-foreground" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{passkeyLabel(p)}</p>
+                  <p className="truncate text-sm font-medium">{passkeyLabel(p, t)}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {p.backedUp ? "Synced" : "This device only"}
-                    {p.createdAt ? ` · added ${timeAgo(p.createdAt)}` : ""}
+                    {p.backedUp ? t("settings2.synced") : t("settings2.thisDeviceOnly")}
+                    {p.createdAt ? ` · ${t("settings2.addedAgo", { time: timeAgo(p.createdAt) })}` : ""}
                   </p>
                 </div>
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={`Rename ${passkeyLabel(p)}`}
+                  aria-label={t("settings2.renameNamed", { name: passkeyLabel(p, t) })}
                   onClick={() => setOpen({ rename: p })}
                 >
                   <Pencil />
@@ -129,7 +130,7 @@ export function PasskeysCard() {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={`Remove ${passkeyLabel(p)}`}
+                  aria-label={t("settings2.removeNamed", { name: passkeyLabel(p, t) })}
                   onClick={() => setOpen({ remove: p })}
                 >
                   <Trash2 />
@@ -140,7 +141,7 @@ export function PasskeysCard() {
         )}
         {enabled && (
           <Button variant="outline" className="justify-self-start" onClick={() => setOpen("add")}>
-            <KeyRound /> Add a passkey
+            <KeyRound /> {t("settings2.addAPasskey")}
           </Button>
         )}
       </CardContent>
@@ -156,16 +157,16 @@ export function PasskeysCard() {
       <ConfirmDialog
         open={!!open && open !== "add" && "remove" in open}
         onOpenChange={(o) => !o && setOpen(null)}
-        title="Remove this passkey?"
-        description="You won't be able to sign in with it any more. Remove it from your password manager or device too."
-        confirmLabel="Remove"
+        title={t("settings2.removeThisPasskeyQ")}
+        description={t("settings2.removePasskeyDesc")}
+        confirmLabel={t("settings2.removeConfirm")}
         pending={removing.isLoading}
         onConfirm={() => {
           if (!open || open === "add" || !("remove" in open)) return;
           remove(open.remove.id)
             .unwrap()
             .then(() => {
-              toast.success("Passkey removed");
+              toast.success(t("settings2.passkeyRemoved"));
               setOpen(null);
             })
             .catch((e: unknown) => toast.error(errorMessage(e)));
@@ -177,10 +178,11 @@ export function PasskeysCard() {
 
 /** Name it, then the browser's own passkey dialog. */
 function AddPasskey({ onDone }: { onDone: () => void }) {
+  const t = useT();
   const dispatch = useAppDispatch();
   const defaultName = useSyncExternalStore(
     subscribeNever,
-    () => describeAgent(navigator.userAgent),
+    () => describeAgent(navigator.userAgent, t),
     () => "",
   );
   const form = useZodForm(passkeyNameForm, { values: { name: defaultName } });
@@ -191,29 +193,27 @@ function AddPasskey({ onDone }: { onDone: () => void }) {
       const msg = error.message ?? "";
       form.setError("root", {
         message: /fresh|session/i.test(msg)
-          ? "For your security, sign out and back in, then add the passkey within a day of signing in."
+          ? t("settings2.passkeyFreshSession")
           : /cancel|not allowed|abort/i.test(msg)
-            ? "The passkey wasn't saved. Try again when you're ready."
-            : msg || "Couldn't add the passkey",
+            ? t("settings2.passkeyNotSaved")
+            : msg || t("settings2.couldntAddPasskey"),
       });
       return;
     }
     dispatch(passkeysChanged());
-    toast.success("Passkey added", { description: "Use it on the sign-in page." });
+    toast.success(t("settings2.passkeyAdded"), { description: t("settings2.useItOnSignIn") });
     onDone();
   });
   return (
     <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
       <DialogHeader>
-        <DialogTitle>Add a passkey</DialogTitle>
-        <DialogDescription>
-          Your browser asks where to save it: your password manager, this device, or a security key.
-        </DialogDescription>
+        <DialogTitle>{t("settings2.addAPasskey")}</DialogTitle>
+        <DialogDescription>{t("settings2.addPasskeyDesc")}</DialogDescription>
       </DialogHeader>
       <Field
         id="passkey-name"
-        label="Name"
-        help="So you can tell your passkeys apart."
+        label={t("settings2.name")}
+        help={t("settings2.passkeyNameHelp")}
         error={errors.name?.message}
       >
         <Input
@@ -227,10 +227,10 @@ function AddPasskey({ onDone }: { onDone: () => void }) {
       <FormError message={errors.root?.message} />
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onDone}>
-          Cancel
+          {t("settings2.cancel")}
         </Button>
         <Button type="submit" disabled={isSubmitting}>
-          <Fingerprint /> {isSubmitting ? "Waiting for your device…" : "Create passkey"}
+          <Fingerprint /> {isSubmitting ? t("settings2.waitingForDevice") : t("settings2.createPasskey")}
         </Button>
       </DialogFooter>
     </form>
@@ -238,13 +238,14 @@ function AddPasskey({ onDone }: { onDone: () => void }) {
 }
 
 function RenamePasskey({ passkey, onDone }: { passkey: Passkey; onDone: () => void }) {
+  const t = useT();
   const [rename] = useRenamePasskeyMutation();
-  const form = useZodForm(passkeyNameForm, { defaultValues: { name: passkeyLabel(passkey) } });
+  const form = useZodForm(passkeyNameForm, { defaultValues: { name: passkeyLabel(passkey, t) } });
   const { errors, isSubmitting } = form.formState;
   const submit = form.handleSubmit(async ({ name }) => {
     try {
       await rename({ id: passkey.id, name }).unwrap();
-      toast.success("Passkey renamed");
+      toast.success(t("settings2.passkeyRenamed"));
       onDone();
     } catch (e) {
       form.setError("root", { message: errorMessage(e) });
@@ -253,9 +254,9 @@ function RenamePasskey({ passkey, onDone }: { passkey: Passkey; onDone: () => vo
   return (
     <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
       <DialogHeader>
-        <DialogTitle>Rename passkey</DialogTitle>
+        <DialogTitle>{t("settings2.renamePasskey")}</DialogTitle>
       </DialogHeader>
-      <Field id="passkey-rename" label="Name" error={errors.name?.message}>
+      <Field id="passkey-rename" label={t("settings2.name")} error={errors.name?.message}>
         <Input
           {...controlProps("passkey-rename", errors.name?.message)}
           {...form.register("name")}
@@ -267,10 +268,10 @@ function RenamePasskey({ passkey, onDone }: { passkey: Passkey; onDone: () => vo
       <FormError message={errors.root?.message} />
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onDone}>
-          Cancel
+          {t("settings2.cancel")}
         </Button>
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Saving…" : "Save"}
+          {isSubmitting ? t("settings2.saving") : t("settings2.save")}
         </Button>
       </DialogFooter>
     </form>
@@ -284,6 +285,8 @@ function RenamePasskey({ passkey, onDone }: { passkey: Passkey; onDone: () => vo
  * account already has one connected (a provider switched off later can still be disconnected).
  */
 export function ConnectedAccountsCard() {
+  const t = useT();
+  const timeAgo = useTimeAgo();
   const methods = useSignInMethodsQuery(undefined);
   const q = useLinkedAccountsQuery(undefined);
   const [unlink, unlinking] = useUnlinkAccountMutation();
@@ -311,7 +314,9 @@ export function ConnectedAccountsCard() {
       errorCallbackURL: PROFILE_PATH,
     });
     if (error) {
-      toast.error(error.message ?? `Couldn't reach ${PROVIDER_NAMES[provider]}`);
+      toast.error(
+        error.message ?? t("settings2.couldntReachProvider", { provider: PROVIDER_NAMES[provider] }),
+      );
       setPending(null);
     }
   };
@@ -319,10 +324,8 @@ export function ConnectedAccountsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Connected accounts</CardTitle>
-        <CardDescription className="text-pretty">
-          Sign in with Google or GitHub as well. The address there can differ from your Pinwren email.
-        </CardDescription>
+        <CardTitle>{t("settings2.connectedAccounts")}</CardTitle>
+        <CardDescription className="text-pretty">{t("settings2.connectedAccountsDesc")}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         {linkError && (
@@ -332,7 +335,7 @@ export function ConnectedAccountsCard() {
         )}
         {q.isError && <ErrorState error={q.error} retry={() => void q.refetch()} className="py-6" />}
         {q.data && (
-          <ul className="-my-1 divide-y" aria-label="Connected accounts">
+          <ul className="-my-1 divide-y" aria-label={t("settings2.connectedAccounts")}>
             {rows.map((p) => {
               const account = linked.find((a) => a.providerId === p);
               return (
@@ -343,8 +346,10 @@ export function ConnectedAccountsCard() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">{PROVIDER_NAMES[p]}</p>
                     <p className="text-xs text-muted-foreground">
-                      {account ? `Connected ${timeAgo(account.createdAt)}` : "Not connected"}
-                      {account && !offered.includes(p) ? " · no longer offered on this server" : ""}
+                      {account
+                        ? t("settings2.connectedAgo", { time: timeAgo(account.createdAt) })
+                        : t("settings2.notConnected")}
+                      {account && !offered.includes(p) ? ` · ${t("settings2.noLongerOffered")}` : ""}
                     </p>
                   </div>
                   {account ? (
@@ -352,12 +357,12 @@ export function ConnectedAccountsCard() {
                       variant="ghost"
                       size="sm"
                       disabled={onlyOne}
-                      title={onlyOne ? "It's your only way to sign in" : undefined}
+                      title={onlyOne ? t("settings2.onlyWayToSignIn") : undefined}
                       onClick={() =>
                         setConfirm({ providerId: account.providerId, accountId: account.accountId })
                       }
                     >
-                      Disconnect
+                      {t("settings2.disconnect")}
                     </Button>
                   ) : (
                     <Button
@@ -366,7 +371,7 @@ export function ConnectedAccountsCard() {
                       disabled={pending !== null}
                       onClick={() => void connect(p)}
                     >
-                      <Link2 /> {pending === p ? "Redirecting…" : "Connect"}
+                      <Link2 /> {pending === p ? t("settings2.redirecting") : t("settings2.connect")}
                     </Button>
                   )}
                 </li>
@@ -375,24 +380,24 @@ export function ConnectedAccountsCard() {
           </ul>
         )}
         {q.data && !hasPassword && (
-          <p className="text-xs text-pretty text-muted-foreground">
-            You sign in without a password. To add one, use “Forgot password?” on the sign-in page.
-          </p>
+          <p className="text-xs text-pretty text-muted-foreground">{t("settings2.noPasswordHint")}</p>
         )}
       </CardContent>
       <ConfirmDialog
         open={confirm !== null}
         onOpenChange={(o) => !o && setConfirm(null)}
-        title={`Disconnect ${confirm ? providerName(confirm.providerId) : ""}?`}
-        description="You won't be able to sign in with it any more. You can connect it again later."
-        confirmLabel="Disconnect"
+        title={t("settings2.disconnectProviderQ", {
+          provider: confirm ? providerName(confirm.providerId) : "",
+        })}
+        description={t("settings2.disconnectDesc")}
+        confirmLabel={t("settings2.disconnect")}
         pending={unlinking.isLoading}
         onConfirm={() => {
           if (!confirm) return;
           unlink(confirm)
             .unwrap()
             .then(() => {
-              toast.success("Disconnected");
+              toast.success(t("settings2.disconnected"));
               setConfirm(null);
             })
             .catch((e: unknown) => toast.error(errorMessage(e)));

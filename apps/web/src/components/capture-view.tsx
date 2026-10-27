@@ -6,6 +6,7 @@ import { PenLine } from "lucide-react";
 import { AnnotationOverlay } from "@/components/annotation-layer";
 import { Toggle } from "@/components/ui/toggle";
 import type { Placement } from "@/lib/geometry";
+import { useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
 export type Marker = Placement & {
@@ -30,17 +31,18 @@ export function AnnotationsToggle({
   pressed: boolean;
   onPressedChange: (on: boolean) => void;
 }) {
+  const t = useT();
   if (!layer?.shapes.length) return null;
   return (
     <Toggle
       size="sm"
       pressed={pressed}
       onPressedChange={onPressedChange}
-      aria-label={pressed ? "Hide annotations" : "Show annotations"}
-      title={pressed ? "Hide the reporter's annotations" : "Show the reporter's annotations"}
+      aria-label={pressed ? t("components1.hideAnnotations") : t("components1.showAnnotations")}
+      title={pressed ? t("components1.hideReporterAnnotations") : t("components1.showReporterAnnotations")}
       data-testid="annotations-toggle"
     >
-      <PenLine /> Annotations
+      <PenLine /> {t("components1.annotations")}
     </Toggle>
   );
 }
@@ -70,6 +72,7 @@ export function CaptureView({
   annotations?: AnnotationLayer | null | undefined;
   showAnnotations?: boolean;
 }) {
+  const t = useT();
   const Tag = decorative ? "span" : "button";
   return (
     <div className={cn("relative overflow-hidden rounded-lg border bg-muted/40", className)}>
@@ -91,7 +94,9 @@ export function CaptureView({
                 type={decorative ? undefined : "button"}
                 onClick={m.onSelect}
                 title={m.title}
-                aria-label={decorative ? undefined : (m.title ?? `Feedback ${m.label}`)}
+                aria-label={
+                  decorative ? undefined : (m.title ?? t("components1.feedbackMarker", { label: m.label }))
+                }
                 aria-hidden={decorative || undefined}
                 data-marker={m.id}
                 className={cn(
@@ -126,7 +131,9 @@ export function CaptureView({
               type={decorative ? undefined : "button"}
               onClick={m.onSelect}
               title={m.title}
-              aria-label={decorative ? undefined : (m.title ?? `Feedback ${m.label}`)}
+              aria-label={
+                decorative ? undefined : (m.title ?? t("components1.feedbackMarker", { label: m.label }))
+              }
               aria-hidden={decorative || undefined}
               data-marker={m.id}
               className={cn(

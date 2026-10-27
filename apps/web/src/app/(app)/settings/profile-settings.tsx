@@ -27,6 +27,7 @@ import type { MeResponse } from "@/lib/api";
 import { changeEmailForm } from "@/lib/account-forms";
 import { authClient } from "@/lib/auth-client";
 import { profileForm } from "@/lib/form-schemas";
+import { useT } from "@/lib/i18n/provider";
 import { errorMessage } from "@/lib/store/api";
 import { useChangeEmailWithPasswordMutation, useSaveProfileMutation } from "@/lib/store/api/people";
 import { useMounted } from "@/lib/use-synced-state";
@@ -46,6 +47,7 @@ export async function refreshAccount(router: ReturnType<typeof useRouter>) {
 
 /** Settings › Profile: who you are to your team, how the app looks, and how you sign in. */
 export function ProfileSettings() {
+  const t = useT();
   const { me } = useViewer();
   const { theme, setTheme } = useTheme();
   // The theme is only known on the client; render its control after hydration.
@@ -55,24 +57,24 @@ export function ProfileSettings() {
     <div className="grid gap-4">
       <Card>
         <CardHeader>
-          <CardTitle>Profile</CardTitle>
-          <CardDescription>How you appear to your team in comments and assignments.</CardDescription>
+          <CardTitle>{t("settings3.profile")}</CardTitle>
+          <CardDescription>{t("settings3.profileDescription")}</CardDescription>
         </CardHeader>
         <CardContent>{!me ? <Skeleton className="h-40" /> : <ProfileForm me={me} />}</CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Appearance</CardTitle>
-          <CardDescription>Saved on this device.</CardDescription>
+          <CardTitle>{t("settings3.appearance")}</CardTitle>
+          <CardDescription>{t("settings3.savedOnThisDevice")}</CardDescription>
         </CardHeader>
         <CardContent>
           <SettingGroup>
             <LanguageRow />
-            <SettingRow label="Theme" description="System follows your operating system.">
+            <SettingRow label={t("settings3.theme")} description={t("settings3.themeDescription")}>
               {mounted ? (
                 <Segmented
-                  label="Theme"
+                  label={t("settings3.theme")}
                   value={(theme ?? "system") as "light" | "dark" | "system"}
                   onChange={setTheme}
                   options={[
@@ -80,7 +82,7 @@ export function ProfileSettings() {
                       value: "light",
                       label: (
                         <>
-                          <Sun /> Light
+                          <Sun /> {t("settings3.themeLight")}
                         </>
                       ),
                     },
@@ -88,7 +90,7 @@ export function ProfileSettings() {
                       value: "dark",
                       label: (
                         <>
-                          <Moon /> Dark
+                          <Moon /> {t("settings3.themeDark")}
                         </>
                       ),
                     },
@@ -96,7 +98,7 @@ export function ProfileSettings() {
                       value: "system",
                       label: (
                         <>
-                          <Monitor /> System
+                          <Monitor /> {t("settings3.themeSystem")}
                         </>
                       ),
                     },
@@ -133,6 +135,7 @@ function ProfileForm({ me }: { me: MeResponse }) {
 }
 
 function NameForm({ name }: { name: string }) {
+  const t = useT();
   const router = useRouter();
   const [saveProfile] = useSaveProfileMutation();
   const form = useZodForm(profileForm, { defaultValues: { name }, mode: "onChange" });
@@ -141,15 +144,15 @@ function NameForm({ name }: { name: string }) {
     if (v.name === name) return;
     try {
       await saveProfile({ name: v.name }).unwrap();
-      toast.success("Name updated");
+      toast.success(t("settings3.nameUpdated"));
       await refreshAccount(router);
     } catch (e) {
-      toast.error(errorMessage(e, "Couldn't save your name"));
+      toast.error(errorMessage(e, t("settings3.couldntSaveName")));
     }
   });
   return (
     <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-2 sm:max-w-sm">
-      <Label htmlFor="profile-name">Name</Label>
+      <Label htmlFor="profile-name">{t("settings3.name")}</Label>
       <div className="flex gap-2">
         <Input
           {...controlProps("profile-name", errors.name?.message)}
@@ -158,7 +161,7 @@ function NameForm({ name }: { name: string }) {
           autoComplete="name"
         />
         <Button type="submit" disabled={isSubmitting || !isDirty || !!errors.name}>
-          {isSubmitting ? "Saving…" : "Save"}
+          {isSubmitting ? t("settings3.saving") : t("settings3.save")}
         </Button>
       </div>
       <FieldError id="profile-name" message={errors.name?.message} />
@@ -168,6 +171,7 @@ function NameForm({ name }: { name: string }) {
 
 /** The address notifications go to: whether it's confirmed, resending the link, and changing it. */
 function EmailRow({ me }: { me: MeResponse }) {
+  const t = useT();
   const [changing, setChanging] = useState(false);
   const [sending, setSending] = useState(false);
   const verified = !!me.user.emailVerified;
@@ -179,28 +183,31 @@ function EmailRow({ me }: { me: MeResponse }) {
       callbackURL: "/settings",
     });
     setSending(false);
-    if (error) toast.error(error.message ?? "Couldn't send the link");
-    else toast.success(`Link sent to ${me.user.email}`, { description: "It works for 24 hours." });
+    if (error) toast.error(error.message ?? t("settings3.couldntSendLink"));
+    else
+      toast.success(t("settings3.linkSentTo", { email: me.user.email }), {
+        description: t("settings3.linkWorks24Hours"),
+      });
   }
 
   return (
     <div className="grid gap-2 sm:max-w-sm">
-      <Label htmlFor="profile-email">Email</Label>
+      <Label htmlFor="profile-email">{t("settings3.colEmail")}</Label>
       <div className="flex gap-2">
         <Input id="profile-email" value={me.user.email} readOnly className="bg-muted/40" />
         <Button type="button" variant="outline" onClick={() => setChanging(true)}>
-          Change
+          {t("settings3.change")}
         </Button>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         {verified ? (
           <Badge variant="secondary" className="gap-1 font-normal" data-testid="email-verified">
-            <BadgeCheck className="size-3.5 text-emerald-600" /> Verified
+            <BadgeCheck className="size-3.5 text-emerald-600" /> {t("settings3.verified")}
           </Badge>
         ) : (
           <>
             <Badge variant="outline" className="gap-1 font-normal" data-testid="email-unverified">
-              <CircleAlert className="size-3.5 text-amber-600" /> Not verified
+              <CircleAlert className="size-3.5 text-amber-600" /> {t("settings3.notVerified")}
             </Badge>
             {me.emailConfigured ? (
               <Button
@@ -211,10 +218,10 @@ function EmailRow({ me }: { me: MeResponse }) {
                 disabled={sending}
                 onClick={() => void resend()}
               >
-                {sending ? "Sending…" : "Send the confirmation link again"}
+                {sending ? t("settings3.sending") : t("settings3.sendConfirmationLinkAgain")}
               </Button>
             ) : (
-              <span>Email isn&apos;t set up on this server, so there is nothing to confirm yet.</span>
+              <span>{t("settings3.emailNotSetUpNothingToConfirm")}</span>
             )}
           </>
         )}
@@ -237,6 +244,7 @@ function ChangeEmailDialog({
   onOpenChange: (open: boolean) => void;
   me: MeResponse;
 }) {
+  const t = useT();
   const router = useRouter();
   const [changeWithPassword] = useChangeEmailWithPasswordMutation();
   const byEmail = me.emailConfigured;
@@ -247,22 +255,22 @@ function ChangeEmailDialog({
     if (byEmail) {
       const { error } = await authClient.changeEmail({ newEmail, callbackURL: "/settings" });
       if (error) {
-        form.setError("root", { message: error.message ?? "Couldn't start the change" });
+        form.setError("root", { message: error.message ?? t("settings3.couldntStartChange") });
         return;
       }
-      toast.success("Check your email", {
+      toast.success(t("settings3.checkYourEmail"), {
         description: me.user.emailVerified
-          ? `Approve the change from the link sent to ${me.user.email}, then confirm ${newEmail}.`
-          : `Confirm the change from the link sent to ${newEmail}.`,
+          ? t("settings3.approveChangeFromLink", { current: me.user.email, next: newEmail })
+          : t("settings3.confirmChangeFromLink", { next: newEmail }),
       });
     } else {
       if (!password) {
-        form.setError("password", { message: "Enter your password" });
+        form.setError("password", { message: t("settings3.enterYourPassword") });
         return;
       }
       try {
         await changeWithPassword({ newEmail, password }).unwrap();
-        toast.success(`Your email is now ${newEmail.toLowerCase()}`);
+        toast.success(t("settings3.yourEmailIsNow", { email: newEmail.toLowerCase() }));
         await refreshAccount(router);
       } catch (e) {
         form.setError("root", { message: errorMessage(e) });
@@ -284,14 +292,14 @@ function ChangeEmailDialog({
       <DialogContent className="sm:max-w-md">
         <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
           <DialogHeader>
-            <DialogTitle>Change your email</DialogTitle>
+            <DialogTitle>{t("settings3.changeYourEmail")}</DialogTitle>
             <DialogDescription>
               {byEmail
-                ? "We email a confirmation link. Your address changes once it's confirmed."
-                : "Email isn't set up on this server, so confirm the change with your password."}
+                ? t("settings3.changeEmailByLinkDescription")
+                : t("settings3.changeEmailByPasswordDescription")}
             </DialogDescription>
           </DialogHeader>
-          <Field id="new-email" label="New email" error={errors.newEmail?.message}>
+          <Field id="new-email" label={t("settings3.newEmail")} error={errors.newEmail?.message}>
             <Input
               {...controlProps("new-email", errors.newEmail?.message)}
               {...form.register("newEmail")}
@@ -302,7 +310,11 @@ function ChangeEmailDialog({
             />
           </Field>
           {!byEmail && (
-            <Field id="email-password" label="Current password" error={errors.password?.message}>
+            <Field
+              id="email-password"
+              label={t("settings3.currentPassword")}
+              error={errors.password?.message}
+            >
               <Input
                 {...controlProps("email-password", errors.password?.message)}
                 {...form.register("password")}
@@ -314,10 +326,14 @@ function ChangeEmailDialog({
           <FormError message={errors.root?.message} />
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("settings3.cancel")}
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Saving…" : byEmail ? "Send confirmation" : "Change email"}
+              {isSubmitting
+                ? t("settings3.saving")
+                : byEmail
+                  ? t("settings3.sendConfirmation")
+                  : t("settings3.changeEmail")}
             </Button>
           </DialogFooter>
         </form>

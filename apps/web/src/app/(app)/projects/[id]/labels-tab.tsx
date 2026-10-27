@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Label, ProjectDetail } from "@/lib/api";
+import { useI18n, useT } from "@/lib/i18n/provider";
 import {
   errorMessage,
   useCreateLabelMutation,
@@ -32,6 +33,7 @@ import { colorFor, LabelDot } from "../../inbox/pickers";
  * (`l` on an open item, or the bulk bar).
  */
 export function LabelsTab({ project }: { project: ProjectDetail }) {
+  const t = useT();
   const { canWrite } = useViewer();
   const labels = useLabelsQuery(project.id);
   const list = labels.data?.labels ?? [];
@@ -40,11 +42,12 @@ export function LabelsTab({ project }: { project: ProjectDetail }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Tag className="size-4" /> Labels
+          <Tag className="size-4" /> {t("projects1.labels")}
         </CardTitle>
         <CardDescription>
-          Group reports across statuses: “checkout”, “mobile”, “copy”… Filter the inbox by label, and add them
-          to items with <kbd className="rounded border px-1 font-mono text-[11px]">l</kbd>.
+          {t("projects1.labelsDescriptionBefore")}{" "}
+          <kbd className="rounded border px-1 font-mono text-[11px]">l</kbd>
+          {t("projects1.labelsDescriptionAfter")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -59,16 +62,16 @@ export function LabelsTab({ project }: { project: ProjectDetail }) {
         ) : list.length === 0 ? (
           <EmptyState
             icon={Tag}
-            title="No labels yet"
-            description={
-              canWrite
-                ? "Add one above, or create one from the label picker on any item."
-                : "An Admin or Editor can add labels."
-            }
+            title={t("projects1.noLabelsYet")}
+            description={canWrite ? t("projects1.noLabelsAdmin") : t("projects1.noLabelsViewer")}
             className="py-8"
           />
         ) : (
-          <ul className="divide-y rounded-lg border" aria-label="Labels" data-testid="labels-list">
+          <ul
+            className="divide-y rounded-lg border"
+            aria-label={t("projects1.labels")}
+            data-testid="labels-list"
+          >
             {list.map((l) => (
               <LabelRow key={l.id} label={l} canWrite={canWrite} projectId={project.id} />
             ))}
@@ -80,6 +83,7 @@ export function LabelsTab({ project }: { project: ProjectDetail }) {
 }
 
 function NewLabel({ projectId, full }: { projectId: string; full: boolean }) {
+  const t = useT();
   const [createLabel] = useCreateLabelMutation();
   const form = useZodForm(labelCreate, { defaultValues: { name: "", color: "#e5484d" } });
   const { isSubmitting, errors } = form.formState;
@@ -87,7 +91,7 @@ function NewLabel({ projectId, full }: { projectId: string; full: boolean }) {
   const submit = form.handleSubmit(async (v) => {
     try {
       await createLabel({ projectId, ...v }).unwrap();
-      toast.success(`Label “${v.name}” added`);
+      toast.success(t("projects1.labelAdded", { name: v.name }));
       form.reset({ name: "", color: colorFor(`${v.name}-next`) });
     } catch (e) {
       toast.error(errorMessage(e));
@@ -95,23 +99,28 @@ function NewLabel({ projectId, full }: { projectId: string; full: boolean }) {
   });
   return (
     <form className="flex flex-wrap items-end gap-2" noValidate onSubmit={(e) => void submit(e)}>
-      <Field id="label-name" label="New label" error={errors.name?.message} className="min-w-48 flex-1">
+      <Field
+        id="label-name"
+        label={t("projects1.newLabel")}
+        error={errors.name?.message}
+        className="min-w-48 flex-1"
+      >
         <Input
           {...form.register("name")}
           {...controlProps("label-name", errors.name?.message)}
-          placeholder="e.g. checkout"
+          placeholder={t("projects1.labelNamePlaceholder")}
           maxLength={40}
           disabled={full}
         />
       </Field>
-      <Field id="label-color" label="Colour" error={errors.color?.message}>
+      <Field id="label-color" label={t("projects1.colour")} error={errors.color?.message}>
         <Controller
           control={form.control}
           name="color"
           render={({ field }) => (
             <ColorPicker
               id="label-color"
-              label="Label colour"
+              label={t("projects1.labelColour")}
               value={field.value}
               onChange={field.onChange}
               onCommit={field.onChange}
@@ -120,11 +129,11 @@ function NewLabel({ projectId, full }: { projectId: string; full: boolean }) {
         />
       </Field>
       <Button type="submit" disabled={full || !name.trim() || isSubmitting}>
-        {isSubmitting ? <Loader2 className="animate-spin" /> : <Plus />} Add label
+        {isSubmitting ? <Loader2 className="animate-spin" /> : <Plus />} {t("projects1.addLabel")}
       </Button>
       {full && (
         <p className="w-full text-xs text-muted-foreground">
-          A project can have up to {MAX_LABELS_PER_PROJECT} labels. Delete one to add another.
+          {t("projects1.labelLimit", { max: MAX_LABELS_PER_PROJECT })}
         </p>
       )}
     </form>
@@ -132,6 +141,7 @@ function NewLabel({ projectId, full }: { projectId: string; full: boolean }) {
 }
 
 function LabelRow({ label: l, canWrite, projectId }: { label: Label; canWrite: boolean; projectId: string }) {
+  const { t, tn } = useI18n();
   const [updateLabel, updating] = useUpdateLabelMutation();
   const [deleteLabel, deleting] = useDeleteLabelMutation();
   const [name, setName] = useSyncedState(l.name);
@@ -140,13 +150,13 @@ function LabelRow({ label: l, canWrite, projectId }: { label: Label; canWrite: b
   const save = (patch: { name?: string; color?: string }) =>
     updateLabel({ id: l.id, ...patch })
       .unwrap()
-      .then(() => toast.success("Label saved"))
+      .then(() => toast.success(t("projects1.labelSaved")))
       .catch((e: unknown) => {
         setName(l.name);
         setColor(l.color);
         toast.error(errorMessage(e));
       });
-  const items = `${l.count} item${l.count === 1 ? "" : "s"}`;
+  const items = tn("projects1.labelItems", l.count);
 
   return (
     <li className="flex flex-wrap items-center gap-3 px-3 py-2" data-label={l.name}>
@@ -154,14 +164,14 @@ function LabelRow({ label: l, canWrite, projectId }: { label: Label; canWrite: b
         <>
           <ColorPicker
             id={`label-color-${l.id}`}
-            label={`Colour of ${l.name}`}
+            label={t("projects1.colourOf", { name: l.name })}
             value={color}
             onChange={setColor}
             onCommit={(hex) => hex !== l.color && void save({ color: hex })}
           />
           <Input
             value={name}
-            aria-label={`Name of ${l.name}`}
+            aria-label={t("projects1.nameOf", { name: l.name })}
             maxLength={40}
             className="h-8 max-w-64 flex-1"
             onChange={(e) => setName(e.target.value)}
@@ -195,7 +205,7 @@ function LabelRow({ label: l, canWrite, projectId }: { label: Label; canWrite: b
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label={`Delete ${l.name}`}
+          aria-label={t("projects1.deleteLabelAria", { name: l.name })}
           className="text-muted-foreground hover:text-destructive"
           onClick={() => setConfirming(true)}
         >
@@ -205,15 +215,15 @@ function LabelRow({ label: l, canWrite, projectId }: { label: Label; canWrite: b
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={`Delete the label “${l.name}”?`}
-        description={`It is removed from ${items}. The items themselves stay.`}
+        title={t("projects1.deleteLabelTitle", { name: l.name })}
+        description={t("projects1.deleteLabelDescription", { items })}
         pending={deleting.isLoading}
         onConfirm={() =>
           deleteLabel(l.id)
             .unwrap()
             .then(() => {
               setConfirming(false);
-              toast.success("Label deleted");
+              toast.success(t("projects1.labelDeleted"));
             })
             .catch((e: unknown) => toast.error(errorMessage(e)))
         }

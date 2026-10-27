@@ -61,9 +61,13 @@ test.describe("review links", () => {
 
     // Filter › Review link lists it too.
     await page.goto(`/inbox?project=${projectId}&status=all`);
-    await page.getByTestId("filter-menu").click();
-    await page.getByTestId("review-link-filter").click();
-    await expect(page.getByRole("menuitemradio", { name })).toBeVisible();
+    // The submenu can re-render itself while the list loads: open it again until the item shows.
+    await expect(async () => {
+      await page.keyboard.press("Escape");
+      await page.getByTestId("filter-menu").click();
+      await page.getByTestId("review-link-filter").click();
+      await expect(page.getByRole("menuitemradio", { name })).toBeVisible({ timeout: 4000 });
+    }).toPass({ timeout: 30_000 });
     await page.keyboard.press("Escape");
 
     // Revoke: the link stops working, and what came through it keeps its source.

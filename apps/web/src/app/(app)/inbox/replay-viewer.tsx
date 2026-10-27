@@ -5,6 +5,7 @@ import { Film, TriangleAlert } from "lucide-react";
 import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type Asset, assetUrl, type FeedbackDetail } from "@/lib/api";
+import { useT } from "@/lib/i18n/provider";
 import { loadReplayEvents } from "@/lib/replay";
 import { cn } from "@/lib/utils";
 
@@ -60,6 +61,8 @@ export function ReplayViewer({
   handle: React.RefObject<ReplayHandle | null>;
   onTime: (epochMs: number | null) => void;
 }) {
+  const t = useT();
+  const tRef = useRef(t);
   const box = useRef<HTMLDivElement>(null);
   const player = useRef<Player | null>(null);
   const [state, setState] = useState<
@@ -69,6 +72,7 @@ export function ReplayViewer({
   const report = useRef(onTime);
   useEffect(() => {
     report.current = onTime;
+    tRef.current = t;
   });
 
   useImperativeHandle(handle, () => ({
@@ -89,9 +93,9 @@ export function ReplayViewer({
     let instance: Player | null = null;
     (async () => {
       const res = await fetch(assetUrl(asset.id), { credentials: "same-origin" });
-      if (!res.ok) throw new Error(`The replay couldn't be loaded (HTTP ${res.status})`);
+      if (!res.ok) throw new Error(tRef.current("inbox1.replayLoadFailed", { status: res.status }));
       const events = await loadReplayEvents(res);
-      if (events.length < 2) throw new Error("This replay has no recorded frames.");
+      if (events.length < 2) throw new Error(tRef.current("inbox1.replayNoFrames"));
       const { default: Player } = await import("rrweb-player");
       if (run.cancelled) return;
       const meta = events.find((e) => e.type === META_EVENT)?.data;
@@ -117,9 +121,9 @@ export function ReplayViewer({
       const start = events[0]?.timestamp ?? 0;
       const end = events.at(-1)?.timestamp ?? start;
       instance.addEventListener("ui-update-current-time", (p) => {
-        const t = (p as { payload?: number }).payload ?? 0;
-        setOffset(t);
-        report.current(start + t);
+        const at = (p as { payload?: number }).payload ?? 0;
+        setOffset(at);
+        report.current(start + at);
       });
       setState({ kind: "ready", start, end });
       report.current(start);
@@ -127,7 +131,7 @@ export function ReplayViewer({
       if (!run.cancelled)
         setState({
           kind: "error",
-          message: e instanceof Error ? e.message : "The replay couldn't be played.",
+          message: e instanceof Error ? e.message : tRef.current("inbox1.replayPlayFailed"),
         });
     });
     return () => {
@@ -166,7 +170,7 @@ export function ReplayViewer({
       />
       {state.kind === "ready" && markers.length > 0 && (
         <div className="space-y-1">
-          <div className="relative h-5 rounded bg-muted" aria-label="Replay timeline" role="group">
+          <div className="relative h-5 rounded bg-muted" aria-label={t("inbox1.replayTimeline")} role="group">
             <span
               aria-hidden
               className="absolute top-0 bottom-0 w-px bg-foreground/60"
@@ -177,7 +181,14 @@ export function ReplayViewer({
                 type="button"
                 key={`${m.kind}-${m.at}-${m.label}`}
                 title={m.label}
-                aria-label={`Jump to ${m.kind === "network" ? "request" : m.kind}: ${m.label}`}
+                aria-label={t(
+                  m.kind === "network"
+                    ? "inbox1.jumpToRequest"
+                    : m.kind === "error"
+                      ? "inbox1.jumpToError"
+                      : "inbox1.jumpToWarn",
+                  { label: m.label },
+                )}
                 data-testid="replay-marker"
                 onClick={() => handle.current?.seekTo(m.at)}
                 className={cn(
@@ -192,28 +203,31 @@ export function ReplayViewer({
           </div>
           <p className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
             <span className="flex items-center gap-1">
-              <span className="size-2 rounded-full bg-destructive" /> errors
+              <span className="size-2 rounded-full bg-destructive" /> {t("inbox1.replayLegendErrors")}
             </span>
             <span className="flex items-center gap-1">
-              <span className="size-2 rounded-full bg-amber-500" /> warnings
+              <span className="size-2 rounded-full bg-amber-500" /> {t("inbox1.replayLegendWarnings")}
             </span>
             <span className="flex items-center gap-1">
-              <span className="size-2 rounded-full bg-violet-500" /> failed requests
+              <span className="size-2 rounded-full bg-violet-500" /> {t("inbox1.replayLegendFailedRequests")}
             </span>
           </p>
         </div>
       )}
       <figcaption className="space-y-0.5 text-xs text-muted-foreground">
         <span className="flex flex-wrap items-center gap-x-2">
-          <Film className="size-3.5" /> Session replay
-          {durationMs !== null && <span className="tabular-nums">· {Math.round(durationMs / 1000)} s</span>}
-          <span>· inputs are masked when recorded</span>
+          <Film className="size-3.5" /> {t("inbox1.sessionReplay")}
+          {durationMs !== null && (
+            <span className="tabular-nums">
+              {t("inbox1.replayDuration", { seconds: Math.round(durationMs / 1000) })}
+            </span>
+          )}
+          <span>{t("inbox1.replayInputsMasked")}</span>
         </span>
         {/* The replay rebuilds the page from its DOM: images, fonts and styles still load from your
             site, so ones it no longer serves (or serves only to signed-in visitors) appear blank. */}
         <span className="block" data-testid="replay-assets-note">
-          Images, fonts and styles load from your site when the replay plays, so ones that have changed or
-          need a sign-in may look missing.
+          {t("inbox1.replayAssetsNote")}
         </span>
       </figcaption>
     </figure>

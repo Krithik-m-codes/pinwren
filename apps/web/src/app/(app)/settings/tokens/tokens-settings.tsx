@@ -5,7 +5,7 @@ import { KeyRound, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { timeAgo } from "@/components/feedback-meta";
+import { useTimeAgo } from "@/components/feedback-meta";
 import { SecretDialog } from "@/components/secret-dialog";
 import { EmptyState, ErrorState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,8 @@ import { Controller } from "react-hook-form";
 import { controlProps, Field, FormError, useZodForm } from "@/components/form";
 import type { ApiToken } from "@/lib/api";
 import { createTokenForm } from "@/lib/form-schemas";
+import type { Key } from "@/lib/i18n/en";
+import { useT } from "@/lib/i18n/provider";
 import {
   errorMessage,
   useCreateTokenMutation,
@@ -35,22 +37,24 @@ import {
   useTokensQuery,
 } from "@/lib/store/api";
 
-const SCOPE_INFO: Record<(typeof API_TOKEN_SCOPES)[number], string> = {
-  "feedback:read": "List and read feedback",
-  "feedback:write": "Change status, priority, assignee and title",
-  "comments:write": "Post comments as you",
+const SCOPE_INFO: Record<(typeof API_TOKEN_SCOPES)[number], Key> = {
+  "feedback:read": "settings1.scopeFeedbackRead",
+  "feedback:write": "settings1.scopeFeedbackWrite",
+  "comments:write": "settings1.scopeCommentsWrite",
 };
-const EXPIRY: { value: "30" | "90" | "365" | "never"; label: string }[] = [
-  { value: "30", label: "30 days" },
-  { value: "90", label: "90 days" },
-  { value: "365", label: "1 year" },
-  { value: "never", label: "Never" },
+const EXPIRY: { value: "30" | "90" | "365" | "never"; label: Key }[] = [
+  { value: "30", label: "settings1.expiry30" },
+  { value: "90", label: "settings1.expiry90" },
+  { value: "365", label: "settings1.expiry365" },
+  { value: "never", label: "settings1.expiryNever" },
 ];
 
 const dateOnly = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" });
 
 /** Personal API tokens for `/api/v1` (F-081). Secrets are shown once. */
 export function TokensSettings() {
+  const tr = useT();
+  const timeAgo = useTimeAgo();
   const [creating, setCreating] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<ApiToken | null>(null);
@@ -60,7 +64,7 @@ export function TokensSettings() {
     revokeToken(t.id)
       .unwrap()
       .then(() => {
-        toast.success(`Token “${t.name}” revoked`);
+        toast.success(tr("settings1.tokenRevoked", { name: t.name }));
         setRevoking(null);
       })
       .catch((e: unknown) => toast.error(errorMessage(e)));
@@ -69,16 +73,19 @@ export function TokensSettings() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>API tokens</CardTitle>
+        <CardTitle>{tr("settings1.apiTokens")}</CardTitle>
         <CardDescription>
-          For scripts and integrations calling <code className="font-mono">/api/v1</code> with{" "}
-          <code className="font-mono">Authorization: Bearer pwt_…</code>. A token acts as you.
+          {tr("settings1.apiTokensDescriptionBefore")}
+          <code className="font-mono">/api/v1</code>
+          {tr("settings1.apiTokensDescriptionMiddle")}
+          <code className="font-mono">Authorization: Bearer pwt_…</code>
+          {tr("settings1.apiTokensDescriptionAfter")}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="mb-3 flex justify-end">
           <Button size="sm" onClick={() => setCreating(true)}>
-            <Plus /> Create token
+            <Plus /> {tr("settings1.createToken")}
           </Button>
         </div>
         {tokens.isLoading && <Skeleton className="h-24" />}
@@ -86,12 +93,12 @@ export function TokensSettings() {
         {tokens.data?.tokens.length === 0 && (
           <EmptyState
             icon={KeyRound}
-            title="No tokens yet"
-            description="Create one for each script or service, so you can revoke them one at a time."
+            title={tr("settings1.noTokensYet")}
+            description={tr("settings1.noTokensYetDescription")}
           />
         )}
         {tokens.data && tokens.data.tokens.length > 0 && (
-          <ul className="divide-y rounded-lg border" aria-label="API tokens">
+          <ul className="divide-y rounded-lg border" aria-label={tr("settings1.apiTokens")}>
             {tokens.data.tokens.map((t) => {
               const expired = !!t.expiresAt && new Date(t.expiresAt) < new Date();
               return (
@@ -103,17 +110,24 @@ export function TokensSettings() {
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 text-sm font-medium">
                       <span className="truncate">{t.name}</span>
-                      {expired && <Badge variant="destructive">Expired</Badge>}
+                      {expired && <Badge variant="destructive">{tr("settings1.expired")}</Badge>}
                     </p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                       <code className="font-mono">{t.prefix}…</code>
-                      <span>· created {timeAgo(t.createdAt)}</span>
-                      <span>· {t.lastUsedAt ? `used ${timeAgo(t.lastUsedAt)}` : "never used"}</span>
+                      <span>· {tr("settings1.created", { time: timeAgo(t.createdAt) })}</span>
+                      <span>
+                        ·{" "}
+                        {t.lastUsedAt
+                          ? tr("settings1.used", { time: timeAgo(t.lastUsedAt) })
+                          : tr("settings1.neverUsed")}
+                      </span>
                       <span>
                         ·{" "}
                         {t.expiresAt
-                          ? `${expired ? "expired" : "expires"} ${dateOnly(t.expiresAt)}`
-                          : "no expiry"}
+                          ? tr(expired ? "settings1.expiredOn" : "settings1.expiresOn", {
+                              date: dateOnly(t.expiresAt),
+                            })
+                          : tr("settings1.noExpiry")}
                       </span>
                     </p>
                   </div>
@@ -125,7 +139,7 @@ export function TokensSettings() {
                     ))}
                   </div>
                   <Button size="sm" variant="outline" onClick={() => setRevoking(t)}>
-                    Revoke
+                    {tr("settings1.revoke")}
                   </Button>
                 </li>
               );
@@ -143,16 +157,16 @@ export function TokensSettings() {
       />
       <SecretDialog
         secret={secret}
-        title="Your new API token"
-        description="Send it as a Bearer token. Revoke it here if it ever leaks."
+        title={tr("settings1.yourNewApiToken")}
+        description={tr("settings1.yourNewApiTokenDescription")}
         onClose={() => setSecret(null)}
       />
       <ConfirmDialog
         open={!!revoking}
         onOpenChange={(o) => !o && setRevoking(null)}
-        title={`Revoke “${revoking?.name ?? ""}”?`}
-        description="Anything using it stops working immediately."
-        confirmLabel="Revoke token"
+        title={tr("settings1.revokeTitle", { name: revoking?.name ?? "" })}
+        description={tr("settings1.revokeDescription")}
+        confirmLabel={tr("settings1.revokeToken")}
         pending={revoke.isLoading}
         onConfirm={() => revoking && revokeNow(revoking)}
       />
@@ -185,6 +199,7 @@ function CreateTokenForm({
   onCreated: (secret: string) => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [create] = useCreateTokenMutation();
   const form = useZodForm(createTokenForm, {
     defaultValues: { name: "", scopes: ["feedback:read"], expiry: "90" },
@@ -205,15 +220,15 @@ function CreateTokenForm({
   return (
     <form className="grid gap-4" noValidate onSubmit={(e) => void submit(e)}>
       <DialogHeader>
-        <DialogTitle>Create an API token</DialogTitle>
-        <DialogDescription>Give it only the scopes it needs.</DialogDescription>
+        <DialogTitle>{t("settings1.createAnApiToken")}</DialogTitle>
+        <DialogDescription>{t("settings1.createAnApiTokenDescription")}</DialogDescription>
       </DialogHeader>
-      <Field id="token-name" label="Name" error={errors.name?.message}>
+      <Field id="token-name" label={t("settings1.name")} error={errors.name?.message}>
         <Input
           {...controlProps("token-name", errors.name?.message)}
           {...form.register("name")}
           maxLength={80}
-          placeholder="CI triage bot"
+          placeholder={t("settings1.tokenNamePlaceholder")}
           // eslint-disable-next-line jsx-a11y/no-autofocus -- the dialog's first field; focus moves into a dialog on open
           autoFocus
         />
@@ -223,7 +238,7 @@ function CreateTokenForm({
         name="scopes"
         render={({ field }) => (
           <fieldset className="grid gap-2">
-            <legend className="mb-1 text-sm font-medium">Scopes</legend>
+            <legend className="mb-1 text-sm font-medium">{t("settings1.scopes")}</legend>
             {API_TOKEN_SCOPES.map((sc) => (
               <div key={sc} className="flex items-start gap-2.5 text-sm">
                 <Checkbox
@@ -236,7 +251,7 @@ function CreateTokenForm({
                 />
                 <label htmlFor={`scope-${sc}`}>
                   <code className="font-mono text-xs">{sc}</code>
-                  <span className="block text-xs text-muted-foreground">{SCOPE_INFO[sc]}</span>
+                  <span className="block text-xs text-muted-foreground">{t(SCOPE_INFO[sc])}</span>
                 </label>
               </div>
             ))}
@@ -244,19 +259,23 @@ function CreateTokenForm({
         )}
       />
       <div className="grid gap-2">
-        <Label>Expires</Label>
+        <Label>{t("settings1.expires")}</Label>
         <Controller
           control={form.control}
           name="expiry"
           render={({ field }) => (
-            <Select items={EXPIRY} value={field.value} onValueChange={(v) => v && field.onChange(v)}>
-              <SelectTrigger className="w-40" aria-label="Expires">
+            <Select
+              items={EXPIRY.map((x) => ({ value: x.value, label: t(x.label) }))}
+              value={field.value}
+              onValueChange={(v) => v && field.onChange(v)}
+            >
+              <SelectTrigger className="w-40" aria-label={t("settings1.expires")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {EXPIRY.map((x) => (
                   <SelectItem key={x.value} value={x.value}>
-                    {x.label}
+                    {t(x.label)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -267,10 +286,10 @@ function CreateTokenForm({
       <FormError message={errors.scopes?.message ?? errors.root?.message} />
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
+          {t("settings1.cancel")}
         </Button>
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Creating…" : "Create token"}
+          {isSubmitting ? t("settings1.creating") : t("settings1.createToken")}
         </Button>
       </DialogFooter>
     </form>

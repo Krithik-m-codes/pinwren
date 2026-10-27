@@ -5,7 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { CopyButton } from "@/components/copy-button";
 import { QrCode } from "@/components/qr-code";
-import { timeAgo } from "@/components/feedback-meta";
+import { useTimeAgo } from "@/components/feedback-meta";
 import { controlProps, Field, FormError, useZodForm } from "@/components/form";
 import { EmptyState, ErrorState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { passwordConfirmForm, twoFactorCodeForm } from "@/lib/account-forms";
 import { authClient } from "@/lib/auth-client";
 import { changePasswordForm } from "@/lib/form-schemas";
+import type { TFn } from "@/lib/i18n/english";
+import { useT } from "@/lib/i18n/provider";
 import { errorMessage, useMeQuery } from "@/lib/store/api";
 import {
   type AccountSession,
@@ -36,6 +38,7 @@ import {
 // deleting the account. Every action goes through Better Auth's own endpoints.
 
 export function PasswordCard() {
+  const t = useT();
   const form = useZodForm(changePasswordForm, { defaultValues: { current: "", next: "", confirm: "" } });
   const { errors, isSubmitting } = form.formState;
   const submit = form.handleSubmit(async ({ current, next }) => {
@@ -45,21 +48,21 @@ export function PasswordCard() {
       revokeOtherSessions: true,
     });
     if (error) {
-      form.setError("root", { message: error.message ?? "Couldn't change your password" });
+      form.setError("root", { message: error.message ?? t("settings2.couldntChangePassword") });
       return;
     }
     form.reset();
-    toast.success("Password changed", { description: "Other devices were signed out." });
+    toast.success(t("settings2.passwordChanged"), { description: t("settings2.otherDevicesSignedOut") });
   });
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Password</CardTitle>
-        <CardDescription>Changing it signs you out everywhere else.</CardDescription>
+        <CardTitle>{t("settings2.password")}</CardTitle>
+        <CardDescription>{t("settings2.changingSignsOut")}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-3 sm:max-w-sm">
-          <Field id="pw-current" label="Current password" error={errors.current?.message}>
+          <Field id="pw-current" label={t("settings2.currentPassword")} error={errors.current?.message}>
             <Input
               {...controlProps("pw-current", errors.current?.message)}
               {...form.register("current")}
@@ -67,7 +70,7 @@ export function PasswordCard() {
               autoComplete="current-password"
             />
           </Field>
-          <Field id="pw-new" label="New password" error={errors.next?.message}>
+          <Field id="pw-new" label={t("settings2.newPassword")} error={errors.next?.message}>
             <Input
               {...controlProps("pw-new", errors.next?.message)}
               {...form.register("next")}
@@ -75,7 +78,7 @@ export function PasswordCard() {
               autoComplete="new-password"
             />
           </Field>
-          <Field id="pw-confirm" label="Confirm new password" error={errors.confirm?.message}>
+          <Field id="pw-confirm" label={t("settings2.confirmNewPassword")} error={errors.confirm?.message}>
             <Input
               {...controlProps("pw-confirm", errors.confirm?.message)}
               {...form.register("confirm")}
@@ -85,7 +88,7 @@ export function PasswordCard() {
           </Field>
           <FormError message={errors.root?.message} />
           <Button type="submit" variant="outline" className="justify-self-start" disabled={isSubmitting}>
-            {isSubmitting ? "Changing…" : "Change password"}
+            {isSubmitting ? t("settings2.changing") : t("settings2.changePassword")}
           </Button>
         </form>
       </CardContent>
@@ -117,10 +120,11 @@ function downloadCodes(codes: string[]) {
 }
 
 function BackupCodes({ codes }: { codes: string[] }) {
+  const t = useT();
   return (
     <div className="grid gap-3">
       <ul
-        aria-label="Backup codes"
+        aria-label={t("settings2.backupCodes")}
         className="grid grid-cols-2 gap-x-6 gap-y-1 rounded-lg border bg-muted/40 p-3 font-mono text-sm"
       >
         {codes.map((c) => (
@@ -128,9 +132,9 @@ function BackupCodes({ codes }: { codes: string[] }) {
         ))}
       </ul>
       <div className="flex flex-wrap gap-2">
-        <CopyButton value={codes.join("\n")} label="Copy codes" size="sm" variant="outline" />
+        <CopyButton value={codes.join("\n")} label={t("settings2.copyCodes")} size="sm" variant="outline" />
         <Button type="button" variant="outline" size="sm" onClick={() => downloadCodes(codes)}>
-          <Download /> Download
+          <Download /> {t("settings2.download")}
         </Button>
       </div>
     </div>
@@ -140,6 +144,7 @@ function BackupCodes({ codes }: { codes: string[] }) {
 type Dialogs = "enable" | "disable" | "codes" | null;
 
 export function TwoFactorCard({ enabled }: { enabled: boolean }) {
+  const t = useT();
   const me = useMeQuery(undefined);
   const [open, setOpen] = useState<Dialogs>(null);
   const done = () => {
@@ -150,34 +155,32 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          Two-factor authentication
+          {t("settings2.twoFactorAuth")}
           {enabled ? (
             <Badge variant="secondary" className="gap-1 font-normal" data-testid="two-factor-on">
-              <ShieldCheck className="size-3.5 text-emerald-600" /> On
+              <ShieldCheck className="size-3.5 text-emerald-600" /> {t("settings2.on")}
             </Badge>
           ) : (
             <Badge variant="outline" className="font-normal">
-              Off
+              {t("settings2.off")}
             </Badge>
           )}
         </CardTitle>
-        <CardDescription>
-          Ask for a code from an authenticator app (1Password, Google Authenticator, Authy…) when you sign in.
-        </CardDescription>
+        <CardDescription>{t("settings2.twoFactorDesc")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2">
         {enabled ? (
           <>
             <Button variant="outline" onClick={() => setOpen("codes")}>
-              <KeyRound /> New backup codes
+              <KeyRound /> {t("settings2.newBackupCodes")}
             </Button>
             <Button variant="ghost" onClick={() => setOpen("disable")}>
-              Turn off
+              {t("settings2.turnOff")}
             </Button>
           </>
         ) : (
           <Button variant="outline" onClick={() => setOpen("enable")}>
-            <ShieldCheck /> Turn on
+            <ShieldCheck /> {t("settings2.turnOn")}
           </Button>
         )}
       </CardContent>
@@ -194,6 +197,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
 
 /** Password → scan (or type) the secret and confirm a code → save the backup codes. */
 function EnableTwoFactor({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+  const t = useT();
   const [setup, setSetup] = useState<{ uri: string; codes: string[] } | null>(null);
   const [verified, setVerified] = useState(false);
   const pw = useZodForm(passwordConfirmForm, { defaultValues: { password: "" } });
@@ -203,7 +207,7 @@ function EnableTwoFactor({ onDone, onCancel }: { onDone: () => void; onCancel: (
     const { data, error } = await authClient.twoFactor.enable({ password });
     // TOTP is the only method configured (auth.ts), so the answer carries the URI and backup codes.
     if (error || !("totpURI" in data)) {
-      pw.setError("root", { message: error?.message ?? "Couldn't start two-factor setup" });
+      pw.setError("root", { message: error?.message ?? t("settings2.couldntStartTwoFactor") });
       return;
     }
     setSetup({ uri: data.totpURI, codes: data.backupCodes });
@@ -211,7 +215,7 @@ function EnableTwoFactor({ onDone, onCancel }: { onDone: () => void; onCancel: (
   const confirm = code.handleSubmit(async ({ code: value }) => {
     const { error } = await authClient.twoFactor.verifyTotp({ code: value });
     if (error) {
-      code.setError("root", { message: error.message ?? "That code didn't work. Try the next one." });
+      code.setError("root", { message: error.message ?? t("settings2.codeDidntWork") });
       return;
     }
     setVerified(true);
@@ -221,10 +225,14 @@ function EnableTwoFactor({ onDone, onCancel }: { onDone: () => void; onCancel: (
     return (
       <form onSubmit={(e) => void start(e)} noValidate className="grid gap-4">
         <DialogHeader>
-          <DialogTitle>Turn on two-factor authentication</DialogTitle>
-          <DialogDescription>Confirm it&apos;s you first.</DialogDescription>
+          <DialogTitle>{t("settings2.turnOnTwoFactor")}</DialogTitle>
+          <DialogDescription>{t("settings2.confirmItsYou")}</DialogDescription>
         </DialogHeader>
-        <Field id="tfa-password" label="Password" error={pw.formState.errors.password?.message}>
+        <Field
+          id="tfa-password"
+          label={t("settings2.password")}
+          error={pw.formState.errors.password?.message}
+        >
           <Input
             {...controlProps("tfa-password", pw.formState.errors.password?.message)}
             {...pw.register("password")}
@@ -237,10 +245,10 @@ function EnableTwoFactor({ onDone, onCancel }: { onDone: () => void; onCancel: (
         <FormError message={pw.formState.errors.root?.message} />
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onCancel}>
-            Cancel
+            {t("settings2.cancel")}
           </Button>
           <Button type="submit" disabled={pw.formState.isSubmitting}>
-            {pw.formState.isSubmitting ? "Checking…" : "Continue"}
+            {pw.formState.isSubmitting ? t("settings2.checking") : t("settings2.continue")}
           </Button>
         </DialogFooter>
       </form>
@@ -251,22 +259,19 @@ function EnableTwoFactor({ onDone, onCancel }: { onDone: () => void; onCancel: (
     return (
       <div className="grid gap-4">
         <DialogHeader>
-          <DialogTitle>Save your backup codes</DialogTitle>
-          <DialogDescription>
-            Each code signs you in once if you lose your phone. Keep them somewhere safe: they won&apos;t be
-            shown again.
-          </DialogDescription>
+          <DialogTitle>{t("settings2.saveBackupCodes")}</DialogTitle>
+          <DialogDescription>{t("settings2.saveBackupCodesDesc")}</DialogDescription>
         </DialogHeader>
         <BackupCodes codes={setup.codes} />
         <DialogFooter>
           <Button
             type="button"
             onClick={() => {
-              toast.success("Two-factor authentication is on");
+              toast.success(t("settings2.twoFactorIsOn"));
               onDone();
             }}
           >
-            Done
+            {t("settings2.done")}
           </Button>
         </DialogFooter>
       </div>
@@ -277,28 +282,25 @@ function EnableTwoFactor({ onDone, onCancel }: { onDone: () => void; onCancel: (
   return (
     <form onSubmit={(e) => void confirm(e)} noValidate className="grid gap-4">
       <DialogHeader>
-        <DialogTitle>Add Pinwren to your authenticator</DialogTitle>
-        <DialogDescription>
-          Scan the code with your authenticator app, or add the account by hand with the key below. Then enter
-          the code it shows.
-        </DialogDescription>
+        <DialogTitle>{t("settings2.addToAuthenticator")}</DialogTitle>
+        <DialogDescription>{t("settings2.addToAuthenticatorDesc")}</DialogDescription>
       </DialogHeader>
-      <QrCode value={setup.uri} label="QR code for your authenticator app" className="justify-self-center" />
+      <QrCode value={setup.uri} label={t("settings2.qrLabel")} className="justify-self-center" />
       {secret && (
         <div className="flex items-center gap-2 rounded-lg border bg-muted/40 p-3">
           <code className="min-w-0 flex-1 font-mono text-sm break-all" data-testid="totp-secret">
             {grouped(secret)}
           </code>
-          <CopyButton value={secret} label="Copy key" />
+          <CopyButton value={secret} label={t("settings2.copyKey")} />
         </div>
       )}
       <a
         href={setup.uri}
         className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
       >
-        <Smartphone className="size-4" /> Open in an authenticator app
+        <Smartphone className="size-4" /> {t("settings2.openInAuthenticator")}
       </a>
-      <Field id="tfa-code" label="Code from the app" error={code.formState.errors.code?.message}>
+      <Field id="tfa-code" label={t("settings2.codeFromApp")} error={code.formState.errors.code?.message}>
         <Input
           {...controlProps("tfa-code", code.formState.errors.code?.message)}
           {...code.register("code")}
@@ -310,10 +312,10 @@ function EnableTwoFactor({ onDone, onCancel }: { onDone: () => void; onCancel: (
       <FormError message={code.formState.errors.root?.message} />
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onCancel}>
-          Cancel
+          {t("settings2.cancel")}
         </Button>
         <Button type="submit" disabled={code.formState.isSubmitting}>
-          {code.formState.isSubmitting ? "Checking…" : "Turn on"}
+          {code.formState.isSubmitting ? t("settings2.checking") : t("settings2.turnOn")}
         </Button>
       </DialogFooter>
     </form>
@@ -321,24 +323,25 @@ function EnableTwoFactor({ onDone, onCancel }: { onDone: () => void; onCancel: (
 }
 
 function DisableTwoFactor({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+  const t = useT();
   const form = useZodForm(passwordConfirmForm, { defaultValues: { password: "" } });
   const { errors, isSubmitting } = form.formState;
   const submit = form.handleSubmit(async ({ password }) => {
     const { error } = await authClient.twoFactor.disable({ password });
     if (error) {
-      form.setError("root", { message: error.message ?? "Couldn't turn it off" });
+      form.setError("root", { message: error.message ?? t("settings2.couldntTurnOff") });
       return;
     }
-    toast.success("Two-factor authentication is off");
+    toast.success(t("settings2.twoFactorIsOff"));
     onDone();
   });
   return (
     <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
       <DialogHeader>
-        <DialogTitle>Turn off two-factor authentication?</DialogTitle>
-        <DialogDescription>Signing in will only need your password again.</DialogDescription>
+        <DialogTitle>{t("settings2.turnOffTwoFactorQ")}</DialogTitle>
+        <DialogDescription>{t("settings2.turnOffDesc")}</DialogDescription>
       </DialogHeader>
-      <Field id="tfa-off-password" label="Password" error={errors.password?.message}>
+      <Field id="tfa-off-password" label={t("settings2.password")} error={errors.password?.message}>
         <Input
           {...controlProps("tfa-off-password", errors.password?.message)}
           {...form.register("password")}
@@ -351,10 +354,10 @@ function DisableTwoFactor({ onDone, onCancel }: { onDone: () => void; onCancel: 
       <FormError message={errors.root?.message} />
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onCancel}>
-          Cancel
+          {t("settings2.cancel")}
         </Button>
         <Button type="submit" variant="destructive" disabled={isSubmitting}>
-          {isSubmitting ? "Turning off…" : "Turn off"}
+          {isSubmitting ? t("settings2.turningOff") : t("settings2.turnOff")}
         </Button>
       </DialogFooter>
     </form>
@@ -362,13 +365,14 @@ function DisableTwoFactor({ onDone, onCancel }: { onDone: () => void; onCancel: 
 }
 
 function RegenerateCodes({ onDone }: { onDone: () => void }) {
+  const t = useT();
   const [codes, setCodes] = useState<string[] | null>(null);
   const form = useZodForm(passwordConfirmForm, { defaultValues: { password: "" } });
   const { errors, isSubmitting } = form.formState;
   const submit = form.handleSubmit(async ({ password }) => {
     const { data, error } = await authClient.twoFactor.generateBackupCodes({ password });
     if (error) {
-      form.setError("root", { message: error.message ?? "Couldn't make new codes" });
+      form.setError("root", { message: error.message ?? t("settings2.couldntMakeCodes") });
       return;
     }
     setCodes(data.backupCodes);
@@ -377,13 +381,13 @@ function RegenerateCodes({ onDone }: { onDone: () => void }) {
     return (
       <div className="grid gap-4">
         <DialogHeader>
-          <DialogTitle>Your new backup codes</DialogTitle>
-          <DialogDescription>The old ones no longer work. Keep these somewhere safe.</DialogDescription>
+          <DialogTitle>{t("settings2.yourNewBackupCodes")}</DialogTitle>
+          <DialogDescription>{t("settings2.oldCodesNoLonger")}</DialogDescription>
         </DialogHeader>
         <BackupCodes codes={codes} />
         <DialogFooter>
           <Button type="button" onClick={onDone}>
-            Done
+            {t("settings2.done")}
           </Button>
         </DialogFooter>
       </div>
@@ -392,10 +396,10 @@ function RegenerateCodes({ onDone }: { onDone: () => void }) {
   return (
     <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
       <DialogHeader>
-        <DialogTitle>Make new backup codes</DialogTitle>
-        <DialogDescription>The codes you have now stop working.</DialogDescription>
+        <DialogTitle>{t("settings2.makeNewBackupCodes")}</DialogTitle>
+        <DialogDescription>{t("settings2.codesStopWorking")}</DialogDescription>
       </DialogHeader>
-      <Field id="codes-password" label="Password" error={errors.password?.message}>
+      <Field id="codes-password" label={t("settings2.password")} error={errors.password?.message}>
         <Input
           {...controlProps("codes-password", errors.password?.message)}
           {...form.register("password")}
@@ -408,10 +412,10 @@ function RegenerateCodes({ onDone }: { onDone: () => void }) {
       <FormError message={errors.root?.message} />
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onDone}>
-          Cancel
+          {t("settings2.cancel")}
         </Button>
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Working…" : "Make new codes"}
+          {isSubmitting ? t("settings2.working") : t("settings2.makeNewCodes")}
         </Button>
       </DialogFooter>
     </form>
@@ -421,8 +425,8 @@ function RegenerateCodes({ onDone }: { onDone: () => void }) {
 // --- Signed-in devices -------------------------------------------------------------------------------
 
 /** "Chrome on Windows" from a user agent (best effort; unknown parts are left out). */
-export function describeAgent(ua: string | null | undefined): string {
-  if (!ua) return "Unknown device";
+export function describeAgent(ua: string | null | undefined, t: TFn): string {
+  if (!ua) return t("settings2.unknownDevice");
   const has = (...parts: string[]) => parts.some((p) => ua.includes(p));
   // Order matters: Edge and Opera also say Chrome, Chrome also says Safari, Android also says Linux.
   const browser = has("Edg/")
@@ -447,14 +451,15 @@ export function describeAgent(ua: string | null | undefined): string {
           : has("Linux")
             ? "Linux"
             : null;
-  if (browser && os) return `${browser} on ${os}`;
-  return browser ?? os ?? "Unknown device";
+  if (browser && os) return t("settings2.browserOnOs", { browser, os });
+  return browser ?? os ?? t("settings2.unknownDevice");
 }
 
 const isMobile = (ua: string | null | undefined) =>
   !!ua && ["Mobile", "iPhone", "Android"].some((p) => ua.includes(p));
 
 export function SessionsCard() {
+  const t = useT();
   const q = useSessionsQuery(undefined);
   const [revoke] = useRevokeSessionMutation();
   const [revokeOthers, othersState] = useRevokeOtherSessionsMutation();
@@ -463,10 +468,8 @@ export function SessionsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Where you&apos;re signed in</CardTitle>
-        <CardDescription>
-          Sign out a device you don&apos;t recognise, or every other one at once.
-        </CardDescription>
+        <CardTitle>{t("settings2.whereSignedIn")}</CardTitle>
+        <CardDescription>{t("settings2.whereSignedInDesc")}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         {q.isLoading && (
@@ -477,10 +480,10 @@ export function SessionsCard() {
         )}
         {q.isError && <ErrorState error={q.error} retry={() => void q.refetch()} className="py-6" />}
         {q.data && sessions.length === 0 && (
-          <EmptyState icon={Laptop} title="No active sessions" className="py-6" />
+          <EmptyState icon={Laptop} title={t("settings2.noActiveSessions")} className="py-6" />
         )}
         {sessions.length > 0 && (
-          <ul className="-my-1 divide-y" aria-label="Sessions">
+          <ul className="-my-1 divide-y" aria-label={t("settings2.sessions")}>
             {sessions.map((s) => (
               <SessionRow
                 key={s.id}
@@ -489,7 +492,7 @@ export function SessionsCard() {
                 onRevoke={() =>
                   revoke(s.token)
                     .unwrap()
-                    .then(() => toast.success("Signed out that device"))
+                    .then(() => toast.success(t("settings2.signedOutThatDevice")))
                     .catch((e: unknown) => toast.error(errorMessage(e)))
                 }
               />
@@ -504,11 +507,11 @@ export function SessionsCard() {
             onClick={() =>
               revokeOthers(undefined)
                 .unwrap()
-                .then(() => toast.success("Signed out everywhere else"))
+                .then(() => toast.success(t("settings2.signedOutElsewhere")))
                 .catch((e: unknown) => toast.error(errorMessage(e)))
             }
           >
-            <LogOut /> {othersState.isLoading ? "Signing out…" : "Sign out all other devices"}
+            <LogOut /> {othersState.isLoading ? t("settings2.signingOut") : t("settings2.signOutAllOther")}
           </Button>
         )}
       </CardContent>
@@ -525,6 +528,8 @@ function SessionRow({
   current: boolean;
   onRevoke: () => void;
 }) {
+  const t = useT();
+  const timeAgo = useTimeAgo();
   const Icon = isMobile(s.userAgent) ? Smartphone : Laptop;
   return (
     <li className="flex flex-wrap items-center gap-3 py-2.5" data-session={current ? "current" : "other"}>
@@ -533,20 +538,22 @@ function SessionRow({
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">
-          {describeAgent(s.userAgent)}{" "}
+          {describeAgent(s.userAgent, t)}{" "}
           {current && (
             <Badge variant="secondary" className="ml-1 font-normal">
-              This device
+              {t("settings2.thisDevice")}
             </Badge>
           )}
         </p>
         <p className="truncate text-xs text-muted-foreground">
-          {s.ipAddress ? `${s.ipAddress} · ` : ""}signed in {timeAgo(s.createdAt)}
+          {s.ipAddress
+            ? t("settings2.ipSignedIn", { ip: s.ipAddress, time: timeAgo(s.createdAt) })
+            : t("settings2.signedInAgo", { time: timeAgo(s.createdAt) })}
         </p>
       </div>
       {!current && (
         <Button variant="ghost" size="sm" onClick={onRevoke}>
-          Sign out
+          {t("settings2.signOut")}
         </Button>
       )}
     </li>
@@ -556,13 +563,14 @@ function SessionRow({
 // --- Delete account ----------------------------------------------------------------------------------
 
 export function DeleteAccountCard() {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const form = useZodForm(passwordConfirmForm, { defaultValues: { password: "" } });
   const { errors, isSubmitting } = form.formState;
   const submit = form.handleSubmit(async ({ password }) => {
     const { error } = await authClient.deleteUser({ password });
     if (error) {
-      form.setError("root", { message: error.message ?? "Couldn't delete your account" });
+      form.setError("root", { message: error.message ?? t("settings2.couldntDeleteAccount") });
       return;
     }
     // A full load: the store and the router cache belong to the account that's gone.
@@ -571,16 +579,12 @@ export function DeleteAccountCard() {
   return (
     <Card className="border-destructive/30">
       <CardHeader>
-        <CardTitle>Delete account</CardTitle>
-        <CardDescription className="text-pretty">
-          Removes your account and signs you out everywhere. Your comments stay, without your name. A
-          workspace only you are in is deleted with it; one you own with others has to be handed over first
-          (Settings › Workspace).
-        </CardDescription>
+        <CardTitle>{t("settings2.deleteAccount")}</CardTitle>
+        <CardDescription className="text-pretty">{t("settings2.deleteAccountDesc")}</CardDescription>
       </CardHeader>
       <CardContent>
         <Button variant="destructive" onClick={() => setOpen(true)}>
-          <Trash2 /> Delete my account
+          <Trash2 /> {t("settings2.deleteMyAccount")}
         </Button>
       </CardContent>
       <Dialog
@@ -593,12 +597,10 @@ export function DeleteAccountCard() {
         <DialogContent className="sm:max-w-md">
           <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
             <DialogHeader>
-              <DialogTitle>Delete your account?</DialogTitle>
-              <DialogDescription>
-                This can&apos;t be undone. Enter your password to confirm.
-              </DialogDescription>
+              <DialogTitle>{t("settings2.deleteYourAccountQ")}</DialogTitle>
+              <DialogDescription>{t("settings2.cantBeUndonePassword")}</DialogDescription>
             </DialogHeader>
-            <Field id="delete-password" label="Password" error={errors.password?.message}>
+            <Field id="delete-password" label={t("settings2.password")} error={errors.password?.message}>
               <Input
                 {...controlProps("delete-password", errors.password?.message)}
                 {...form.register("password")}
@@ -611,10 +613,10 @@ export function DeleteAccountCard() {
             <FormError message={errors.root?.message} />
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-                Cancel
+                {t("settings2.cancel")}
               </Button>
               <Button type="submit" variant="destructive" disabled={isSubmitting}>
-                {isSubmitting ? "Deleting…" : "Delete account"}
+                {isSubmitting ? t("settings2.deleting") : t("settings2.deleteAccount")}
               </Button>
             </DialogFooter>
           </form>

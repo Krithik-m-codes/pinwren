@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { forgotPasswordForm } from "@/lib/account-forms";
 import { authClient } from "@/lib/auth-client";
+import { useT } from "@/lib/i18n/provider";
 import { withNext } from "@/lib/next-path";
 import { linkClass, useNextParam, useSetupStatus } from "../auth-shared";
 
@@ -19,6 +20,7 @@ import { linkClass, useNextParam, useSetupStatus } from "../auth-shared";
  * instance administrator copies a reset link from Settings › Users.
  */
 export function ForgotPasswordForm() {
+  const t = useT();
   const nextParam = useNextParam();
   const setup = useSetupStatus();
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -27,7 +29,7 @@ export function ForgotPasswordForm() {
   const submit = form.handleSubmit(async ({ email }) => {
     const { error } = await authClient.requestPasswordReset({ email, redirectTo: "/reset-password" });
     if (error) {
-      form.setError("root", { message: error.message ?? "Couldn't send the link. Try again later." });
+      form.setError("root", { message: error.message ?? t("other1.forgotCouldntSend") });
       return;
     }
     // The answer is the same whether or not the address has an account (no account discovery).
@@ -35,9 +37,9 @@ export function ForgotPasswordForm() {
   });
   const back = (
     <p className="text-center text-sm text-muted-foreground">
-      Remembered it?{" "}
+      {t("other1.rememberedIt")}{" "}
       <Link href={withNext("/sign-in", nextParam) as Route} className={linkClass}>
-        Sign in
+        {t("other1.signIn")}
       </Link>
     </p>
   );
@@ -58,12 +60,9 @@ export function ForgotPasswordForm() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
-            <MailX className="size-5 text-muted-foreground" /> Ask your administrator
+            <MailX className="size-5 text-muted-foreground" /> {t("other1.askYourAdministrator")}
           </CardTitle>
-          <CardDescription className="text-pretty">
-            Email isn&apos;t set up on this server, so Pinwren can&apos;t send you a reset link. Your
-            administrator can copy one for you from Settings › Users.
-          </CardDescription>
+          <CardDescription className="text-pretty">{t("other1.emailNotSetUp")}</CardDescription>
         </CardHeader>
         <CardContent>{back}</CardContent>
       </Card>
@@ -75,16 +74,16 @@ export function ForgotPasswordForm() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
-            <MailCheck className="size-5 text-primary" /> Check your email
+            <MailCheck className="size-5 text-primary" /> {t("other1.checkYourEmail")}
           </CardTitle>
           <CardDescription className="text-pretty">
-            If <span className="font-medium text-foreground">{sentTo}</span> has an account, a link to choose
-            a new password is on its way. It works for an hour.
+            {t("other1.resetLinkSentBefore")} <span className="font-medium text-foreground">{sentTo}</span>{" "}
+            {t("other1.resetLinkSentAfter")}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">
           <Button variant="outline" onClick={() => setSentTo(null)}>
-            Use another address
+            {t("other1.useAnotherAddress")}
           </Button>
           {back}
         </CardContent>
@@ -95,12 +94,12 @@ export function ForgotPasswordForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-xl">Reset your password</CardTitle>
-        <CardDescription>We&apos;ll email you a link to choose a new one.</CardDescription>
+        <CardTitle className="text-xl">{t("other1.resetYourPassword")}</CardTitle>
+        <CardDescription>{t("other1.resetEmailYouLink")}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
-          <Field id="email" label="Email" error={errors.email?.message}>
+          <Field id="email" label={t("other1.email")} error={errors.email?.message}>
             <Input
               {...controlProps("email", errors.email?.message)}
               {...form.register("email")}
@@ -112,7 +111,7 @@ export function ForgotPasswordForm() {
           </Field>
           <FormError message={errors.root?.message} />
           <Button type="submit" disabled={isSubmitting} className="w-full">
-            {isSubmitting ? "Sending…" : "Send reset link"}
+            {isSubmitting ? t("other1.sending") : t("other1.sendResetLink")}
           </Button>
           {back}
         </form>

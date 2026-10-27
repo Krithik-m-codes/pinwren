@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ProjectDetail } from "@/lib/api";
+import { useT } from "@/lib/i18n/provider";
 import { errorMessage, useRoundsQuery, useUpdateRoundMutation } from "@/lib/store/api";
 
 const NONE = "none";
@@ -17,13 +18,14 @@ const NONE = "none";
  * round when there is exactly one, so choosing one here closes the other active rounds.
  */
 export function ActiveRoundCard({ project }: { project: ProjectDetail }) {
+  const t = useT();
   const rounds = useRoundsQuery(project.id);
   const [updateRound, update] = useUpdateRoundMutation();
   const list = rounds.data?.rounds ?? [];
   const active = list.filter((r) => r.status === "active");
   const value = active.length === 1 && active[0] ? active[0].id : NONE;
   const items = [
-    { value: NONE, label: active.length > 1 ? "Several (none is used)" : "No round" },
+    { value: NONE, label: active.length > 1 ? t("projects1.severalNoneUsed") : t("projects1.noRound") },
     ...list.map((r) => ({ value: r.id, label: r.name })),
   ];
 
@@ -37,8 +39,8 @@ export function ActiveRoundCard({ project }: { project: ProjectDetail }) {
       if (id !== NONE) await updateRound({ id, projectId: project.id, patch: { status: "active" } }).unwrap();
       toast.success(
         id === NONE
-          ? "New feedback joins no round"
-          : `New feedback joins “${list.find((r) => r.id === id)?.name ?? ""}”`,
+          ? t("projects1.newFeedbackJoinsNoRound")
+          : t("projects1.newFeedbackJoins", { name: list.find((r) => r.id === id)?.name ?? "" }),
       );
     } catch (e) {
       toast.error(errorMessage(e));
@@ -49,24 +51,19 @@ export function ActiveRoundCard({ project }: { project: ProjectDetail }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Target className="size-4 text-muted-foreground" /> Review round
+          <Target className="size-4 text-muted-foreground" /> {t("projects1.reviewRound")}
           <ButtonLink href={`/projects/${project.id}/rounds`} size="sm" variant="ghost" className="ml-auto">
-            Manage rounds
+            {t("projects1.manageRounds")}
           </ButtonLink>
         </CardTitle>
-        <CardDescription>
-          Group the feedback of one review (“Homepage v2”, “Sprint 14”) and export it.
-        </CardDescription>
+        <CardDescription>{t("projects1.reviewRoundDescription")}</CardDescription>
       </CardHeader>
       <CardContent>
-        <SettingRow
-          label="Active round"
-          description="New feedback from the widget joins it. Choosing one closes the other active rounds."
-        >
+        <SettingRow label={t("projects1.activeRound")} description={t("projects1.activeRoundDescription")}>
           {rounds.isLoading ? (
             <Skeleton className="h-8 w-48" />
           ) : list.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No rounds yet.</p>
+            <p className="text-sm text-muted-foreground">{t("projects1.noRoundsYet")}</p>
           ) : (
             <Select
               items={items}
@@ -74,7 +71,7 @@ export function ActiveRoundCard({ project }: { project: ProjectDetail }) {
               disabled={update.isLoading}
               onValueChange={(v) => v && v !== value && void choose(v)}
             >
-              <SelectTrigger className="w-56" aria-label="Active round">
+              <SelectTrigger className="w-56" aria-label={t("projects1.activeRound")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

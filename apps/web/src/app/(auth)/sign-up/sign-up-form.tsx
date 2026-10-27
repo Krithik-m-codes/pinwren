@@ -9,11 +9,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { signUp } from "@/lib/auth-client";
 import { signUpForm } from "@/lib/form-schemas";
+import { useT } from "@/lib/i18n/provider";
 import { safeNext, withNext } from "@/lib/next-path";
 import { isOriginError, linkClass, useNextParam, useSetupStatus } from "../auth-shared";
 import { OtherSignIn, SignInErrorNotice } from "../other-sign-in";
 
 export function SignUpForm() {
+  const t = useT();
   const router = useRouter();
   const nextParam = useNextParam();
   const setup = useSetupStatus();
@@ -27,8 +29,8 @@ export function SignUpForm() {
     if (error) {
       form.setError("root", {
         message: isOriginError(error.message)
-          ? "This page isn't open on the address the server expects. See the note above."
-          : (error.message ?? "Could not create your account"),
+          ? t("other1.originMismatch")
+          : (error.message ?? t("other1.couldNotCreateAccount")),
       });
       return;
     }
@@ -41,12 +43,10 @@ export function SignUpForm() {
     <Card>
       <CardHeader>
         <CardTitle className="text-xl">
-          {first ? "Create the administrator account" : "Create your account"}
+          {first ? t("other1.createAdminAccount") : t("other1.createYourAccount")}
         </CardTitle>
         <CardDescription className="text-pretty">
-          {first
-            ? "This is the first account on this server. It administers Pinwren: email delivery, security and who can sign in."
-            : "Collect pinned feedback and bug reports from any site."}
+          {first ? t("other1.firstAccountDescription") : t("other1.collectFeedbackDescription")}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -56,11 +56,11 @@ export function SignUpForm() {
             className="mb-4 rounded-lg bg-muted p-3 text-sm text-pretty text-muted-foreground"
             data-testid="invite-only"
           >
-            Accounts on this server are by invitation. Sign up with the address your invitation was sent to.
+            {t("other1.invitationOnlyNotice")}
           </p>
         )}
         <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
-          <Field id="name" label="Name" error={errors.name?.message}>
+          <Field id="name" label={t("other1.name")} error={errors.name?.message}>
             <Input
               {...controlProps("name", errors.name?.message)}
               {...form.register("name")}
@@ -69,7 +69,7 @@ export function SignUpForm() {
               autoFocus
             />
           </Field>
-          <Field id="email" label="Work email" error={errors.email?.message}>
+          <Field id="email" label={t("other1.workEmail")} error={errors.email?.message}>
             <Input
               {...controlProps("email", errors.email?.message)}
               {...form.register("email")}
@@ -79,8 +79,8 @@ export function SignUpForm() {
           </Field>
           <Field
             id="password"
-            label="Password"
-            help="At least 8 characters."
+            label={t("other1.password")}
+            help={t("other1.atLeast8Chars")}
             error={errors.password?.message}
           >
             <Input
@@ -92,14 +92,14 @@ export function SignUpForm() {
           </Field>
           <FormError message={errors.root?.message} />
           <Button type="submit" disabled={isSubmitting} className="w-full">
-            {isSubmitting ? "Creating account…" : "Create account"}
+            {isSubmitting ? t("other1.creatingAccount") : t("other1.createAccount")}
           </Button>
           <OtherSignIn mode="sign-up" nextParam={nextParam} />
           {!first && (
             <p className="text-center text-sm text-muted-foreground">
-              Already have an account?{" "}
+              {t("other1.alreadyHaveAccount")}{" "}
               <Link href={withNext("/sign-in", nextParam) as Route} className={linkClass}>
-                Sign in
+                {t("other1.signIn")}
               </Link>
             </p>
           )}

@@ -13,14 +13,14 @@ import { Input } from "@/components/ui/input";
 import { twoFactorCodeForm } from "@/lib/account-forms";
 import { authClient, signIn } from "@/lib/auth-client";
 import { signInForm } from "@/lib/form-schemas";
+import { useT } from "@/lib/i18n/provider";
 import { withNext } from "@/lib/next-path";
 import { isOriginError, linkClass, useNextParam, useNextPath, useSetupStatus } from "../auth-shared";
 import { EmailLinkStep, OtherSignIn, SignInErrorNotice } from "../other-sign-in";
 
-const ORIGIN_MESSAGE = "This page isn't open on the address the server expects. See the note above.";
-
 /** Prerendered page; only the submit talks to the server. Asks for a second factor when the account has one. */
 export function SignInForm() {
+  const t = useT();
   const router = useRouter();
   const next = useNextPath();
   const nextParam = useNextParam();
@@ -38,7 +38,9 @@ export function SignInForm() {
     const { data, error } = await signIn.email(v);
     if (error) {
       form.setError("root", {
-        message: isOriginError(error.message) ? ORIGIN_MESSAGE : (error.message ?? "Could not sign in"),
+        message: isOriginError(error.message)
+          ? t("other1.originMismatch")
+          : (error.message ?? t("other1.couldNotSignIn")),
       });
       return;
     }
@@ -56,13 +58,13 @@ export function SignInForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-xl">Welcome back</CardTitle>
-        <CardDescription>Sign in to triage your feedback.</CardDescription>
+        <CardTitle className="text-xl">{t("other1.welcomeBack")}</CardTitle>
+        <CardDescription>{t("other1.signInToTriage")}</CardDescription>
       </CardHeader>
       <CardContent>
         <SignInErrorNotice />
         <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
-          <Field id="email" label="Email" error={errors.email?.message}>
+          <Field id="email" label={t("other1.email")} error={errors.email?.message}>
             <Input
               {...controlProps("email", errors.email?.message)}
               {...form.register("email")}
@@ -72,7 +74,7 @@ export function SignInForm() {
               autoFocus
             />
           </Field>
-          <Field id="password" label="Password" error={errors.password?.message}>
+          <Field id="password" label={t("other1.password")} error={errors.password?.message}>
             <Input
               {...controlProps("password", errors.password?.message)}
               {...form.register("password")}
@@ -84,24 +86,23 @@ export function SignInForm() {
             href={withNext("/forgot-password", nextParam) as Route}
             className="-mt-2 justify-self-end text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
           >
-            Forgot password?
+            {t("other1.forgotPassword")}
           </Link>
           <FormError message={errors.root?.message} />
           <Button type="submit" disabled={isSubmitting} className="w-full">
-            {isSubmitting ? "Signing in…" : "Sign in"}
+            {isSubmitting ? t("other1.signingIn") : t("other1.signIn")}
           </Button>
           <OtherSignIn mode="sign-in" nextParam={nextParam} onEmailLink={() => setStep("link")} />
           {signupOpen ? (
             <p className="text-center text-sm text-muted-foreground">
-              New here?{" "}
+              {t("other1.newHere")}{" "}
               <Link href={withNext("/sign-up", nextParam) as Route} className={linkClass}>
-                Create an account
+                {t("other1.createAnAccount")}
               </Link>
             </p>
           ) : (
             <p className="text-center text-sm text-pretty text-muted-foreground">
-              New here? Accounts on this server are by invitation: use the link in your invitation email, or
-              ask an administrator to add you.
+              {t("other1.newHereInvitationOnly")}
             </p>
           )}
         </form>
@@ -112,6 +113,7 @@ export function SignInForm() {
 
 /** Second step: a code from the authenticator app, or one of the backup codes. */
 function TwoFactorStep({ onDone }: { onDone: () => void }) {
+  const t = useT();
   const [backup, setBackup] = useState(false);
   const form = useZodForm(twoFactorCodeForm, { defaultValues: { code: "", trustDevice: false } });
   const { errors, isSubmitting } = form.formState;
@@ -120,7 +122,7 @@ function TwoFactorStep({ onDone }: { onDone: () => void }) {
       ? await authClient.twoFactor.verifyBackupCode({ code, trustDevice })
       : await authClient.twoFactor.verifyTotp({ code, trustDevice });
     if (error) {
-      form.setError("root", { message: error.message ?? "That code didn't work" });
+      form.setError("root", { message: error.message ?? t("other1.thatCodeDidntWork") });
       return;
     }
     onDone();
@@ -128,16 +130,18 @@ function TwoFactorStep({ onDone }: { onDone: () => void }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-xl">Two-factor authentication</CardTitle>
+        <CardTitle className="text-xl">{t("other1.twoFactorTitle")}</CardTitle>
         <CardDescription>
-          {backup
-            ? "Enter one of the backup codes you saved when you turned on two-factor authentication."
-            : "Enter the 6-digit code from your authenticator app."}
+          {backup ? t("other1.twoFactorBackupHint") : t("other1.twoFactorCodeHint")}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
-          <Field id="code" label={backup ? "Backup code" : "Code"} error={errors.code?.message}>
+          <Field
+            id="code"
+            label={backup ? t("other1.backupCode") : t("other1.code")}
+            error={errors.code?.message}
+          >
             <Input
               {...controlProps("code", errors.code?.message)}
               {...form.register("code")}
@@ -160,13 +164,13 @@ function TwoFactorStep({ onDone }: { onDone: () => void }) {
                   checked={field.value}
                   onCheckedChange={(v) => field.onChange(v)}
                 />
-                Trust this device for 30 days
+                {t("other1.trustDevice")}
               </label>
             )}
           />
           <FormError message={errors.root?.message} />
           <Button type="submit" disabled={isSubmitting} className="w-full">
-            {isSubmitting ? "Checking…" : "Verify"}
+            {isSubmitting ? t("other1.checking") : t("other1.verify")}
           </Button>
           <Button
             type="button"
@@ -176,7 +180,7 @@ function TwoFactorStep({ onDone }: { onDone: () => void }) {
               form.reset({ code: "", trustDevice: form.getValues("trustDevice") });
             }}
           >
-            {backup ? "Use the authenticator app instead" : "Use a backup code instead"}
+            {backup ? t("other1.useAuthenticatorInstead") : t("other1.useBackupCodeInstead")}
           </Button>
         </form>
       </CardContent>

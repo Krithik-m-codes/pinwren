@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { workspaceNameForm } from "@/lib/account-forms";
 import { authClient } from "@/lib/auth-client";
+import { useT } from "@/lib/i18n/provider";
 import { refreshWorkspace } from "@/lib/server/actions";
 import { errorMessage, useMembersQuery } from "@/lib/store/api";
 import {
@@ -41,6 +42,7 @@ const reload = () => window.location.assign(new URL("/inbox", window.location.hr
 
 /** Settings › Workspace (wave-5 §3.1): rename it, leave it, hand it over, or delete it. */
 export function WorkspaceSettings() {
+  const t = useT();
   const { me, userId } = useViewer();
   const workspaces = useWorkspacesQuery(undefined);
   const members = useMembersQuery(undefined);
@@ -54,11 +56,11 @@ export function WorkspaceSettings() {
   const others = (members.data?.members ?? []).filter((m) => m.id !== userId);
   return (
     <div className="grid gap-4">
-      <SectionTitle title="Workspace" description="The team, projects and settings you share." />
+      <SectionTitle title={t("settings3.workspace")} description={t("settings3.workspaceDescription")} />
       <Card>
         <CardHeader>
-          <CardTitle>Name</CardTitle>
-          <CardDescription>Shown in the sidebar, invitations and emails.</CardDescription>
+          <CardTitle>{t("settings3.name")}</CardTitle>
+          <CardDescription>{t("settings3.nameShownIn")}</CardDescription>
         </CardHeader>
         <CardContent>
           {canRename ? (
@@ -84,6 +86,7 @@ export function WorkspaceSettings() {
 }
 
 function RenameForm({ name }: { name: string }) {
+  const t = useT();
   const [rename] = useRenameWorkspaceMutation();
   const form = useZodForm(workspaceNameForm, { defaultValues: { name }, mode: "onChange" });
   const { errors, isSubmitting, isDirty } = form.formState;
@@ -91,14 +94,14 @@ function RenameForm({ name }: { name: string }) {
     try {
       await rename({ name: v.name }).unwrap();
       await refreshWorkspace();
-      toast.success("Workspace renamed");
+      toast.success(t("settings3.workspaceRenamed"));
     } catch (e) {
-      toast.error(errorMessage(e, "Couldn't rename the workspace"));
+      toast.error(errorMessage(e, t("settings3.couldntRenameWorkspace")));
     }
   });
   return (
     <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-2 sm:max-w-sm">
-      <Label htmlFor="workspace-name">Workspace name</Label>
+      <Label htmlFor="workspace-name">{t("settings3.workspaceName")}</Label>
       <div className="flex gap-2">
         <Input
           {...controlProps("workspace-name", errors.name?.message)}
@@ -106,7 +109,7 @@ function RenameForm({ name }: { name: string }) {
           maxLength={80}
         />
         <Button type="submit" disabled={isSubmitting || !isDirty || !!errors.name}>
-          {isSubmitting ? "Saving…" : "Save"}
+          {isSubmitting ? t("settings3.saving") : t("settings3.save")}
         </Button>
       </div>
       <FieldError id="workspace-name" message={errors.name?.message} />
@@ -115,6 +118,7 @@ function RenameForm({ name }: { name: string }) {
 }
 
 function LeaveCard({ orgId, name }: { orgId: string; name: string }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   async function leave() {
@@ -122,7 +126,7 @@ function LeaveCard({ orgId, name }: { orgId: string; name: string }) {
     const { error } = await authClient.organization.leave({ organizationId: orgId });
     if (error) {
       setPending(false);
-      toast.error(error.message ?? "Couldn't leave the workspace");
+      toast.error(error.message ?? t("settings3.couldntLeaveWorkspace"));
       return;
     }
     reload();
@@ -130,20 +134,20 @@ function LeaveCard({ orgId, name }: { orgId: string; name: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Leave workspace</CardTitle>
-        <CardDescription>You lose access to {name} until someone adds you again.</CardDescription>
+        <CardTitle>{t("settings3.leaveWorkspace")}</CardTitle>
+        <CardDescription>{t("settings3.leaveWorkspaceDescription", { name })}</CardDescription>
       </CardHeader>
       <CardContent>
         <Button variant="outline" onClick={() => setOpen(true)}>
-          <LogOut /> Leave {name}
+          <LogOut /> {t("settings3.leaveName", { name })}
         </Button>
       </CardContent>
       <ConfirmDialog
         open={open}
         onOpenChange={setOpen}
-        title={`Leave ${name}?`}
-        description="Your comments stay. An Admin can add you back."
-        confirmLabel="Leave"
+        title={t("settings3.leaveNameQuestion", { name })}
+        description={t("settings3.leaveConfirmDescription")}
+        confirmLabel={t("settings3.leave")}
         pending={pending}
         onConfirm={() => void leave()}
       />
@@ -152,6 +156,7 @@ function LeaveCard({ orgId, name }: { orgId: string; name: string }) {
 }
 
 function TransferCard({ members }: { members: { id: string; name: string; email: string }[] }) {
+  const t = useT();
   const [to, setTo] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [transfer, state] = useTransferOwnershipMutation();
@@ -160,19 +165,17 @@ function TransferCard({ members }: { members: { id: string; name: string; email:
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Transfer ownership</CardTitle>
-        <CardDescription>
-          The new owner can delete the workspace and hand it on. You stay an Admin.
-        </CardDescription>
+        <CardTitle>{t("settings3.transferOwnership")}</CardTitle>
+        <CardDescription>{t("settings3.transferOwnershipDescription")}</CardDescription>
       </CardHeader>
       <CardContent>
         {members.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Add someone in Settings › Users first.</p>
+          <p className="text-sm text-muted-foreground">{t("settings3.addSomeoneFirst")}</p>
         ) : (
           <div className="flex flex-col gap-2 sm:flex-row">
             <Select items={items} value={to} onValueChange={(v) => setTo(v)}>
-              <SelectTrigger className="sm:w-64" aria-label="New owner">
-                <SelectValue placeholder="Choose a member" />
+              <SelectTrigger className="sm:w-64" aria-label={t("settings3.newOwner")}>
+                <SelectValue placeholder={t("settings3.chooseAMember")} />
               </SelectTrigger>
               <SelectContent>
                 {items.map((m) => (
@@ -183,7 +186,7 @@ function TransferCard({ members }: { members: { id: string; name: string; email:
               </SelectContent>
             </Select>
             <Button variant="outline" disabled={!target} onClick={() => setConfirm(true)}>
-              <Crown /> Transfer
+              <Crown /> {t("settings3.transfer")}
             </Button>
           </div>
         )}
@@ -191,16 +194,16 @@ function TransferCard({ members }: { members: { id: string; name: string; email:
       <ConfirmDialog
         open={confirm}
         onOpenChange={setConfirm}
-        title={`Make ${target?.name ?? "them"} the owner?`}
-        description="Only they can undo it, by transferring it back."
-        confirmLabel="Transfer ownership"
+        title={t("settings3.makeOwnerQuestion", { name: target?.name ?? t("settings3.them") })}
+        description={t("settings3.makeOwnerDescription")}
+        confirmLabel={t("settings3.transferOwnership")}
         pending={state.isLoading}
         onConfirm={() => {
           if (!target) return;
           transfer({ userId: target.id })
             .unwrap()
             .then(() => {
-              toast.success(`${target.name} owns this workspace now`);
+              toast.success(t("settings3.ownsWorkspaceNow", { name: target.name }));
               setConfirm(false);
               setTo(null);
             })
@@ -212,6 +215,7 @@ function TransferCard({ members }: { members: { id: string; name: string; email:
 }
 
 function DeleteCard({ name }: { name: string }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const [error, setError] = useState<string | undefined>();
@@ -220,15 +224,14 @@ function DeleteCard({ name }: { name: string }) {
   return (
     <Card className="border-destructive/30">
       <CardHeader>
-        <CardTitle>Delete workspace</CardTitle>
+        <CardTitle>{t("settings3.deleteWorkspace")}</CardTitle>
         <CardDescription className="text-pretty">
-          Deletes every project, report, screenshot, comment and integration in {name}, for everyone. This
-          can&apos;t be undone.
+          {t("settings3.deleteWorkspaceDescription", { name })}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Button variant="destructive" onClick={() => setOpen(true)}>
-          <Trash2 /> Delete workspace
+          <Trash2 /> {t("settings3.deleteWorkspace")}
         </Button>
       </CardContent>
       <Dialog
@@ -255,12 +258,13 @@ function DeleteCard({ name }: { name: string }) {
             }}
           >
             <DialogHeader>
-              <DialogTitle>Delete {name}?</DialogTitle>
+              <DialogTitle>{t("settings3.deleteNameQuestion", { name })}</DialogTitle>
               <DialogDescription>
-                Type <span className="font-medium text-foreground">{name}</span> to confirm.
+                {t("settings3.typeBefore")} <span className="font-medium text-foreground">{name}</span>{" "}
+                {t("settings3.typeAfter")}
               </DialogDescription>
             </DialogHeader>
-            <Field id="delete-workspace-name" label="Workspace name">
+            <Field id="delete-workspace-name" label={t("settings3.workspaceName")}>
               <Input
                 id="delete-workspace-name"
                 value={typed}
@@ -273,10 +277,10 @@ function DeleteCard({ name }: { name: string }) {
             <FormError message={error} />
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-                Cancel
+                {t("settings3.cancel")}
               </Button>
               <Button type="submit" variant="destructive" disabled={!matches || state.isLoading}>
-                {state.isLoading ? "Deleting…" : "Delete workspace"}
+                {state.isLoading ? t("settings3.deleting") : t("settings3.deleteWorkspace")}
               </Button>
             </DialogFooter>
           </form>

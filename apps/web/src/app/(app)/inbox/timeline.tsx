@@ -23,7 +23,7 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { commentCreate, commentUpdate } from "@pinwren/core";
 import { Controller, useWatch } from "react-hook-form";
 import { toast } from "sonner";
@@ -36,7 +36,7 @@ import {
   PriorityIcon,
   STATUS_META,
   StatusIcon,
-  timeAgo,
+  useTimeAgo,
 } from "@/components/feedback-meta";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +50,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
 import type { ActivityEvent, Comment, FeedbackDetail } from "@/lib/api";
+import type { TFn } from "@/lib/i18n/english";
+import { useT } from "@/lib/i18n/provider";
 import {
   errorMessage,
   useAddCommentMutation,
@@ -70,6 +72,7 @@ const absolute = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 
 function Time({ iso }: { iso: string }) {
+  const timeAgo = useTimeAgo();
   return (
     <Tooltip>
       <TooltipTrigger
@@ -86,23 +89,24 @@ const isStatus = (v: unknown): v is FeedbackStatus => typeof v === "string" && v
 const isKind = (v: unknown): v is FeedbackKind => typeof v === "string" && v in KIND_META;
 
 /** `added` / `removed` of a labels change (the API resolves names; a deleted label has none). */
-function labelNames(v: unknown): string {
+function labelNames(v: unknown, t: TFn): string {
   if (!Array.isArray(v) || !v.length) return "";
   return v
     .map((l: unknown) =>
       l && typeof l === "object" && "name" in l && typeof l.name === "string"
-        ? `“${l.name}”`
-        : "a deleted label",
+        ? t("inbox2.quoted", { name: l.name })
+        : t("inbox2.deletedLabel"),
     )
     .join(", ");
 }
 const isPriority = (v: unknown): v is Priority => typeof v === "string" && v in PRIORITY_META;
 
-function actorOf(e: ActivityEvent): string {
+function actorOf(e: ActivityEvent, t: TFn): string {
   if (e.actorName) return e.actorName;
-  if (e.actorKind === "guest") return e.data.via === "reporter" ? "The reporter" : "A visitor";
-  if (e.actorKind === "integration") return trackerName(e.data.via) ?? "An integration";
-  return "Someone";
+  if (e.actorKind === "guest")
+    return e.data.via === "reporter" ? t("inbox2.theReporter") : t("inbox2.visitor");
+  if (e.actorKind === "integration") return trackerName(e.data.via) ?? t("inbox2.anIntegration");
+  return t("inbox2.someone");
 }
 
 /** Event data is JSON from the API: show strings and numbers, anything else as `fallback`. */
@@ -110,171 +114,195 @@ function str(v: unknown, fallback = ""): string {
   return typeof v === "string" || typeof v === "number" ? String(v) : fallback;
 }
 
-function names(v: unknown): string {
+function names(v: unknown, t: TFn): string {
   if (!Array.isArray(v) || !v.length) return "";
   return v
-    .map((u: unknown) => (u && typeof u === "object" && "name" in u ? str(u.name, "a former member") : "?"))
+    .map((u: unknown) =>
+      u && typeof u === "object" && "name" in u ? str(u.name, t("inbox2.formerMember")) : "?",
+    )
     .join(", ");
+}
+
+/** Fill a translated sentence's `{name}` slots with elements, so a language can put them in its own order. */
+function rich(text: string, parts: Record<string, React.ReactNode>): React.ReactNode {
+  return text
+    .split(/\{(\w+)\}/)
+    .map((piece, i) => (i % 2 === 0 ? piece : <Fragment key={i}>{parts[piece]}</Fragment>));
 }
 
 /** One line per activity row: who did what, with the before → after values. */
 function EventLine({ event: e }: { event: ActivityEvent }) {
-  const who = <span className="font-medium text-foreground">{actorOf(e)}</span>;
+  const t = useT();
+  const who = <span className="font-medium text-foreground">{actorOf(e, t)}</span>;
   const { from, to } = e.data;
   let icon = <CircleDot className="size-3.5" />;
   let body: React.ReactNode;
   if (e.type === "status_changed" && isStatus(to)) {
     icon = <StatusIcon status={to} className="size-3.5" />;
-    body = (
+    const change = (
       <>
-        {who} changed status{" "}
-        {isStatus(from) && <span className="text-foreground">{STATUS_META[from].label}</span>}
+        {isStatus(from) && <span className="text-foreground">{t(STATUS_META[from].labelKey)}</span>}
         {isStatus(from) && (
           <>
             <ArrowRight aria-hidden className="mx-1 inline size-3" />
-            <span className="sr-only"> to </span>
+            <span className="sr-only"> {t("inbox2.srTo")} </span>
           </>
         )}
-        <span className="text-foreground">{STATUS_META[to].label}</span>
-        {e.data.via === "api" && " via API"}
-        {typeof e.data.issue === "number" && ` (issue #${e.data.issue})`}
+        <span className="text-foreground">{t(STATUS_META[to].labelKey)}</span>
+      </>
+    );
+    body = (
+      <>
+        {rich(t("inbox2.evStatusChanged"), { who, change })}
+        {e.data.via === "api" && <> {t("inbox2.viaApi")}</>}
+        {typeof e.data.issue === "number" && <> {t("inbox2.issueNumber", { number: e.data.issue })}</>}
       </>
     );
   } else if (e.type === "priority_changed" && isPriority(to)) {
     icon = <PriorityIcon priority={to} className="size-3.5" />;
     body = (
       <>
-        {who} set priority to <span className="text-foreground">{PRIORITY_META[to].label}</span>
-        {isPriority(from) && from !== "none" && <> (was {PRIORITY_META[from].label})</>}
+        {rich(t("inbox2.evPrioritySet"), {
+          who,
+          priority: <span className="text-foreground">{t(PRIORITY_META[to].labelKey)}</span>,
+        })}
+        {isPriority(from) && from !== "none" && (
+          <> {t("inbox2.was", { value: t(PRIORITY_META[from].labelKey) })}</>
+        )}
       </>
     );
   } else if (e.type === "assigneeIds_changed") {
     icon = <UserRound className="size-3.5" />;
-    const added = names(e.data.toUsers);
-    body = added ? (
-      <>
-        {who} assigned <span className="text-foreground">{added}</span>
-      </>
-    ) : (
-      <>
-        {who} removed the assignee{names(e.data.fromUsers) && ` (${names(e.data.fromUsers)})`}
-      </>
-    );
+    const added = names(e.data.toUsers, t);
+    const was = names(e.data.fromUsers, t);
+    body = added
+      ? rich(t("inbox2.evAssigned"), { who, users: <span className="text-foreground">{added}</span> })
+      : was
+        ? rich(t("inbox2.evAssigneeRemovedWas"), { who, users: was })
+        : rich(t("inbox2.evAssigneeRemoved"), { who });
   } else if (e.type === "title_changed") {
     icon = <PencilLine className="size-3.5" />;
-    body = (
-      <>
-        {who} renamed this to <span className="text-foreground">“{str(to)}”</span>
-      </>
-    );
+    body = rich(t("inbox2.evRenamed"), {
+      who,
+      title: <span className="text-foreground">{t("inbox2.quoted", { name: str(to) })}</span>,
+    });
   } else if (e.type === "action_run") {
     icon = <Zap className="size-3.5" />;
     body = (
       <>
-        {who} ran{" "}
-        <span className="text-foreground">“{str(e.data.label ?? e.data.actionId, "an action")}”</span>
+        {rich(t("inbox2.evActionRan"), {
+          who,
+          action: (
+            <span className="text-foreground">
+              {t("inbox2.quoted", { name: str(e.data.label ?? e.data.actionId, t("inbox2.anAction")) })}
+            </span>
+          ),
+        })}
         {e.data.ok === true ? (
           typeof e.data.message === "string" && e.data.message ? (
-            <> — {e.data.message}</>
+            <> {t("inbox2.evActionMessage", { message: e.data.message })}</>
           ) : null
         ) : (
-          <span className="text-destructive"> — failed ({str(e.data.error ?? e.data.status, "error")})</span>
+          <span className="text-destructive">
+            {" "}
+            {t("inbox2.evActionFailed", {
+              error: str(e.data.error ?? e.data.status, t("inbox2.errorFallback")),
+            })}
+          </span>
         )}
       </>
     );
   } else if (e.type === "issue_linked") {
     icon = <ExternalLink className="size-3.5" />;
     const url = safeHref(e.data.url);
-    const label = `${trackerName(e.data.provider) ?? "Tracker"} issue ${issueRef({
-      provider: str(e.data.provider),
-      number: Number(e.data.number),
-      url: str(e.data.url),
-      key: e.data.key,
-    })}`;
-    body = (
-      <>
-        Linked{" "}
-        {url ? (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-foreground underline-offset-4 hover:underline"
-          >
-            {label}
-          </a>
-        ) : (
-          <span className="text-foreground">{label}</span>
-        )}
-      </>
-    );
+    const label = t("inbox2.trackerIssue", {
+      tracker: trackerName(e.data.provider) ?? t("inbox2.trackerFallback"),
+      ref: issueRef({
+        provider: str(e.data.provider),
+        number: Number(e.data.number),
+        url: str(e.data.url),
+        key: e.data.key,
+      }),
+    });
+    body = rich(t("inbox2.evIssueLinked"), {
+      issue: url ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-foreground underline-offset-4 hover:underline"
+        >
+          {label}
+        </a>
+      ) : (
+        <span className="text-foreground">{label}</span>
+      ),
+    });
   } else if (e.type === "comment_deleted") {
     icon = <Trash2 className="size-3.5" />;
-    body = (
-      <>
-        {who} deleted {e.data.visibility === "internal" ? "an internal note" : "a reply"}
-      </>
+    body = rich(
+      t(e.data.visibility === "internal" ? "inbox2.evDeletedInternalNote" : "inbox2.evDeletedReply"),
+      { who },
     );
   } else if (e.type === "kind_changed" && isKind(to)) {
     const Icon = KIND_META[to].icon;
     icon = <Icon className="size-3.5" />;
     body = (
       <>
-        {who} changed the type to <span className="text-foreground">{KIND_META[to].label}</span>
-        {isKind(from) && <> (was {KIND_META[from].label})</>}
+        {rich(t("inbox2.evKindChanged"), {
+          who,
+          kind: <span className="text-foreground">{t(KIND_META[to].labelKey)}</span>,
+        })}
+        {isKind(from) && <> {t("inbox2.was", { value: t(KIND_META[from].labelKey) })}</>}
       </>
     );
   } else if (e.type === "anchor_changed") {
     icon = <MapPin className="size-3.5" />;
-    body = (
-      <>
-        {who} re-pinned this{e.data.via === "widget" ? " on the page" : ""}
-      </>
-    );
+    body = rich(t(e.data.via === "widget" ? "inbox2.evRepinnedOnPage" : "inbox2.evRepinned"), { who });
   } else if (e.type === "dueAt_changed") {
     icon = <CalendarClock className="size-3.5" />;
     body =
-      typeof to === "string" ? (
-        <>
-          {who} set the due date to{" "}
-          <span className="text-foreground">
-            <LocalDate iso={to} />
-          </span>
-        </>
-      ) : (
-        <>{who} removed the due date</>
-      );
+      typeof to === "string"
+        ? rich(t("inbox2.evDueSet"), {
+            who,
+            date: (
+              <span className="text-foreground">
+                <LocalDate iso={to} />
+              </span>
+            ),
+          })
+        : rich(t("inbox2.evDueRemoved"), { who });
   } else if (e.type === "labelIds_changed") {
     icon = <Tag className="size-3.5" />;
-    const added = labelNames(e.data.added);
-    const removed = labelNames(e.data.removed);
-    body = (
-      <>
-        {who} {added && <>added {added}</>}
-        {added && removed && " and "}
-        {removed && <>removed {removed}</>}
-        {!added && !removed && "changed the labels"}
-      </>
-    );
+    const added = labelNames(e.data.added, t);
+    const removed = labelNames(e.data.removed, t);
+    body =
+      added && removed
+        ? rich(t("inbox2.evLabelsAddedRemoved"), { who, added, removed })
+        : added
+          ? rich(t("inbox2.evLabelsAdded"), { who, labels: added })
+          : removed
+            ? rich(t("inbox2.evLabelsRemoved"), { who, labels: removed })
+            : rich(t("inbox2.evLabelsChanged"), { who });
   } else if (e.type === "duplicateOfId_changed") {
     icon = <StatusIcon status="duplicate" className="size-3.5" />;
     body =
-      typeof to === "string" ? (
-        <>
-          {who} marked this as a duplicate of{" "}
-          <span className="text-foreground">
-            {typeof e.data.toNumber === "number" ? `#${e.data.toNumber}` : "another item"}
-          </span>
-        </>
-      ) : (
-        <>{who} marked this as not a duplicate</>
-      );
+      typeof to === "string"
+        ? rich(t("inbox2.evDuplicateOf"), {
+            who,
+            item: (
+              <span className="text-foreground">
+                {typeof e.data.toNumber === "number" ? `#${e.data.toNumber}` : t("inbox2.anotherItem")}
+              </span>
+            ),
+          })
+        : rich(t("inbox2.evNotDuplicate"), { who });
   } else if (e.type === "deleted") {
     icon = <Trash2 className="size-3.5" />;
-    body = <>{who} moved this to the trash</>;
+    body = rich(t("inbox2.evMovedToTrash"), { who });
   } else if (e.type === "restored") {
     icon = <RotateCcw className="size-3.5" />;
-    body = <>{who} restored this from the trash</>;
+    body = rich(t("inbox2.evRestored"), { who });
   } else {
     icon = <Flag className="size-3.5" />;
     body = (
@@ -297,13 +325,16 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
 }
 
 function CommentCard({ comment: c, feedbackId }: { comment: Comment; feedbackId: string }) {
+  const t = useT();
   const { userId, isAdmin, canWrite } = useViewer();
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const own = canWrite && !!c.author && c.author.id === userId;
   const canDelete = canWrite && (own || isAdmin);
   const name =
-    c.author?.name ?? c.authorGuest?.name ?? (c.authorGuest?.email ? c.authorGuest.email : "Visitor");
+    c.author?.name ??
+    c.authorGuest?.name ??
+    (c.authorGuest?.email ? c.authorGuest.email : t("inbox2.visitorName"));
 
   const [deleteComment, remove] = useDeleteCommentMutation();
 
@@ -319,22 +350,24 @@ function CommentCard({ comment: c, feedbackId }: { comment: Comment; feedbackId:
       <div className="mb-1.5 flex items-center gap-2 text-xs">
         <UserAvatar name={name} image={c.author?.image} className="size-5" />
         <span className="min-w-0 truncate font-medium">{name}</span>
-        {!c.author && <span className="text-muted-foreground">· visitor</span>}
+        {!c.author && <span className="text-muted-foreground">{t("inbox2.visitorTag")}</span>}
         {!c.author && c.authorGuest?.verified && (
-          <BadgeCheck className="size-3.5 text-emerald-600" aria-label="Verified reporter" />
+          <BadgeCheck className="size-3.5 text-emerald-600" aria-label={t("inbox2.verifiedReporter")} />
         )}
         {c.visibility === "internal" ? (
           <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
-            <Lock className="size-3" /> Internal
+            <Lock className="size-3" /> {t("inbox2.internal")}
           </span>
         ) : (
-          c.author && <span className="text-muted-foreground">· public reply</span>
+          c.author && <span className="text-muted-foreground">{t("inbox2.publicReplyTag")}</span>
         )}
         <span className="ml-auto flex items-center gap-1">
           <Time iso={c.createdAt} />
           {c.editedAt && (
             <Tooltip>
-              <TooltipTrigger render={<span className="text-muted-foreground" />}>· edited</TooltipTrigger>
+              <TooltipTrigger render={<span className="text-muted-foreground" />}>
+                {t("inbox2.editedTag")}
+              </TooltipTrigger>
               <TooltipContent>{absolute(c.editedAt)}</TooltipContent>
             </Tooltip>
           )}
@@ -346,7 +379,7 @@ function CommentCard({ comment: c, feedbackId }: { comment: Comment; feedbackId:
                     variant="ghost"
                     size="icon-xs"
                     className="-my-1 -mr-1"
-                    aria-label="Comment actions"
+                    aria-label={t("inbox2.commentActions")}
                   />
                 }
               >
@@ -355,12 +388,12 @@ function CommentCard({ comment: c, feedbackId }: { comment: Comment; feedbackId:
               <DropdownMenuContent align="end" className="w-36">
                 {own && (
                   <DropdownMenuItem onClick={() => setEditing(true)}>
-                    <Pencil /> Edit
+                    <Pencil /> {t("inbox2.edit")}
                   </DropdownMenuItem>
                 )}
                 {canDelete && (
                   <DropdownMenuItem variant="destructive" onClick={() => setConfirming(true)}>
-                    <Trash2 /> Delete
+                    <Trash2 /> {t("inbox2.delete")}
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
@@ -378,15 +411,15 @@ function CommentCard({ comment: c, feedbackId }: { comment: Comment; feedbackId:
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Delete this comment?"
-        description="It's removed for everyone, including the reporter if it was a public reply. The timeline keeps a note that it was deleted."
+        title={t("inbox2.deleteCommentTitle")}
+        description={t("inbox2.deleteCommentDescription")}
         pending={remove.isLoading}
         onConfirm={() => {
           deleteComment({ id: c.id, feedbackId })
             .unwrap()
             .then(() => {
               setConfirming(false);
-              toast.success("Comment deleted");
+              toast.success(t("inbox2.commentDeleted"));
             })
             .catch((e: unknown) => toast.error(errorMessage(e)));
         }}
@@ -421,6 +454,7 @@ function EditComment({
   feedbackId: string;
   onDone: () => void;
 }) {
+  const t = useT();
   const [saveComment] = useEditCommentMutation();
   const form = useZodForm(commentUpdate, { defaultValues: { body: c.body } });
   const { isSubmitting, isDirty } = form.formState;
@@ -428,7 +462,7 @@ function EditComment({
   const submit = form.handleSubmit(async (v) => {
     try {
       await saveComment({ id: c.id, feedbackId, body: v.body }).unwrap();
-      toast.success("Comment updated");
+      toast.success(t("inbox2.commentUpdated"));
       onDone();
     } catch (e) {
       toast.error(errorMessage(e));
@@ -444,7 +478,7 @@ function EditComment({
         maxLength={10_000}
         // eslint-disable-next-line jsx-a11y/no-autofocus -- opened by the Edit action, which hands focus to the field
         autoFocus
-        aria-label="Edit comment"
+        aria-label={t("inbox2.editComment")}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit();
           if (e.key === "Escape") {
@@ -455,10 +489,10 @@ function EditComment({
       />
       <div className="flex justify-end gap-2">
         <Button type="button" size="sm" variant="ghost" onClick={onDone}>
-          Cancel
+          {t("inbox2.cancel")}
         </Button>
         <Button type="submit" size="sm" disabled={!body.trim() || !isDirty || isSubmitting}>
-          {isSubmitting ? "Saving…" : "Save"}
+          {isSubmitting ? t("inbox2.saving") : t("inbox2.save")}
         </Button>
       </div>
     </form>
@@ -467,8 +501,9 @@ function EditComment({
 
 /** Comments and activity in one chronological thread (blueprint 06 §3.2 "Timeline"). */
 export function Timeline({ data }: { data: FeedbackDetail }) {
+  const t = useT();
   const f = data.feedback;
-  const reporter = f.reporterGuest?.name ?? f.reporterGuest?.email ?? "A visitor";
+  const reporter = f.reporterGuest?.name ?? f.reporterGuest?.email ?? t("inbox2.visitor");
   // The API writes its own "created" row; it becomes the "reported this" line (named after the reporter).
   const created = data.activity.find((e) => e.type === "created");
   const entries: Entry[] = [
@@ -500,13 +535,14 @@ export function Timeline({ data }: { data: FeedbackDetail }) {
                 <CircleDot className="size-3.5 text-blue-500" />
               </span>
               <span className="min-w-0 flex-1 pt-0.5">
-                <span className="font-medium text-foreground">{entry.who}</span> reported this
-                {entry.via && (
-                  <>
-                    {" "}
-                    via review link <span className="font-medium text-foreground">{entry.via}</span>
-                  </>
-                )}
+                {entry.via
+                  ? rich(t("inbox2.reportedThisViaLink"), {
+                      who: <span className="font-medium text-foreground">{entry.who}</span>,
+                      link: <span className="font-medium text-foreground">{entry.via}</span>,
+                    })
+                  : rich(t("inbox2.reportedThis"), {
+                      who: <span className="font-medium text-foreground">{entry.who}</span>,
+                    })}
               </span>
               <span className="pt-0.5">
                 <Time iso={entry.at} />
@@ -531,6 +567,7 @@ export function CommentComposer({
   projectId: string;
   reach: FeedbackDetail["replyReach"];
 }) {
+  const t = useT();
   const [addComment] = useAddCommentMutation();
   const { userId } = useViewer();
   const members = useMembers().filter((m) => m.id !== userId);
@@ -603,12 +640,8 @@ export function CommentComposer({
           // Let a click on a suggestion land before the list closes.
           setTimeout(() => setQuery(null), 150);
         }}
-        placeholder={
-          visibility === "internal"
-            ? "Leave an internal note… (@ to mention)"
-            : "Reply to the reporter… (@ to mention a teammate)"
-        }
-        aria-label="Comment"
+        placeholder={visibility === "internal" ? t("inbox2.notePlaceholder") : t("inbox2.replyPlaceholder")}
+        aria-label={t("inbox2.comment")}
         role="combobox"
         aria-expanded={matches.length > 0}
         aria-controls={listId}
@@ -648,7 +681,7 @@ export function CommentComposer({
         <ul
           id={listId}
           role="listbox"
-          aria-label="Mention a teammate"
+          aria-label={t("inbox2.mentionTeammate")}
           className="absolute inset-x-2 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md"
         >
           {matches.map((m, i) => (
@@ -683,18 +716,20 @@ export function CommentComposer({
             <Tabs value={field.value} onValueChange={(v) => field.onChange(v)}>
               <TabsList className="h-7">
                 <TabsTrigger value="internal" className="px-2.5 text-xs">
-                  <Lock /> Internal
+                  <Lock /> {t("inbox2.internal")}
                 </TabsTrigger>
                 <TabsTrigger value="public" className="px-2.5 text-xs">
-                  Public reply
+                  {t("inbox2.publicReply")}
                 </TabsTrigger>
               </TabsList>
             </Tabs>
           )}
         />
-        <span className="ml-auto hidden text-[11px] text-muted-foreground sm:inline">Ctrl ↵ to send</span>
+        <span className="ml-auto hidden text-[11px] text-muted-foreground sm:inline">
+          {t("inbox2.ctrlEnterToSend")}
+        </span>
         <Button type="submit" size="sm" disabled={!body.trim() || isSubmitting}>
-          {isSubmitting ? "Sending…" : "Send"}
+          {isSubmitting ? t("inbox2.sending") : t("inbox2.send")}
         </Button>
       </div>
     </form>
@@ -702,34 +737,34 @@ export function CommentComposer({
 }
 
 /** Where a public reply goes, from the project's settings and the report (wave-5 contract §3.4). */
-export function replyReachText(reach: FeedbackDetail["replyReach"]): {
+export function replyReachText(
+  reach: FeedbackDetail["replyReach"],
+  t: TFn,
+): {
   tone: "ok" | "warn";
   text: string;
 } {
   const email = reach.notifyReporter && reach.reporterHasEmail;
   if (reach.publicRead && email) {
-    return { tone: "ok", text: "Shown under the pin on the page and emailed to the reporter." };
+    return { tone: "ok", text: t("inbox2.reachPublicAndEmail") };
   }
   if (reach.publicRead) {
     return {
       tone: "ok",
-      text: reach.reporterHasEmail
-        ? "Shown under the pin on the page. Reporter emails are off for this project."
-        : "Shown under the pin on the page. The reporter left no email address.",
+      text: reach.reporterHasEmail ? t("inbox2.reachPublicEmailOff") : t("inbox2.reachPublicNoEmail"),
     };
   }
-  if (email) return { tone: "ok", text: "Emailed to the reporter. Pins are private on this project." };
+  if (email) return { tone: "ok", text: t("inbox2.reachEmailOnly") };
   return {
     tone: "warn",
-    text: reach.reporterHasEmail
-      ? "Not delivered: pins are private and reporter emails are off for this project."
-      : "Not delivered: pins are private and the reporter left no email address.",
+    text: reach.reporterHasEmail ? t("inbox2.reachNoneEmailOff") : t("inbox2.reachNoneNoEmail"),
   };
 }
 
 function ReplyReach({ reach, projectId }: { reach: FeedbackDetail["replyReach"]; projectId: string }) {
+  const t = useT();
   const { isAdmin } = useViewer();
-  const { tone, text } = replyReachText(reach);
+  const { tone, text } = replyReachText(reach, t);
   const Icon = tone === "warn" ? TriangleAlert : reach.publicRead ? Eye : Mail;
   return (
     <p
@@ -746,7 +781,7 @@ function ReplyReach({ reach, projectId }: { reach: FeedbackDetail["replyReach"];
           href={`/projects/${projectId}?tab=privacy`}
           className="font-medium underline underline-offset-2"
         >
-          Change in project settings
+          {t("inbox2.changeInProjectSettings")}
         </Link>
       )}
     </p>

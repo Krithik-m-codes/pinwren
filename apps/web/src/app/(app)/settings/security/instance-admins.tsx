@@ -17,6 +17,7 @@ import {
   useInstanceAdminsQuery,
   useRemoveInstanceAdminMutation,
 } from "@/lib/store/api/people";
+import { useT } from "@/lib/i18n/provider";
 import { useViewer } from "@/lib/viewer";
 
 /**
@@ -24,6 +25,7 @@ import { useViewer } from "@/lib/viewer";
  * PINWREN_ADMIN_EMAILS (locked, changed in the environment). The server never lets the last one go.
  */
 export function InstanceAdminsCard() {
+  const t = useT();
   const { userId } = useViewer();
   const q = useInstanceAdminsQuery(undefined);
   const members = useMembersQuery(undefined);
@@ -42,16 +44,14 @@ export function InstanceAdminsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Instance administrators</CardTitle>
-        <CardDescription>
-          They set up email delivery, security and the licence for everyone on this server.
-        </CardDescription>
+        <CardTitle>{t("settings3.instanceAdministrators")}</CardTitle>
+        <CardDescription>{t("settings3.instanceAdminsDescription")}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
         {q.isLoading && <Skeleton className="h-20" />}
         {q.isError && <ErrorState error={q.error} retry={() => void q.refetch()} className="py-6" />}
         {q.data && (
-          <ul className="-my-1 divide-y" aria-label="Instance administrators">
+          <ul className="-my-1 divide-y" aria-label={t("settings3.instanceAdministrators")}>
             {q.data.admins.map((a) => (
               <li key={a.id} className="flex flex-wrap items-center gap-3 py-2.5" data-admin={a.email}>
                 <span className="grid size-8 place-items-center rounded-full bg-muted">
@@ -60,7 +60,9 @@ export function InstanceAdminsCard() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">
                     {a.name}{" "}
-                    {a.id === userId && <span className="font-normal text-muted-foreground">(you)</span>}
+                    {a.id === userId && (
+                      <span className="font-normal text-muted-foreground">{t("settings3.you")}</span>
+                    )}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">{a.email}</p>
                 </div>
@@ -68,7 +70,7 @@ export function InstanceAdminsCard() {
                   <Badge
                     variant="outline"
                     className="gap-1 font-mono font-normal text-muted-foreground"
-                    title="Listed in PINWREN_ADMIN_EMAILS; change it in the server's environment"
+                    title={t("settings3.listedInEnvTitle")}
                   >
                     <Lock className="size-3" /> PINWREN_ADMIN_EMAILS
                   </Badge>
@@ -77,7 +79,7 @@ export function InstanceAdminsCard() {
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={`Remove ${a.name} as administrator`}
+                    aria-label={t("settings3.removeAsAdministrator", { name: a.name })}
                     disabled={removable <= 1 && total <= 1}
                     onClick={() => setConfirm(a)}
                   >
@@ -94,7 +96,7 @@ export function InstanceAdminsCard() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm">{email}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    Listed in PINWREN_ADMIN_EMAILS; an administrator once they sign up
+                    {t("settings3.listedInEnvPending")}
                   </p>
                 </div>
               </li>
@@ -104,8 +106,8 @@ export function InstanceAdminsCard() {
         {q.data && candidates.length > 0 && (
           <div className="flex flex-col gap-2 sm:flex-row">
             <Select items={candidates} value={pick} onValueChange={(v) => setPick(v)}>
-              <SelectTrigger className="sm:flex-1" aria-label="Member to make an administrator">
-                <SelectValue placeholder="Choose someone from this workspace" />
+              <SelectTrigger className="sm:flex-1" aria-label={t("settings3.memberToMakeAdmin")}>
+                <SelectValue placeholder={t("settings3.chooseSomeoneFromWorkspace")} />
               </SelectTrigger>
               <SelectContent>
                 {candidates.map((c) => (
@@ -123,13 +125,13 @@ export function InstanceAdminsCard() {
                 add(pick)
                   .unwrap()
                   .then(() => {
-                    toast.success("Administrator added");
+                    toast.success(t("settings3.administratorAdded"));
                     setPick(null);
                   })
                   .catch((e: unknown) => toast.error(errorMessage(e)));
               }}
             >
-              <UserPlus /> {adding.isLoading ? "Adding…" : "Make administrator"}
+              <UserPlus /> {adding.isLoading ? t("settings3.adding") : t("settings3.makeAdministrator")}
             </Button>
           </div>
         )}
@@ -137,20 +139,16 @@ export function InstanceAdminsCard() {
       <ConfirmDialog
         open={confirm !== null}
         onOpenChange={(o) => !o && setConfirm(null)}
-        title={`Remove ${confirm?.name ?? ""} as administrator?`}
-        description={
-          confirm?.id === userId
-            ? "You lose access to email, security and licence settings."
-            : "They keep their account and workspaces."
-        }
-        confirmLabel="Remove"
+        title={t("settings3.removeAsAdministratorQuestion", { name: confirm?.name ?? "" })}
+        description={confirm?.id === userId ? t("settings3.youLoseAccess") : t("settings3.theyKeepAccount")}
+        confirmLabel={t("settings3.remove")}
         pending={removing.isLoading}
         onConfirm={() => {
           if (!confirm) return;
           remove(confirm.id)
             .unwrap()
             .then(() => {
-              toast.success(`${confirm.name} is no longer an administrator`);
+              toast.success(t("settings3.noLongerAdministrator", { name: confirm.name }));
               setConfirm(null);
             })
             .catch((e: unknown) => toast.error(errorMessage(e)));

@@ -5,6 +5,7 @@ import { CircleAlert } from "lucide-react";
 import { type FieldValues, type Resolver, type UseFormProps, useForm } from "react-hook-form";
 import type { z } from "zod";
 import { Label } from "@/components/ui/label";
+import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
 /**
@@ -66,20 +67,22 @@ export function Field({
 }
 
 export function FieldError({ id, message }: { id: string; message?: string | undefined }) {
+  const { tm } = useI18n();
   if (!message) return null;
   return (
     <p id={`${id}-error`} className="text-xs text-destructive">
-      {message}
+      {tm(message)}
     </p>
   );
 }
 
 /** A form-level error (what the server answered). */
 export function FormError({ message }: { message?: string | undefined }) {
+  const { tm } = useI18n();
   if (!message) return null;
   return (
     <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
-      <CircleAlert className="mt-0.5 size-4 shrink-0" /> {message}
+      <CircleAlert className="mt-0.5 size-4 shrink-0" /> {tm(message)}
     </p>
   );
 }

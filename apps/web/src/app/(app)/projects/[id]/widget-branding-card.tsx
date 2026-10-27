@@ -10,11 +10,13 @@ import { Switch } from "@/components/ui/switch";
 import type { ProjectDetail } from "@/lib/api";
 import { useBrandingQuery, useEntitlementsQuery } from "@/lib/store/api";
 import { UpgradeNote } from "@/components/upgrade-note";
+import { useT } from "@/lib/i18n/provider";
 import { useSyncedState } from "@/lib/use-synced-state";
 import { useProjectPatch } from "./use-project";
 
 /** Widget white-label (F-094, wave-3 contract §2): "Powered by", dialog colour, logo. */
 export function WidgetBrandingCard({ project }: { project: ProjectDetail }) {
+  const t = useT();
   const save = useProjectPatch(project.id);
   const b = project.widgetBranding;
   const orgLogo = useBrandingQuery(undefined).data?.branding.logoUrl ?? null;
@@ -27,19 +29,19 @@ export function WidgetBrandingCard({ project }: { project: ProjectDetail }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Widget branding</CardTitle>
-        <CardDescription>Make the widget look like part of your product.</CardDescription>
+        <CardTitle>{t("projects2.widgetBranding")}</CardTitle>
+        <CardDescription>{t("projects2.widgetBrandingDescription")}</CardDescription>
       </CardHeader>
       <CardContent>
         <SettingGroup>
           <SettingRow
-            label="Hide “Powered by Pinwren”"
+            label={t("projects2.hidePoweredBy")}
             htmlFor="hide-powered-by"
             description={
               <>
-                Removes the credit line from the widget&apos;s cards and dialogs.
+                {t("projects2.removesCreditLine")}
                 {!whiteLabel && <UpgradeNote feature="white_label" applied={b.hidePoweredBy} />}
-                {frozen && " Read-only until the Enterprise licence is renewed."}
+                {frozen && ` ${t("projects2.readOnlyUntilRenewed")}`}
               </>
             }
           >
@@ -50,40 +52,41 @@ export function WidgetBrandingCard({ project }: { project: ProjectDetail }) {
               onCheckedChange={(hidePoweredBy) =>
                 save.mutate({
                   patch: { widgetBranding: { hidePoweredBy } },
-                  message: "Widget branding saved",
+                  message: t("projects2.widgetBrandingSaved"),
                 })
               }
             />
           </SettingRow>
           <SettingRow
-            label="Dialog colour"
+            label={t("projects2.dialogColour")}
             description={
-              b.dialogAccent
-                ? "Primary buttons in the widget's cards and dialogs."
-                : "Uses the launcher's accent colour."
+              b.dialogAccent ? t("projects2.dialogColourCustom") : t("projects2.dialogColourDefault")
             }
           >
             <div className="flex items-center gap-2">
               <ColorPicker
                 id="dialog-accent"
-                label="Dialog colour"
+                label={t("projects2.dialogColour")}
                 value={accent}
                 onChange={setAccent}
                 onCommit={(dialogAccent) =>
                   dialogAccent !== (b.dialogAccent ?? fallback) &&
-                  save.mutate({ patch: { widgetBranding: { dialogAccent } }, message: "Dialog colour saved" })
+                  save.mutate({
+                    patch: { widgetBranding: { dialogAccent } },
+                    message: t("projects2.dialogColourSaved"),
+                  })
                 }
               />
               {b.dialogAccent && (
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label="Use the launcher colour"
-                  title="Use the launcher colour"
+                  aria-label={t("projects2.useLauncherColour")}
+                  title={t("projects2.useLauncherColour")}
                   onClick={() =>
                     save.mutate({
                       patch: { widgetBranding: { dialogAccent: null } },
-                      message: "Dialog colour reset",
+                      message: t("projects2.dialogColourReset"),
                     })
                   }
                 >
@@ -92,14 +95,14 @@ export function WidgetBrandingCard({ project }: { project: ProjectDetail }) {
               )}
             </div>
           </SettingRow>
-          <SettingRow label="Logo" description="Shown in the header of the bug-report dialog." stack>
+          <SettingRow label={t("projects2.logo")} description={t("projects2.logoDescription")} stack>
             <div className="grid gap-2">
               <LogoUpload
                 value={b.logoUrl}
                 onUploaded={(logo) =>
                   save.mutate({
                     patch: { widgetBranding: { logoUrl: logo.url } },
-                    message: "Widget logo saved",
+                    message: t("projects2.widgetLogoSaved"),
                   })
                 }
               />
@@ -112,11 +115,11 @@ export function WidgetBrandingCard({ project }: { project: ProjectDetail }) {
                     onClick={() =>
                       save.mutate({
                         patch: { widgetBranding: { logoUrl: orgLogo } },
-                        message: "Using the workspace logo",
+                        message: t("projects2.usingWorkspaceLogo"),
                       })
                     }
                   >
-                    Use the workspace logo
+                    {t("projects2.useWorkspaceLogo")}
                   </Button>
                 )}
                 {b.logoUrl && (
@@ -127,11 +130,11 @@ export function WidgetBrandingCard({ project }: { project: ProjectDetail }) {
                     onClick={() =>
                       save.mutate({
                         patch: { widgetBranding: { logoUrl: null } },
-                        message: "Widget logo removed",
+                        message: t("projects2.widgetLogoRemoved"),
                       })
                     }
                   >
-                    Remove logo
+                    {t("projects2.removeLogo")}
                   </Button>
                 )}
               </div>

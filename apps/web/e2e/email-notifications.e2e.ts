@@ -102,7 +102,7 @@ test.describe("email and notifications", () => {
     await page.getByRole("switch", { name: "Pause all email" }).click();
     await page.getByRole("button", { name: "Instantly", exact: true }).click();
     await expect(page.getByText(/One email per notification/)).toBeVisible();
-    await expect.poll(prefs).toEqual({ emailDigest: "off", emailPaused: false });
+    await expect.poll(prefs).toMatchObject({ emailDigest: "off", emailPaused: false });
   });
 
   test("bell → View all → notifications page with tabs, project filter and paging", async ({

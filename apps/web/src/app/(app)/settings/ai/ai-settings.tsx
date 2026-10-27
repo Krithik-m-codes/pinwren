@@ -11,10 +11,12 @@ import {
   useTestAiSettingsMutation,
   useUpdateAiSettingsMutation,
 } from "@/lib/store/api";
+import { useT } from "@/lib/i18n/provider";
 import { SectionTitle } from "../settings-shell";
 import { AiSettingsForm, type AiSettingsPayload } from "./ai-settings-form";
 
 export function AiSettings() {
+  const t = useT();
   const query = useAiSettingsQuery(undefined);
   const me = useMeQuery(undefined);
   const [updateAiSettings] = useUpdateAiSettingsMutation();
@@ -34,8 +36,8 @@ export function AiSettings() {
         <CardContent>
           <EmptyState
             icon={Sparkles}
-            title="Workspace admins only"
-            description="Ask an owner or admin of this workspace to configure AI settings."
+            title={t("settings3.workspaceAdminsOnly")}
+            description={t("settings3.askAdminConfigureAi")}
           />
         </CardContent>
       </Card>
@@ -53,8 +55,8 @@ export function AiSettings() {
   return (
     <div className="grid gap-4">
       <SectionTitle
-        title="AI Configuration"
-        description="Configure provider credentials and models for automated bug triage, duplicate detection, and summaries."
+        title={t("settings3.aiConfiguration")}
+        description={t("settings3.aiConfigurationDescription")}
       />
       <AiSettingsForm initialConfig={query.data} onSave={handleSave} onTest={handleTest} />
     </div>

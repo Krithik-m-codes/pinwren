@@ -3,6 +3,8 @@
 // refused origin.
 
 import { trimTrailingSlashes as trimSlash } from "@pinwren/core";
+import type { Key } from "@/lib/i18n/en";
+import { tEn } from "@/lib/i18n/english";
 
 export const INSTALL_METHODS = ["html", "next", "gtm", "npm", "react"] as const;
 export type InstallMethod = (typeof INSTALL_METHODS)[number];
@@ -15,14 +17,22 @@ export const INSTALL_LABELS: Record<InstallMethod, string> = {
   react: "React",
 };
 
-/** Where each snippet goes, under the tabs. */
+/** The keys of where each snippet goes, under the tabs (the UI translates them). */
+export const INSTALL_HINT_KEYS: Record<InstallMethod, Key> = {
+  html: "other1.installHintHtml",
+  next: "other1.installHintNext",
+  gtm: "other1.installHintGtm",
+  npm: "other1.installHintNpm",
+  react: "other1.installHintReact",
+};
+
+/** Where each snippet goes, in English. */
 export const INSTALL_HINTS: Record<InstallMethod, string> = {
-  html: "Add this before the closing </body> tag on every page.",
-  next: "Add it to your root layout so it loads on every page.",
-  gtm: "In Google Tag Manager: a Custom HTML tag, triggered on All Pages.",
-  npm: "Call init() once in the browser, e.g. in your app's entry file. The package is a tiny loader: the widget itself comes from your Pinwren server, so it always matches it.",
-  react:
-    "Render it once near the root of your app. It renders nothing itself and loads the widget from your Pinwren server.",
+  html: tEn(INSTALL_HINT_KEYS.html),
+  next: tEn(INSTALL_HINT_KEYS.next),
+  gtm: tEn(INSTALL_HINT_KEYS.gtm),
+  npm: tEn(INSTALL_HINT_KEYS.npm),
+  react: tEn(INSTALL_HINT_KEYS.react),
 };
 
 export function installSnippets(publicUrl: string, projectKey: string): Record<InstallMethod, string> {

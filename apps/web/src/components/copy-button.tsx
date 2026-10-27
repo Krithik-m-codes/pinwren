@@ -4,21 +4,24 @@ import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { type TFn, tEn } from "@/lib/i18n/english";
+import { useT } from "@/lib/i18n/provider";
 
-export async function copyText(text: string, message = "Copied") {
+/** `t` defaults to English for callers outside a translated tree; pass the component's `t` to translate the toasts. */
+export async function copyText(text: string, message?: string, t: TFn = tEn) {
   try {
     await navigator.clipboard.writeText(text);
-    toast.success(message);
+    toast.success(message ?? t("components2.copied"));
     return true;
   } catch {
-    toast.error("Couldn't copy — select the text and copy it manually");
+    toast.error(t("components2.copyFailed"));
     return false;
   }
 }
 
 export function CopyButton({
   value,
-  label = "Copy",
+  label: labelProp,
   size = "icon-sm",
   variant = "ghost",
   className,
@@ -29,6 +32,8 @@ export function CopyButton({
   variant?: "ghost" | "outline";
   className?: string;
 }) {
+  const t = useT();
+  const label = labelProp ?? t("components2.copy");
   const [copied, setCopied] = useState(false);
   const icon = copied ? <Check /> : <Copy />;
   return (
@@ -44,12 +49,12 @@ export function CopyButton({
           setCopied(true);
           setTimeout(() => setCopied(false), 1500);
         } catch {
-          toast.error("Couldn't copy — select the text and copy it manually");
+          toast.error(t("components2.copyFailed"));
         }
       }}
     >
       {icon}
-      {size === "sm" && (copied ? "Copied" : label)}
+      {size === "sm" && (copied ? t("components2.copied") : label)}
     </Button>
   );
 }

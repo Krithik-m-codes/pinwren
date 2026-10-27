@@ -15,6 +15,8 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import type { Key } from "@/lib/i18n/en";
+import { useT } from "@/lib/i18n/provider";
 import { useProjectsQuery, useViewsQuery } from "@/lib/store/api";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { paletteToggled } from "@/lib/store/slices/ui";
@@ -22,13 +24,19 @@ import { useViewer } from "@/lib/viewer";
 import { visibleSettingsPages } from "@/lib/settings-nav";
 import { viewHref } from "./sidebar-lists";
 
-const PAGES: { href: Route; label: string; icon: typeof Inbox; keywords?: string[] }[] = [
-  { href: "/inbox", label: "Inbox", icon: Inbox, keywords: ["feedback", "triage"] },
-  { href: "/projects", label: "Projects", icon: FolderKanban, keywords: ["sites", "install", "widget"] },
+const PAGES: { href: Route; label: Key; icon: typeof Inbox; keywords?: string[] }[] = [
+  { href: "/inbox", label: "components2.inbox", icon: Inbox, keywords: ["feedback", "triage"] },
+  {
+    href: "/projects",
+    label: "components2.projects",
+    icon: FolderKanban,
+    keywords: ["sites", "install", "widget"],
+  },
 ];
 
 /** ⌘K / Ctrl+K: jump to any screen, project or saved view, and run a few app-wide actions (blueprint 06 §5). */
 export function CommandPalette() {
+  const t = useT();
   const open = useAppSelector((s) => s.ui.paletteOpen);
   const dispatch = useAppDispatch();
   const router = useRouter();
@@ -61,38 +69,38 @@ export function CommandPalette() {
         className="top-1/3 translate-y-0 overflow-hidden p-0 sm:max-w-lg"
         showCloseButton={false}
       >
-        <DialogTitle className="sr-only">Command palette</DialogTitle>
-        <DialogDescription className="sr-only">Go to a screen, a project or a saved view.</DialogDescription>
+        <DialogTitle className="sr-only">{t("components2.commandPalette")}</DialogTitle>
+        <DialogDescription className="sr-only">{t("components2.commandPaletteHint")}</DialogDescription>
         <Command>
-          <CommandInput placeholder="Go to…" />
+          <CommandInput placeholder={t("components2.goToPlaceholder")} />
           <CommandList>
-            <CommandEmpty>No results.</CommandEmpty>
-            <CommandGroup heading="Go to">
+            <CommandEmpty>{t("components2.noResults")}</CommandEmpty>
+            <CommandGroup heading={t("components2.goTo")}>
               {PAGES.map((p) => (
                 <CommandItem
                   key={p.href}
-                  value={p.label}
+                  value={t(p.label)}
                   keywords={p.keywords ?? []}
                   onSelect={() => run(() => router.push(p.href))}
                 >
-                  <p.icon /> {p.label}
+                  <p.icon /> {t(p.label)}
                 </CommandItem>
               ))}
             </CommandGroup>
-            <CommandGroup heading="Settings">
+            <CommandGroup heading={t("components2.settings")}>
               {settings.map((p) => (
                 <CommandItem
                   key={p.href}
-                  value={`settings ${p.label}`}
-                  keywords={p.keywords ?? []}
+                  value={`${t("components2.settings")} ${t(p.labelKey)}`}
+                  keywords={[...(p.keywords ?? []), "settings", p.label]}
                   onSelect={() => run(() => router.push(p.href))}
                 >
-                  <p.icon /> {p.label}
+                  <p.icon /> {t(p.labelKey)}
                 </CommandItem>
               ))}
             </CommandGroup>
             {!!views.data?.views.length && (
-              <CommandGroup heading="Views">
+              <CommandGroup heading={t("components2.views")}>
                 {views.data.views.map((v) => (
                   <CommandItem
                     key={v.id}
@@ -105,7 +113,7 @@ export function CommandPalette() {
               </CommandGroup>
             )}
             {!!projects.data?.projects.length && (
-              <CommandGroup heading="Projects">
+              <CommandGroup heading={t("components2.projects")}>
                 {projects.data.projects.map((p) => (
                   <CommandItem
                     key={p.id}
@@ -118,20 +126,26 @@ export function CommandPalette() {
               </CommandGroup>
             )}
             <CommandSeparator />
-            <CommandGroup heading="Actions">
+            <CommandGroup heading={t("components2.actions")}>
               {isAdmin && (
-                <CommandItem value="New project" onSelect={() => run(() => router.push("/projects?new=1"))}>
-                  <FolderPlus /> New project
+                <CommandItem
+                  value={t("components2.newProject")}
+                  onSelect={() => run(() => router.push("/projects?new=1"))}
+                >
+                  <FolderPlus /> {t("components2.newProject")}
                 </CommandItem>
               )}
-              <CommandItem value="Light theme" onSelect={() => run(() => setTheme("light"))}>
-                <Sun /> Light theme
+              <CommandItem value={t("components2.lightTheme")} onSelect={() => run(() => setTheme("light"))}>
+                <Sun /> {t("components2.lightTheme")}
               </CommandItem>
-              <CommandItem value="Dark theme" onSelect={() => run(() => setTheme("dark"))}>
-                <Moon /> Dark theme
+              <CommandItem value={t("components2.darkTheme")} onSelect={() => run(() => setTheme("dark"))}>
+                <Moon /> {t("components2.darkTheme")}
               </CommandItem>
-              <CommandItem value="System theme" onSelect={() => run(() => setTheme("system"))}>
-                <Monitor /> System theme
+              <CommandItem
+                value={t("components2.systemTheme")}
+                onSelect={() => run(() => setTheme("system"))}
+              >
+                <Monitor /> {t("components2.systemTheme")}
               </CommandItem>
             </CommandGroup>
           </CommandList>

@@ -16,7 +16,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { timeAgo } from "@/components/feedback-meta";
+import { useTimeAgo } from "@/components/feedback-meta";
 import { SecretDialog } from "@/components/secret-dialog";
 import { SettingGroup, SettingRow } from "@/components/setting-row";
 import { EmptyState, ErrorState } from "@/components/states";
@@ -43,6 +43,9 @@ import { z } from "zod";
 import { controlProps, Field, FormError, useZodForm } from "@/components/form";
 import type { Project, Webhook, WebhookDelivery, WebhookEvent, WebhookKind } from "@/lib/api";
 import { webhookForm } from "@/lib/form-schemas";
+import type { Key } from "@/lib/i18n/en";
+import type { TFn } from "@/lib/i18n/english";
+import { useI18n, useT } from "@/lib/i18n/provider";
 import {
   errorMessage,
   isForbidden,
@@ -61,27 +64,27 @@ import type { WebhookPatch } from "@/lib/store/api/admin";
 import { cn } from "@/lib/utils";
 import { here } from "@/lib/routes";
 
-const EVENT_LABELS: Record<WebhookEvent, string> = {
-  "feedback.created": "New feedback",
-  "feedback.updated": "Feedback updated (any field)",
-  "feedback.status_changed": "Status changed",
-  "feedback.assigned": "Assignee changed",
-  "feedback.priority_changed": "Priority changed",
-  "feedback.labels_changed": "Labels changed",
-  "feedback.deleted": "Feedback deleted",
-  "comment.created": "New comment",
-  "comment.updated": "Comment edited",
-  "comment.deleted": "Comment deleted",
+const EVENT_LABELS: Record<WebhookEvent, Key> = {
+  "feedback.created": "settings1.eventFeedbackCreated",
+  "feedback.updated": "settings1.eventFeedbackUpdated",
+  "feedback.status_changed": "settings1.eventStatusChanged",
+  "feedback.assigned": "settings1.eventAssigned",
+  "feedback.priority_changed": "settings1.eventPriorityChanged",
+  "feedback.labels_changed": "settings1.eventLabelsChanged",
+  "feedback.deleted": "settings1.eventFeedbackDeleted",
+  "comment.created": "settings1.eventCommentCreated",
+  "comment.updated": "settings1.eventCommentUpdated",
+  "comment.deleted": "settings1.eventCommentDeleted",
 };
-const KIND_LABELS: Record<WebhookKind, string> = {
-  generic: "Webhook",
-  slack: "Slack",
-  discord: "Discord",
-  teams: "Microsoft Teams",
-  telegram: "Telegram",
-  ntfy: "ntfy",
+const KIND_LABELS: Record<WebhookKind, Key> = {
+  generic: "settings1.kindWebhook",
+  slack: "settings1.kindSlack",
+  discord: "settings1.kindDiscord",
+  teams: "settings1.kindTeams",
+  telegram: "settings1.kindTelegram",
+  ntfy: "settings1.kindNtfy",
 };
-const KIND_OPTIONS: Record<WebhookKind, string> = { ...KIND_LABELS, generic: "Webhook (signed JSON)" };
+const KIND_OPTIONS: Record<WebhookKind, Key> = { ...KIND_LABELS, generic: "settings1.kindWebhookSigned" };
 const URL_HINT: Record<Exclude<WebhookKind, "telegram">, string> = {
   generic: "https://example.com/hooks/pinwren",
   slack: "https://hooks.slack.com/services/…",
@@ -90,39 +93,56 @@ const URL_HINT: Record<Exclude<WebhookKind, "telegram">, string> = {
   ntfy: "https://ntfy.sh/my-team-bugs",
 };
 /** Where to find the URL (or the credentials) for each kind. */
-const KIND_HELP: Record<WebhookKind, React.ReactNode> = {
-  generic: "Pinwren signs each request; you get the signing secret next.",
-  slack: (
-    <>
-      In Slack: <b>Apps › Incoming Webhooks</b>, add one for the channel and paste its URL.
-    </>
-  ),
-  discord: (
-    <>
-      In Discord: <b>Channel settings › Integrations › Webhooks › New webhook</b>, then{" "}
-      <b>Copy webhook URL</b>.
-    </>
-  ),
-  teams: (
-    <>
-      In the Teams channel: <b>Workflows</b> › <b>Post to a channel when a webhook request is received</b>,
-      then paste the URL the workflow shows.
-    </>
-  ),
-  telegram: (
-    <>
-      Create a bot with <b>@BotFather</b>, add it to the group or channel, and use the chat&apos;s id (a group
-      id starts with -100) or the channel&apos;s @name.
-    </>
-  ),
-  ntfy: "The topic URL on ntfy.sh or your own server. Add an access token if the topic is protected.",
-};
+function kindHelp(kind: WebhookKind, t: TFn): React.ReactNode {
+  switch (kind) {
+    case "generic":
+      return t("settings1.helpGeneric");
+    case "slack":
+      return (
+        <>
+          {t("settings1.helpSlackBefore")}
+          <b>{t("settings1.helpSlackPath")}</b>
+          {t("settings1.helpSlackAfter")}
+        </>
+      );
+    case "discord":
+      return (
+        <>
+          {t("settings1.helpDiscordBefore")}
+          <b>{t("settings1.helpDiscordPath")}</b>
+          {t("settings1.helpDiscordMiddle")}
+          <b>{t("settings1.helpDiscordCopy")}</b>
+          {t("settings1.helpDiscordAfter")}
+        </>
+      );
+    case "teams":
+      return (
+        <>
+          {t("settings1.helpTeamsBefore")}
+          <b>{t("settings1.helpTeamsWorkflows")}</b>
+          {t("settings1.helpTeamsMiddle")}
+          <b>{t("settings1.helpTeamsPost")}</b>
+          {t("settings1.helpTeamsAfter")}
+        </>
+      );
+    case "telegram":
+      return (
+        <>
+          {t("settings1.helpTelegramBefore")}
+          <b>{t("settings1.helpTelegramBot")}</b>
+          {t("settings1.helpTelegramAfter")}
+        </>
+      );
+    case "ntfy":
+      return t("settings1.helpNtfy");
+  }
+}
 const usesUrl = (kind: WebhookKind) => kind !== "telegram";
 
-const SECRET_HELP =
-  "Verify the Pinwren-Signature header with it: v1 = HMAC-SHA256(secret, timestamp + '.' + body).";
+const SECRET_HELP: Key = "settings1.secretHelp";
 
 export function IntegrationsSettings() {
+  const { t, tn } = useI18n();
   const search = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -135,7 +155,9 @@ export function IntegrationsSettings() {
   const open = (id: string | null) =>
     router.replace(here(pathname, id ? `webhook=${id}` : undefined), { scroll: false });
   const projectName = (id: string | null) =>
-    id ? (projects.data?.projects.find((p) => p.id === id)?.name ?? "One project") : "All projects";
+    id
+      ? (projects.data?.projects.find((p) => p.id === id)?.name ?? t("settings1.oneProject"))
+      : t("settings1.allProjects");
 
   if (isForbidden(hooks.error)) {
     return (
@@ -143,8 +165,8 @@ export function IntegrationsSettings() {
         <CardContent>
           <EmptyState
             icon={Lock}
-            title="Integrations are managed by admins"
-            description="Ask a workspace Admin to connect Slack, Discord, Teams, Telegram, ntfy or a webhook."
+            title={t("settings1.integrationsManagedByAdmins")}
+            description={t("settings1.integrationsManagedByAdminsDescription")}
           />
         </CardContent>
       </Card>
@@ -154,16 +176,13 @@ export function IntegrationsSettings() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Webhooks</CardTitle>
-        <CardDescription>
-          Send events to Slack, Discord, Microsoft Teams, Telegram, ntfy or your own endpoint. Deliveries are
-          retried for up to 3 days and logged; generic webhooks are signed.
-        </CardDescription>
+        <CardTitle>{t("settings1.webhooks")}</CardTitle>
+        <CardDescription>{t("settings1.webhooksDescription")}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="mb-3 flex justify-end">
           <Button size="sm" onClick={() => setCreating(true)}>
-            <Plus /> Add webhook
+            <Plus /> {t("settings1.addWebhook")}
           </Button>
         </div>
         {hooks.isLoading && (
@@ -176,17 +195,17 @@ export function IntegrationsSettings() {
         {hooks.data?.webhooks.length === 0 && (
           <EmptyState
             icon={WebhookIcon}
-            title="No webhooks yet"
-            description="Post new feedback to Slack, Discord, Teams, Telegram, ntfy or any HTTPS endpoint."
+            title={t("settings1.noWebhooksYet")}
+            description={t("settings1.noWebhooksYetDescription")}
             action={
               <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
-                <Plus /> Add webhook
+                <Plus /> {t("settings1.addWebhook")}
               </Button>
             }
           />
         )}
         {hooks.data && hooks.data.webhooks.length > 0 && (
-          <ul className="divide-y rounded-lg border" aria-label="Webhooks">
+          <ul className="divide-y rounded-lg border" aria-label={t("settings1.webhooks")}>
             {hooks.data.webhooks.map((w) => (
               <li key={w.id}>
                 <button
@@ -195,7 +214,13 @@ export function IntegrationsSettings() {
                   className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/60 focus-visible:bg-muted focus-visible:outline-none"
                 >
                   <span
-                    title={!w.active ? "Disabled" : w.failingSince ? "Failing" : "Active"}
+                    title={
+                      !w.active
+                        ? t("settings1.disabled")
+                        : w.failingSince
+                          ? t("settings1.failing")
+                          : t("settings1.active")
+                    }
                     className={cn(
                       "size-2 shrink-0 rounded-full",
                       !w.active ? "bg-muted-foreground/40" : w.failingSince ? "bg-red-500" : "bg-emerald-500",
@@ -203,12 +228,14 @@ export function IntegrationsSettings() {
                   />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium">{w.name || KIND_LABELS[w.kind]}</span>
+                      <span className="truncate text-sm font-medium">{w.name || t(KIND_LABELS[w.kind])}</span>
                       <Badge variant="secondary" className="font-normal">
-                        {KIND_LABELS[w.kind]}
+                        {t(KIND_LABELS[w.kind])}
                       </Badge>
-                      {!w.active && <Badge variant="outline">Disabled</Badge>}
-                      {w.active && w.failingSince && <Badge variant="destructive">Failing</Badge>}
+                      {!w.active && <Badge variant="outline">{t("settings1.disabled")}</Badge>}
+                      {w.active && w.failingSince && (
+                        <Badge variant="destructive">{t("settings1.failing")}</Badge>
+                      )}
                     </span>
                     <span className="mt-0.5 block truncate font-mono text-xs text-muted-foreground">
                       {w.url}
@@ -216,7 +243,7 @@ export function IntegrationsSettings() {
                     </span>
                   </span>
                   <span className="hidden shrink-0 text-xs text-muted-foreground sm:block">
-                    {w.events.length} event{w.events.length === 1 ? "" : "s"} · {projectName(w.projectId)}
+                    {tn("settings1.eventCount", w.events.length)} · {projectName(w.projectId)}
                   </span>
                   <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
                 </button>
@@ -251,8 +278,8 @@ export function IntegrationsSettings() {
       </Sheet>
       <SecretDialog
         secret={created?.secret ?? null}
-        title="Signing secret"
-        description={SECRET_HELP}
+        title={t("settings1.signingSecret")}
+        description={t(SECRET_HELP)}
         onClose={() => {
           const id = created?.id;
           setCreated(null);
@@ -264,9 +291,10 @@ export function IntegrationsSettings() {
 }
 
 function EventPicker({ value, onChange }: { value: WebhookEvent[]; onChange: (v: WebhookEvent[]) => void }) {
+  const t = useT();
   return (
     <fieldset className="grid gap-2">
-      <legend className="mb-1 text-sm font-medium">Events</legend>
+      <legend className="mb-1 text-sm font-medium">{t("settings1.events")}</legend>
       {WEBHOOK_EVENTS.map((e) => (
         <div key={e} className="flex items-center gap-2.5 text-sm">
           <Checkbox
@@ -274,7 +302,7 @@ function EventPicker({ value, onChange }: { value: WebhookEvent[]; onChange: (v:
             checked={value.includes(e)}
             onCheckedChange={(on) => onChange(on ? [...value, e] : value.filter((x) => x !== e))}
           />
-          <label htmlFor={`event-${e}`}>{EVENT_LABELS[e]}</label>
+          <label htmlFor={`event-${e}`}>{t(EVENT_LABELS[e])}</label>
           <code className="ml-auto font-mono text-[11px] text-muted-foreground">{e}</code>
         </div>
       ))}
@@ -291,13 +319,14 @@ function ProjectScope({
   onChange: (v: string | null) => void;
   projects: Project[];
 }) {
+  const t = useT();
   const items = [
-    { value: "all", label: "All projects" },
+    { value: "all", label: t("settings1.allProjects") },
     ...projects.map((p) => ({ value: p.id, label: p.name })),
   ];
   return (
     <Select items={items} value={value ?? "all"} onValueChange={(v) => v && onChange(v === "all" ? null : v)}>
-      <SelectTrigger className="w-full" aria-label="Projects">
+      <SelectTrigger className="w-full" aria-label={t("settings1.projects")}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -342,6 +371,7 @@ function CreateWebhookForm({
   onCreated: (w: Webhook, secret: string | null) => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [create] = useCreateWebhookMutation();
   const form = useZodForm(webhookForm, {
     defaultValues: {
@@ -367,7 +397,7 @@ function CreateWebhookForm({
         ...(v.kind === "telegram" ? { botToken: v.botToken, chatId: v.chatId } : { url: v.url }),
         ...(v.kind === "ntfy" && v.accessToken ? { accessToken: v.accessToken } : {}),
       }).unwrap();
-      toast.success("Webhook added");
+      toast.success(t("settings1.webhookAdded"));
       onCreated(webhook, secret);
     } catch (e) {
       form.setError("root", { message: errorMessage(e) });
@@ -377,27 +407,27 @@ function CreateWebhookForm({
   return (
     <form className="grid gap-4" noValidate onSubmit={(e) => void submit(e)}>
       <DialogHeader>
-        <DialogTitle>Add a webhook</DialogTitle>
-        <DialogDescription>Pinwren posts each selected event here.</DialogDescription>
+        <DialogTitle>{t("settings1.addAWebhook")}</DialogTitle>
+        <DialogDescription>{t("settings1.addAWebhookDescription")}</DialogDescription>
       </DialogHeader>
       <div className="grid gap-1.5">
-        <Label htmlFor="wh-kind">Type</Label>
+        <Label htmlFor="wh-kind">{t("settings1.type")}</Label>
         <Controller
           control={form.control}
           name="kind"
           render={({ field }) => (
             <Select
-              items={WEBHOOK_KINDS.map((k) => ({ value: k, label: KIND_OPTIONS[k] }))}
+              items={WEBHOOK_KINDS.map((k) => ({ value: k, label: t(KIND_OPTIONS[k]) }))}
               value={field.value}
               onValueChange={(v) => v && field.onChange(v)}
             >
-              <SelectTrigger id="wh-kind" className="w-full" aria-label="Type">
+              <SelectTrigger id="wh-kind" className="w-full" aria-label={t("settings1.type")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {WEBHOOK_KINDS.map((k) => (
                   <SelectItem key={k} value={k}>
-                    {KIND_OPTIONS[k]}
+                    {t(KIND_OPTIONS[k])}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -405,19 +435,15 @@ function CreateWebhookForm({
           )}
         />
         <p className="text-xs text-muted-foreground" data-testid="wh-kind-help">
-          {KIND_HELP[kind]}
+          {kindHelp(kind, t)}
         </p>
       </div>
       {usesUrl(kind) ? (
         <Field
           id="wh-url"
-          label={kind === "ntfy" ? "Topic URL" : "URL"}
+          label={kind === "ntfy" ? t("settings1.topicUrl") : t("settings1.url")}
           error={errors.url?.message}
-          help={
-            kind !== "generic"
-              ? "The URL is a credential — it's stored encrypted and shown masked afterwards."
-              : undefined
-          }
+          help={kind !== "generic" ? t("settings1.urlCredentialHelp") : undefined}
         >
           <Input
             {...controlProps("wh-url", errors.url?.message, kind !== "generic")}
@@ -432,9 +458,9 @@ function CreateWebhookForm({
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
             id="wh-bot-token"
-            label="Bot token"
+            label={t("settings1.botToken")}
             error={errors.botToken?.message}
-            help="Stored encrypted, never shown again."
+            help={t("settings1.botTokenHelp")}
           >
             <Input
               {...controlProps("wh-bot-token", errors.botToken?.message, true)}
@@ -446,12 +472,12 @@ function CreateWebhookForm({
               className="font-mono text-xs"
             />
           </Field>
-          <Field id="wh-chat" label="Chat id" error={errors.chatId?.message}>
+          <Field id="wh-chat" label={t("settings1.chatId")} error={errors.chatId?.message}>
             <Input
               {...controlProps("wh-chat", errors.chatId?.message)}
               {...form.register("chatId")}
               spellCheck={false}
-              placeholder="-1001234567890 or @channel"
+              placeholder={t("settings1.chatIdPlaceholder")}
               className="font-mono text-xs"
             />
           </Field>
@@ -460,9 +486,9 @@ function CreateWebhookForm({
       {kind === "ntfy" && (
         <Field
           id="wh-ntfy-token"
-          label="Access token (optional)"
+          label={t("settings1.accessTokenOptional")}
           error={errors.accessToken?.message}
-          help="For protected topics: a tk_… token, or user:password. Stored encrypted."
+          help={t("settings1.accessTokenHelp")}
         >
           <Input
             {...controlProps("wh-ntfy-token", errors.accessToken?.message, true)}
@@ -473,7 +499,7 @@ function CreateWebhookForm({
           />
         </Field>
       )}
-      <Field id="wh-name" label="Name (optional)" error={errors.name?.message}>
+      <Field id="wh-name" label={t("settings1.nameOptional")} error={errors.name?.message}>
         <Input
           {...controlProps("wh-name", errors.name?.message)}
           {...form.register("name")}
@@ -482,7 +508,7 @@ function CreateWebhookForm({
         />
       </Field>
       <div className="grid gap-2">
-        <Label>Projects</Label>
+        <Label>{t("settings1.projects")}</Label>
         <Controller
           control={form.control}
           name="projectId"
@@ -503,10 +529,10 @@ function CreateWebhookForm({
       <FormError message={errors.events?.message ?? errors.root?.message} />
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
+          {t("settings1.cancel")}
         </Button>
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Adding…" : "Add webhook"}
+          {isSubmitting ? t("settings1.adding") : t("settings1.addWebhook")}
         </Button>
       </DialogFooter>
     </form>
@@ -522,6 +548,8 @@ function WebhookDetail({
   projects: Project[];
   onDeleted: () => void;
 }) {
+  const t = useT();
+  const timeAgo = useTimeAgo();
   const [confirm, setConfirm] = useState<"delete" | "rotate" | null>(null);
   const [rotated, setRotated] = useState<string | null>(null);
   const hook = useWebhookQuery(id);
@@ -533,18 +561,22 @@ function WebhookDetail({
   const patch = (body: WebhookPatch) => {
     updateWebhook({ id, patch: body })
       .unwrap()
-      .then(() => toast.success("Webhook saved", { id: `wh-${id}` }))
-      .catch((e: unknown) => toast.error("Not saved", { description: errorMessage(e) }));
+      .then(() => toast.success(t("settings1.webhookSaved"), { id: `wh-${id}` }))
+      .catch((e: unknown) => toast.error(t("settings1.notSaved"), { description: errorMessage(e) }));
   };
   const sendTest = () => {
     testWebhook(id)
       .unwrap()
       .then(({ delivery }) => {
         if (delivery.status === "success")
-          toast.success(`Test delivered · ${delivery.responseCode ?? "no status"}`);
+          toast.success(
+            t("settings1.testDelivered", { status: delivery.responseCode ?? t("settings1.noStatus") }),
+          );
         else
-          toast.error("Test failed", {
-            description: delivery.error ?? `HTTP ${delivery.responseCode ?? "error"}`,
+          toast.error(t("settings1.testFailed"), {
+            description:
+              delivery.error ??
+              t("settings1.httpStatus", { status: delivery.responseCode ?? t("settings1.error") }),
           });
       })
       .catch((e: unknown) => toast.error(errorMessage(e)));
@@ -563,7 +595,7 @@ function WebhookDetail({
       .unwrap()
       .then(() => {
         setConfirm(null);
-        toast.success("Webhook deleted");
+        toast.success(t("settings1.webhookDeleted"));
         onDeleted();
       })
       .catch((e: unknown) => toast.error(errorMessage(e)));
@@ -585,28 +617,32 @@ function WebhookDetail({
     <div className="flex h-full flex-col overflow-y-auto">
       <SheetHeader className="border-b p-5 pr-12">
         <SheetTitle className="flex items-center gap-2">
-          {w.name || KIND_LABELS[w.kind]}
+          {w.name || t(KIND_LABELS[w.kind])}
           <Badge variant="secondary" className="font-normal">
-            {KIND_LABELS[w.kind]}
+            {t(KIND_LABELS[w.kind])}
           </Badge>
         </SheetTitle>
         <SheetDescription className="font-mono text-xs break-all">
           {w.url}
-          {w.chatId && ` → chat ${w.chatId}`}
+          {w.chatId && t("settings1.arrowChat", { id: w.chatId })}
         </SheetDescription>
       </SheetHeader>
       <div className="grid gap-6 p-5">
         {w.failingSince && (
           <p className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-700 dark:text-red-400">
             <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-            Failing since {timeAgo(w.failingSince)}. It turns itself off after 3 days of failures.
+            {t("settings1.failingSince", { time: timeAgo(w.failingSince) })}
           </p>
         )}
         <SettingGroup>
-          <SettingRow label="Active" htmlFor="wh-active" description="Paused webhooks receive nothing.">
+          <SettingRow
+            label={t("settings1.active")}
+            htmlFor="wh-active"
+            description={t("settings1.activeDescription")}
+          >
             <Switch id="wh-active" checked={w.active} onCheckedChange={(active) => patch({ active })} />
           </SettingRow>
-          <SettingRow label="Projects" stack>
+          <SettingRow label={t("settings1.projects")} stack>
             <ProjectScope
               value={w.projectId}
               onChange={(projectId) => patch({ projectId })}
@@ -617,15 +653,17 @@ function WebhookDetail({
         </SettingGroup>
         <EventPicker
           value={w.events}
-          onChange={(events) => (events.length ? patch({ events }) : toast.error("Keep at least one event"))}
+          onChange={(events) =>
+            events.length ? patch({ events }) : toast.error(t("settings1.keepOneEvent"))
+          }
         />
         <div className="flex flex-wrap gap-2">
           <Button onClick={sendTest} disabled={test.isLoading || !w.active}>
-            <Send /> {test.isLoading ? "Sending…" : "Send test event"}
+            <Send /> {test.isLoading ? t("settings1.sending") : t("settings1.sendTestEvent")}
           </Button>
           {w.hasSecret && (
             <Button variant="outline" onClick={() => setConfirm("rotate")}>
-              <KeyRound /> Rotate secret
+              <KeyRound /> {t("settings1.rotateSecret")}
             </Button>
           )}
           <Button
@@ -633,12 +671,12 @@ function WebhookDetail({
             className="ml-auto text-destructive hover:text-destructive"
             onClick={() => setConfirm("delete")}
           >
-            <Trash2 /> Delete
+            <Trash2 /> {t("settings1.delete")}
           </Button>
         </div>
-        <section aria-label="Delivery log">
+        <section aria-label={t("settings1.deliveryLog")}>
           <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-            Recent deliveries
+            {t("settings1.recentDeliveries")}
             {deliveries.isFetching && <RotateCw className="size-3 animate-spin text-muted-foreground" />}
           </h3>
           {deliveries.isLoading && <Skeleton className="h-24" />}
@@ -647,7 +685,7 @@ function WebhookDetail({
           )}
           {deliveries.data?.deliveries.length === 0 && (
             <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-              Nothing sent yet. Send a test event to check the connection.
+              {t("settings1.nothingSentYet")}
             </p>
           )}
           {deliveries.data && deliveries.data.deliveries.length > 0 && (
@@ -662,24 +700,24 @@ function WebhookDetail({
       <ConfirmDialog
         open={confirm === "delete"}
         onOpenChange={(o) => setConfirm(o ? "delete" : null)}
-        title="Delete this webhook?"
-        description="Deliveries stop at once and the log is removed."
+        title={t("settings1.deleteWebhookTitle")}
+        description={t("settings1.deleteWebhookDescription")}
         pending={remove.isLoading}
         onConfirm={removeNow}
       />
       <ConfirmDialog
         open={confirm === "rotate"}
         onOpenChange={(o) => setConfirm(o ? "rotate" : null)}
-        title="Rotate the signing secret?"
-        description="The old secret stops validating immediately. Update your receiver with the new one."
-        confirmLabel="Rotate"
+        title={t("settings1.rotateSecretTitle")}
+        description={t("settings1.rotateSecretDescription")}
+        confirmLabel={t("settings1.rotate")}
         pending={rotate.isLoading}
         onConfirm={rotateNow}
       />
       <SecretDialog
         secret={rotated}
-        title="New signing secret"
-        description={SECRET_HELP}
+        title={t("settings1.newSigningSecret")}
+        description={t(SECRET_HELP)}
         onClose={() => setRotated(null)}
       />
     </div>
@@ -689,40 +727,41 @@ function WebhookDetail({
 const urlRule = z
   .string()
   .trim()
-  .min(1, "Enter the URL")
-  .pipe(z.url({ protocol: /^https?$/, error: "Use an http(s) URL" }).max(2000));
+  .min(1, "settings1.enterTheUrl")
+  .pipe(z.url({ protocol: /^https?$/, error: "settings1.useHttpUrl" }).max(2000));
 
 /**
  * Replace a webhook's credentials without re-creating it: the URL (chat webhooks are write-only, so the
  * field starts empty), Telegram's bot token or chat, or ntfy's access token.
  */
 function ConnectionRows({ webhook: w, onPatch }: { webhook: Webhook; onPatch: (p: WebhookPatch) => void }) {
+  const t = useT();
   if (w.kind === "telegram") {
     return (
       <>
         <SettingRow
-          label="Chat"
+          label={t("settings1.chat")}
           htmlFor="wh-edit-chat"
-          description="The group, channel or chat the bot posts to."
+          description={t("settings1.chatDescription")}
         >
           <ReplaceValue
             id="wh-edit-chat"
             placeholder={w.chatId ?? "-1001234567890"}
-            rule={z.string().trim().regex(TELEGRAM_CHAT_ID, "A numeric chat id or @channelname")}
-            label="Move"
+            rule={z.string().trim().regex(TELEGRAM_CHAT_ID, "settings1.chatIdRule")}
+            label={t("settings1.move")}
             onSave={(chatId) => onPatch({ chatId })}
           />
         </SettingRow>
         <SettingRow
-          label="Bot token"
+          label={t("settings1.botToken")}
           htmlFor="wh-edit-bot"
-          description="Saved and hidden. Paste a new one to replace it."
+          description={t("settings1.botTokenReplaceDescription")}
         >
           <ReplaceValue
             id="wh-edit-bot"
             secret
-            placeholder="New bot token"
-            rule={z.string().trim().regex(TELEGRAM_BOT_TOKEN, "A bot token looks like 123456789:AA…")}
+            placeholder={t("settings1.newBotToken")}
+            rule={z.string().trim().regex(TELEGRAM_BOT_TOKEN, "settings1.botTokenRule")}
             onSave={(botToken) => onPatch({ botToken })}
           />
         </SettingRow>
@@ -732,12 +771,10 @@ function ConnectionRows({ webhook: w, onPatch }: { webhook: Webhook; onPatch: (p
   return (
     <>
       <SettingRow
-        label={w.kind === "ntfy" ? "Topic URL" : "URL"}
+        label={w.kind === "ntfy" ? t("settings1.topicUrl") : t("settings1.url")}
         htmlFor="wh-edit-url"
         description={
-          w.kind === "generic"
-            ? "Where events are posted."
-            : "Saved encrypted. Paste a new URL to replace it."
+          w.kind === "generic" ? t("settings1.urlGenericDescription") : t("settings1.urlReplaceDescription")
         }
         stack
       >
@@ -751,21 +788,23 @@ function ConnectionRows({ webhook: w, onPatch }: { webhook: Webhook; onPatch: (p
       </SettingRow>
       {w.kind === "ntfy" && (
         <SettingRow
-          label="Access token"
+          label={t("settings1.accessToken")}
           htmlFor="wh-edit-ntfy"
-          description={w.hasSecret ? "Set. Paste a new one to replace it." : "None: the topic is public."}
+          description={
+            w.hasSecret ? t("settings1.accessTokenSetDescription") : t("settings1.accessTokenNoneDescription")
+          }
         >
           <div className="flex flex-wrap gap-2">
             <ReplaceValue
               id="wh-edit-ntfy"
               secret
-              placeholder="tk_… or user:password"
-              rule={z.string().trim().min(4, "That token looks too short").max(200)}
+              placeholder={t("settings1.accessTokenPlaceholder")}
+              rule={z.string().trim().min(4, "settings1.tokenTooShort").max(200)}
               onSave={(accessToken) => onPatch({ accessToken })}
             />
             {w.hasSecret && (
               <Button variant="ghost" onClick={() => onPatch({ accessToken: null })}>
-                Remove
+                {t("settings1.remove")}
               </Button>
             )}
           </div>
@@ -782,7 +821,7 @@ function ReplaceValue({
   onSave,
   secret,
   wide,
-  label = "Replace",
+  label,
 }: {
   id: string;
   placeholder: string;
@@ -792,9 +831,11 @@ function ReplaceValue({
   wide?: boolean;
   label?: string;
 }) {
+  const t = useT();
   const form = useZodForm(z.object({ value: rule }), { defaultValues: { value: "" } });
   const value = useWatch({ control: form.control, name: "value" });
-  const error = form.formState.errors.value?.message;
+  const rawError = form.formState.errors.value?.message;
+  const error = rawError ? t(rawError as Key) : rawError;
   const submit = form.handleSubmit((v) => {
     onSave(v.value);
     form.reset({ value: "" });
@@ -812,13 +853,20 @@ function ReplaceValue({
           className={cn("font-mono text-xs", wide ? "w-full" : "w-full sm:w-52")}
         />
         <Button type="submit" variant="outline" disabled={!value.trim()}>
-          {label}
+          {label ?? t("settings1.replace")}
         </Button>
       </div>
       <FormError message={error} />
     </form>
   );
 }
+
+const DELIVERY_STATUS: Record<WebhookDelivery["status"], Key> = {
+  success: "settings1.deliverySuccess",
+  pending: "settings1.deliveryPending",
+  retrying: "settings1.deliveryRetrying",
+  failed: "settings1.deliveryFailed",
+};
 
 const DELIVERY_TONE: Record<WebhookDelivery["status"], string> = {
   success: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
@@ -836,6 +884,8 @@ function DeliveryRow({
   webhookId: string;
   disabled: boolean;
 }) {
+  const t = useT();
+  const timeAgo = useTimeAgo();
   const [open, setOpen] = useState(false);
   const [redeliverNow, redeliver] = useRedeliverMutation();
   const run = () => {
@@ -843,7 +893,7 @@ function DeliveryRow({
       .unwrap()
       .then(({ delivery }) =>
         toast[delivery.status === "success" ? "success" : "error"](
-          delivery.status === "success" ? "Redelivered" : "Redelivery failed",
+          delivery.status === "success" ? t("settings1.redelivered") : t("settings1.redeliveryFailed"),
         ),
       )
       .catch((e: unknown) => toast.error(errorMessage(e)));
@@ -864,27 +914,31 @@ function DeliveryRow({
             )}
           />
           <span className={cn("rounded px-1.5 py-0.5 font-medium capitalize", DELIVERY_TONE[d.status])}>
-            {d.status}
+            {t(DELIVERY_STATUS[d.status])}
           </span>
           <code className="truncate font-mono">{d.event}</code>
           <span className="shrink-0 text-muted-foreground tabular-nums">
             {d.responseCode ?? "—"}
             {d.durationMs !== null && ` · ${d.durationMs}ms`}
-            {d.attempt > 1 && ` · try ${d.attempt}`}
+            {d.attempt > 1 && ` · ${t("settings1.tryN", { n: d.attempt })}`}
           </span>
           <span className="ml-auto shrink-0 text-muted-foreground">{timeAgo(d.createdAt)}</span>
         </button>
         <Button size="xs" variant="ghost" onClick={run} disabled={redeliver.isLoading || disabled}>
-          <RotateCw /> Redeliver
+          <RotateCw /> {t("settings1.redeliver")}
         </Button>
       </div>
       {open && (
         <div className="space-y-1.5 border-t bg-muted/30 px-3 py-2 font-mono text-[11px]">
-          <p className="text-muted-foreground">Delivery {d.eventId}</p>
+          <p className="text-muted-foreground">{t("settings1.deliveryId", { id: d.eventId })}</p>
           {d.error && <p className="text-destructive">{d.error}</p>}
-          {d.nextRetryAt && <p className="text-muted-foreground">Next retry {timeAgo(d.nextRetryAt)}</p>}
+          {d.nextRetryAt && (
+            <p className="text-muted-foreground">
+              {t("settings1.nextRetry", { time: timeAgo(d.nextRetryAt) })}
+            </p>
+          )}
           <pre className="max-h-40 overflow-auto break-all whitespace-pre-wrap">
-            {d.responseBody || "(empty response)"}
+            {d.responseBody || t("settings1.emptyResponse")}
           </pre>
         </div>
       )}

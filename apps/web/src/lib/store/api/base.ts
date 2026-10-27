@@ -1,5 +1,6 @@
 import { createApi, type FetchArgs, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type { BaseQueryFn, FetchBaseQueryError } from "@reduxjs/toolkit/query";
+import { translateNow } from "@/lib/i18n/provider";
 
 /** A failed request as the dashboard sees it: the HTTP status and the problem-details code (blueprint 04 §1). */
 export type ApiError = { status: number; code: string; message: string };
@@ -29,7 +30,7 @@ export const isForbidden = (e: unknown) => isApiError(e) && e.status === 403;
 
 /** The message to show for any error a hook or `unwrap()` hands back. */
 export const errorMessage = (e: unknown, fallback = "Something went wrong") =>
-  isApiError(e) ? e.message : e instanceof Error ? e.message : fallback;
+  translateNow(isApiError(e) ? e.message : e instanceof Error ? e.message : fallback);
 
 function toApiError(e: FetchBaseQueryError): ApiError {
   if (typeof e.status === "number") {

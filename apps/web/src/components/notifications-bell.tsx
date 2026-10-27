@@ -5,11 +5,12 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { timeAgo } from "@/components/feedback-meta";
+import { useTimeAgo } from "@/components/feedback-meta";
 import { NotificationIcon, useUnreadTitle } from "@/components/notifications/notification-parts";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useT } from "@/lib/i18n/provider";
 import { notificationHref, notificationSubject, notificationText } from "@/lib/notification-text";
 import { useMarkNotificationsReadMutation, useNotificationsQuery } from "@/lib/store/api";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,8 @@ import { cn } from "@/lib/utils";
  * a row exists; polling is only the fallback.
  */
 export function NotificationsBell() {
+  const t = useT();
+  const timeAgo = useTimeAgo();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const query = useNotificationsQuery(undefined, { pollingInterval: 60_000, skipPollingIfUnfocused: true });
@@ -37,7 +40,11 @@ export function NotificationsBell() {
             variant="ghost"
             size="icon-sm"
             className="relative"
-            aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
+            aria-label={
+              unread
+                ? t("components2.notificationsUnread", { count: unread })
+                : t("components2.notifications")
+            }
             data-testid="notifications-bell"
           />
         }
@@ -51,14 +58,14 @@ export function NotificationsBell() {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[min(22rem,calc(100vw-1.5rem))] gap-0 p-0">
         <div className="flex items-center justify-between border-b px-3 py-2">
-          <p className="text-sm font-semibold">Notifications</p>
+          <p className="text-sm font-semibold">{t("components2.notifications")}</p>
           <Button
             variant="ghost"
             size="xs"
             disabled={!unread || marking.isLoading}
             onClick={() => void markRead({ all: true })}
           >
-            <CheckCheck /> Mark all read
+            <CheckCheck /> {t("components2.markAllRead")}
           </Button>
         </div>
         <div className="max-h-[min(26rem,70svh)] overflow-y-auto">
@@ -73,19 +80,17 @@ export function NotificationsBell() {
               role="alert"
               className="flex items-center justify-between gap-2 p-4 text-sm text-destructive"
             >
-              Couldn&apos;t load notifications.
+              {t("components2.notificationsLoadFailed")}
               <Button size="xs" variant="outline" onClick={() => void query.refetch()}>
-                Retry
+                {t("components2.retry")}
               </Button>
             </div>
           )}
           {query.isSuccess && items.length === 0 && (
             <div className="px-6 py-10 text-center">
               <Bell className="mx-auto mb-2 size-5 text-muted-foreground" />
-              <p className="text-sm font-medium">You&apos;re all caught up</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                New reports, assignments, replies and mentions show up here.
-              </p>
+              <p className="text-sm font-medium">{t("components2.allCaughtUp")}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t("components2.allCaughtUpHint")}</p>
             </div>
           )}
           <ul className="divide-y">
@@ -107,16 +112,16 @@ export function NotificationsBell() {
                   <NotificationIcon type={n.type} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs text-muted-foreground">
-                      {notificationText(n)}
+                      {notificationText(n, t)}
                       {n.data.projectName ? ` · ${n.data.projectName}` : ""}
                     </span>
-                    <span className="block truncate text-sm">{notificationSubject(n)}</span>
+                    <span className="block truncate text-sm">{notificationSubject(n, t)}</span>
                   </span>
                   <span className="flex shrink-0 flex-col items-end gap-1.5">
                     <span className="text-[11px] text-muted-foreground">{timeAgo(n.createdAt)}</span>
                     {!n.readAt && (
                       <span className="size-1.5 rounded-full bg-blue-600">
-                        <span className="sr-only">Unread</span>
+                        <span className="sr-only">{t("components2.unread")}</span>
                       </span>
                     )}
                   </span>
@@ -132,7 +137,7 @@ export function NotificationsBell() {
             data-testid="notifications-view-all"
             className="flex h-8 items-center justify-center rounded-md text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
           >
-            View all notifications
+            {t("components2.viewAllNotifications")}
           </Link>
         </div>
       </PopoverContent>

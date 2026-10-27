@@ -19,6 +19,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import type { EmailField, EmailSettings, EmailTestResult } from "@/lib/api";
 import { emailSettingsForm } from "@/lib/form-schemas";
+import type { Key } from "@/lib/i18n/en";
+import { useT } from "@/lib/i18n/provider";
 import {
   errorMessage,
   isForbidden,
@@ -47,7 +49,7 @@ const PRESETS = [
     host: "smtp.gmail.com",
     port: 587,
     secure: false,
-    hint: "Use an app password (Google account › Security › App passwords), not your normal password.",
+    hint: "settings3.hintGmail",
   },
   {
     id: "m365",
@@ -55,7 +57,7 @@ const PRESETS = [
     host: "smtp.office365.com",
     port: 587,
     secure: false,
-    hint: "SMTP AUTH must be enabled for the mailbox in the Microsoft 365 admin centre.",
+    hint: "settings3.hintM365",
   },
   {
     id: "ses",
@@ -63,7 +65,7 @@ const PRESETS = [
     host: "email-smtp.us-east-1.amazonaws.com",
     port: 587,
     secure: false,
-    hint: "Change the region in the host to yours; use SES SMTP credentials, not IAM keys.",
+    hint: "settings3.hintSes",
   },
   {
     id: "postmark",
@@ -71,7 +73,7 @@ const PRESETS = [
     host: "smtp.postmarkapp.com",
     port: 587,
     secure: false,
-    hint: "Username and password are both your Server API token.",
+    hint: "settings3.hintPostmark",
   },
   {
     id: "mailgun",
@@ -79,7 +81,7 @@ const PRESETS = [
     host: "smtp.mailgun.org",
     port: 587,
     secure: false,
-    hint: "Use the SMTP credentials of your sending domain (EU: smtp.eu.mailgun.org).",
+    hint: "settings3.hintMailgun",
   },
   {
     id: "sendgrid",
@@ -88,7 +90,7 @@ const PRESETS = [
     port: 587,
     secure: false,
     user: "apikey",
-    hint: "The username is literally “apikey”; the password is an API key.",
+    hint: "settings3.hintSendgrid",
   },
   {
     id: "brevo",
@@ -96,7 +98,7 @@ const PRESETS = [
     host: "smtp-relay.brevo.com",
     port: 587,
     secure: false,
-    hint: "Use the SMTP key from Brevo › SMTP & API, and your Brevo login as the username.",
+    hint: "settings3.hintBrevo",
   },
   {
     id: "resend",
@@ -105,7 +107,7 @@ const PRESETS = [
     port: 465,
     secure: true,
     user: "resend",
-    hint: "The username is “resend”; the password is an API key.",
+    hint: "settings3.hintResend",
   },
 ] as const;
 
@@ -113,11 +115,12 @@ type FormValues = z.input<typeof emailSettingsForm>;
 type Form = UseFormReturn<FormValues, unknown, z.output<typeof emailSettingsForm>>;
 
 function LockedBadge({ field }: { field: EmailField }) {
+  const t = useT();
   return (
     <Badge
       variant="outline"
       className="gap-1 font-mono font-normal text-muted-foreground"
-      title="Set by an environment variable"
+      title={t("settings3.setByEnvVar")}
     >
       <Lock className="size-3" /> {ENV[field]}
     </Badge>
@@ -157,6 +160,7 @@ function configOf(d: FormValues, locked: EmailSettings["locked"]): EmailSettings
  * form as it is, saved or not.
  */
 export function EmailSettingsForm() {
+  const t = useT();
   const query = useEmailSettingsQuery(undefined);
   if (query.isLoading) return <Skeleton className="h-96 rounded-xl" />;
   if (isForbidden(query.error)) {
@@ -165,8 +169,8 @@ export function EmailSettingsForm() {
         <CardContent>
           <EmptyState
             icon={Lock}
-            title="Instance admins only"
-            description="SMTP is configured by whoever runs this Pinwren server: the first account, or an address in PINWREN_ADMIN_EMAILS."
+            title={t("settings3.instanceAdminsOnly")}
+            description={t("settings3.smtpConfiguredByInstanceAdmins")}
           />
         </CardContent>
       </Card>
@@ -189,6 +193,7 @@ function SmtpSettings({ settings: s }: { settings: EmailSettings }) {
 }
 
 function SmtpCard({ settings: s, form }: { settings: EmailSettings; form: Form }) {
+  const t = useT();
   const [updateSettings] = useUpdateEmailSettingsMutation();
   const [preset, setPreset] = useState<string | null>(null);
   // The form is owned by the parent, and the React Compiler memoizes this card on its (stable) props:
@@ -197,13 +202,14 @@ function SmtpCard({ settings: s, form }: { settings: EmailSettings; form: Form }
   const locked = s.locked;
   const allLocked = Object.values(locked).every(Boolean);
   const [port, secure] = useWatch({ control: form.control, name: ["port", "secure"] });
-  const hint = PRESETS.find((p) => p.id === preset)?.hint;
+  const hintKey = PRESETS.find((p) => p.id === preset)?.hint;
+  const hint = hintKey ? t(hintKey) : undefined;
 
   const save = (patch: EmailSettingsUpdate) =>
     updateSettings(patch)
       .unwrap()
-      .then(() => toast.success("Email settings saved"))
-      .catch((e: unknown) => toast.error("Not saved", { description: errorMessage(e) }));
+      .then(() => toast.success(t("settings3.emailSettingsSaved")))
+      .catch((e: unknown) => toast.error(t("settings3.notSaved"), { description: errorMessage(e) }));
 
   const submit = form.handleSubmit(async (d) => {
     const all = configOf(d, locked);
@@ -212,7 +218,7 @@ function SmtpCard({ settings: s, form }: { settings: EmailSettings; form: Form }
       Object.entries(all).filter(([k, v]) => k === "password" || v !== (s as Record<string, unknown>)[k]),
     ) as EmailSettingsUpdate;
     if (!Object.keys(patch).length) {
-      toast("Nothing to save");
+      toast(t("settings3.nothingToSave"));
       return;
     }
     await save(patch);
@@ -231,19 +237,19 @@ function SmtpCard({ settings: s, form }: { settings: EmailSettings; form: Form }
 
   const portMismatch =
     port === 465 && !secure
-      ? "Port 465 expects TLS from the first byte: turn on “Use TLS”."
+      ? t("settings3.port465Mismatch")
       : port === 587 && secure
-        ? "Port 587 starts unencrypted and upgrades with STARTTLS: turn off “Use TLS” (and turn on “Require STARTTLS”)."
+        ? t("settings3.port587Mismatch")
         : null;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          Outgoing email (SMTP)
+          {t("settings3.outgoingEmailSmtp")}
           {s.configured ? (
             <Badge variant="secondary" className="ml-auto gap-1.5 font-normal">
-              <span className="size-1.5 rounded-full bg-emerald-500" /> Configured
+              <span className="size-1.5 rounded-full bg-emerald-500" /> {t("settings3.configured")}
             </Badge>
           ) : (
             <Badge
@@ -251,30 +257,27 @@ function SmtpCard({ settings: s, form }: { settings: EmailSettings; form: Form }
               className="ml-auto gap-1.5 font-normal"
               data-testid="smtp-not-configured"
             >
-              <span className="size-1.5 rounded-full bg-amber-500" /> Not set up — emails are skipped
+              <span className="size-1.5 rounded-full bg-amber-500" /> {t("settings3.notSetUpEmailsSkipped")}
             </Badge>
           )}
         </CardTitle>
-        <CardDescription>
-          Every email Pinwren sends goes through this server: new-report emails to the team, invitations,
-          password resets and emails to reporters. Environment variables override these and lock them.
-        </CardDescription>
+        <CardDescription>{t("settings3.smtpCardDescription")}</CardDescription>
       </CardHeader>
       <CardContent>
         <form noValidate onSubmit={(e) => void submit(e)}>
           <SettingGroup>
             {!allLocked && (
               <SettingRow
-                label="Provider"
-                description={hint ?? "Fills in the usual host and port for a provider. Nothing is saved yet."}
+                label={t("settings3.provider")}
+                description={hint ?? t("settings3.providerDescription")}
               >
                 <Select
                   items={PRESETS.map((p) => ({ value: p.id, label: p.label }))}
                   value={preset}
                   onValueChange={(v) => applyPreset(v)}
                 >
-                  <SelectTrigger className="w-full sm:w-72" aria-label="Fill in for a provider">
-                    <SelectValue placeholder="Fill in for a provider…" />
+                  <SelectTrigger className="w-full sm:w-72" aria-label={t("settings3.fillInForProvider")}>
+                    <SelectValue placeholder={t("settings3.fillInForProviderPlaceholder")} />
                   </SelectTrigger>
                   <SelectContent>
                     {PRESETS.map((p) => (
@@ -286,7 +289,7 @@ function SmtpCard({ settings: s, form }: { settings: EmailSettings; form: Form }
                 </Select>
               </SettingRow>
             )}
-            <SettingRow label="SMTP host" htmlFor="smtp-host">
+            <SettingRow label={t("settings3.smtpHost")} htmlFor="smtp-host">
               <div className="grid w-full gap-1 sm:w-72">
                 <Input
                   {...controlProps("smtp-host", errors.host?.message)}
@@ -299,9 +302,9 @@ function SmtpCard({ settings: s, form }: { settings: EmailSettings; form: Form }
               </div>
             </SettingRow>
             <SettingRow
-              label="Port"
+              label={t("settings3.port")}
               htmlFor="smtp-port"
-              description="587 with STARTTLS (most providers) or 465 with TLS from the start."
+              description={t("settings3.portDescription")}
             >
               <div className="grid w-full gap-1 sm:w-72">
                 <Controller
@@ -329,22 +332,22 @@ function SmtpCard({ settings: s, form }: { settings: EmailSettings; form: Form }
               form={form}
               name="secure"
               locked={locked.secure}
-              label="Use TLS"
-              description="Connect with TLS from the start (port 465)."
+              label={t("settings3.useTls")}
+              description={t("settings3.useTlsDescription")}
             />
             <SwitchRow
               form={form}
               name="requireTls"
               locked={locked.requireTls}
-              label="Require STARTTLS"
-              description="Refuse to send unless the server upgrades the connection to TLS (ports 587 and 25)."
+              label={t("settings3.requireStarttls")}
+              description={t("settings3.requireStarttlsDescription")}
             />
             <SwitchRow
               form={form}
               name="allowSelfSigned"
               locked={locked.allowSelfSigned}
-              label="Allow a self-signed certificate"
-              description="Only for a mail server on your own network whose certificate can't be verified."
+              label={t("settings3.allowSelfSigned")}
+              description={t("settings3.allowSelfSignedDescription")}
             />
             {portMismatch && (
               <p
@@ -354,19 +357,19 @@ function SmtpCard({ settings: s, form }: { settings: EmailSettings; form: Form }
                 <TriangleAlert className="mt-0.5 size-4 shrink-0" /> {portMismatch}
               </p>
             )}
-            <SettingRow label="Username" htmlFor="smtp-user">
+            <SettingRow label={t("settings3.username")} htmlFor="smtp-user">
               <div className="grid w-full gap-1 sm:w-72">
                 <Input id="smtp-user" {...form.register("user")} disabled={locked.user} autoComplete="off" />
                 {locked.user && <LockedBadge field="user" />}
               </div>
             </SettingRow>
             <SettingRow
-              label="Password"
+              label={t("settings3.password")}
               htmlFor="smtp-password"
               description={
                 s.passwordSet
-                  ? "A password is saved. Type a new one to replace it."
-                  : "Stored encrypted; never shown again."
+                  ? t("settings3.passwordSavedDescription")
+                  : t("settings3.passwordStoredDescription")
               }
             >
               <div className="grid w-full gap-1 sm:w-72">
@@ -376,7 +379,7 @@ function SmtpCard({ settings: s, form }: { settings: EmailSettings; form: Form }
                   autoComplete="new-password"
                   {...form.register("password")}
                   disabled={locked.password}
-                  placeholder={s.passwordSet ? "••••••••  (saved)" : ""}
+                  placeholder={s.passwordSet ? t("settings3.passwordSavedPlaceholder") : ""}
                 />
                 {locked.password && <LockedBadge field="password" />}
                 {s.passwordSet && !locked.password && (
@@ -387,15 +390,15 @@ function SmtpCard({ settings: s, form }: { settings: EmailSettings; form: Form }
                     className="justify-self-start text-muted-foreground"
                     onClick={() => void save({ password: null })}
                   >
-                    Remove saved password
+                    {t("settings3.removeSavedPassword")}
                   </Button>
                 )}
               </div>
             </SettingRow>
             <SettingRow
-              label="From address"
+              label={t("settings3.fromAddress")}
               htmlFor="smtp-from"
-              description="Who the emails come from. Use an address your provider lets you send as."
+              description={t("settings3.fromAddressDescription")}
             >
               <div className="grid w-full gap-1 sm:w-72">
                 <Input
@@ -412,7 +415,7 @@ function SmtpCard({ settings: s, form }: { settings: EmailSettings; form: Form }
           {!allLocked && (
             <div className="mt-4 flex justify-end border-t pt-4">
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Saving…" : "Save changes"}
+                {isSubmitting ? t("settings3.saving") : t("settings3.saveChanges")}
               </Button>
             </div>
           )}
@@ -462,11 +465,12 @@ const testForm = z.object({
   to: z
     .string()
     .trim()
-    .refine((v) => v === "" || z.email().safeParse(v).success, "An email address"),
+    .refine((v) => v === "" || z.email().safeParse(v).success, "settings3.anEmailAddress" satisfies Key),
 });
 
 /** Connects, signs in and sends one email with the form as it is now — saved or not. */
 function TestCard({ settings: s, form }: { settings: EmailSettings; form: Form }) {
+  const t = useT();
   const [sendTest] = useTestSmtpMutation();
   const [result, setResult] = useState<EmailTestResult | null>(null);
   const test = useZodForm(testForm, { defaultValues: { to: "" } });
@@ -476,7 +480,7 @@ function TestCard({ settings: s, form }: { settings: EmailSettings; form: Form }
     setResult(null);
     const valid = await form.trigger();
     if (!valid) {
-      setResult({ sent: false, skipped: true, reason: "Fix the highlighted fields first" });
+      setResult({ sent: false, skipped: true, reason: t("settings3.fixHighlightedFields") });
       return;
     }
     try {
@@ -489,11 +493,9 @@ function TestCard({ settings: s, form }: { settings: EmailSettings; form: Form }
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Send a test email</CardTitle>
+        <CardTitle>{t("settings3.sendATestEmail")}</CardTitle>
         <CardDescription>
-          Connects, signs in and sends one email{" "}
-          {dirty ? "with the values above, before you save them" : "with these settings"}, then shows the
-          server&apos;s answer.
+          {dirty ? t("settings3.testDescriptionDirty") : t("settings3.testDescriptionSaved")}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
@@ -503,15 +505,15 @@ function TestCard({ settings: s, form }: { settings: EmailSettings; form: Form }
               {...controlProps("test-to", errors.to?.message)}
               {...test.register("to")}
               type="email"
-              placeholder="Your own address (default)"
-              aria-label="Send the test to"
+              placeholder={t("settings3.yourOwnAddressDefault")}
+              aria-label={t("settings3.sendTheTestTo")}
               className="sm:max-w-xs"
             />
             <Button type="submit" variant="outline" disabled={isSubmitting} data-testid="smtp-test">
-              <Send /> {isSubmitting ? "Sending…" : "Send test email"}
+              <Send /> {isSubmitting ? t("settings3.sending") : t("settings3.sendTestEmail")}
             </Button>
           </div>
-          <FieldError id="test-to" message={errors.to?.message} />
+          <FieldError id="test-to" message={errors.to?.message && t(errors.to.message as Key)} />
         </form>
         {result && (
           <p
@@ -529,15 +531,15 @@ function TestCard({ settings: s, form }: { settings: EmailSettings; form: Form }
               <CircleX className="mt-0.5 size-4 shrink-0" />
             )}
             {result.sent
-              ? `Sent to ${result.to}. Check the inbox (and spam).${dirty ? " Save the settings to use them." : ""}`
+              ? t(dirty ? "settings3.testSentDirty" : "settings3.testSent", { to: result.to })
               : result.skipped
-                ? `Not sent: ${result.reason}`
-                : `The SMTP server refused it: ${result.reason}`}
+                ? t("settings3.notSentReason", { reason: result.reason })
+                : t("settings3.smtpRefusedReason", { reason: result.reason })}
           </p>
         )}
         {!s.configured && !result && (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Mail className="size-3.5" /> Fill in at least a host and a from address.
+            <Mail className="size-3.5" /> {t("settings3.fillInHostAndFrom")}
           </p>
         )}
       </CardContent>

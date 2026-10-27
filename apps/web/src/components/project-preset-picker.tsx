@@ -2,20 +2,22 @@
 
 import { Globe, MessagesSquare } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import type { Key } from "@/lib/i18n/en";
+import { useT } from "@/lib/i18n/provider";
 import type { ProjectPreset } from "@/lib/store/api/onboarding";
 import { cn } from "@/lib/utils";
 
-const PRESETS: { value: ProjectPreset; title: string; description: string; icon: typeof Globe }[] = [
+const PRESETS: { value: ProjectPreset; title: Key; description: Key; icon: typeof Globe }[] = [
   {
     value: "public-site",
-    title: "Public website",
-    description: "Visitors report bugs; reports stay private to your team.",
+    title: "components1.presetPublicTitle",
+    description: "components1.presetPublicDescription",
     icon: Globe,
   },
   {
     value: "review",
-    title: "Staging or client review",
-    description: "Reviewers see each other's pins and replies on the page.",
+    title: "components1.presetReviewTitle",
+    description: "components1.presetReviewDescription",
     icon: MessagesSquare,
   },
 ];
@@ -33,10 +35,11 @@ export function ProjectPresetPicker({
   onChange: (v: ProjectPreset) => void;
   id?: string;
 }) {
+  const t = useT();
   return (
     <ToggleGroup
       id={id}
-      aria-label="What is this site for?"
+      aria-label={t("components1.presetLabel")}
       value={[value]}
       onValueChange={(v) => {
         const next = v[0] as ProjectPreset | undefined;
@@ -58,9 +61,9 @@ export function ProjectPresetPicker({
         >
           <span className="flex items-center gap-2 text-sm font-medium">
             <p.icon className="size-4 text-muted-foreground" />
-            {p.title}
+            {t(p.title)}
           </span>
-          <span className="text-xs font-normal text-muted-foreground">{p.description}</span>
+          <span className="text-xs font-normal text-muted-foreground">{t(p.description)}</span>
         </ToggleGroupItem>
       ))}
     </ToggleGroup>

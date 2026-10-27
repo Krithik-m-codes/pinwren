@@ -5,6 +5,8 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
+import type { Key } from "@/lib/i18n/en";
+import { useT } from "@/lib/i18n/provider";
 import { type SetupStep, useSetupChecklistQuery } from "@/lib/store/api/onboarding";
 import { cn } from "@/lib/utils";
 import { useViewer } from "@/lib/viewer";
@@ -43,57 +45,61 @@ const subscribe = (l: () => void) => {
 
 type StepView = { title: string; detail: string; href: Route | null; cta: string | null };
 
-function stepView(step: SetupStep, o: { instanceAdmin: boolean; projectId: string | null }): StepView {
+function stepView(
+  step: SetupStep,
+  o: { instanceAdmin: boolean; projectId: string | null },
+  t: (key: Key) => string,
+): StepView {
   const install: Route = o.projectId ? (`/projects/${o.projectId}?tab=install` as Route) : "/projects?new=1";
   switch (step) {
     case "admin":
       return {
-        title: "Create the admin account",
-        detail: "The first account on a new server administers it.",
+        title: t("components1.stepAdminTitle"),
+        detail: t("components1.stepAdminDetail"),
         href: null,
         cta: null,
       };
     case "email":
       return o.instanceAdmin
         ? {
-            title: "Set up email",
-            detail: "Add your SMTP server so reports reach the team's inbox.",
+            title: t("components1.stepEmailTitle"),
+            detail: t("components1.stepEmailDetailAdmin"),
             href: "/settings/email",
-            cta: "Add SMTP",
+            cta: t("components1.stepEmailCta"),
           }
         : {
-            title: "Set up email",
-            detail: "Your server admin adds SMTP under Settings › Email.",
+            title: t("components1.stepEmailTitle"),
+            detail: t("components1.stepEmailDetailMember"),
             href: null,
             cta: null,
           };
     case "emailSent":
       return {
-        title: "Send a test email",
-        detail: "Proves the server can deliver mail.",
+        title: t("components1.stepEmailSentTitle"),
+        detail: t("components1.stepEmailSentDetail"),
         href: o.instanceAdmin ? "/settings/email" : null,
-        cta: o.instanceAdmin ? "Send a test" : null,
+        cta: o.instanceAdmin ? t("components1.stepEmailSentCta") : null,
       };
     case "widget":
       return {
-        title: "Install the widget",
-        detail: "Paste one snippet on your site; it shows Connected once it loads.",
+        title: t("components1.stepWidgetTitle"),
+        detail: t("components1.stepWidgetDetail"),
         href: install,
-        cta: o.projectId ? "Get the snippet" : "Create a project",
+        cta: o.projectId ? t("components1.stepWidgetCtaSnippet") : t("components1.stepWidgetCtaProject"),
       };
     case "feedback":
       return {
-        title: "Receive your first report",
-        detail: "Click the feedback button on your site and report a bug.",
+        title: t("components1.stepFeedbackTitle"),
+        detail: t("components1.stepFeedbackDetail"),
         href: install,
-        cta: "How to test",
+        cta: t("components1.stepFeedbackCta"),
       };
     case "team":
       return {
-        title: "Add a teammate",
-        detail: "Create their account or invite them by email.",
+        title: t("components1.stepTeamTitle"),
+        detail: t("components1.stepTeamDetail"),
         href: "/settings/members",
-        cta: "Add people",
+        cta: t("components1.stepTeamCta"),
       };
   }
 }
@@ -101,6 +107,7 @@ function stepView(step: SetupStep, o: { instanceAdmin: boolean; projectId: strin
 const ORDER: SetupStep[] = ["admin", "email", "emailSent", "widget", "feedback", "team"];
 
 export function SetupChecklist({ className }: { className?: string }) {
+  const t = useT();
   const { isAdmin, instanceAdmin } = useViewer();
   const dismissed = useSyncExternalStore(
     subscribe,
@@ -115,16 +122,16 @@ export function SetupChecklist({ className }: { className?: string }) {
 
   return (
     <section
-      aria-label="Get started"
+      aria-label={t("components1.getStarted")}
       className={cn("border-b bg-muted/30 px-4 py-3", className)}
       data-testid="setup-checklist"
     >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold">
-            Get started{" "}
+            {t("components1.getStarted")}{" "}
             <span className="font-normal text-muted-foreground tabular-nums">
-              · {c.done} of {c.total} done
+              {t("components1.setupProgressCount", { done: c.done, total: c.total })}
             </span>
           </h2>
           <div
@@ -133,7 +140,7 @@ export function SetupChecklist({ className }: { className?: string }) {
             aria-valuemin={0}
             aria-valuemax={c.total}
             aria-valuenow={c.done}
-            aria-label="Setup progress"
+            aria-label={t("components1.setupProgress")}
           >
             <div
               className="h-full bg-primary transition-all"
@@ -141,14 +148,14 @@ export function SetupChecklist({ className }: { className?: string }) {
             />
           </div>
         </div>
-        <Button variant="ghost" size="icon-sm" aria-label="Hide the checklist" onClick={dismiss}>
+        <Button variant="ghost" size="icon-sm" aria-label={t("components1.hideChecklist")} onClick={dismiss}>
           <X />
         </Button>
       </div>
       <ol className="mt-3 grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
         {ORDER.map((s) => {
           const done = c.steps[s];
-          const v = stepView(s, { instanceAdmin, projectId: c.projectId });
+          const v = stepView(s, { instanceAdmin, projectId: c.projectId }, t);
           return (
             <li
               key={s}
@@ -160,11 +167,14 @@ export function SetupChecklist({ className }: { className?: string }) {
               )}
             >
               {done ? (
-                <CircleCheck className="mt-0.5 size-4 shrink-0 text-emerald-600" aria-label="Done" />
+                <CircleCheck
+                  className="mt-0.5 size-4 shrink-0 text-emerald-600"
+                  aria-label={t("components1.done")}
+                />
               ) : (
                 <span
                   className="mt-0.5 size-4 shrink-0 rounded-full border border-dashed"
-                  aria-label="To do"
+                  aria-label={t("components1.toDo")}
                 />
               )}
               <span className="min-w-0 flex-1">

@@ -7,6 +7,7 @@ import { PanelActionIcon } from "@/components/panel-action-icon";
 import { issueRef, TRACKER_NAMES, TrackerIcon } from "@/components/tracker-icon";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { FeedbackDetail } from "@/lib/api";
+import { useT } from "@/lib/i18n/provider";
 import { errorMessage, useCreateIssueMutation, useRunPanelActionMutation } from "@/lib/store/api";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils";
  * the substituted URL in a new tab; webhooks run on the server and answer with a toast.
  */
 export function ItemActions({ data }: { data: FeedbackDetail }) {
+  const t = useT();
   const f = data.feedback;
   const [runAction, run] = useRunPanelActionMutation();
   const [createIssue, send] = useCreateIssueMutation();
@@ -22,27 +24,38 @@ export function ItemActions({ data }: { data: FeedbackDetail }) {
   const sendingTo = send.isLoading ? send.originalArgs?.integrationId : undefined;
 
   const runPanelAction = (actionId: string) => {
-    const label = data.panelActions.find((a) => a.id === actionId)?.label ?? "Action";
+    const label = data.panelActions.find((a) => a.id === actionId)?.label ?? t("inbox2.actionFallback");
     runAction({ feedbackId: f.id, actionId })
       .unwrap()
       .then((r) => {
-        if (r.ok) toast.success(r.message ?? `${label}: done`);
-        else toast.error(`${label} failed`, { description: r.message ?? r.error ?? `HTTP ${r.status}` });
+        if (r.ok) toast.success(r.message ?? t("inbox2.actionDone", { label }));
+        else
+          toast.error(t("inbox2.actionFailed", { label }), {
+            description: r.message ?? r.error ?? `HTTP ${r.status}`,
+          });
       })
       .catch((e: unknown) => toast.error(errorMessage(e)));
   };
   const sendToTracker = (integrationId: string) => {
     createIssue({ feedbackId: f.id, integrationId })
       .unwrap()
-      .then(({ issue }) => toast.success(`${TRACKER_NAMES[issue.provider]} issue ${issueRef(issue)} created`))
-      .catch((e: unknown) => toast.error("Couldn't create the issue", { description: errorMessage(e) }));
+      .then(({ issue }) =>
+        toast.success(
+          t("inbox2.issueCreated", { tracker: TRACKER_NAMES[issue.provider], ref: issueRef(issue) }),
+        ),
+      )
+      .catch((e: unknown) => toast.error(t("inbox2.issueCreateFailed"), { description: errorMessage(e) }));
   };
 
   const unsent = data.integrations.filter((i) => !data.issues.some((l) => l.integrationId === i.id));
   if (!data.panelActions.length && !data.integrations.length && !data.issues.length) return null;
 
   return (
-    <section aria-label="Actions" className="flex flex-wrap items-center gap-1.5" data-testid="item-actions">
+    <section
+      aria-label={t("inbox2.actions")}
+      className="flex flex-wrap items-center gap-1.5"
+      data-testid="item-actions"
+    >
       {data.issues.map((l) => (
         <a
           key={l.id}
@@ -67,10 +80,10 @@ export function ItemActions({ data }: { data: FeedbackDetail }) {
           size="sm"
           disabled={!!sendingTo}
           onClick={() => sendToTracker(i.id)}
-          title={`Open an issue in ${i.repo}`}
+          title={t("inbox2.openIssueIn", { repo: i.repo })}
         >
           {sendingTo === i.id ? <Loader2 className="animate-spin" /> : <Send />}
-          Send to {TRACKER_NAMES[i.provider]}
+          {t("inbox2.sendTo", { tracker: TRACKER_NAMES[i.provider] })}
         </Button>
       ))}
       {data.panelActions.map((a) =>

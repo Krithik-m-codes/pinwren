@@ -2,6 +2,7 @@
 
 import type { WidgetConfig } from "@pinwren/core";
 import { Bug, EyeOff, MapPin, MessageCircle } from "lucide-react";
+import { useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
 export const LAUNCHER_ICONS = { pin: MapPin, comment: MessageCircle, bug: Bug } as const;
@@ -18,11 +19,9 @@ export function onAccent(hex: string): string {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.45 ? "#111" : "#fff";
 }
 
-const DEFAULT_CONSENT =
-  "Your comment, the page address, browser details and any screenshot are sent to the site owner.";
-
 /** The launcher as the widget draws it, on a mock page. Offsets are scaled to the preview frame. */
 export function LauncherPreview({ config }: { config: WidgetConfig }) {
+  const t = useT();
   const { launcher, consent } = config;
   const Icon = LAUNCHER_ICONS[launcher.icon];
   const [v, hz] = launcher.position.split("-") as ["top" | "bottom", "left" | "right"];
@@ -32,7 +31,10 @@ export function LauncherPreview({ config }: { config: WidgetConfig }) {
     [v]: Math.round(launcher.offset.y * scale) + 6,
     [hz]: Math.round(launcher.offset.x * scale) + 6,
   };
-  const modes = [config.modes.comment && "Comment", config.modes.bug && "Report a bug"].filter(Boolean);
+  const modes = [
+    config.modes.comment && t("projects1.modeComment"),
+    config.modes.bug && t("projects1.modeReportBug"),
+  ].filter(Boolean);
 
   return (
     <div className="overflow-hidden rounded-xl border bg-background shadow-sm" data-testid="launcher-preview">
@@ -66,11 +68,13 @@ export function LauncherPreview({ config }: { config: WidgetConfig }) {
 
         {consent.enabled && (
           <div className="absolute inset-x-6 top-1/2 -translate-y-1/2 rounded-lg border bg-popover p-3 text-xs shadow-md">
-            <p className="font-medium">Before you send</p>
-            <p className="mt-1 line-clamp-3 text-muted-foreground">{consent.text || DEFAULT_CONSENT}</p>
+            <p className="font-medium">{t("projects1.beforeYouSend")}</p>
+            <p className="mt-1 line-clamp-3 text-muted-foreground">
+              {consent.text || t("projects1.defaultConsent")}
+            </p>
             {consent.privacyUrl && (
               <p className="mt-1 truncate underline underline-offset-2" style={{ color: launcher.accent }}>
-                Privacy policy
+                {t("projects1.privacyPolicy")}
               </p>
             )}
           </div>
@@ -93,8 +97,8 @@ export function LauncherPreview({ config }: { config: WidgetConfig }) {
               role="img"
               aria-label={
                 launcher.hidden
-                  ? "Launcher hidden"
-                  : `Launcher: ${pill ? (launcher.label ?? "") : launcher.icon}`
+                  ? t("projects1.launcherHidden")
+                  : t("projects1.launcherNamed", { name: pill ? (launcher.label ?? "") : launcher.icon })
               }
               className={cn(
                 "flex items-center justify-center gap-1.5 shadow-lg ring-1 ring-black/10 transition-all duration-150",
@@ -112,13 +116,13 @@ export function LauncherPreview({ config }: { config: WidgetConfig }) {
         <p className="absolute inset-x-0 bottom-2 flex items-center justify-center gap-1.5 px-4 text-center text-[11px] text-muted-foreground">
           {launcher.hidden ? (
             <>
-              <EyeOff className="size-3 shrink-0" /> Hidden — opened with a shortcut or{" "}
+              <EyeOff className="size-3 shrink-0" /> {t("projects1.launcherHiddenHint")}{" "}
               <code className="font-mono">Pinwren.open()</code>
             </>
           ) : modes.length ? (
-            <>Menu: {modes.join(" · ")}</>
+            <>{t("projects1.launcherMenu", { modes: modes.join(" · ") })}</>
           ) : (
-            <>No modes on — visitors can only read pins</>
+            <>{t("projects1.noModesOn")}</>
           )}
         </p>
       </div>

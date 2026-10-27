@@ -7,6 +7,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CopyButton } from "@/components/copy-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useT } from "@/lib/i18n/provider";
 import { errorMessage } from "@/lib/store/api";
 
 /**
@@ -36,6 +37,7 @@ export function SecretCard({
   rotatedMessage: string;
   children?: React.ReactNode;
 }) {
+  const t = useT();
   const [secret, setSecret] = useState<string | null>(null);
   const [busy, setBusy] = useState<"reveal" | "rotate" | null>(null);
   const [confirmRotate, setConfirmRotate] = useState(false);
@@ -64,22 +66,22 @@ export function SecretCard({
             <code className="min-w-0 flex-1 font-mono text-xs break-all select-all" data-testid={testId}>
               {secret}
             </code>
-            <CopyButton value={secret} label="Copy" size="sm" variant="outline" />
+            <CopyButton value={secret} label={t("components1.copy")} size="sm" variant="outline" />
           </div>
         ) : (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <KeyRound className="size-4" />
-            {hasSecret ? "A secret is set." : "Created the first time you reveal it."}
+            {hasSecret ? t("components1.secretIsSet") : t("components1.secretCreatedOnReveal")}
           </p>
         )}
         <div className="flex flex-wrap gap-2">
           {!secret && (
             <Button variant="outline" size="sm" disabled={busy === "reveal"} onClick={() => run("reveal")}>
-              <Eye /> Reveal secret
+              <Eye /> {t("components1.revealSecret")}
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={() => setConfirmRotate(true)}>
-            <RefreshCw /> Rotate
+            <RefreshCw /> {t("components1.rotate")}
           </Button>
         </div>
         {children}
@@ -89,7 +91,7 @@ export function SecretCard({
         onOpenChange={setConfirmRotate}
         title={rotateTitle}
         description={rotateDescription}
-        confirmLabel="Rotate"
+        confirmLabel={t("components1.rotate")}
         pending={busy === "rotate"}
         onConfirm={() => run("rotate")}
       />

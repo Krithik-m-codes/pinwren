@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { useT } from "@/lib/i18n/provider";
 import { errorMessage } from "@/lib/store/api";
 import { useSignInSettingsQuery, useUpdateSignInSettingsMutation } from "@/lib/store/api/sign-in";
 
@@ -20,23 +21,21 @@ import { useSignInSettingsQuery, useUpdateSignInSettingsMutation } from "@/lib/s
  * this shows whether each is on and the callback URL to register with the provider.
  */
 export function SignInMethodsCard() {
+  const t = useT();
   const q = useSignInSettingsQuery(undefined);
   const [update, updating] = useUpdateSignInSettingsMutation();
   const save = (patch: { magicLink?: boolean; passkeys?: boolean }, message: string) => {
     update(patch)
       .unwrap()
       .then(() => toast.success(message))
-      .catch((e: unknown) => toast.error("Not saved", { description: errorMessage(e) }));
+      .catch((e: unknown) => toast.error(t("settings1.notSaved"), { description: errorMessage(e) }));
   };
 
   return (
     <Card data-testid="sign-in-methods">
       <CardHeader>
-        <CardTitle>Sign-in methods</CardTitle>
-        <CardDescription className="text-pretty">
-          Everyone can sign in with a password. Offer these as well; sign-up rules still apply, so Google or
-          GitHub never let in someone an invitation-only server wouldn&apos;t.
-        </CardDescription>
+        <CardTitle>{t("settings1.signInMethods")}</CardTitle>
+        <CardDescription className="text-pretty">{t("settings1.signInMethodsDescription")}</CardDescription>
       </CardHeader>
       <CardContent>
         {q.isLoading && <Skeleton className="h-56" />}
@@ -44,18 +43,18 @@ export function SignInMethodsCard() {
         {q.data && (
           <SettingGroup>
             <SettingRow
-              label="Email sign-in links"
+              label={t("settings1.emailSignInLinks")}
               htmlFor="signin-magic-link"
               description={
                 q.data.signIn.emailConfigured ? (
-                  "A one-time link by email, valid for 10 minutes."
+                  t("settings1.emailLinkDescription")
                 ) : (
                   <>
-                    Needs email:{" "}
+                    {t("settings1.needsEmailBefore")}
                     <Link href="/settings/email" className="underline underline-offset-4">
-                      set up SMTP
-                    </Link>{" "}
-                    first. Until then the sign-in page doesn&apos;t offer it.
+                      {t("settings1.setUpSmtp")}
+                    </Link>
+                    {t("settings1.needsEmailAfter")}
                   </>
                 )
               }
@@ -65,20 +64,25 @@ export function SignInMethodsCard() {
                 checked={q.data.signIn.magicLink}
                 disabled={updating.isLoading}
                 onCheckedChange={(magicLink) =>
-                  save({ magicLink }, magicLink ? "Email sign-in links on" : "Email sign-in links off")
+                  save(
+                    { magicLink },
+                    magicLink ? t("settings1.emailSignInLinksOn") : t("settings1.emailSignInLinksOff"),
+                  )
                 }
               />
             </SettingRow>
             <SettingRow
-              label="Passkeys"
+              label={t("settings1.passkeys")}
               htmlFor="signin-passkeys"
-              description="Fingerprint, face, screen lock or a security key; each person adds theirs in Settings › Profile."
+              description={t("settings1.passkeysDescription")}
             >
               <Switch
                 id="signin-passkeys"
                 checked={q.data.signIn.passkeys}
                 disabled={updating.isLoading}
-                onCheckedChange={(passkeys) => save({ passkeys }, passkeys ? "Passkeys on" : "Passkeys off")}
+                onCheckedChange={(passkeys) =>
+                  save({ passkeys }, passkeys ? t("settings1.passkeysOn") : t("settings1.passkeysOff"))
+                }
               />
             </SettingRow>
             {q.data.signIn.providers.map((p) => (
@@ -90,26 +94,33 @@ export function SignInMethodsCard() {
                     <ProviderIcon provider={p.id} className="size-4" /> {p.name}
                     {p.configured ? (
                       <Badge variant="secondary" className="gap-1 font-normal">
-                        <CircleCheck className="size-3.5 text-emerald-600" /> On
+                        <CircleCheck className="size-3.5 text-emerald-600" /> {t("settings1.on")}
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="gap-1 font-normal text-muted-foreground">
-                        <CircleDashed className="size-3.5" /> Not configured
+                        <CircleDashed className="size-3.5" /> {t("settings1.notConfigured")}
                       </Badge>
                     )}
                   </span>
                 }
                 description={
                   p.configured
-                    ? `Set by ${p.envVars[0]} and ${p.envVars[1]}.`
-                    : `Create an OAuth app at ${p.name}, register this callback URL, then set ${p.envVars[0]} and ${p.envVars[1]} and restart.`
+                    ? t("settings1.providerSetBy", { a: p.envVars[0], b: p.envVars[1] })
+                    : t("settings1.providerCreateOauth", {
+                        name: p.name,
+                        a: p.envVars[0],
+                        b: p.envVars[1],
+                      })
                 }
               >
                 <div className="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 px-2 py-1">
                   <code className="min-w-0 flex-1 truncate font-mono text-xs" title={p.callbackUrl}>
                     {p.callbackUrl}
                   </code>
-                  <CopyButton value={p.callbackUrl} label={`Copy the ${p.name} callback URL`} />
+                  <CopyButton
+                    value={p.callbackUrl}
+                    label={t("settings1.copyCallbackUrl", { name: p.name })}
+                  />
                 </div>
               </SettingRow>
             ))}

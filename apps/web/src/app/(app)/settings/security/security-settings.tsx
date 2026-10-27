@@ -3,7 +3,7 @@
 import { MAX_SESSION_DAYS, MIN_SESSION_DAYS, safeHref } from "@pinwren/core";
 import { ArrowUpCircle, CircleCheck, Lock, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-import { timeAgo } from "@/components/feedback-meta";
+import { useTimeAgo } from "@/components/feedback-meta";
 import { NumberInput } from "@/components/number-input";
 import { SettingGroup, SettingRow } from "@/components/setting-row";
 import { EmptyState, ErrorState } from "@/components/states";
@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import type { SecuritySettings } from "@/lib/api";
+import { useI18n, useT } from "@/lib/i18n/provider";
 import {
   errorMessage,
   isForbidden,
@@ -25,11 +26,12 @@ import { InstanceAdminsCard } from "./instance-admins";
 import { SignInMethodsCard } from "./sign-in-methods-card";
 
 function EnvBadge({ name }: { name: string }) {
+  const t = useT();
   return (
     <Badge
       variant="outline"
       className="gap-1 font-mono font-normal text-muted-foreground"
-      title="Set by an environment variable"
+      title={t("settings2.setByEnv")}
     >
       <Lock className="size-3" /> {name}
     </Badge>
@@ -41,6 +43,8 @@ function EnvBadge({ name }: { name: string }) {
  * update check.
  */
 export function SecuritySettingsForm() {
+  const { t, tn } = useI18n();
+  const timeAgo = useTimeAgo();
   const query = useSecuritySettingsQuery(undefined);
   const [updateSecurity] = useUpdateSecuritySettingsMutation();
   const [runCheck, checking] = useRunUpdateCheckMutation();
@@ -55,7 +59,7 @@ export function SecuritySettingsForm() {
       updateSecurity(patch)
         .unwrap()
         .then(() => toast.success(message))
-        .catch((e: unknown) => toast.error("Not saved", { description: errorMessage(e) }));
+        .catch((e: unknown) => toast.error(t("settings2.notSaved"), { description: errorMessage(e) }));
     },
   };
   const check = () => {
@@ -64,12 +68,12 @@ export function SecuritySettingsForm() {
       .then((r) => {
         if (!r.checked)
           toast(
-            r.reason === "privacy_mode" ? "Skipped: a project uses privacy mode" : "The update check is off",
+            r.reason === "privacy_mode" ? t("settings2.skippedPrivacyMode") : t("settings2.updateCheckIsOff"),
           );
-        else if (r.state?.error)
-          toast.error("Couldn't reach the release feed", { description: r.state.error });
-        else if (r.state?.available) toast.success(`Version ${r.state.latest ?? "?"} is available`);
-        else toast.success("You're on the latest version");
+        else if (r.state?.error) toast.error(t("settings2.couldntReachFeed"), { description: r.state.error });
+        else if (r.state?.available)
+          toast.success(t("settings2.versionAvailable", { version: r.state.latest ?? "?" }));
+        else toast.success(t("settings2.onLatestVersion"));
       })
       .catch((e: unknown) => toast.error(errorMessage(e)));
   };
@@ -81,8 +85,8 @@ export function SecuritySettingsForm() {
         <CardContent>
           <EmptyState
             icon={Lock}
-            title="Instance admins only"
-            description="These settings belong to the server's administrators: the first account, anyone they name, and PINWREN_ADMIN_EMAILS."
+            title={t("settings2.instanceAdminsOnly")}
+            description={t("settings2.instanceAdminsOnlyDesc")}
           />
         </CardContent>
       </Card>
@@ -94,22 +98,19 @@ export function SecuritySettingsForm() {
 
   return (
     <div className="grid gap-4">
-      <SectionTitle
-        title="Security"
-        description="Instance-wide settings for everyone who signs in to this server."
-      />
+      <SectionTitle title={t("settings2.security")} description={t("settings2.securityDesc")} />
       <InstanceAdminsCard />
       <SignInMethodsCard />
       <Card>
         <CardHeader>
-          <CardTitle>Sessions</CardTitle>
-          <CardDescription>How long a sign-in lasts.</CardDescription>
+          <CardTitle>{t("settings2.sessions")}</CardTitle>
+          <CardDescription>{t("settings2.sessionsDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <SettingRow
-            label="Session lifetime"
+            label={t("settings2.sessionLifetime")}
             htmlFor="session-days"
-            description={`People sign in again after this many days. Applies to new sign-ins; ${MIN_SESSION_DAYS}–${MAX_SESSION_DAYS} days.`}
+            description={t("settings2.sessionLifetimeDesc", { min: MIN_SESSION_DAYS, max: MAX_SESSION_DAYS })}
           >
             <div className="grid gap-1">
               <NumberInput
@@ -118,14 +119,14 @@ export function SecuritySettingsForm() {
                 value={s.sessionDays}
                 min={MIN_SESSION_DAYS}
                 max={MAX_SESSION_DAYS}
-                suffix="days"
+                suffix={t("settings2.daysSuffix")}
                 disabled={s.locked.sessionDays}
                 onCommit={(n) =>
                   n !== null &&
                   n !== s.sessionDays &&
                   save.mutate({
                     patch: { sessionDays: n },
-                    message: `New sessions last ${n} day${n === 1 ? "" : "s"}`,
+                    message: tn("settings2.newSessionsLast", n),
                   })
                 }
               />
@@ -137,37 +138,29 @@ export function SecuritySettingsForm() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Transport</CardTitle>
-          <CardDescription>Set by environment variables when the server starts.</CardDescription>
+          <CardTitle>{t("settings2.transport")}</CardTitle>
+          <CardDescription>{t("settings2.transportDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <SettingGroup>
-            <SettingRow
-              label="Enforce HTTPS"
-              description="Plain-HTTP requests are redirected (pages) or refused (forms, API). Localhost stays reachable for health checks."
-            >
+            <SettingRow label={t("settings2.enforceHttps")} description={t("settings2.enforceHttpsDesc")}>
               <div className="flex flex-col items-start gap-1 sm:items-end">
                 {s.enforceHttps ? (
                   <Badge variant="secondary" className="gap-1.5 font-normal">
-                    <ShieldCheck className="size-3.5 text-emerald-600" /> On
+                    <ShieldCheck className="size-3.5 text-emerald-600" /> {t("settings2.on")}
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="gap-1.5 font-normal">
-                    <ShieldAlert className="size-3.5 text-amber-600" /> Off
+                    <ShieldAlert className="size-3.5 text-amber-600" /> {t("settings2.off")}
                   </Badge>
                 )}
                 <code className="font-mono text-xs text-muted-foreground">PINWREN_ENFORCE_HTTPS=true</code>
               </div>
             </SettingRow>
-            <SettingRow
-              label="Behind a reverse proxy"
-              description="How many proxies in front of Pinwren to trust for X-Forwarded-For / -Proto / -Host. Only set it when proxies add those headers."
-            >
+            <SettingRow label={t("settings2.behindProxy")} description={t("settings2.behindProxyDesc")}>
               <div className="flex flex-col items-start gap-1 sm:items-end">
                 <Badge variant={s.trustProxy ? "secondary" : "outline"} className="font-normal">
-                  {s.trustProxy
-                    ? `Trusted: ${s.trustProxyHops} ${s.trustProxyHops === 1 ? "hop" : "hops"}`
-                    : "Not trusted"}
+                  {s.trustProxy ? tn("settings2.trustedHops", s.trustProxyHops) : t("settings2.notTrusted")}
                 </Badge>
                 <code className="font-mono text-xs text-muted-foreground">PINWREN_TRUST_PROXY=1</code>
               </div>
@@ -179,22 +172,22 @@ export function SecuritySettingsForm() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            Updates
+            {t("settings2.updates")}
             <Badge variant="outline" className="ml-auto font-mono font-normal">
               v{s.version.replace(/^v/, "")}
             </Badge>
           </CardTitle>
-          <CardDescription>Look for a newer release once a day and tell instance admins.</CardDescription>
+          <CardDescription>{t("settings2.updatesDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <SettingGroup>
             <SettingRow
-              label="Check for updates"
+              label={t("settings2.checkForUpdates")}
               htmlFor="update-check"
               description={
                 blockedByPrivacy
-                  ? `Paused: ${s.privacyModeProjects} project${s.privacyModeProjects === 1 ? " uses" : "s use"} privacy mode, which allows no third-party calls.`
-                  : "Reads the latest release from GitHub. Nothing about your instance is sent."
+                  ? tn("settings2.pausedPrivacy", s.privacyModeProjects)
+                  : t("settings2.readsLatestRelease")
               }
             >
               <div className="flex items-center gap-2">
@@ -206,20 +199,23 @@ export function SecuritySettingsForm() {
                   onCheckedChange={(updateCheck) =>
                     save.mutate({
                       patch: { updateCheck },
-                      message: updateCheck ? "Update check on" : "Update check off",
+                      message: updateCheck ? t("settings2.updateCheckOn") : t("settings2.updateCheckOff"),
                     })
                   }
                 />
               </div>
             </SettingRow>
             <SettingRow
-              label="Latest check"
+              label={t("settings2.latestCheck")}
               description={
                 s.update
                   ? s.update.error
-                    ? `Couldn't reach the release feed ${timeAgo(s.update.checkedAt)}: ${s.update.error}`
-                    : `Checked ${timeAgo(s.update.checkedAt)}.`
-                  : "Not checked yet."
+                    ? t("settings2.couldntReachFeedAgo", {
+                        time: timeAgo(s.update.checkedAt),
+                        error: s.update.error,
+                      })
+                    : t("settings2.checkedAgo", { time: timeAgo(s.update.checkedAt) })
+                  : t("settings2.notCheckedYet")
               }
             >
               <div className="flex flex-wrap items-center gap-2">
@@ -230,11 +226,12 @@ export function SecuritySettingsForm() {
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
                   >
-                    <ArrowUpCircle className="size-4" /> {s.update.latest} is available
+                    <ArrowUpCircle className="size-4" />{" "}
+                    {t("settings2.versionIsAvailable", { version: s.update.latest ?? "" })}
                   </a>
                 ) : s.update && !s.update.error ? (
                   <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <CircleCheck className="size-4 text-emerald-600" /> Up to date
+                    <CircleCheck className="size-4 text-emerald-600" /> {t("settings2.upToDate")}
                   </span>
                 ) : null}
                 <Button
@@ -244,7 +241,8 @@ export function SecuritySettingsForm() {
                   disabled={checking.isLoading || !s.updateCheck}
                   onClick={check}
                 >
-                  <RefreshCw className={checking.isLoading ? "animate-spin" : undefined} /> Check now
+                  <RefreshCw className={checking.isLoading ? "animate-spin" : undefined} />{" "}
+                  {t("settings2.checkNow")}
                 </Button>
               </div>
             </SettingRow>

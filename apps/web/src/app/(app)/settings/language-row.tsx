@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { SettingRow } from "@/components/setting-row";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n/provider";
 import { LOCALE_NAMES, LOCALES, type AppLocale } from "@/lib/i18n/translate";
@@ -17,14 +18,15 @@ export function LanguageRow() {
   const router = useRouter();
   const prefs = useUserPreferencesQuery(undefined);
   const [update, { isLoading }] = useUpdateUserPreferencesMutation();
-  const saved = prefs.data?.preferences.locale ?? AUTO;
+  // Until the saved choice has loaded there is nothing true to show (and a click would be judged against it).
+  const saved = prefs.data ? (prefs.data.preferences.locale ?? AUTO) : null;
   const items = [
     { value: AUTO, label: t("language.auto") },
     ...LOCALES.map((l) => ({ value: l, label: LOCALE_NAMES[l] })),
   ];
 
   const change = async (value: string | null) => {
-    if (!value || value === saved) return;
+    if (!value || saved === null || value === saved) return;
     try {
       await update({ locale: value === AUTO ? null : (value as AppLocale) }).unwrap();
       // The page is rendered on the server in the chosen language: ask for it again.
@@ -36,18 +38,22 @@ export function LanguageRow() {
 
   return (
     <SettingRow label={t("language.label")} htmlFor="language-picker" description={t("language.description")}>
-      <Select items={items} value={saved} onValueChange={(v) => void change(v)} disabled={isLoading}>
-        <SelectTrigger id="language-picker" size="sm" className="w-56" aria-label={t("language.label")}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {items.map((i) => (
-            <SelectItem key={i.value} value={i.value}>
-              {i.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {saved === null ? (
+        <Skeleton className="h-8 w-56" />
+      ) : (
+        <Select items={items} value={saved} onValueChange={(v) => void change(v)} disabled={isLoading}>
+          <SelectTrigger id="language-picker" size="sm" className="w-56" aria-label={t("language.label")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {items.map((i) => (
+              <SelectItem key={i.value} value={i.value}>
+                {i.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     </SettingRow>
   );
 }

@@ -22,6 +22,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { LicenseInfo } from "@/lib/api";
 import { licenseForm } from "@/lib/form-schemas";
+import type { Key } from "@/lib/i18n/en";
+import { useT } from "@/lib/i18n/provider";
 import {
   errorMessage,
   isForbidden,
@@ -32,36 +34,37 @@ import {
 import { cn } from "@/lib/utils";
 import { SectionTitle } from "../settings-shell";
 
-const FEATURE_NAMES: Record<LicenseFeature, string> = {
-  sso: "Single sign-on",
-  scim: "SCIM provisioning",
-  audit_log: "Audit log",
-  custom_roles: "Custom roles",
-  white_label: "White-label",
-  jira: "Jira",
-  legal_hold: "Legal hold",
-  siem_stream: "SIEM stream",
-  priority_support: "Priority support",
+const FEATURE_NAMES: Record<LicenseFeature, Key> = {
+  sso: "settings1.featureSso",
+  scim: "settings1.featureScim",
+  audit_log: "settings1.featureAuditLog",
+  custom_roles: "settings1.featureCustomRoles",
+  white_label: "settings1.featureWhiteLabel",
+  jira: "settings1.featureJira",
+  legal_hold: "settings1.featureLegalHold",
+  siem_stream: "settings1.featureSiemStream",
+  priority_support: "settings1.featurePrioritySupport",
 };
 
 /** What an implemented entitlement does, next to its name. */
-const FEATURE_HINTS: Record<(typeof IMPLEMENTED_LICENSE_FEATURES)[number], string> = {
-  white_label: "hide “Powered by Pinwren” in the widget and emails",
-  jira: "two-way Jira Cloud issue sync in each project's Issue trackers tab",
+const FEATURE_HINTS: Record<(typeof IMPLEMENTED_LICENSE_FEATURES)[number], Key> = {
+  white_label: "settings1.hintWhiteLabel",
+  jira: "settings1.hintJira",
 };
 
 const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" });
 
-const STATUS: Record<LicenseInfo["status"], { label: string; className: string }> = {
-  none: { label: "Community", className: "" },
-  valid: { label: "Active", className: "text-emerald-700 dark:text-emerald-400" },
-  grace: { label: "Grace period", className: "text-amber-700 dark:text-amber-400" },
-  expired: { label: "Expired · read-only", className: "text-destructive" },
-  invalid: { label: "Not valid", className: "text-destructive" },
+const STATUS: Record<LicenseInfo["status"], { label: Key; className: string }> = {
+  none: { label: "settings1.community", className: "" },
+  valid: { label: "settings1.active", className: "text-emerald-700 dark:text-emerald-400" },
+  grace: { label: "settings1.gracePeriod", className: "text-amber-700 dark:text-amber-400" },
+  expired: { label: "settings1.expiredReadOnly", className: "text-destructive" },
+  invalid: { label: "settings1.notValid", className: "text-destructive" },
 };
 
 /** Settings › Licence (F-098, ADR 0019): install, inspect and remove the Enterprise licence. Instance admins. */
 export function LicenseSettings() {
+  const t = useT();
   const query = useLicenseQuery(undefined);
   const [uploading, setUploading] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -74,8 +77,8 @@ export function LicenseSettings() {
         <CardContent>
           <EmptyState
             icon={Lock}
-            title="Instance admins only"
-            description="The licence belongs to whoever runs this server (PINWREN_ADMIN_EMAILS)."
+            title={t("settings1.instanceAdminsOnly")}
+            description={t("settings1.instanceAdminsOnlyDescription")}
           />
         </CardContent>
       </Card>
@@ -89,12 +92,13 @@ export function LicenseSettings() {
   return (
     <div className="grid gap-4">
       <SectionTitle
-        title="Licence"
-        description="Enterprise features are unlocked by a signed licence file, verified on this server — nothing is sent anywhere."
+        title={t("settings1.licence")}
+        description={t("settings1.licenceDescription")}
         action={
           !locked && (
             <Button size="sm" onClick={() => setUploading(true)} data-testid="upload-license">
-              <Upload /> {l.status === "none" ? "Install a licence" : "Replace licence"}
+              <Upload />{" "}
+              {l.status === "none" ? t("settings1.installALicence") : t("settings1.replaceLicence")}
             </Button>
           )
         }
@@ -102,20 +106,22 @@ export function LicenseSettings() {
 
       {l.status === "grace" && l.license && (
         <Banner tone="warn" icon={TriangleAlert}>
-          The licence expired on {date(l.license.expiresAt)}. Everything keeps working until{" "}
-          {date(l.license.graceEndsAt)}; renew before then.
+          {t("settings1.licenceGrace", {
+            expires: date(l.license.expiresAt),
+            graceEnds: date(l.license.graceEndsAt),
+          })}
         </Banner>
       )}
       {l.status === "expired" && (
         <Banner tone="error" icon={ShieldAlert}>
-          The licence and its grace period are over. Enterprise settings keep their effect but are read-only
-          until a new licence is installed. No data is hidden or deleted.
+          {t("settings1.licenceExpired")}
         </Banner>
       )}
       {l.status === "invalid" && (
         <Banner tone="error" icon={ShieldAlert}>
-          The installed licence isn&apos;t valid{l.error ? `: ${l.error}` : ""}. This instance runs as
-          Community.
+          {l.error
+            ? t("settings1.licenceInvalidWithError", { error: l.error })
+            : t("settings1.licenceInvalid")}
         </Banner>
       )}
 
@@ -123,58 +129,62 @@ export function LicenseSettings() {
         <CardHeader>
           <CardTitle className="flex flex-wrap items-center gap-2">
             <Award className="size-4 text-muted-foreground" />
-            {l.edition === "enterprise" ? "Enterprise" : "Community"}
+            {l.edition === "enterprise" ? t("settings1.enterprise") : t("settings1.community")}
             <Badge variant="outline" className={cn("ml-auto font-normal", STATUS[l.status].className)}>
-              {STATUS[l.status].label}
+              {t(STATUS[l.status].label)}
             </Badge>
           </CardTitle>
           <CardDescription>
             {locked ? (
               <>
-                Set by <code className="font-mono text-xs">PINWREN_LICENSE_FILE</code> — replace the file to
-                change it.
+                {t("settings1.licenceSetByBefore")}
+                <code className="font-mono text-xs">PINWREN_LICENSE_FILE</code>
+                {t("settings1.licenceSetByAfter")}
               </>
             ) : l.source === "upload" ? (
-              "Uploaded in this screen."
+              t("settings1.uploadedInThisScreen")
             ) : (
-              "No licence installed. Every Community feature is available; Enterprise ones are listed below."
+              t("settings1.noLicenceInstalled")
             )}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-5">
           {d && (
             <dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-2 text-sm">
-              <dt className="text-muted-foreground">Customer</dt>
+              <dt className="text-muted-foreground">{t("settings1.customer")}</dt>
               <dd data-testid="license-customer">{d.customer}</dd>
               {d.email && (
                 <>
-                  <dt className="text-muted-foreground">Contact</dt>
+                  <dt className="text-muted-foreground">{t("settings1.contact")}</dt>
                   <dd>{d.email}</dd>
                 </>
               )}
-              <dt className="text-muted-foreground">Licence id</dt>
+              <dt className="text-muted-foreground">{t("settings1.licenceId")}</dt>
               <dd>
                 <code className="font-mono text-xs">{d.lid}</code>
               </dd>
-              <dt className="text-muted-foreground">Valid</dt>
+              <dt className="text-muted-foreground">{t("settings1.valid")}</dt>
               <dd>
                 {date(d.issuedAt)} – {date(d.expiresAt)}
                 {l.license && l.status === "valid" && (
-                  <span className="text-muted-foreground"> · {l.license.daysLeft} days left</span>
+                  <span className="text-muted-foreground">
+                    {t("settings1.daysLeft", { n: l.license.daysLeft })}
+                  </span>
                 )}
               </dd>
-              <dt className="text-muted-foreground">Grace period</dt>
-              <dd>{d.graceDays} days</dd>
-              <dt className="text-muted-foreground">Seats</dt>
+              <dt className="text-muted-foreground">{t("settings1.gracePeriod")}</dt>
+              <dd>{t("settings1.graceDays", { n: d.graceDays })}</dd>
+              <dt className="text-muted-foreground">{t("settings1.seats")}</dt>
               <dd className="tabular-nums">
-                {l.seats.used} used{l.seats.limit !== null && ` of ${l.seats.limit}`}
+                {t("settings1.seatsUsed", { n: l.seats.used })}
+                {l.seats.limit !== null && t("settings1.seatsOf", { n: l.seats.limit })}
                 {l.seats.limit !== null && l.seats.used > l.seats.limit && (
-                  <span className="text-amber-700 dark:text-amber-400"> · over the limit (not enforced)</span>
+                  <span className="text-amber-700 dark:text-amber-400">{t("settings1.seatsOver")}</span>
                 )}
               </dd>
               {d.instance && (
                 <>
-                  <dt className="text-muted-foreground">Bound to</dt>
+                  <dt className="text-muted-foreground">{t("settings1.boundTo")}</dt>
                   <dd>
                     <code className="font-mono text-xs">{d.instance}</code>
                   </dd>
@@ -183,8 +193,8 @@ export function LicenseSettings() {
             </dl>
           )}
           <div className="grid gap-2">
-            <p className="text-sm font-medium">Features</p>
-            <ul className="grid gap-1.5 sm:grid-cols-2" aria-label="Enterprise features">
+            <p className="text-sm font-medium">{t("settings1.features")}</p>
+            <ul className="grid gap-1.5 sm:grid-cols-2" aria-label={t("settings1.enterpriseFeatures")}>
               {IMPLEMENTED_LICENSE_FEATURES.map((f) => {
                 const on = l.features.includes(f);
                 return (
@@ -199,8 +209,8 @@ export function LicenseSettings() {
                     ) : (
                       <span className="size-4 shrink-0 rounded-full border border-dashed" />
                     )}
-                    {FEATURE_NAMES[f]}
-                    <span className="text-xs text-muted-foreground">{FEATURE_HINTS[f]}</span>
+                    {t(FEATURE_NAMES[f])}
+                    <span className="text-xs text-muted-foreground">{t(FEATURE_HINTS[f])}</span>
                   </li>
                 );
               })}
@@ -208,9 +218,9 @@ export function LicenseSettings() {
           </div>
           <div className="grid gap-2" data-testid="license-coming-soon">
             <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-              <Clock className="size-3.5" /> Coming soon
+              <Clock className="size-3.5" /> {t("settings1.comingSoon")}
             </p>
-            <ul className="grid gap-1.5 sm:grid-cols-2" aria-label="Planned Enterprise features">
+            <ul className="grid gap-1.5 sm:grid-cols-2" aria-label={t("settings1.plannedEnterpriseFeatures")}>
               {PLANNED_LICENSE_FEATURES.map((f) => (
                 <li
                   key={f}
@@ -218,19 +228,16 @@ export function LicenseSettings() {
                   data-feature={f}
                 >
                   <span className="size-4 shrink-0 rounded-full border border-dashed" />
-                  {FEATURE_NAMES[f]}
+                  {t(FEATURE_NAMES[f])}
                   {l.features.includes(f) && (
                     <Badge variant="outline" className="font-normal">
-                      In your licence
+                      {t("settings1.inYourLicence")}
                     </Badge>
                   )}
                 </li>
               ))}
             </ul>
-            <p className="text-xs text-pretty text-muted-foreground">
-              Not built yet. A licence that names them keeps them, and they switch on in the release that
-              ships them, with no new licence file.
-            </p>
+            <p className="text-xs text-pretty text-muted-foreground">{t("settings1.notBuiltYet")}</p>
           </div>
           {l.source === "upload" && (
             <div className="border-t pt-4">
@@ -239,7 +246,7 @@ export function LicenseSettings() {
                 className="text-destructive hover:text-destructive"
                 onClick={() => setConfirmRemove(true)}
               >
-                Remove licence
+                {t("settings1.removeLicence")}
               </Button>
             </div>
           )}
@@ -250,16 +257,16 @@ export function LicenseSettings() {
       <ConfirmDialog
         open={confirmRemove}
         onOpenChange={setConfirmRemove}
-        title="Remove the licence?"
-        description="This instance goes back to Community. Enterprise settings stay saved and apply again once a licence is installed."
-        confirmLabel="Remove"
+        title={t("settings1.removeTheLicence")}
+        description={t("settings1.removeTheLicenceDescription")}
+        confirmLabel={t("settings1.remove")}
         pending={removal.isLoading}
         onConfirm={() => {
           removeLicense(undefined)
             .unwrap()
             .then(() => {
               setConfirmRemove(false);
-              toast.success("Licence removed");
+              toast.success(t("settings1.licenceRemoved"));
             })
             .catch((e: unknown) => toast.error(errorMessage(e)));
         }}
@@ -305,6 +312,7 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
 }
 
 function UploadForm({ onDone }: { onDone: () => void }) {
+  const t = useT();
   const [upload] = useUploadLicenseMutation();
   const file = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
@@ -314,7 +322,7 @@ function UploadForm({ onDone }: { onDone: () => void }) {
   const readFile = async (f: File | undefined) => {
     if (!f) return;
     if (f.size > 20_000) {
-      form.setError("license", { message: "That file is too large to be a licence" });
+      form.setError("license", { message: t("settings1.fileTooLarge") });
       return;
     }
     form.setValue("license", (await f.text()).trim(), { shouldValidate: true, shouldDirty: true });
@@ -322,7 +330,11 @@ function UploadForm({ onDone }: { onDone: () => void }) {
   const submit = form.handleSubmit(async ({ license }) => {
     try {
       const { license: l } = await upload(license).unwrap();
-      toast.success(`Licence for ${l.details?.customer ?? "your organisation"} installed`);
+      toast.success(
+        t("settings1.licenceInstalled", {
+          customer: l.details?.customer ?? t("settings1.yourOrganisation"),
+        }),
+      );
       onDone();
     } catch (e) {
       form.setError("license", { message: errorMessage(e) });
@@ -332,8 +344,8 @@ function UploadForm({ onDone }: { onDone: () => void }) {
   return (
     <form noValidate className="grid gap-4" onSubmit={(e) => void submit(e)}>
       <DialogHeader>
-        <DialogTitle>Install a licence</DialogTitle>
-        <DialogDescription>Drop the .lic file you received, or paste its contents.</DialogDescription>
+        <DialogTitle>{t("settings1.installALicence")}</DialogTitle>
+        <DialogDescription>{t("settings1.installALicenceDescription")}</DialogDescription>
       </DialogHeader>
       <button
         type="button"
@@ -354,7 +366,7 @@ function UploadForm({ onDone }: { onDone: () => void }) {
         )}
       >
         <FileKey2 className="size-5" />
-        Drop a .lic file here, or click to choose one
+        {t("settings1.dropALicFile")}
       </button>
       <input
         ref={file}
@@ -368,7 +380,7 @@ function UploadForm({ onDone }: { onDone: () => void }) {
       />
       <div className="grid gap-1.5">
         <label htmlFor="license-text" className="text-sm font-medium">
-          Licence
+          {t("settings1.licence")}
         </label>
         <Textarea
           {...controlProps("license-text", errors.license?.message)}
@@ -383,10 +395,10 @@ function UploadForm({ onDone }: { onDone: () => void }) {
       <FormError message={errors.root?.message} />
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onDone}>
-          Cancel
+          {t("settings1.cancel")}
         </Button>
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Verifying…" : "Install licence"}
+          {isSubmitting ? t("settings1.verifying") : t("settings1.installLicence")}
         </Button>
       </DialogFooter>
     </form>

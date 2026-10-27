@@ -10,6 +10,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n/provider";
 
 /** Destructive confirmation. Controlled, so a menu item or key can open it. */
 export function ConfirmDialog({
@@ -17,7 +18,7 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   description,
-  confirmLabel = "Delete",
+  confirmLabel,
   pending,
   onConfirm,
 }: {
@@ -29,6 +30,7 @@ export function ConfirmDialog({
   pending?: boolean;
   onConfirm: () => void;
 }) {
+  const t = useT();
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
@@ -37,9 +39,9 @@ export function ConfirmDialog({
           {description && <AlertDialogDescription>{description}</AlertDialogDescription>}
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{t("components1.cancel")}</AlertDialogCancel>
           <Button variant="destructive" disabled={pending} onClick={onConfirm}>
-            {pending ? "Working…" : confirmLabel}
+            {pending ? t("components1.working") : (confirmLabel ?? t("components1.delete"))}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

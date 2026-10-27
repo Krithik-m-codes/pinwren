@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isAdminRole, type OrgBranding } from "@/lib/api";
 import { contrastText } from "@/lib/color";
+import { useT } from "@/lib/i18n/provider";
 import { refreshBranding } from "@/lib/server/actions";
 import { errorMessage, useBrandingQuery, useMeQuery, useUpdateBrandingMutation } from "@/lib/store/api";
 import { SectionTitle } from "../settings-shell";
@@ -24,6 +25,7 @@ type Patch = Partial<Pick<OrgBranding, "productName" | "accent" | "logoAssetId">
 
 /** Settings › Branding (F-094): product name, logo and accent for the dashboard and emails. */
 export function BrandingSettings() {
+  const t = useT();
   const query = useBrandingQuery(undefined);
   const me = useMeQuery(undefined);
   const b = query.data?.branding;
@@ -41,7 +43,7 @@ export function BrandingSettings() {
         .then(() => refreshBranding())
         .then(() => toast.success(message))
         .catch((e: unknown) => {
-          toast.error("Not saved", { description: errorMessage(e) });
+          toast.error(t("settings1.notSaved"), { description: errorMessage(e) });
           if (b) setAccent(b.accent ?? DEFAULT_ACCENT);
         });
     },
@@ -55,8 +57,8 @@ export function BrandingSettings() {
         <CardContent>
           <EmptyState
             icon={Palette}
-            title="Workspace admins only"
-            description="Ask an owner or admin of this workspace to change its branding."
+            title={t("settings1.workspaceAdminsOnly")}
+            description={t("settings1.brandingAdminsOnlyDescription")}
           />
         </CardContent>
       </Card>
@@ -68,34 +70,31 @@ export function BrandingSettings() {
     const v = name.trim();
     if ((v || null) === b.productName) return;
     if (v.length > 40) {
-      toast.error("Keep the name to 40 characters");
+      toast.error(t("settings1.keepNameTo40"));
       return;
     }
     save.mutate({
       patch: { productName: v || null },
-      message: v ? `Now called ${v}` : "Name reset to Pinwren",
+      message: v ? t("settings1.nowCalled", { name: v }) : t("settings1.nameResetToPinwren"),
     });
   };
   const shownName = name.trim() || "Pinwren";
 
   return (
     <div className="grid gap-4">
-      <SectionTitle
-        title="Branding"
-        description="Your name, logo and colour replace Pinwren's in the dashboard header and in every email this workspace sends."
-      />
+      <SectionTitle title={t("settings1.branding")} description={t("settings1.brandingDescription")} />
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <Card>
           <CardHeader>
-            <CardTitle>Identity</CardTitle>
-            <CardDescription>Shown to your team and in notification emails.</CardDescription>
+            <CardTitle>{t("settings1.identity")}</CardTitle>
+            <CardDescription>{t("settings1.identityDescription")}</CardDescription>
           </CardHeader>
           <CardContent>
             <SettingGroup>
               <SettingRow
-                label="Product name"
+                label={t("settings1.productName")}
                 htmlFor="brand-name"
-                description="Up to 40 characters. Empty uses “Pinwren”."
+                description={t("settings1.productNameDescription")}
               >
                 <Input
                   id="brand-name"
@@ -108,12 +107,12 @@ export function BrandingSettings() {
                   onKeyDown={(e) => e.key === "Enter" && commitName()}
                 />
               </SettingRow>
-              <SettingRow label="Logo" description="Square works best; it's shown at 28 px." stack>
+              <SettingRow label={t("settings1.logo")} description={t("settings1.logoDescription")} stack>
                 <div className="grid gap-2">
                   <LogoUpload
                     value={b.logoUrl}
                     onUploaded={(logo) =>
-                      save.mutate({ patch: { logoAssetId: logo.id }, message: "Logo updated" })
+                      save.mutate({ patch: { logoAssetId: logo.id }, message: t("settings1.logoUpdated") })
                     }
                   />
                   {b.logoUrl && (
@@ -122,26 +121,28 @@ export function BrandingSettings() {
                       size="xs"
                       variant="ghost"
                       className="justify-self-start text-muted-foreground"
-                      onClick={() => save.mutate({ patch: { logoAssetId: null }, message: "Logo removed" })}
+                      onClick={() =>
+                        save.mutate({ patch: { logoAssetId: null }, message: t("settings1.logoRemoved") })
+                      }
                     >
-                      Remove logo
+                      {t("settings1.removeLogo")}
                     </Button>
                   )}
                 </div>
               </SettingRow>
               <SettingRow
-                label="Accent colour"
-                description="Buttons, focus rings and links in the dashboard; buttons in emails."
+                label={t("settings1.accentColour")}
+                description={t("settings1.accentColourDescription")}
               >
                 <div className="flex items-center gap-2">
                   <ColorPicker
                     id="brand-accent"
-                    label="Brand colour"
+                    label={t("settings1.brandColour")}
                     value={accent}
                     onChange={setAccent}
                     onCommit={(hex) =>
                       hex !== (b.accent ?? DEFAULT_ACCENT) &&
-                      save.mutate({ patch: { accent: hex }, message: "Accent colour saved" })
+                      save.mutate({ patch: { accent: hex }, message: t("settings1.accentColourSaved") })
                     }
                   />
                   {b.accent && (
@@ -149,9 +150,11 @@ export function BrandingSettings() {
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      aria-label="Reset accent colour"
-                      title="Reset to the default"
-                      onClick={() => save.mutate({ patch: { accent: null }, message: "Accent colour reset" })}
+                      aria-label={t("settings1.resetAccentColour")}
+                      title={t("settings1.resetToDefault")}
+                      onClick={() =>
+                        save.mutate({ patch: { accent: null }, message: t("settings1.accentColourReset") })
+                      }
                     >
                       <RotateCcw />
                     </Button>
@@ -162,8 +165,8 @@ export function BrandingSettings() {
           </CardContent>
         </Card>
 
-        <section className="lg:sticky lg:top-16" aria-label="Preview">
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Email preview</p>
+        <section className="lg:sticky lg:top-16" aria-label={t("settings1.preview")}>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">{t("settings1.emailPreview")}</p>
           <div className="rounded-xl border bg-[#f6f6f9] p-3 text-[#1c1c24]">
             <div className="rounded-lg bg-white p-4 shadow-xs">
               <div className="mb-3 flex items-center gap-2">
@@ -175,16 +178,18 @@ export function BrandingSettings() {
                 )}
                 <span className="truncate text-sm font-semibold">{shownName}</span>
               </div>
-              <p className="text-sm font-semibold">#42 Checkout button does nothing</p>
-              <p className="mt-1 text-xs text-[#55556a]">New bug in Marketing site from Dana.</p>
+              <p className="text-sm font-semibold">{t("settings1.sampleIssueTitle")}</p>
+              <p className="mt-1 text-xs text-[#55556a]">{t("settings1.sampleIssueBody")}</p>
               <span
                 className="mt-3 inline-block rounded-md px-3 py-1.5 text-xs font-medium"
                 style={{ background: accent, color: contrastText(accent) }}
               >
-                Open in {shownName}
+                {t("settings1.openInName", { name: shownName })}
               </span>
             </div>
-            <p className="mt-2 text-center text-[11px] text-[#8b8b99]">Sent by {shownName}</p>
+            <p className="mt-2 text-center text-[11px] text-[#8b8b99]">
+              {t("settings1.sentByName", { name: shownName })}
+            </p>
           </div>
         </section>
       </div>

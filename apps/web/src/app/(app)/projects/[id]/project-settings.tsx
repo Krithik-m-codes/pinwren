@@ -21,24 +21,27 @@ import { WidgetTab } from "./widget-tab";
 import { here } from "@/lib/routes";
 import { useViewer } from "@/lib/viewer";
 import { ReadOnly } from "@/components/read-only";
+import type { Key } from "@/lib/i18n/en";
+import { useT } from "@/lib/i18n/provider";
 
 const TABS = [
-  { value: "install", label: "Install" },
-  { value: "widget", label: "Widget" },
-  { value: "review", label: "Review links" },
-  { value: "capture", label: "Capture" },
-  { value: "actions", label: "Actions" },
-  { value: "trackers", label: "Issue trackers" },
-  { value: "labels", label: "Labels" },
-  { value: "ai", label: "AI triage" },
-  { value: "privacy", label: "Privacy & data" },
-  { value: "danger", label: "Danger zone" },
-] as const;
+  { value: "install", label: "projects2.tabInstall" },
+  { value: "widget", label: "projects2.tabWidget" },
+  { value: "review", label: "projects2.reviewLinks" },
+  { value: "capture", label: "projects2.tabCapture" },
+  { value: "actions", label: "projects2.tabActions" },
+  { value: "trackers", label: "projects2.tabIssueTrackers" },
+  { value: "labels", label: "projects2.labels" },
+  { value: "ai", label: "projects2.tabAiTriage" },
+  { value: "privacy", label: "projects2.tabPrivacyData" },
+  { value: "danger", label: "projects2.dangerZone" },
+] as const satisfies readonly { value: string; label: Key }[];
 type Tab = (typeof TABS)[number]["value"];
 /** Tabs only organisation admins see (the API refuses everyone else). */
 const ADMIN_ONLY = new Set<Tab>(["review", "danger"]);
 
 export function ProjectSettings({ id }: { id: string }) {
+  const t = useT();
   // Project settings are configuration: organisation admins only (ADR 0021). Members and viewers see
   // them read-only.
   const { isAdmin: canWrite, isViewer } = useViewer();
@@ -46,7 +49,7 @@ export function ProjectSettings({ id }: { id: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const query = useProject(id);
-  const tab: Tab = TABS.some((t) => t.value === search.get("tab")) ? (search.get("tab") as Tab) : "install";
+  const tab: Tab = TABS.some((x) => x.value === search.get("tab")) ? (search.get("tab") as Tab) : "install";
 
   if (query.isLoading) {
     return (
@@ -63,7 +66,7 @@ export function ProjectSettings({ id }: { id: string }) {
   if (!query.data) {
     return (
       <>
-        <PageHeader title="Project" />
+        <PageHeader title={t("projects2.project")} />
         <ErrorState error={query.error} retry={() => void query.refetch()} />
       </>
     );
@@ -74,13 +77,13 @@ export function ProjectSettings({ id }: { id: string }) {
     <>
       <PageHeader title={p.name}>
         <ButtonLink href={`/projects/${p.id}/rounds`} size="sm" variant="ghost">
-          <Target /> <span className="hidden sm:inline">Rounds</span>
+          <Target /> <span className="hidden sm:inline">{t("projects2.rounds")}</span>
         </ButtonLink>
         <ButtonLink href={`/projects/${p.id}/pages`} size="sm" variant="ghost">
-          <FileStack /> <span className="hidden sm:inline">Pages</span>
+          <FileStack /> <span className="hidden sm:inline">{t("projects2.pages")}</span>
         </ButtonLink>
         <ButtonLink href={`/inbox?project=${p.id}`} size="sm" variant="outline">
-          <Inbox /> <span className="hidden sm:inline">Open inbox</span>
+          <Inbox /> <span className="hidden sm:inline">{t("projects2.openInbox")}</span>
         </ButtonLink>
       </PageHeader>
       <div className="mx-auto w-full max-w-5xl p-4 pb-16">
@@ -90,17 +93,15 @@ export function ProjectSettings({ id }: { id: string }) {
             data-testid="read-only-notice"
           >
             <Eye className="size-4 shrink-0" />
-            {isViewer
-              ? "You have read-only access: settings are shown but can't be changed."
-              : "Only organisation admins can change project settings."}
+            {isViewer ? t("projects2.readOnlyAccess") : t("projects2.adminsOnlyChangeSettings")}
           </p>
         )}
         {p.archivedAt && (
           <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
             <Archive className="size-4 shrink-0" />
-            This project is archived: the widget is switched off and it&apos;s hidden from your lists.
+            {t("projects2.projectArchivedNotice")}
             <ButtonLink href={here(pathname, "tab=danger")} size="sm" variant="outline" className="ml-auto">
-              Restore
+              {t("projects2.restore")}
             </ButtonLink>
           </div>
         )}
@@ -110,9 +111,9 @@ export function ProjectSettings({ id }: { id: string }) {
         >
           <div className="-mx-4 overflow-x-auto px-4 pb-1">
             <TabsList variant="line" className="w-full justify-start border-b">
-              {TABS.filter((t) => canWrite || !ADMIN_ONLY.has(t.value)).map((t) => (
-                <TabsTrigger key={t.value} value={t.value} className="flex-none px-2.5">
-                  {t.label}
+              {TABS.filter((x) => canWrite || !ADMIN_ONLY.has(x.value)).map((x) => (
+                <TabsTrigger key={x.value} value={x.value} className="flex-none px-2.5">
+                  {t(x.label)}
                 </TabsTrigger>
               ))}
             </TabsList>

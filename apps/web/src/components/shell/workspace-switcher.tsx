@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { workspaceNameForm } from "@/lib/account-forms";
 import { authClient } from "@/lib/auth-client";
+import { useT } from "@/lib/i18n/provider";
 import { useWorkspacesQuery } from "@/lib/store/api/people";
 
 /** A unique-enough slug for a new workspace (Better Auth needs one; people never see it). */
@@ -53,6 +54,7 @@ async function switchTo(orgId: string, path = "/inbox") {
  * a way to create another, and the workspace's settings. `children` is the brand block (server-rendered).
  */
 export function WorkspaceSwitcher({ orgId, children }: { orgId: string; children: React.ReactNode }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [switching, setSwitching] = useState<string | null>(null);
@@ -74,7 +76,7 @@ export function WorkspaceSwitcher({ orgId, children }: { orgId: string; children
             <SidebarMenuButton
               size="lg"
               className="data-popup-open:bg-sidebar-accent"
-              aria-label="Switch workspace"
+              aria-label={t("components2.switchWorkspace")}
               data-testid="workspace-switcher"
             />
           }
@@ -84,7 +86,7 @@ export function WorkspaceSwitcher({ orgId, children }: { orgId: string; children
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-64">
           <DropdownMenuGroup>
-            <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+            <DropdownMenuLabel>{t("components2.workspaces")}</DropdownMenuLabel>
             {list.isLoading || list.isUninitialized ? (
               <div className="grid gap-1 p-1">
                 <Skeleton className="h-7" />
@@ -92,7 +94,7 @@ export function WorkspaceSwitcher({ orgId, children }: { orgId: string; children
               </div>
             ) : list.isError ? (
               <DropdownMenuItem onClick={() => void list.refetch()}>
-                Couldn&apos;t load. Try again
+                {t("components2.workspacesLoadFailed")}
               </DropdownMenuItem>
             ) : (
               list.data.map((w) => (
@@ -108,9 +110,9 @@ export function WorkspaceSwitcher({ orgId, children }: { orgId: string; children
                 >
                   <span className="min-w-0 flex-1 truncate">{w.name}</span>
                   {w.id === orgId ? (
-                    <Check className="size-4" aria-label="Current workspace" />
+                    <Check className="size-4" aria-label={t("components2.currentWorkspace")} />
                   ) : switching === w.id ? (
-                    <span className="text-xs text-muted-foreground">Opening…</span>
+                    <span className="text-xs text-muted-foreground">{t("components2.opening")}</span>
                   ) : null}
                 </DropdownMenuItem>
               ))
@@ -118,10 +120,10 @@ export function WorkspaceSwitcher({ orgId, children }: { orgId: string; children
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setCreating(true)}>
-            <Plus /> Create workspace
+            <Plus /> {t("components2.createWorkspace")}
           </DropdownMenuItem>
           <DropdownMenuItem render={<Link href="/settings/workspace" />}>
-            <Settings /> Workspace settings
+            <Settings /> {t("components2.workspaceSettings")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -137,12 +139,13 @@ function CreateWorkspaceDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const form = useZodForm(workspaceNameForm, { defaultValues: { name: "" } });
   const { errors, isSubmitting } = form.formState;
   const submit = form.handleSubmit(async ({ name }) => {
     const { data, error } = await authClient.organization.create({ name, slug: workspaceSlug(name) });
     if (error) {
-      form.setError("root", { message: error.message ?? "Couldn't create the workspace" });
+      form.setError("root", { message: error.message ?? t("components2.workspaceCreateFailed") });
       return;
     }
     // Its first project is the next step.
@@ -159,16 +162,14 @@ function CreateWorkspaceDialog({
       <DialogContent className="sm:max-w-md">
         <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
           <DialogHeader>
-            <DialogTitle>Create a workspace</DialogTitle>
-            <DialogDescription>
-              A separate team with its own projects, users and settings. You&apos;ll be its owner.
-            </DialogDescription>
+            <DialogTitle>{t("components2.createAWorkspace")}</DialogTitle>
+            <DialogDescription>{t("components2.createWorkspaceHint")}</DialogDescription>
           </DialogHeader>
-          <Field id="new-workspace" label="Workspace name" error={errors.name?.message}>
+          <Field id="new-workspace" label={t("components2.workspaceName")} error={errors.name?.message}>
             <Input
               {...controlProps("new-workspace", errors.name?.message)}
               {...form.register("name")}
-              placeholder="Acme Studio"
+              placeholder={t("components2.workspaceNamePlaceholder")}
               // eslint-disable-next-line jsx-a11y/no-autofocus -- the dialog's only field
               autoFocus
             />
@@ -176,10 +177,10 @@ function CreateWorkspaceDialog({
           <FormError message={errors.root?.message} />
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("components2.cancel")}
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Creating…" : "Create workspace"}
+              {isSubmitting ? t("components2.creating") : t("components2.createWorkspace")}
             </Button>
           </DialogFooter>
         </form>

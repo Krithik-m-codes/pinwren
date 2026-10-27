@@ -11,12 +11,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { OrgAiSettings } from "@/lib/api";
+import type { Key } from "@/lib/i18n/en";
+import { useI18n } from "@/lib/i18n/provider";
 import { errorMessage } from "@/lib/store/api";
 
 const schema = z.object({
   enabled: z.boolean(),
   provider: z.enum(["anthropic", "openai", "ollama"]),
-  model: z.string().min(1, "Model name is required"),
+  model: z.string().min(1, "settings1.modelNameRequired"),
   apiKey: z.string().optional(),
   baseUrl: z.string().optional(),
 });
@@ -54,6 +56,7 @@ export function AiSettingsForm({
       ) => Promise<{ ok: boolean; latencyMs?: number | undefined; error?: string | undefined }>)
     | undefined;
 }) {
+  const { t } = useI18n();
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [showKeyInput, setShowKeyInput] = useState(!initialConfig?.hasKey);
@@ -110,12 +113,12 @@ export function AiSettingsForm({
       if (onSave) {
         await onSave(payload);
       }
-      toast.success("AI settings updated successfully");
+      toast.success(t("settings1.aiSettingsUpdated"));
       if (payload.apiKey) {
         setShowKeyInput(false);
       }
     } catch (e: unknown) {
-      toast.error("Failed to update AI settings", { description: errorMessage(e) });
+      toast.error(t("settings1.aiSettingsUpdateFailed"), { description: errorMessage(e) });
     } finally {
       setIsSaving(false);
     }
@@ -135,14 +138,18 @@ export function AiSettingsForm({
 
         if (res.ok) {
           toast.success(
-            res.latencyMs ? `Connection successful (${res.latencyMs}ms)` : "Connection successful",
+            res.latencyMs
+              ? t("settings1.connectionSuccessfulMs", { ms: res.latencyMs })
+              : t("settings1.connectionSuccessful"),
           );
         } else {
-          toast.error("Connection failed", { description: res.error || "Unknown error" });
+          toast.error(t("settings1.connectionFailed"), {
+            description: res.error || t("settings1.unknownError"),
+          });
         }
       }
     } catch (e: unknown) {
-      toast.error("Connection test error", { description: errorMessage(e) });
+      toast.error(t("settings1.connectionTestError"), { description: errorMessage(e) });
     } finally {
       setIsTesting(false);
     }
@@ -152,16 +159,14 @@ export function AiSettingsForm({
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Provider & Model</CardTitle>
-          <CardDescription>
-            Choose the language model provider for automatic summaries, triage, and duplicate detection.
-          </CardDescription>
+          <CardTitle>{t("settings1.providerAndModel")}</CardTitle>
+          <CardDescription>{t("settings1.providerAndModelDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <SettingGroup>
             <SettingRow
-              label="Enable AI features"
-              description="Allow AI assistance across projects where AI triage is toggled on."
+              label={t("settings1.enableAiFeatures")}
+              description={t("settings1.enableAiFeaturesDescription")}
             >
               <Switch
                 checked={isEnabled}
@@ -169,22 +174,34 @@ export function AiSettingsForm({
                   setIsEnabled(checked);
                   setValue("enabled", checked);
                 }}
-                aria-label="Enable AI features"
+                aria-label={t("settings1.enableAiFeatures")}
               />
             </SettingRow>
 
             <SettingRow
-              label="Provider"
-              description="Pinwren supports Anthropic Claude, OpenAI-compatible APIs, and local Ollama."
+              label={t("settings1.provider")}
+              description={t("settings1.providerDescription")}
               stack
             >
               <div className="grid gap-3 pt-1 sm:grid-cols-3">
                 {(
                   [
-                    { id: "anthropic", label: "Anthropic", desc: "Claude Haiku, Sonnet & Opus" },
-                    { id: "openai", label: "OpenAI-compatible", desc: "OpenAI, Groq, OpenRouter" },
-                    { id: "ollama", label: "Ollama (Local)", desc: "Self-hosted local models" },
-                  ] as const
+                    {
+                      id: "anthropic",
+                      label: "settings1.providerAnthropic",
+                      desc: "settings1.providerAnthropicDesc",
+                    },
+                    {
+                      id: "openai",
+                      label: "settings1.providerOpenai",
+                      desc: "settings1.providerOpenaiDesc",
+                    },
+                    {
+                      id: "ollama",
+                      label: "settings1.providerOllama",
+                      desc: "settings1.providerOllamaDesc",
+                    },
+                  ] as const satisfies readonly { id: string; label: Key; desc: Key }[]
                 ).map((opt) => {
                   const active = selectedProvider === opt.id;
                   return (
@@ -205,23 +222,27 @@ export function AiSettingsForm({
                           onChange={() => onProviderChange(opt.id)}
                           className="size-4 text-primary focus:ring-ring"
                         />
-                        <span className="text-sm font-semibold">{opt.label}</span>
+                        <span className="text-sm font-semibold">{t(opt.label)}</span>
                       </div>
-                      <span className="mt-1 text-xs text-muted-foreground">{opt.desc}</span>
+                      <span className="mt-1 text-xs text-muted-foreground">{t(opt.desc)}</span>
                     </label>
                   );
                 })}
               </div>
             </SettingRow>
 
-            <SettingRow label="Model" htmlFor="ai-model" description="Model identifier sent in API requests.">
+            <SettingRow
+              label={t("settings1.model")}
+              htmlFor="ai-model"
+              description={t("settings1.modelDescription")}
+            >
               <div className="w-full space-y-2 sm:w-80">
                 <Input
                   id="ai-model"
                   {...register("model")}
                   placeholder={MODEL_PRESETS[selectedProvider].defaultModel}
                 />
-                {errors.model && <p className="text-xs text-destructive">{errors.model.message}</p>}
+                {errors.model && <p className="text-xs text-destructive">{t(errors.model.message as Key)}</p>}
                 <div className="flex flex-wrap gap-1.5">
                   {MODEL_PRESETS[selectedProvider].presets.map((preset) => (
                     <Button
@@ -240,9 +261,9 @@ export function AiSettingsForm({
 
             {selectedProvider !== "ollama" && (
               <SettingRow
-                label="API Key"
+                label={t("settings1.apiKey")}
                 htmlFor="ai-api-key"
-                description="Encrypted at rest with AES-256-GCM. Never shown in plain text once saved."
+                description={t("settings1.apiKeyDescription")}
               >
                 <div className="w-full space-y-2 sm:w-80">
                   {initialConfig?.hasKey && !showKeyInput ? (
@@ -251,7 +272,7 @@ export function AiSettingsForm({
                         ••••••••••••••••
                       </span>
                       <Button type="button" variant="outline" size="sm" onClick={() => setShowKeyInput(true)}>
-                        Change key
+                        {t("settings1.changeKey")}
                       </Button>
                     </div>
                   ) : (
@@ -268,7 +289,7 @@ export function AiSettingsForm({
                             setShowKeyInput(false);
                           }}
                         >
-                          Keep existing key
+                          {t("settings1.keepExistingKey")}
                         </Button>
                       )}
                     </div>
@@ -279,12 +300,12 @@ export function AiSettingsForm({
 
             {(selectedProvider === "openai" || selectedProvider === "ollama") && (
               <SettingRow
-                label="Base URL"
+                label={t("settings1.baseUrl")}
                 htmlFor="ai-base-url"
                 description={
                   selectedProvider === "ollama"
-                    ? "Address of your Ollama instance (default: http://localhost:11434)."
-                    : "Custom endpoint URL if using Azure, Groq, OpenRouter, or a reverse proxy."
+                    ? t("settings1.baseUrlDescriptionOllama")
+                    : t("settings1.baseUrlDescriptionOther")
                 }
               >
                 <div className="w-full sm:w-80">
@@ -310,10 +331,10 @@ export function AiSettingsForm({
           onClick={handleTestConnection}
           disabled={isTesting || isSaving}
         >
-          {isTesting ? "Testing connection..." : "Test connection"}
+          {isTesting ? t("settings1.testingConnection") : t("settings1.testConnection")}
         </Button>
         <Button type="submit" disabled={isSaving || isTesting}>
-          {isSaving ? "Saving..." : "Save changes"}
+          {isSaving ? t("settings1.saving") : t("settings1.saveChanges")}
         </Button>
       </div>
     </form>

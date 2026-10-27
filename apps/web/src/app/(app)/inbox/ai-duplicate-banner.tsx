@@ -2,6 +2,7 @@
 
 import { CopyCheck, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n/provider";
 
 export function AiDuplicateBanner({
   candidateId,
@@ -20,14 +21,16 @@ export function AiDuplicateBanner({
   onLinkDuplicate?: ((candidateId: string) => void) | undefined;
   onViewCandidate?: ((candidateId: string) => void) | undefined;
 }) {
+  const t = useT();
   return (
     <div className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-foreground">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 font-medium text-amber-800 dark:text-amber-300">
           <CopyCheck className="size-4 shrink-0" />
           <span>
-            Possible duplicate detected
-            {typeof confidence === "number" ? ` (${confidence}% confidence)` : ""}
+            {typeof confidence === "number"
+              ? t("inbox2.duplicateDetectedConfidence", { confidence })
+              : t("inbox2.duplicateDetected")}
           </span>
         </div>
         {onLinkDuplicate && (
@@ -38,13 +41,13 @@ export function AiDuplicateBanner({
             className="border-amber-500/40 text-amber-800 hover:bg-amber-500/20 dark:text-amber-300"
             onClick={() => onLinkDuplicate(candidateId)}
           >
-            Link as duplicate
+            {t("inbox2.linkAsDuplicate")}
           </Button>
         )}
       </div>
 
       <div className="text-sm">
-        <span className="text-muted-foreground">Matches item: </span>
+        <span className="text-muted-foreground">{t("inbox2.matchesItem")}</span>
         {onViewCandidate ? (
           <button
             type="button"

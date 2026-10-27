@@ -75,6 +75,7 @@ import {
   screenshotOf,
 } from "@/lib/api";
 import { captureOf, isRegion, placeOn } from "@/lib/geometry";
+import { useI18n, useT } from "@/lib/i18n/provider";
 import { itemLink } from "@/lib/links";
 import {
   errorMessage,
@@ -107,8 +108,6 @@ import { AssigneesPicker, ItemSearchPicker, LabelChips, LabelPicker } from "./pi
 import { type ReplayHandle, ReplayViewer } from "./replay-viewer";
 import { CommentComposer, Timeline } from "./timeline";
 
-const statusItems = FEEDBACK_STATUSES.map((s) => ({ value: s, label: STATUS_META[s].label }));
-const priorityItems = PRIORITIES.map((p) => ({ value: p, label: PRIORITY_META[p].label }));
 const NO_ROUND = "none";
 const NOBODY: PresenceUser[] = [];
 
@@ -186,6 +185,9 @@ function DetailBody({
   onDeleted: ((id: string) => void) | undefined;
   others: PresenceUser[];
 }) {
+  const { t, tn } = useI18n();
+  const statusItems = FEEDBACK_STATUSES.map((s) => ({ value: s, label: t(STATUS_META[s].labelKey) }));
+  const priorityItems = PRIORITIES.map((p) => ({ value: p, label: t(PRIORITY_META[p].labelKey) }));
   const { feedback: f, assets } = data;
   const id = f.id;
   const dispatch = useAppDispatch();
@@ -218,7 +220,7 @@ function DetailBody({
 
   const Kind = KIND_META[f.kind].icon;
   const roundItems = [
-    { value: NO_ROUND, label: "No round" },
+    { value: NO_ROUND, label: t("inbox1.noRound") },
     ...(rounds.data?.rounds ?? [])
       .filter((r) => r.status === "active" || r.id === f.roundId)
       .map((r) => ({ value: r.id, label: r.name })),
@@ -229,7 +231,7 @@ function DetailBody({
       .catch((e: unknown) => toast.error(errorMessage(e)));
   };
   const setMenu = (m: DetailMenu) => dispatch(menuChanged(m));
-  const reporter = f.reporterGuest?.name ?? f.reporterGuest?.email ?? "Anonymous visitor";
+  const reporter = f.reporterGuest?.name ?? f.reporterGuest?.email ?? t("inbox1.anonymousVisitor");
   const assignees = f.assigneeIds
     .map((uid) => members.find((m) => m.id === uid) ?? data.assignees.find((a) => a.id === uid))
     .filter((m) => !!m);
@@ -243,25 +245,25 @@ function DetailBody({
       .unwrap()
       .then(({ url }) => {
         const safe = safeHref(url);
-        if (!safe) throw new Error("The page address isn't a web link");
+        if (!safe) throw new Error(t("inbox1.pageAddressNotLink"));
         if (tab) tab.location.href = safe;
         else window.open(safe, "_blank", "noopener");
       })
       .catch((e: unknown) => {
         tab?.close();
-        toast.error("Couldn't open the page", { description: errorMessage(e) });
+        toast.error(t("inbox1.couldntOpenPage"), { description: errorMessage(e) });
       });
   };
   const copyMarkdown = () => {
     reproduction(id, true)
       .unwrap()
-      .then((r) => copyText(r.markdown, "Copied as Markdown"))
-      .catch((e: unknown) => toast.error("Couldn't copy", { description: errorMessage(e) }));
+      .then((r) => copyText(r.markdown, t("inbox1.copiedAsMarkdown")))
+      .catch((e: unknown) => toast.error(t("inbox1.couldntCopy"), { description: errorMessage(e) }));
   };
   const toggleWatch = () => {
     watch({ id, watching: !data.watching })
       .unwrap()
-      .then((r) => toast.success(r.watching ? "You follow this item" : "You no longer follow this item"))
+      .then((r) => toast.success(r.watching ? t("inbox1.youFollowItem") : t("inbox1.youNoLongerFollowItem")))
       .catch((e: unknown) => toast.error(errorMessage(e)));
   };
   const handleTranslate = (locale = "en") => {
@@ -269,24 +271,28 @@ function DetailBody({
       .unwrap()
       .then((res) => {
         setActiveTranslation({ title: res.title, body: res.body });
-        toast.success(`Translated to ${locale.toUpperCase()}`);
+        toast.success(t("inbox1.translatedTo", { locale: locale.toUpperCase() }));
       })
       .catch((e: unknown) => {
-        toast.error("Translation failed", { description: errorMessage(e) });
+        toast.error(t("inbox1.translationFailed"), { description: errorMessage(e) });
       });
   };
 
   return (
-    <article className="flex flex-col" aria-label={`Feedback #${f.number}`} data-testid="feedback-detail">
+    <article
+      className="flex flex-col"
+      aria-label={t("inbox1.feedbackAria", { number: f.number })}
+      data-testid="feedback-detail"
+    >
       <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background/90 px-4 py-2 backdrop-blur">
         <span className="font-mono text-xs text-muted-foreground tabular-nums">#{f.number}</span>
         <Badge variant="secondary" className="gap-1" data-testid="kind-badge">
           <Kind className="size-3" />
-          {KIND_META[f.kind].label}
+          {t(KIND_META[f.kind].labelKey)}
         </Badge>
         {isRegion(f.anchor) && (
           <Badge variant="outline" className="gap-1 font-normal">
-            <SquareDashed className="size-3" /> Region
+            <SquareDashed className="size-3" /> {t("inbox1.region")}
           </Badge>
         )}
         <span className="hidden truncate text-xs text-muted-foreground lg:inline">{f.projectName}</span>
@@ -300,18 +306,16 @@ function DetailBody({
               disabled={watchState.isLoading}
               aria-pressed={data.watching}
               data-testid="follow"
-              title={
-                data.watching
-                  ? "You get notified about changes and replies. Click to stop."
-                  : "Get notified about changes and replies"
-              }
+              title={data.watching ? t("inbox1.followingTitle") : t("inbox1.followTitle")}
             >
               {data.watching ? <BellOff /> : <Bell />}
-              <span className="hidden sm:inline">{data.watching ? "Unfollow" : "Follow"}</span>
+              <span className="hidden sm:inline">
+                {data.watching ? t("inbox1.unfollow") : t("inbox1.follow")}
+              </span>
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={() => copyText(itemLink(f.id), "Link copied")}>
-            <Link2 /> <span className="hidden sm:inline">Copy link</span>
+          <Button variant="ghost" size="sm" onClick={() => copyText(itemLink(f.id), t("inbox1.linkCopied"))}>
+            <Link2 /> <span className="hidden sm:inline">{t("inbox1.copyLink")}</span>
           </Button>
           {f.pageUrl && !inTrash && (
             <Button
@@ -322,20 +326,22 @@ function DetailBody({
               data-testid="open-on-page"
             >
               {linking.isLoading ? <Loader2 className="animate-spin" /> : <ExternalLink />}
-              <span className="hidden sm:inline">Open on page</span>
+              <span className="hidden sm:inline">{t("inbox1.openOnPage")}</span>
             </Button>
           )}
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="More actions" />}>
+            <DropdownMenuTrigger
+              render={<Button variant="ghost" size="icon-sm" aria-label={t("inbox1.moreActions")} />}
+            >
               <MoreHorizontal />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem onClick={() => copyText(`#${f.number}`, "Number copied")}>
-                Copy number
+              <DropdownMenuItem onClick={() => copyText(`#${f.number}`, t("inbox1.numberCopied"))}>
+                {t("inbox1.copyNumber")}
               </DropdownMenuItem>
               {f.pageUrl && (
-                <DropdownMenuItem onClick={() => copyText(f.pageUrl ?? "", "Page URL copied")}>
-                  Copy page URL
+                <DropdownMenuItem onClick={() => copyText(f.pageUrl ?? "", t("inbox1.pageUrlCopied"))}>
+                  {t("inbox1.copyPageUrl")}
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem
@@ -343,22 +349,22 @@ function DetailBody({
                 disabled={repro.isFetching}
                 data-testid="copy-markdown"
               >
-                <Copy /> Copy as Markdown
+                <Copy /> {t("inbox1.copyAsMarkdown")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => handleTranslate()}
                 disabled={translating.isLoading}
                 data-testid="translate-report"
               >
-                <Languages /> Translate report
+                <Languages /> {t("inbox1.translateReport")}
               </DropdownMenuItem>
               {canWrite && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setMenu("title")}>Rename</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setMenu("title")}>{t("inbox1.rename")}</DropdownMenuItem>
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger>
-                      <Shapes /> Change kind
+                      <Shapes /> {t("inbox1.changeKind")}
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="w-40">
                       <DropdownMenuRadioGroup
@@ -372,7 +378,7 @@ function DetailBody({
                           const Icon = KIND_META[k].icon;
                           return (
                             <DropdownMenuRadioItem closeOnClick key={k} value={k}>
-                              <Icon /> {KIND_META[k].label}
+                              <Icon /> {t(KIND_META[k].labelKey)}
                             </DropdownMenuRadioItem>
                           );
                         })}
@@ -381,11 +387,11 @@ function DetailBody({
                   </DropdownMenuSub>
                   {f.duplicateOf ? (
                     <DropdownMenuItem onClick={() => patch({ duplicateOfId: null, status: "open" })}>
-                      <Unlink /> Not a duplicate
+                      <Unlink /> {t("inbox1.notADuplicate")}
                     </DropdownMenuItem>
                   ) : (
                     <DropdownMenuItem onClick={() => setDupOpen(true)} data-testid="mark-duplicate">
-                      Mark duplicate of…
+                      {t("inbox1.markDuplicateOfMenu")}
                     </DropdownMenuItem>
                   )}
                 </>
@@ -394,7 +400,7 @@ function DetailBody({
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem variant="destructive" onClick={() => setConfirmDelete(true)}>
-                    <Trash2 /> Move to trash
+                    <Trash2 /> {t("inbox1.moveToTrash")}
                   </DropdownMenuItem>
                 </>
               )}
@@ -406,16 +412,16 @@ function DetailBody({
               excludeId={id}
               open={dupOpen}
               onOpenChange={setDupOpen}
-              label="Mark duplicate of"
+              label={t("inbox1.markDuplicateOf")}
               trigger={<button type="button" className="sr-only" tabIndex={-1} />}
               onPick={(original) => {
                 setDupOpen(false);
                 patch({ duplicateOfId: original.id, status: "duplicate" });
-                toast.success(`Marked as a duplicate of #${original.number}`);
+                toast.success(t("inbox1.markedDuplicateOf", { number: original.number }));
               }}
             />
           )}
-          <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={onClose}>
+          <Button variant="ghost" size="icon-sm" aria-label={t("inbox1.close")} onClick={onClose}>
             <X />
           </Button>
         </div>
@@ -428,8 +434,9 @@ function DetailBody({
         >
           <Trash2 className="size-4 shrink-0 text-destructive" />
           <span className="mr-auto">
-            In the trash since <RelativeTime iso={f.deletedAt ?? f.updatedAt} />. It is purged with its files
-            30 days after it was deleted.
+            {t("inbox1.inTrashSinceBefore")}
+            <RelativeTime iso={f.deletedAt ?? f.updatedAt} />
+            {t("inbox1.inTrashSinceAfter")}
           </span>
           {viewer.isAdmin && (
             <>
@@ -441,13 +448,13 @@ function DetailBody({
                   restore([id])
                     .unwrap()
                     .then(() => {
-                      toast.success("Restored");
+                      toast.success(t("inbox1.restored"));
                       setParams({ trash: null });
                     })
                     .catch((e: unknown) => toast.error(errorMessage(e)))
                 }
               >
-                <RotateCcw /> Restore
+                <RotateCcw /> {t("inbox1.restore")}
               </Button>
               <Button
                 size="sm"
@@ -455,7 +462,7 @@ function DetailBody({
                 className="text-destructive hover:text-destructive"
                 onClick={() => setConfirmPurge(true)}
               >
-                Delete forever
+                {t("inbox1.deleteForever")}
               </Button>
             </>
           )}
@@ -478,10 +485,10 @@ function DetailBody({
             {f.reporterGuest?.verified && (
               <span
                 className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-400"
-                title="Identity signed by your app (Pinwren.identify with a signature)"
+                title={t("inbox1.verifiedTitle")}
                 data-testid="verified-reporter"
               >
-                <BadgeCheck className="size-3.5" /> Verified
+                <BadgeCheck className="size-3.5" /> {t("inbox1.verified")}
               </span>
             )}
             <span>
@@ -502,7 +509,7 @@ function DetailBody({
                   canWrite
                     ? (candId) => {
                         patch({ duplicateOfId: candId, status: "duplicate" });
-                        toast.success("Linked as duplicate");
+                        toast.success(t("inbox1.linkedAsDuplicate"));
                       }
                     : undefined
                 }
@@ -530,7 +537,7 @@ function DetailBody({
               onOpenChange={(o) => setMenu(o ? "status" : null)}
               onValueChange={(v) => v && patch({ status: v })}
             >
-              <SelectTrigger size="sm" aria-label="Status" data-testid="status-picker">
+              <SelectTrigger size="sm" aria-label={t("inbox1.status")} data-testid="status-picker">
                 <StatusIcon status={f.status} />
                 <SelectValue />
               </SelectTrigger>
@@ -550,7 +557,7 @@ function DetailBody({
               onOpenChange={(o) => setMenu(o ? "priority" : null)}
               onValueChange={(v) => v && patch({ priority: v })}
             >
-              <SelectTrigger size="sm" aria-label="Priority" data-testid="priority-picker">
+              <SelectTrigger size="sm" aria-label={t("inbox1.priority")} data-testid="priority-picker">
                 <PriorityIcon priority={f.priority} />
                 <SelectValue />
               </SelectTrigger>
@@ -571,10 +578,14 @@ function DetailBody({
                   if (sp) patch({ priority: sp });
                 }}
                 className="inline-flex items-center gap-1.5 rounded-md border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-xs font-medium text-purple-700 hover:bg-purple-500/20 dark:text-purple-300"
-                title="Accept AI suggested priority"
+                title={t("inbox1.acceptAiPriority")}
               >
                 <Sparkles className="size-3 text-purple-500" />
-                <span>Suggest: {PRIORITY_META[data.ai.suggestedPriority].label}</span>
+                <span>
+                  {t("inbox1.suggestPriority", {
+                    priority: t(PRIORITY_META[data.ai.suggestedPriority].labelKey),
+                  })}
+                </span>
                 <Check className="size-3" />
               </button>
             )}
@@ -582,7 +593,7 @@ function DetailBody({
               value={f.assigneeIds}
               open={menu === "assignee"}
               onOpenChange={(o) => setMenu(o ? "assignee" : null)}
-              label="Assignees"
+              label={t("inbox1.assignees")}
               onChange={(ids) => patch({ assigneeIds: ids })}
               trigger={
                 <Button
@@ -604,12 +615,14 @@ function DetailBody({
                         ))}
                       </span>
                       <span className="truncate">
-                        {assignees.length === 1 ? assignees[0]?.name : `${assignees.length} assignees`}
+                        {assignees.length === 1
+                          ? assignees[0]?.name
+                          : tn("inbox1.assigneesCount", assignees.length)}
                       </span>
                     </>
                   ) : (
                     <>
-                      <UserRound /> Unassigned
+                      <UserRound /> {t("inbox1.unassigned")}
                     </>
                   )}
                 </Button>
@@ -621,7 +634,7 @@ function DetailBody({
               canCreate={canWrite}
               open={menu === "labels"}
               onOpenChange={(o) => setMenu(o ? "labels" : null)}
-              label="Labels"
+              label={t("inbox1.labels")}
               onChange={(labels: ItemLabel[]) => patch({ labelIds: labels.map((l) => l.id) }, { labels })}
               trigger={
                 <Button
@@ -631,14 +644,14 @@ function DetailBody({
                   data-testid="label-picker"
                 >
                   <Tag />
-                  {f.labels.length ? <LabelChips labels={f.labels} max={2} /> : "Labels"}
+                  {f.labels.length ? <LabelChips labels={f.labels} max={2} /> : t("inbox1.labels")}
                 </Button>
               }
             />
             <DatePicker
               value={f.dueAt ? new Date(f.dueAt) : null}
               onChange={(d) => patch({ dueAt: d ? endOfDay(d) : null })}
-              placeholder="Due date"
+              placeholder={t("inbox1.dueDate")}
               className="[&_button:first-child]:h-7 [&_button:first-child]:w-auto [&_button:first-child]:text-sm"
             />
             {roundItems.length > 1 && (
@@ -649,7 +662,7 @@ function DetailBody({
                 onOpenChange={(o) => setMenu(o ? "round" : null)}
                 onValueChange={(v) => v && patch({ roundId: v === NO_ROUND ? null : v })}
               >
-                <SelectTrigger size="sm" aria-label="Review round" data-testid="round-picker">
+                <SelectTrigger size="sm" aria-label={t("inbox1.reviewRound")} data-testid="round-picker">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -665,13 +678,13 @@ function DetailBody({
         ) : (
           <div className="flex flex-wrap gap-2 text-sm" data-testid="read-only-fields">
             <Badge variant="outline" className="h-7 gap-1.5 px-2.5 font-normal" data-testid="status-picker">
-              <StatusIcon status={f.status} /> {STATUS_META[f.status].label}
+              <StatusIcon status={f.status} /> {t(STATUS_META[f.status].labelKey)}
             </Badge>
             <Badge variant="outline" className="h-7 gap-1.5 px-2.5 font-normal">
-              <PriorityIcon priority={f.priority} /> {PRIORITY_META[f.priority].label}
+              <PriorityIcon priority={f.priority} /> {t(PRIORITY_META[f.priority].labelKey)}
             </Badge>
             <Badge variant="outline" className="h-7 gap-1.5 px-2.5 font-normal">
-              {assignees.length ? assignees.map((a) => a.name).join(", ") : "Unassigned"}
+              {assignees.length ? assignees.map((a) => a.name).join(", ") : t("inbox1.unassigned")}
             </Badge>
             {f.labels.length > 0 && (
               <Badge variant="outline" className="h-7 gap-1.5 px-2.5 font-normal">
@@ -685,7 +698,7 @@ function DetailBody({
             )}
             {f.roundId && (
               <Badge variant="outline" className="h-7 px-2.5 font-normal">
-                {rounds.data?.rounds.find((r) => r.id === f.roundId)?.name ?? "In a round"}
+                {rounds.data?.rounds.find((r) => r.id === f.roundId)?.name ?? t("inbox1.inARound")}
               </Badge>
             )}
           </div>
@@ -697,14 +710,14 @@ function DetailBody({
           <div className="flex items-center justify-between gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary">
             <span className="flex items-center gap-1.5 font-medium">
               <Languages className="size-3.5" />
-              Showing translated report
+              {t("inbox1.showingTranslated")}
             </span>
             <button
               type="button"
               onClick={() => setActiveTranslation(null)}
               className="underline hover:text-primary/80"
             >
-              Show original
+              {t("inbox1.showOriginal")}
             </button>
           </div>
         )}
@@ -727,14 +740,14 @@ function DetailBody({
           onSeek={replay ? (at) => player.current?.seekTo(at) : undefined}
         />
 
-        <section aria-label="Activity" className="space-y-3">
-          <h3 className="text-sm font-semibold">Activity</h3>
+        <section aria-label={t("inbox1.activity")} className="space-y-3">
+          <h3 className="text-sm font-semibold">{t("inbox1.activity")}</h3>
           <Timeline data={data} />
           {canWrite ? (
             <CommentComposer feedbackId={id} reach={data.replyReach} projectId={f.projectId} />
           ) : (
             <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-              {inTrash ? "Restore the item to reply." : "You have read-only access, so you can't reply."}
+              {inTrash ? t("inbox1.restoreToReply") : t("inbox1.readOnlyNoReply")}
             </p>
           )}
         </section>
@@ -743,9 +756,9 @@ function DetailBody({
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
-        title={`Move #${f.number} to the trash?`}
-        description="Admins can restore it from the trash for 30 days; after that it is purged with its files."
-        confirmLabel="Move to trash"
+        title={t("inbox1.moveToTrashTitle", { number: f.number })}
+        description={t("inbox1.moveToTrashDescription")}
+        confirmLabel={t("inbox1.moveToTrash")}
         pending={removal.isLoading}
         onConfirm={() => {
           remove([id])
@@ -753,7 +766,7 @@ function DetailBody({
             .then(() => {
               setConfirmDelete(false);
               if (onDeleted) onDeleted(id);
-              else toast.success("Moved to the trash");
+              else toast.success(t("inbox1.movedToTrash"));
               onClose();
             })
             .catch((e: unknown) => toast.error(errorMessage(e)));
@@ -762,15 +775,15 @@ function DetailBody({
       <ConfirmDialog
         open={confirmPurge}
         onOpenChange={setConfirmPurge}
-        title={`Delete #${f.number} forever?`}
-        description="It is removed with its comments, screenshots, replay and attachments. This can't be undone."
-        confirmLabel="Delete forever"
+        title={t("inbox1.deleteForeverTitle", { number: f.number })}
+        description={t("inbox1.deleteForeverDescription")}
+        confirmLabel={t("inbox1.deleteForever")}
         pending={purging.isLoading}
         onConfirm={() => {
           purge([id])
             .unwrap()
             .then(() => {
-              toast.success("Deleted forever");
+              toast.success(t("inbox1.deletedForever"));
               setConfirmPurge(false);
               onClose();
             })
@@ -797,6 +810,7 @@ function TitleField({
   onEditingChange: (on: boolean) => void;
   onSave: (title: string | null) => void;
 }) {
+  const t = useT();
   const [value, setValue] = useState(title ?? "");
   const shown = title || fallback;
   if (!editing) {
@@ -805,7 +819,7 @@ function TitleField({
         <button
           type="button"
           className="-mx-1 rounded px-1 text-left hover:bg-muted/70 focus-visible:outline-2 focus-visible:outline-ring"
-          title="Rename (r)"
+          title={t("inbox1.renameTitle")}
           onClick={() => onEditingChange(true)}
           data-testid="title"
         >
@@ -830,7 +844,7 @@ function TitleField({
       maxLength={200}
       // eslint-disable-next-line jsx-a11y/no-autofocus -- opened by a click or `r`, which hands focus here
       autoFocus
-      aria-label="Title"
+      aria-label={t("inbox1.title")}
       placeholder={fallback}
       className="h-9 text-lg font-semibold"
       onBlur={save}
@@ -852,6 +866,7 @@ function TitleField({
 
 /** "Duplicate of #12" and "Duplicates: #14, #20", both linking to the other item. */
 function DuplicateLinks({ data, onOpen }: { data: FeedbackDetail; onOpen: (id: string) => void }) {
+  const t = useT();
   const original = data.feedback.duplicateOf;
   if (!original && !data.duplicates.length) return null;
   const link = (r: { id: string; number: number; title: string }) => (
@@ -872,13 +887,13 @@ function DuplicateLinks({ data, onOpen }: { data: FeedbackDetail; onOpen: (id: s
     >
       {original && (
         <span className="inline-flex items-center gap-1">
-          <StatusIcon status="duplicate" className="size-3.5" /> Duplicate of {link(original)}
+          <StatusIcon status="duplicate" className="size-3.5" /> {t("inbox1.duplicateOf")} {link(original)}
           <span className="max-w-48 truncate">{original.title}</span>
         </span>
       )}
       {data.duplicates.length > 0 && (
         <span className="inline-flex flex-wrap items-center gap-1">
-          Duplicates: {data.duplicates.map((d, i) => [i > 0 ? ", " : null, link(d)])}
+          {t("inbox1.duplicates")} {data.duplicates.map((d, i) => [i > 0 ? ", " : null, link(d)])}
         </span>
       )}
     </p>
@@ -897,6 +912,7 @@ function Media({
   player: React.RefObject<ReplayHandle | null>;
   onReplayTime: (at: number | null) => void;
 }) {
+  const t = useT();
   const shot = screenshotOf(data.assets);
   if (!replay) return shot ? <Screenshot data={data} shot={shot} /> : null;
   const viewer = (
@@ -907,10 +923,10 @@ function Media({
     <Tabs defaultValue="screenshot">
       <TabsList className="h-8">
         <TabsTrigger value="screenshot" className="px-2.5">
-          <ImageIcon /> Screenshot
+          <ImageIcon /> {t("inbox1.screenshot")}
         </TabsTrigger>
         <TabsTrigger value="replay" className="px-2.5">
-          <Film /> Replay
+          <Film /> {t("inbox1.replay")}
         </TabsTrigger>
       </TabsList>
       <TabsContent value="screenshot" className="pt-2">
@@ -924,6 +940,7 @@ function Media({
 }
 
 function Screenshot({ data, shot }: { data: FeedbackDetail; shot: Asset }) {
+  const t = useT();
   const f = data.feedback;
   const [showPin, setShowPin] = useState(true);
   // The reporter's vector annotations (wave-5 §2), drawn over the unflattened capture; switchable.
@@ -940,11 +957,11 @@ function Screenshot({ data, shot }: { data: FeedbackDetail; shot: Asset }) {
         target="_blank"
         rel="noopener noreferrer"
         className="block rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        aria-label="Open screenshot in a new tab"
+        aria-label={t("inbox1.openScreenshot")}
       >
         <CaptureView
           src={assetUrl(shot.id)}
-          alt={`Screenshot attached to #${f.number}`}
+          alt={t("inbox1.screenshotAlt", { number: f.number })}
           markers={markers}
           showMarkers={showPin}
           decorative
@@ -954,7 +971,7 @@ function Screenshot({ data, shot }: { data: FeedbackDetail; shot: Asset }) {
       </a>
       <figcaption className="flex items-center gap-2 text-xs text-muted-foreground">
         <ImageIcon className="size-3.5" />
-        {shot.kind === "screenshot_annotated" ? "Annotated screenshot" : "Screenshot"}
+        {shot.kind === "screenshot_annotated" ? t("inbox1.annotatedScreenshot") : t("inbox1.screenshot")}
         {f.environment?.viewport && (
           <span className="tabular-nums">
             · {f.environment.viewport.w}×{f.environment.viewport.h}
@@ -965,7 +982,9 @@ function Screenshot({ data, shot }: { data: FeedbackDetail; shot: Asset }) {
         </span>
         {placed && (
           <span className="flex items-center gap-2">
-            <label htmlFor={`show-pin-${f.id}`}>{isRegion(f.anchor) ? "Show region" : "Show pin"}</label>
+            <label htmlFor={`show-pin-${f.id}`}>
+              {isRegion(f.anchor) ? t("inbox1.showRegion") : t("inbox1.showPin")}
+            </label>
             <Switch id={`show-pin-${f.id}`} size="sm" checked={showPin} onCheckedChange={setShowPin} />
           </span>
         )}
@@ -975,11 +994,12 @@ function Screenshot({ data, shot }: { data: FeedbackDetail; shot: Asset }) {
 }
 
 function Attachments({ assets }: { assets: Asset[] }) {
+  const t = useT();
   if (!assets.length) return null;
   return (
-    <section aria-label="Attachments" className="space-y-2">
+    <section aria-label={t("inbox1.attachments")} className="space-y-2">
       <h3 className="flex items-center gap-1.5 text-sm font-semibold">
-        <Paperclip className="size-3.5" /> Attachments
+        <Paperclip className="size-3.5" /> {t("inbox1.attachments")}
         <span className="font-normal text-muted-foreground tabular-nums">{assets.length}</span>
       </h3>
       <ul className="grid gap-2 sm:grid-cols-2">
@@ -1006,13 +1026,15 @@ function Attachments({ assets }: { assets: Asset[] }) {
                   </span>
                 )}
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{a.name ?? "Attachment"}</span>
+                  <span className="block truncate text-sm font-medium">
+                    {a.name ?? t("inbox1.attachment")}
+                  </span>
                   <span className="block text-xs text-muted-foreground">
                     {a.contentType.split("/")[1]?.toUpperCase()} · {formatBytes(a.bytes)}
                   </span>
                 </span>
                 <Download
-                  aria-label="Download"
+                  aria-label={t("inbox1.download")}
                   className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground"
                 />
               </a>
@@ -1037,6 +1059,7 @@ function ContextTabs({
   replayAt: number | null;
   onSeek: ((at: number) => void) | undefined;
 }) {
+  const t = useT();
   const { feedback: f, diagnostics } = data;
   const consoleEntries = diagnostics?.console ?? [];
   const networkEntries = diagnostics?.network ?? [];
@@ -1048,25 +1071,25 @@ function ContextTabs({
     <Tabs defaultValue="details">
       <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b">
         <TabsTrigger value="details" className="flex-none">
-          Details
+          {t("inbox1.details")}
         </TabsTrigger>
         {a && (
           <TabsTrigger value="anchor" className="flex-none">
-            Anchor
+            {t("inbox1.anchor")}
           </TabsTrigger>
         )}
         <TabsTrigger value="console" className="flex-none">
-          Console{" "}
+          {t("inbox1.console")}{" "}
           {consoleEntries.length > 0 && <span className="tabular-nums">({consoleEntries.length})</span>}
         </TabsTrigger>
         <TabsTrigger value="network" className="flex-none">
-          Network{" "}
+          {t("inbox1.network")}{" "}
           {networkEntries.length > 0 && <span className="tabular-nums">({networkEntries.length})</span>}
         </TabsTrigger>
       </TabsList>
       <TabsContent value="details" className="pt-2">
         <dl className="grid grid-cols-[6.5rem_1fr] gap-x-4 gap-y-2 text-sm sm:grid-cols-[8rem_1fr]">
-          <Meta label="Page">
+          <Meta label={t("inbox1.metaPage")}>
             {f.pageUrl ? (
               <a
                 href={safeHref(f.pageUrl) ?? undefined}
@@ -1082,31 +1105,31 @@ function ContextTabs({
           </Meta>
           {f.reviewLink && (
             // A guest sent it through a review link (F-012): its name, and every item that came through it.
-            <Meta label="Source">
+            <Meta label={t("inbox1.metaSource")}>
               <Link
                 href={`/inbox?project=${f.projectId}&review=${f.reviewLink.id}`}
                 className="inline-flex items-center gap-1.5 underline-offset-4 hover:underline"
                 data-testid="review-link-source"
               >
                 <Link2 className="size-3.5 text-muted-foreground" />
-                Review link · {f.reviewLink.label}
+                {t("inbox1.reviewLinkSource", { name: f.reviewLink.label })}
               </Link>
             </Meta>
           )}
-          <Meta label="Browser">
+          <Meta label={t("inbox1.metaBrowser")}>
             {[f.environment?.browser, f.environment?.os].filter(Boolean).join(" · ") || "—"}
           </Meta>
-          <Meta label="Viewport">
+          <Meta label={t("inbox1.metaViewport")}>
             {f.environment?.viewport
               ? `${f.environment.viewport.w} × ${f.environment.viewport.h} @${f.environment.dpr ?? 1}x`
               : "—"}
           </Meta>
-          <Meta label="Locale">
+          <Meta label={t("inbox1.metaLocale")}>
             {[f.environment?.locale, f.environment?.timezone].filter(Boolean).join(" · ") || "—"}
           </Meta>
-          {f.reporterGuest?.email && <Meta label="Reporter">{f.reporterGuest.email}</Meta>}
+          {f.reporterGuest?.email && <Meta label={t("inbox1.metaReporter")}>{f.reporterGuest.email}</Meta>}
           {f.reporterGuest?.externalId && (
-            <Meta label="User id">
+            <Meta label={t("inbox1.metaUserId")}>
               <span className="inline-flex flex-wrap items-center gap-1.5">
                 <code className="font-mono text-xs break-all">{f.reporterGuest.externalId}</code>
                 {f.reporterGuest.verified ? (
@@ -1114,33 +1137,33 @@ function ContextTabs({
                     variant="secondary"
                     className="gap-1 font-normal text-emerald-700 dark:text-emerald-400"
                   >
-                    <BadgeCheck className="size-3" /> signed
+                    <BadgeCheck className="size-3" /> {t("inbox1.signed")}
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="font-normal text-muted-foreground">
-                    unsigned
+                    {t("inbox1.unsigned")}
                   </Badge>
                 )}
               </span>
             </Meta>
           )}
-          <Meta label="Consent">
+          <Meta label={t("inbox1.metaConsent")}>
             {f.consent ? (
               <span data-testid="consent-record">
-                Accepted <LocalDate iso={f.consent.acceptedAt} time />{" "}
+                {t("inbox1.accepted")} <LocalDate iso={f.consent.acceptedAt} time />{" "}
                 <span className="text-muted-foreground">
-                  · notice <code className="font-mono text-xs">{f.consent.version}</code>
+                  {t("inbox1.consentNotice")} <code className="font-mono text-xs">{f.consent.version}</code>
                 </span>
               </span>
             ) : (
-              <span className="text-muted-foreground">No consent notice was shown</span>
+              <span className="text-muted-foreground">{t("inbox1.noConsentNotice")}</span>
             )}
           </Meta>
         </dl>
         {f.metadata && Object.keys(f.metadata).length > 0 && (
           // What the site attached with `Pinwren.setMetadata()` / `metadata` (plan, build, feature flags…).
           <div className="mt-4 space-y-2" data-testid="host-metadata">
-            <h4 className="text-xs font-medium text-muted-foreground">From your site</h4>
+            <h4 className="text-xs font-medium text-muted-foreground">{t("inbox1.fromYourSite")}</h4>
             <dl className="grid grid-cols-[6.5rem_1fr] gap-x-4 gap-y-2 text-sm sm:grid-cols-[8rem_1fr]">
               {Object.entries(f.metadata).map(([k, v]) => (
                 <Meta key={k} label={k}>
@@ -1158,15 +1181,18 @@ function ContextTabs({
       {a && (
         <TabsContent value="anchor" className="pt-2">
           <dl className="grid grid-cols-[6.5rem_1fr] gap-x-4 gap-y-2 text-sm sm:grid-cols-[8rem_1fr]">
-            <Meta label="Type">
+            <Meta label={t("inbox1.metaType")}>
               <span className="inline-flex items-center gap-1.5">
                 {isRegion(a) ? <SquareDashed className="size-3.5" /> : <Crosshair className="size-3.5" />}
                 {isRegion(a)
-                  ? `Region · ${Math.round(((a.pin.wPct ?? 0) / 100) * a.rect.w)} × ${Math.round(((a.pin.hPct ?? 0) / 100) * a.rect.h)} px`
-                  : "Point pin"}
+                  ? t("inbox1.regionSize", {
+                      w: Math.round(((a.pin.wPct ?? 0) / 100) * a.rect.w),
+                      h: Math.round(((a.pin.hPct ?? 0) / 100) * a.rect.h),
+                    })
+                  : t("inbox1.pointPin")}
               </span>
             </Meta>
-            <Meta label="Element">
+            <Meta label={t("inbox1.metaElement")}>
               <code className="font-mono text-xs break-all">&lt;{a.tag}&gt;</code>
               {a.attrs?.pinwrenAnchor && (
                 <code className="ml-2 font-mono text-xs">
@@ -1174,28 +1200,31 @@ function ContextTabs({
                 </code>
               )}
             </Meta>
-            <Meta label="Selector">
+            <Meta label={t("inbox1.metaSelector")}>
               <code className="font-mono text-xs break-all" data-testid="anchor-selector">
                 {a.css}
               </code>
             </Meta>
-            <Meta label="XPath">
+            <Meta label={t("inbox1.metaXPath")}>
               <code className="font-mono text-xs break-all text-muted-foreground">{a.xpath}</code>
             </Meta>
             {a.text.content && (
-              <Meta label="Text">
+              <Meta label={t("inbox1.metaText")}>
                 <span className="break-words">“{a.text.content}”</span>
               </Meta>
             )}
-            <Meta label="Position">
+            <Meta label={t("inbox1.metaPosition")}>
               <span className="tabular-nums">
-                {a.pin.xPct.toFixed(1)}%, {a.pin.yPct.toFixed(1)}% of the element
+                {t("inbox1.positionOfElement", { x: a.pin.xPct.toFixed(1), y: a.pin.yPct.toFixed(1) })}
               </span>
             </Meta>
-            <Meta label="Captured at">
+            <Meta label={t("inbox1.metaCapturedAt")}>
               <span className="tabular-nums">
-                {Math.round(a.rect.vw)} × {Math.round(a.rect.vh)} viewport, scrolled{" "}
-                {Math.round(a.rect.scrollY)} px
+                {t("inbox1.capturedAt", {
+                  w: Math.round(a.rect.vw),
+                  h: Math.round(a.rect.vh),
+                  y: Math.round(a.rect.scrollY),
+                })}
               </span>
             </Meta>
           </dl>
@@ -1203,7 +1232,7 @@ function ContextTabs({
       )}
       <TabsContent value="console" className="pt-2">
         {consoleEntries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No console output was captured.</p>
+          <p className="text-sm text-muted-foreground">{t("inbox1.noConsoleOutput")}</p>
         ) : (
           <ul
             className="divide-y overflow-hidden rounded-lg border font-mono text-xs"
@@ -1226,7 +1255,7 @@ function ContextTabs({
                     type="button"
                     className="w-full text-left"
                     onClick={() => onSeek(e.at)}
-                    title="Jump the replay here"
+                    title={t("inbox1.jumpReplayHere")}
                   >
                     {e.message}
                   </button>
@@ -1240,7 +1269,7 @@ function ContextTabs({
       </TabsContent>
       <TabsContent value="network" className="pt-2">
         {networkEntries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No failed requests were captured.</p>
+          <p className="text-sm text-muted-foreground">{t("inbox1.noFailedRequests")}</p>
         ) : (
           <ul className="divide-y overflow-hidden rounded-lg border font-mono text-xs">
             {networkEntries.map((n, i) => {
@@ -1273,7 +1302,7 @@ function ContextTabs({
                       type="button"
                       className="flex w-full gap-3 text-left"
                       onClick={() => onSeek(n.at)}
-                      title="Jump the replay here"
+                      title={t("inbox1.jumpReplayHere")}
                     >
                       {row}
                     </button>

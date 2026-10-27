@@ -4,6 +4,8 @@ import { ImageUp } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { type TFn, tEn } from "@/lib/i18n/english";
+import { useT } from "@/lib/i18n/provider";
 import { errorMessage, useUploadBrandAssetMutation } from "@/lib/store/api";
 import { cn } from "@/lib/utils";
 
@@ -12,11 +14,11 @@ const MAX_BYTES = 512 * 1024;
 
 export type UploadedLogo = { id: string; url: string };
 
-export function readAsDataUrl(file: File): Promise<string> {
+export function readAsDataUrl(file: File, t: TFn = tEn): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(typeof r.result === "string" ? r.result : "");
-    r.onerror = () => reject(r.error ?? new Error("Couldn't read the file"));
+    r.onerror = () => reject(r.error ?? new Error(t("components1.couldntReadFile")));
     r.readAsDataURL(file);
   });
 }
@@ -28,7 +30,7 @@ export function readAsDataUrl(file: File): Promise<string> {
 export function LogoUpload({
   value,
   onUploaded,
-  label = "Upload logo",
+  label,
   className,
 }: {
   value: string | null;
@@ -36,6 +38,8 @@ export function LogoUpload({
   label?: string;
   className?: string;
 }) {
+  const t = useT();
+  const labelText = label ?? t("components1.uploadLogo");
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [over, setOver] = useState(false);
@@ -44,20 +48,20 @@ export function LogoUpload({
   async function upload(file: File | undefined) {
     if (!file) return;
     if (!TYPES.includes(file.type)) {
-      toast.error("Use a PNG, JPEG or WebP image");
+      toast.error(t("components1.logoBadType"));
       return;
     }
     if (file.size > MAX_BYTES) {
-      toast.error("The logo must be 512 KB or smaller");
+      toast.error(t("components1.logoTooBig"));
       return;
     }
     setBusy(true);
     try {
-      const dataUrl = await readAsDataUrl(file);
+      const dataUrl = await readAsDataUrl(file, t);
       const { asset } = await uploadAsset({ dataUrl }).unwrap();
       onUploaded(asset);
     } catch (e) {
-      toast.error("Upload failed", { description: errorMessage(e) });
+      toast.error(t("components1.uploadFailed"), { description: errorMessage(e) });
     } finally {
       setBusy(false);
       if (input.current) input.current.value = "";
@@ -68,7 +72,7 @@ export function LogoUpload({
     <div className={cn("flex items-center gap-3", className)}>
       <button
         type="button"
-        aria-label={value ? "Replace logo" : label}
+        aria-label={value ? t("components1.replaceLogo") : labelText}
         onClick={() => input.current?.click()}
         onDragOver={(e) => {
           e.preventDefault();
@@ -87,7 +91,7 @@ export function LogoUpload({
       >
         {value ? (
           // eslint-disable-next-line @next/next/no-img-element -- user-uploaded logo (any host, any size); nothing for next/image to optimise
-          <img src={value} alt="Current logo" className="size-full object-contain p-1" />
+          <img src={value} alt={t("components1.currentLogo")} className="size-full object-contain p-1" />
         ) : (
           <ImageUp className="size-5 text-muted-foreground" />
         )}
@@ -101,11 +105,9 @@ export function LogoUpload({
           disabled={busy}
           onClick={() => input.current?.click()}
         >
-          <ImageUp /> {busy ? "Uploading…" : value ? "Replace" : label}
+          <ImageUp /> {busy ? t("components1.uploading") : value ? t("components1.replace") : labelText}
         </Button>
-        <p className="text-xs text-muted-foreground">
-          PNG, JPEG or WebP, up to 512 KB. Or drop it on the tile.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("components1.logoHint")}</p>
       </div>
       <input
         ref={input}

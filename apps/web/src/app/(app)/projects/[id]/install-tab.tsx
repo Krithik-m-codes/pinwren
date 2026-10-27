@@ -20,13 +20,14 @@ import { originForm } from "@/lib/form-schemas";
 import {
   differentOrigin,
   doctorCommand,
-  INSTALL_HINTS,
+  INSTALL_HINT_KEYS,
   INSTALL_LABELS,
   INSTALL_METHODS,
   installSnippets,
   patternForOrigin,
 } from "@/lib/install";
 import { useLazyIdentitySecretQuery, useRotateIdentitySecretMutation } from "@/lib/store/api";
+import { useT } from "@/lib/i18n/provider";
 import { useOrigin } from "@/lib/use-synced-state";
 import { useViewer } from "@/lib/viewer";
 import { useProjectPatch } from "./use-project";
@@ -55,31 +56,32 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
 }
 
 function InstallCard({ project }: { project: ProjectDetail }) {
+  const t = useT();
   const browserOrigin = useOrigin();
   const snippets = installSnippets(project.publicUrl, project.publicKey);
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center gap-2">
-          Install the widget
+          {t("projects2.installTheWidget")}
           {project.lastSeenAt ? (
             <Badge
               variant="secondary"
               className="ml-auto gap-1.5 font-normal"
               data-testid="install-connected"
             >
-              <span className="size-1.5 rounded-full bg-emerald-500" /> Connected · seen{" "}
+              <span className="size-1.5 rounded-full bg-emerald-500" /> {t("projects2.connectedSeen")}{" "}
               <RelativeTime iso={project.lastSeenAt} />
             </Badge>
           ) : (
             <Badge variant="outline" className="ml-auto gap-1.5 font-normal" data-testid="install-waiting">
-              <span className="size-1.5 animate-pulse rounded-full bg-amber-500" /> Waiting for your site
+              <span className="size-1.5 animate-pulse rounded-full bg-amber-500" />{" "}
+              {t("projects2.waitingForYourSite")}
             </Badge>
           )}
         </CardTitle>
         <CardDescription>
-          Pick how your site is built. Every snippet loads the widget from{" "}
-          <code className="font-mono text-xs">{project.publicUrl}</code>.
+          {t("projects2.pickHowSiteBuilt")} <code className="font-mono text-xs">{project.publicUrl}</code>.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
@@ -90,10 +92,11 @@ function InstallCard({ project }: { project: ProjectDetail }) {
           >
             <Info className="mt-0.5 size-3.5 shrink-0" />
             <span>
-              You opened the dashboard at <code className="font-mono">{browserOrigin}</code>, but this
-              server&apos;s public address (<code className="font-mono">PINWREN_URL</code>) is{" "}
-              <code className="font-mono">{project.publicUrl}</code>. The snippets use the public address; if
-              it is wrong, change <code className="font-mono">PINWREN_URL</code> and restart.
+              {t("projects2.hintOpenedAt")} <code className="font-mono">{browserOrigin}</code>,{" "}
+              {t("projects2.hintButAddress")} (<code className="font-mono">PINWREN_URL</code>){" "}
+              {t("projects2.hintIs")} <code className="font-mono">{project.publicUrl}</code>.{" "}
+              {t("projects2.hintSnippetsUse")} <code className="font-mono">PINWREN_URL</code>{" "}
+              {t("projects2.hintAndRestart")}
             </span>
           </p>
         )}
@@ -109,18 +112,18 @@ function InstallCard({ project }: { project: ProjectDetail }) {
           </div>
           {INSTALL_METHODS.map((m) => (
             <TabsContent key={m} value={m} className="grid gap-2">
-              <p className="text-xs text-muted-foreground">{INSTALL_HINTS[m]}</p>
-              <CodeBlock code={snippets[m]} label="Copy snippet" />
+              <p className="text-xs text-muted-foreground">{t(INSTALL_HINT_KEYS[m])}</p>
+              <CodeBlock code={snippets[m]} label={t("projects2.copySnippet")} />
             </TabsContent>
           ))}
         </Tabs>
         <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          Project key
+          {t("projects2.projectKey")}
           <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">
             {project.publicKey}
           </code>
-          <CopyButton value={project.publicKey} label="Copy project key" size="icon-xs" />
-          <span>Public by design — it only works from your allowed sites.</span>
+          <CopyButton value={project.publicKey} label={t("projects2.copyProjectKey")} size="icon-xs" />
+          <span>{t("projects2.publicByDesign")}</span>
         </p>
       </CardContent>
     </Card>
@@ -129,54 +132,52 @@ function InstallCard({ project }: { project: ProjectDetail }) {
 
 /** "Is it working?": the CLI check, then a real report end to end. */
 function VerifyCard({ project }: { project: ProjectDetail }) {
+  const t = useT();
   const connected = !!project.lastSeenAt;
   const site = project.allowedOrigins[0];
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{connected ? "Send a test report" : "Check the installation"}</CardTitle>
+        <CardTitle>{connected ? t("projects2.sendTestReport") : t("projects2.checkInstallation")}</CardTitle>
         <CardDescription>
-          {connected
-            ? "The widget has loaded on your site. Try it the way a visitor would."
-            : "Nothing has loaded the widget yet. This page updates by itself once it does."}
+          {connected ? t("projects2.widgetLoadedDescription") : t("projects2.widgetNotLoadedDescription")}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
         {connected ? (
           <ol className="grid gap-2 text-sm" data-testid="test-report-steps">
-            {[
-              "Open a page of your site and click the feedback button in the corner.",
-              "Choose “Report a bug”, draw on the screenshot if you like, and send it.",
-              "It appears in the inbox within seconds, and the team gets an email if email is set up.",
-            ].map((t, i) => (
-              <li key={t} className="flex items-start gap-2.5">
+            {[t("projects2.testStep1"), t("projects2.testStep2"), t("projects2.testStep3")].map((step, i) => (
+              <li key={step} className="flex items-start gap-2.5">
                 <span className="grid size-5 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium tabular-nums">
                   {i + 1}
                 </span>
-                {t}
+                {step}
               </li>
             ))}
             <li className="pt-1">
               <ButtonLink href={`/inbox?project=${project.id}`} size="sm" variant="outline">
-                <Send /> Open the inbox
+                <Send /> {t("projects2.openTheInbox")}
               </ButtonLink>
             </li>
           </ol>
         ) : (
           <ul className="grid gap-1.5 text-sm text-muted-foreground">
-            <li>• The snippet is on the page you opened (view the page source to check).</li>
-            <li>• The site&apos;s domain is under Allowed sites below. Refused sites show up there too.</li>
-            <li>• Your site can reach {project.publicUrl} (not a localhost address, for a live site).</li>
+            <li>{t("projects2.checkSnippet")}</li>
+            <li>{t("projects2.checkDomain")}</li>
+            <li>{t("projects2.checkReach", { url: project.publicUrl })}</li>
           </ul>
         )}
         <div className="grid gap-1.5">
           <p className="flex items-center gap-1.5 text-sm font-medium">
-            <Terminal className="size-4 text-muted-foreground" /> Verify from your terminal
+            <Terminal className="size-4 text-muted-foreground" /> {t("projects2.verifyFromTerminal")}
           </p>
-          <CodeBlock code={doctorCommand(project.publicUrl, project.publicKey, site)} label="Copy command" />
+          <CodeBlock
+            code={doctorCommand(project.publicUrl, project.publicKey, site)}
+            label={t("projects2.copyCommand")}
+          />
           <p className="text-xs text-muted-foreground">
-            Checks the server, <code className="font-mono">widget.js</code> and this project&apos;s settings
-            for your site, and says what to fix.
+            {t("projects2.checksServer")} <code className="font-mono">widget.js</code>{" "}
+            {t("projects2.checksSettings")}
           </p>
         </div>
       </CardContent>
@@ -185,6 +186,7 @@ function VerifyCard({ project }: { project: ProjectDetail }) {
 }
 
 function OriginsCard({ project }: { project: ProjectDetail }) {
+  const t = useT();
   const save = useProjectPatch(project.id);
   const [testUrl, setTestUrl] = useState("");
   const origins = project.allowedOrigins;
@@ -194,7 +196,10 @@ function OriginsCard({ project }: { project: ProjectDetail }) {
   const add = form.handleSubmit(({ host }) => {
     form.reset({ host: "" });
     if (origins.includes(host)) return;
-    save.mutate({ patch: { allowedOrigins: [...origins, host] }, message: `Added ${host}` });
+    save.mutate({
+      patch: { allowedOrigins: [...origins, host] },
+      message: t("projects2.addedHost", { host }),
+    });
   });
   const testResult = testUrl.trim()
     ? origins.some((o) => {
@@ -209,16 +214,20 @@ function OriginsCard({ project }: { project: ProjectDetail }) {
   const allow = (origin: string) => {
     const pattern = patternForOrigin(origin);
     if (!pattern || origins.includes(pattern)) return;
-    save.mutate({ patch: { allowedOrigins: [...origins, pattern] }, message: `Allowed ${pattern}` });
+    save.mutate({
+      patch: { allowedOrigins: [...origins, pattern] },
+      message: t("projects2.allowedPattern", { pattern }),
+    });
   };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Allowed sites</CardTitle>
+        <CardTitle>{t("projects2.allowedSites")}</CardTitle>
         <CardDescription>
-          Feedback is only accepted from these domains. Use <code className="font-mono">*.example.com</code>{" "}
-          for all subdomains and <code className="font-mono">localhost:3000</code> for local development.
+          {t("projects2.originsDescription1")} <code className="font-mono">*.example.com</code>{" "}
+          {t("projects2.originsDescription2")} <code className="font-mono">localhost:3000</code>{" "}
+          {t("projects2.originsDescription3")}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -228,11 +237,11 @@ function OriginsCard({ project }: { project: ProjectDetail }) {
             data-testid="no-origins-warning"
           >
             <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-            No sites allowed yet: the widget refuses to load anywhere until you add your site&apos;s domain.
+            {t("projects2.noSitesAllowed")}
           </p>
         )}
         {project.rejectedOrigins.length > 0 && (
-          <ul className="grid gap-2" aria-label="Refused sites" data-testid="rejected-origins">
+          <ul className="grid gap-2" aria-label={t("projects2.refusedSites")} data-testid="rejected-origins">
             {project.rejectedOrigins.map((r) => (
               <li
                 key={r.origin}
@@ -240,15 +249,16 @@ function OriginsCard({ project }: { project: ProjectDetail }) {
               >
                 <Ban className="size-4 shrink-0 text-destructive" />
                 <span className="min-w-0 flex-1">
-                  Blocked a request from <code className="font-mono text-xs break-all">{r.origin}</code>{" "}
+                  {t("projects2.blockedRequestFrom")}{" "}
+                  <code className="font-mono text-xs break-all">{r.origin}</code>{" "}
                   <span className="text-muted-foreground">
                     <RelativeTime iso={r.at} />
-                    {r.count > 1 && ` · ${r.count} times`}
+                    {r.count > 1 && ` · ${t("projects2.timesCount", { count: r.count })}`}
                   </span>
                 </span>
                 {patternForOrigin(r.origin) && (
                   <Button size="sm" variant="outline" onClick={() => allow(r.origin)}>
-                    Allow
+                    {t("projects2.allow")}
                   </Button>
                 )}
               </li>
@@ -263,12 +273,12 @@ function OriginsCard({ project }: { project: ProjectDetail }) {
                   {o}
                   <button
                     type="button"
-                    aria-label={`Remove ${o}`}
+                    aria-label={t("projects2.removeHost", { host: o })}
                     className="rounded p-0.5 hover:bg-foreground/10"
                     onClick={() =>
                       save.mutate({
                         patch: { allowedOrigins: origins.filter((x) => x !== o) },
-                        message: `Removed ${o}`,
+                        message: t("projects2.removedHost", { host: o }),
                       })
                     }
                   >
@@ -285,17 +295,17 @@ function OriginsCard({ project }: { project: ProjectDetail }) {
               {...controlProps("add-site", errors.host?.message)}
               {...form.register("host")}
               placeholder="www.example.com"
-              aria-label="Add a site"
+              aria-label={t("projects2.addASite")}
             />
             <Button type="submit" variant="outline" disabled={!draft.trim()}>
-              <Plus /> Add
+              <Plus /> {t("projects2.add")}
             </Button>
           </div>
           <FieldError id="add-site" message={errors.host?.message} />
         </form>
         <div className="grid gap-2">
           <Label htmlFor="test-url" className="text-muted-foreground">
-            Test a URL
+            {t("projects2.testAUrl")}
           </Label>
           <div className="flex items-center gap-2">
             <Input
@@ -306,7 +316,7 @@ function OriginsCard({ project }: { project: ProjectDetail }) {
             />
             {testResult !== null && (
               <Badge variant={testResult ? "secondary" : "destructive"} className="shrink-0">
-                {testResult ? "Allowed" : "Blocked"}
+                {testResult ? t("projects2.allowedBadge") : t("projects2.blockedBadge")}
               </Badge>
             )}
           </div>
@@ -330,27 +340,27 @@ Pinwren.identify({ id: user.id, name: user.name, email: user.email }, { signatur
  * user show as verified. Org admins only (the API refuses others).
  */
 function IdentityCard({ project }: { project: ProjectDetail }) {
+  const t = useT();
   const [reveal] = useLazyIdentitySecretQuery();
   const [rotate] = useRotateIdentitySecretMutation();
   return (
     <SecretCard
-      title="Verified identity"
+      title={t("projects2.verifiedIdentity")}
       testId="identity-secret"
       hasSecret={project.hasIdentitySecret}
       reveal={() => reveal(project.id).unwrap()}
       rotate={() => rotate(project.id).unwrap()}
-      rotateTitle="Rotate the identity secret?"
-      rotateDescription="Signatures made with the old secret stop verifying at once; reports show as unverified until your server signs with the new one."
-      rotatedMessage="New identity secret — update your server"
+      rotateTitle={t("projects2.rotateIdentitySecretQuestion")}
+      rotateDescription={t("projects2.rotateIdentitySecretDescription")}
+      rotatedMessage={t("projects2.identitySecretRotated")}
       description={
         <>
-          Sign your users&apos; ids on your server with this secret (HMAC-SHA256, hex) and pass the signature
-          to <code className="font-mono text-xs">Pinwren.identify</code>. Their reports get a verified badge,
-          so you know who really sent them.
+          {t("projects2.identityDescription1")} <code className="font-mono text-xs">Pinwren.identify</code>.{" "}
+          {t("projects2.identityDescription2")}
         </>
       }
     >
-      <CodeBlock code={SIGN_SNIPPET} label="Copy example" />
+      <CodeBlock code={SIGN_SNIPPET} label={t("projects2.copyExample")} />
     </SecretCard>
   );
 }

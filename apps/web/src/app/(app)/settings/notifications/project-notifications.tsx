@@ -21,6 +21,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Segmented } from "@/components/segmented";
 import { EmailNotConfiguredNotice } from "@/components/notifications/notification-parts";
+import type { Key } from "@/lib/i18n/en";
+import { useT } from "@/lib/i18n/provider";
 import { errorMessage, useNotificationPrefsQuery, useProjectsQuery } from "@/lib/store/api";
 import {
   type ProjectNotificationsResponse,
@@ -47,10 +49,16 @@ function ProjectPicker({
   id: string;
   onChange: (id: string) => void;
 }) {
+  const t = useT();
   const items = list.map((p) => ({ value: p.id, label: p.name }));
   return (
     <Select items={items} value={id} onValueChange={(v) => v && onChange(v)}>
-      <SelectTrigger size="sm" aria-label="Project" className="min-w-44" data-testid="notify-project">
+      <SelectTrigger
+        size="sm"
+        aria-label={t("settings2.project")}
+        className="min-w-44"
+        data-testid="notify-project"
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -77,6 +85,7 @@ function PerProject({
     save: (patch: ProjectNotificationsUpdate) => void,
   ) => React.ReactNode;
 }) {
+  const t = useT();
   const { isAdmin } = useViewer();
   const { projects, list, id, setChosen } = useProjectChoice();
   const query = useProjectNotificationsQuery(id ?? "", { skip: !id });
@@ -85,8 +94,8 @@ function PerProject({
     if (!id) return;
     update({ projectId: id, patch })
       .unwrap()
-      .then(() => toast.success("Notification settings saved", { id: "project-notify" }))
-      .catch((e: unknown) => toast.error("Not saved", { description: errorMessage(e) }));
+      .then(() => toast.success(t("settings2.notificationSettingsSaved"), { id: "project-notify" }))
+      .catch((e: unknown) => toast.error(t("settings2.notSaved"), { description: errorMessage(e) }));
   };
 
   return (
@@ -95,7 +104,7 @@ function PerProject({
         <CardTitle>{title}</CardTitle>
         <CardDescription>
           {description}
-          {!isAdmin && " Only workspace Admins can change these."}
+          {!isAdmin && ` ${t("settings2.onlyAdminsCanChange")}`}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -104,11 +113,11 @@ function PerProject({
         {projects.isSuccess && list.length === 0 && (
           <EmptyState
             icon={FolderOpen}
-            title="No projects yet"
-            description="Notification settings are per project. Create one first."
+            title={t("settings2.noProjectsYet")}
+            description={t("settings2.notificationsPerProject")}
             action={
               <ButtonLink href="/projects?new=1" size="sm" variant="outline">
-                Create a project
+                {t("settings2.createAProject")}
               </ButtonLink>
             }
           />
@@ -130,13 +139,14 @@ function PerProject({
 
 /** Notifications › General: who on the team hears about new reports, plus addresses outside the team. */
 export function ProjectGeneral() {
+  const t = useT();
   const prefs = useNotificationPrefsQuery(undefined);
   return (
     <div className="grid gap-4">
       {prefs.data && !prefs.data.emailConfigured && <EmailNotConfiguredNotice />}
       <PerProject
-        title="New report recipients"
-        description="Who gets an email and a bell notification when a report arrives. Each person can still switch kinds off for themselves under My notifications."
+        title={t("settings2.newReportRecipients")}
+        description={t("settings2.newReportRecipientsDesc")}
       >
         {(data, save) => <Recipients data={data} save={save} />}
       </PerProject>
@@ -151,6 +161,7 @@ function Recipients({
   data: ProjectNotificationsResponse;
   save: (patch: ProjectNotificationsUpdate) => void;
 }) {
+  const t = useT();
   const n = data.notifications;
   const everyone = n.memberIds === null;
   const chosen = new Set(n.memberIds ?? []);
@@ -163,22 +174,22 @@ function Recipients({
   return (
     <SettingGroup>
       <SettingRow
-        label="Team members"
+        label={t("settings2.teamMembers")}
         description={
           everyone
-            ? "Every member of the workspace, now and later."
-            : `${chosen.size} of ${data.members.length} members.`
+            ? t("settings2.everyMember")
+            : t("settings2.chosenOfTotal", { chosen: chosen.size, total: data.members.length })
         }
         stack
       >
         <div className="grid gap-3">
           <Segmented
-            label="Team members"
+            label={t("settings2.teamMembers")}
             value={everyone ? "all" : "chosen"}
             onChange={(v) => save({ memberIds: v === "all" ? null : data.members.map((m) => m.userId) })}
             options={[
-              { value: "all", label: "All members" },
-              { value: "chosen", label: "Chosen members" },
+              { value: "all", label: t("settings2.allMembers") },
+              { value: "chosen", label: t("settings2.chosenMembers") },
             ]}
           />
           {!everyone && (
@@ -199,8 +210,8 @@ function Recipients({
         </div>
       </SettingRow>
       <SettingRow
-        label="Other email addresses"
-        description={`People without an account (a client, a shared inbox) who get every new-report email. Each email has a one-click unsubscribe. Up to ${MAX_NOTIFY_EMAILS}.`}
+        label={t("settings2.otherEmailAddresses")}
+        description={t("settings2.otherEmailAddressesDesc", { max: MAX_NOTIFY_EMAILS })}
         stack
       >
         <ExtraEmails emails={n.emails} onChange={(emails) => save({ emails })} />
@@ -209,16 +220,18 @@ function Recipients({
   );
 }
 
-const addressForm = z.object({ email: z.email("An email address like boss@example.com") });
+const addressForm = z.object({ email: z.email("settings2.emailExample" satisfies Key) });
 
 function ExtraEmails({ emails, onChange }: { emails: string[]; onChange: (emails: string[]) => void }) {
+  const t = useT();
   const form = useZodForm(addressForm, { defaultValues: { email: "" } });
   const { errors } = form.formState;
+  const emailError = errors.email?.message ? t(errors.email.message as Key) : undefined;
   const full = emails.length >= MAX_NOTIFY_EMAILS;
   const add = form.handleSubmit(({ email }) => {
     const e = email.trim().toLowerCase();
     if (emails.includes(e)) {
-      form.setError("email", { message: "Already on the list" });
+      form.setError("email", { message: "settings2.alreadyOnList" satisfies Key });
       return;
     }
     onChange([...emails, e]);
@@ -236,7 +249,7 @@ function ExtraEmails({ emails, onChange }: { emails: string[]; onChange: (emails
                   type="button"
                   size="icon-xs"
                   variant="ghost"
-                  aria-label={`Remove ${e}`}
+                  aria-label={t("settings2.removeNamed", { name: e })}
                   onClick={() => onChange(emails.filter((x) => x !== e))}
                 >
                   <X />
@@ -246,26 +259,26 @@ function ExtraEmails({ emails, onChange }: { emails: string[]; onChange: (emails
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-muted-foreground">No extra addresses.</p>
+        <p className="text-sm text-muted-foreground">{t("settings2.noExtraAddresses")}</p>
       )}
       <form noValidate className="grid gap-1" onSubmit={(e) => void add(e)}>
         <div className="flex gap-2">
           <Input
-            {...controlProps("notify-email", errors.email?.message)}
+            {...controlProps("notify-email", emailError)}
             {...form.register("email")}
             type="email"
-            placeholder="boss@example.com"
-            aria-label="Add an email address"
+            placeholder={t("settings2.emailPlaceholder")}
+            aria-label={t("settings2.addAnEmailAddress")}
             className="sm:max-w-xs"
             disabled={full}
           />
           <Button type="submit" variant="outline" disabled={full}>
-            <Plus /> Add
+            <Plus /> {t("settings2.add")}
           </Button>
         </div>
         <FieldError
           id="notify-email"
-          message={full ? `At most ${MAX_NOTIFY_EMAILS} addresses.` : errors.email?.message}
+          message={full ? t("settings2.atMostAddresses", { max: MAX_NOTIFY_EMAILS }) : emailError}
         />
       </form>
     </div>
@@ -274,14 +287,12 @@ function ExtraEmails({ emails, onChange }: { emails: string[]; onChange: (emails
 
 /** Notifications › Reporter: which emails the person who sent a report gets (to the address they left). */
 export function ProjectReporter() {
+  const t = useT();
   const prefs = useNotificationPrefsQuery(undefined);
   return (
     <div className="grid gap-4">
       {prefs.data && !prefs.data.emailConfigured && <EmailNotConfiguredNotice />}
-      <PerProject
-        title="Emails to the reporter"
-        description="Sent to the address a reporter leaves in the widget. Nothing is sent about what reporters do themselves."
-      >
+      <PerProject title={t("settings2.emailsToReporter")} description={t("settings2.emailsToReporterDesc")}>
         {(data, save) => <ReporterSwitches n={data.notifications} save={save} />}
       </PerProject>
     </div>
@@ -290,21 +301,21 @@ export function ProjectReporter() {
 
 const REPORTER_SWITCHES: {
   key: Exclude<keyof ProjectNotifications["reporter"], "enabled">;
-  label: string;
-  description: string;
+  label: Key;
+  description: Key;
 }[] = [
-  { key: "received", label: "Report received", description: "A confirmation right after they send it." },
+  { key: "received", label: "settings2.reporterReceived", description: "settings2.reporterReceivedDesc" },
   {
     key: "statusChanged",
-    label: "Status changes",
-    description: "When the team resolves, closes or reopens it.",
+    label: "settings2.reporterStatusChanged",
+    description: "settings2.reporterStatusChangedDesc",
   },
   {
     key: "priorityChanged",
-    label: "Priority changes",
-    description: "When the team sets or changes its priority.",
+    label: "settings2.reporterPriorityChanged",
+    description: "settings2.reporterPriorityChangedDesc",
   },
-  { key: "assigned", label: "Assignment", description: "When someone on the team takes it on." },
+  { key: "assigned", label: "settings2.reporterAssigned", description: "settings2.reporterAssignedDesc" },
 ];
 
 function ReporterSwitches({
@@ -314,13 +325,14 @@ function ReporterSwitches({
   n: ProjectNotifications;
   save: (patch: ProjectNotificationsUpdate) => void;
 }) {
+  const t = useT();
   const on = n.reporter.enabled;
   return (
     <SettingGroup>
       <SettingRow
-        label="Email the reporter"
+        label={t("settings2.emailTheReporter")}
         htmlFor="reporter-enabled"
-        description="The master switch. While it is on, public replies from the team are always emailed to the reporter, with a link that opens the conversation on the page."
+        description={t("settings2.emailTheReporterDesc")}
       >
         <Switch
           id="reporter-enabled"
@@ -329,7 +341,12 @@ function ReporterSwitches({
         />
       </SettingRow>
       {REPORTER_SWITCHES.map((s) => (
-        <SettingRow key={s.key} label={s.label} htmlFor={`reporter-${s.key}`} description={s.description}>
+        <SettingRow
+          key={s.key}
+          label={t(s.label)}
+          htmlFor={`reporter-${s.key}`}
+          description={t(s.description)}
+        >
           <Switch
             id={`reporter-${s.key}`}
             checked={on && n.reporter[s.key]}

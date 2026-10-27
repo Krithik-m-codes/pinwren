@@ -14,6 +14,8 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { FeedbackRow } from "@/lib/api";
+import type { Key } from "@/lib/i18n/en";
+import { useI18n } from "@/lib/i18n/provider";
 import { filtersFromParams, layoutFromParams, listArgs, trashFromParams } from "@/lib/inbox-filters";
 import { undoChanges } from "@/lib/inbox-undo";
 import {
@@ -51,24 +53,24 @@ import { InboxToolbar } from "./inbox-toolbar";
 import { Kbd } from "./kbd";
 import { SetupChecklist } from "@/components/setup-checklist";
 
-const KEYS: [string, string][] = [
-  ["⌘K", "Command palette"],
-  ["j / k", "Next / previous item"],
-  ["Enter", "Open the focused item"],
-  ["Esc", "Close the item, clear selection"],
-  ["x", "Select the open item"],
-  ["e", "Resolve / reopen"],
-  ["s", "Status menu"],
-  ["p", "Priority menu"],
-  ["a", "Assign menu"],
-  ["l", "Labels menu"],
-  ["r", "Rename the item"],
-  ["c", "Comment"],
-  ["u", "Undo the last change"],
-  ["/", "Search"],
-  ["g m", "My work (assigned to me)"],
-  ["m", "Move a board card to…"],
-  ["?", "This help"],
+const KEYS: [string, Key][] = [
+  ["⌘K", "inbox2.keyCommandPalette"],
+  ["j / k", "inbox2.keyNextPrevious"],
+  ["Enter", "inbox2.keyOpen"],
+  ["Esc", "inbox2.keyEscape"],
+  ["x", "inbox2.keySelect"],
+  ["e", "inbox2.keyResolve"],
+  ["s", "inbox2.keyStatusMenu"],
+  ["p", "inbox2.keyPriorityMenu"],
+  ["a", "inbox2.keyAssignMenu"],
+  ["l", "inbox2.keyLabelsMenu"],
+  ["r", "inbox2.keyRename"],
+  ["c", "inbox2.comment"],
+  ["u", "inbox2.keyUndo"],
+  ["/", "inbox2.keySearch"],
+  ["g m", "inbox2.keyMyWork"],
+  ["m", "inbox2.keyMoveCard"],
+  ["?", "inbox2.keyHelp"],
 ];
 
 const isTyping = (t: EventTarget | null) =>
@@ -88,6 +90,7 @@ const WRITE_KEYS = new Set(["x", "e", "s", "p", "a", "l", "r", "c", "u"]);
  * stream. `?trash=1` is the trash (Admins): restore or delete for good.
  */
 export function InboxView() {
+  const { t, tn } = useI18n();
   const { params, setParams } = useUrlParams();
   const isMobile = useIsMobile();
   const dispatch = useAppDispatch();
@@ -145,7 +148,7 @@ export function InboxView() {
     dispatch(changeRecorded(null));
     update({ each: lastChange.each })
       .unwrap()
-      .then(() => toast("Change undone"))
+      .then(() => toast(t("inbox2.changeUndone")))
       .catch((e: unknown) => toast.error(errorMessage(e)));
   };
 
@@ -156,7 +159,9 @@ export function InboxView() {
     update({ ids, patch, ...(optimistic ? { optimistic } : {}) })
       .unwrap()
       .then(() =>
-        toast.success(label, { action: { label: "Undo (u)", onClick: () => latest.current.undo() } }),
+        toast.success(label, {
+          action: { label: t("inbox2.undoU"), onClick: () => latest.current.undo() },
+        }),
       )
       .catch((e: unknown) => toast.error(errorMessage(e)));
   };
@@ -173,7 +178,9 @@ export function InboxView() {
     update({ each })
       .unwrap()
       .then(() =>
-        toast.success(label, { action: { label: "Undo (u)", onClick: () => latest.current.undo() } }),
+        toast.success(label, {
+          action: { label: t("inbox2.undoU"), onClick: () => latest.current.undo() },
+        }),
       )
       .catch((e: unknown) => toast.error(errorMessage(e)));
   };
@@ -182,7 +189,7 @@ export function InboxView() {
   const restoreItems = (ids: string[]) =>
     restore(ids)
       .unwrap()
-      .then((n) => toast.success(n === 1 ? "Restored" : `${n} items restored`))
+      .then((n) => toast.success(tn("inbox2.restored", n)))
       .catch((e: unknown) => toast.error(errorMessage(e)));
 
   const toggleCheck = (id: string, range = false) =>
@@ -202,6 +209,7 @@ export function InboxView() {
     change,
     undo,
     canWrite,
+    t,
   };
   const latest = useRef(snapshot);
   const pending = useRef<string | null>(null);
@@ -253,7 +261,11 @@ export function InboxView() {
       } else if (key === "e" && selected) {
         const now = current?.status;
         const to: FeedbackStatus = now && isClosedStatus(now) ? "open" : "resolved";
-        st.change([selected], { status: to }, to === "resolved" ? "Resolved" : "Reopened");
+        st.change(
+          [selected],
+          { status: to },
+          to === "resolved" ? st.t("inbox2.resolved") : st.t("inbox2.reopened"),
+        );
       } else if ((key === "s" || key === "p" || key === "a" || key === "l") && selected) {
         dispatch(
           menuChanged(
@@ -263,7 +275,9 @@ export function InboxView() {
       } else if (key === "r" && selected) {
         dispatch(menuChanged("title"));
       } else if (key === "c" && selected) {
-        document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Comment"]')?.focus();
+        document
+          .querySelector<HTMLTextAreaElement>(`textarea[aria-label="${CSS.escape(st.t("inbox2.comment"))}"]`)
+          ?.focus();
       } else {
         return;
       }
@@ -285,8 +299,8 @@ export function InboxView() {
       id={selected}
       onClose={() => setParams({ item: null })}
       onDeleted={(id) =>
-        toast.success("Moved to the trash", {
-          action: { label: "Undo", onClick: () => void restoreItems([id]) },
+        toast.success(tn("inbox2.movedToTrash", 1), {
+          action: { label: t("inbox2.undo"), onClick: () => void restoreItems([id]) },
         })
       }
     />
@@ -295,7 +309,7 @@ export function InboxView() {
 
   return (
     <div className="flex h-svh min-h-0 flex-col md:h-[calc(100svh-1rem)]">
-      <PageHeader title={trash ? "Trash" : project ? project.name : "Inbox"}>
+      <PageHeader title={trash ? t("inbox2.trash") : project ? project.name : t("inbox2.inbox")}>
         {!trash && (
           <Tabs
             value={layout}
@@ -304,11 +318,11 @@ export function InboxView() {
             }
           >
             <TabsList className="h-7">
-              <TabsTrigger value="list" className="px-2" aria-label="List view">
-                <List /> <span className="hidden sm:inline">List</span>
+              <TabsTrigger value="list" className="px-2" aria-label={t("inbox2.listView")}>
+                <List /> <span className="hidden sm:inline">{t("inbox2.list")}</span>
               </TabsTrigger>
-              <TabsTrigger value="board" className="px-2" aria-label="Board view">
-                <Columns3 /> <span className="hidden sm:inline">Board</span>
+              <TabsTrigger value="board" className="px-2" aria-label={t("inbox2.boardView")}>
+                <Columns3 /> <span className="hidden sm:inline">{t("inbox2.board")}</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -321,13 +335,14 @@ export function InboxView() {
             onClick={() => setParams({ trash: trash ? null : "1", item: null, layout: null, saved: null })}
             data-testid="trash-toggle"
           >
-            <Trash2 /> <span className="hidden sm:inline">{trash ? "Leave trash" : "Trash"}</span>
+            <Trash2 />{" "}
+            <span className="hidden sm:inline">{trash ? t("inbox2.leaveTrash") : t("inbox2.trash")}</span>
           </Button>
         )}
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="Keyboard shortcuts"
+          aria-label={t("inbox2.keyboardShortcuts")}
           className="hidden sm:inline-flex"
           onClick={() => dispatch(shortcutsToggled(true))}
         >
@@ -340,7 +355,7 @@ export function InboxView() {
             size="sm"
             className="hidden sm:inline-flex"
           >
-            Settings
+            {t("inbox2.settings")}
           </ButtonLink>
         )}
       </PageHeader>
@@ -361,7 +376,9 @@ export function InboxView() {
           feed={feed}
           readOnly={!canWrite}
           onOpen={(id) => setParams({ item: id })}
-          onMove={(id, to) => change([id], { status: to }, `Moved to ${STATUS_META[to].label}`)}
+          onMove={(id, to) =>
+            change([id], { status: to }, t("inbox2.movedToStatus", { status: t(STATUS_META[to].labelKey) }))
+          }
         />
       ) : (
         <div className="flex min-h-0 flex-1">
@@ -404,7 +421,7 @@ export function InboxView() {
             showCloseButton={false}
             className="p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
           >
-            <SheetTitle className="sr-only">Feedback</SheetTitle>
+            <SheetTitle className="sr-only">{t("inbox2.feedback")}</SheetTitle>
             <div className="h-full overflow-y-auto">{detail}</div>
           </SheetContent>
         </Sheet>
@@ -413,17 +430,17 @@ export function InboxView() {
       <ConfirmDialog
         open={bulkDelete}
         onOpenChange={setBulkDelete}
-        title={`Move ${selection.length} item${selection.length === 1 ? "" : "s"} to the trash?`}
-        description="Admins can restore them from the trash for 30 days; after that they are purged with their files."
-        confirmLabel="Move to trash"
+        title={tn("inbox2.confirmTrashTitle", selection.length)}
+        description={t("inbox2.confirmTrashDescription")}
+        confirmLabel={t("inbox2.moveToTrash")}
         pending={removal.isLoading}
         onConfirm={() => {
           const ids = [...selection];
           remove(ids)
             .unwrap()
             .then((n) => {
-              toast.success(n === 1 ? "Moved to the trash" : `${n} items moved to the trash`, {
-                action: { label: "Undo", onClick: () => void restoreItems(ids) },
+              toast.success(tn("inbox2.movedToTrash", n), {
+                action: { label: t("inbox2.undo"), onClick: () => void restoreItems(ids) },
               });
               setBulkDelete(false);
               if (selected && ids.includes(selected)) setParams({ item: null });
@@ -436,16 +453,16 @@ export function InboxView() {
       <ConfirmDialog
         open={bulkPurge}
         onOpenChange={setBulkPurge}
-        title={`Delete ${selection.length} item${selection.length === 1 ? "" : "s"} forever?`}
-        description="They are removed with their comments, screenshots, replays and attachments. This can't be undone."
-        confirmLabel="Delete forever"
+        title={tn("inbox2.confirmPurgeTitle", selection.length)}
+        description={t("inbox2.confirmPurgeDescription")}
+        confirmLabel={t("inbox2.deleteForever")}
         pending={purging.isLoading}
         onConfirm={() => {
           const ids = [...selection];
           purge(ids)
             .unwrap()
             .then((n) => {
-              toast.success(n === 1 ? "Deleted forever" : `${n} items deleted forever`);
+              toast.success(tn("inbox2.purged", n));
               setBulkPurge(false);
               if (selected && ids.includes(selected)) setParams({ item: null });
               dispatch(selectionCleared());
@@ -457,8 +474,8 @@ export function InboxView() {
       <Dialog open={help} onOpenChange={(o) => dispatch(shortcutsToggled(o))}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Keyboard shortcuts</DialogTitle>
-            <DialogDescription>Work through the inbox without the mouse.</DialogDescription>
+            <DialogTitle>{t("inbox2.keyboardShortcuts")}</DialogTitle>
+            <DialogDescription>{t("inbox2.shortcutsDescription")}</DialogDescription>
           </DialogHeader>
           <dl className="grid grid-cols-[6rem_1fr] gap-x-4 gap-y-2 text-sm">
             {KEYS.map(([k, label]) => (
@@ -476,7 +493,7 @@ export function InboxView() {
                     </span>
                   ))}
                 </dt>
-                <dd className="text-muted-foreground">{label}</dd>
+                <dd className="text-muted-foreground">{t(label)}</dd>
               </div>
             ))}
           </dl>

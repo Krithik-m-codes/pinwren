@@ -1,5 +1,6 @@
 import { AlertCircle, type LucideIcon, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n/provider";
 import { errorMessage } from "@/lib/store/api/base";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +39,7 @@ export function ErrorState({
   retry?: () => void;
   className?: string;
 }) {
+  const t = useT();
   return (
     <div
       role="alert"
@@ -46,11 +48,13 @@ export function ErrorState({
       <span className="mb-1 grid size-10 place-items-center rounded-full bg-destructive/10">
         <AlertCircle className="size-4.5 text-destructive" />
       </span>
-      <p className="text-sm font-medium">Something went wrong</p>
-      <p className="max-w-sm text-sm text-muted-foreground">{errorMessage(error, "Please try again.")}</p>
+      <p className="text-sm font-medium">{t("components1.somethingWentWrong")}</p>
+      <p className="max-w-sm text-sm text-muted-foreground">
+        {errorMessage(error, t("components1.pleaseTryAgain"))}
+      </p>
       {retry && (
         <Button size="sm" variant="outline" className="mt-2" onClick={retry}>
-          <RotateCw /> Try again
+          <RotateCw /> {t("components1.tryAgain")}
         </Button>
       )}
     </div>

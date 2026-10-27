@@ -21,7 +21,7 @@ import { use, useState } from "react";
 import { toast } from "sonner";
 import { ButtonLink } from "@/components/button-link";
 import { AnnotationsToggle, CaptureView, type Marker } from "@/components/capture-view";
-import { KIND_META, pathOf, StatusIcon, timeAgo } from "@/components/feedback-meta";
+import { KIND_META, pathOf, StatusIcon, useTimeAgo } from "@/components/feedback-meta";
 import { PageHeader } from "@/components/page-header";
 import { Segmented } from "@/components/segmented";
 import { EmptyState, ErrorState } from "@/components/states";
@@ -49,6 +49,7 @@ import {
   useProjectQuery,
   useUpdateProjectMutation,
 } from "@/lib/store/api";
+import { useI18n, useT } from "@/lib/i18n/provider";
 import { useRegroupPagesMutation, useRepinLinkMutation } from "@/lib/store/api/page-review";
 import { useViewer } from "@/lib/viewer";
 import { type Capture, captureOf, isRegion, placeOn } from "@/lib/geometry";
@@ -68,6 +69,7 @@ type PageGroup = {
 };
 
 export function PagesView({ params }: { params: Promise<{ id: string }> }) {
+  const t = useT();
   const { id } = use(params);
   const search = useSearchParams();
   const url = search.get("url");
@@ -95,7 +97,7 @@ export function PagesView({ params }: { params: Promise<{ id: string }> }) {
       .sort((a, b) => b.latest.localeCompare(a.latest));
   })();
 
-  const name = project.data?.project.name ?? "Project";
+  const name = project.data?.project.name ?? t("projects1.projectFallback");
   const group = url ? groups.find((g) => g.url === url) : undefined;
 
   return (
@@ -110,13 +112,13 @@ export function PagesView({ params }: { params: Promise<{ id: string }> }) {
             {url ? (
               <>
                 <Link href={`/projects/${id}/pages`} className="text-muted-foreground hover:text-foreground">
-                  Pages
+                  {t("projects1.pages")}
                 </Link>
                 <span className="text-muted-foreground">/</span>
                 <span className="truncate font-mono text-xs">{pathOf(url)}</span>
               </>
             ) : (
-              "Pages"
+              t("projects1.pages")
             )}
           </span>
         }
@@ -126,7 +128,7 @@ export function PagesView({ params }: { params: Promise<{ id: string }> }) {
         )}
         {!url && (
           <ButtonLink href={`/projects/${id}`} size="sm" variant="ghost">
-            <Settings /> <span className="hidden sm:inline">Settings</span>
+            <Settings /> <span className="hidden sm:inline">{t("projects1.settings")}</span>
           </ButtonLink>
         )}
       </PageHeader>
@@ -140,11 +142,11 @@ export function PagesView({ params }: { params: Promise<{ id: string }> }) {
         ) : (
           <EmptyState
             icon={FileStack}
-            title="No feedback on this page"
-            description="It may have been deleted or the address changed."
+            title={t("projects1.noFeedbackOnPage")}
+            description={t("projects1.noFeedbackOnPageDescription")}
             action={
               <ButtonLink href={`/projects/${id}/pages`} size="sm" variant="outline">
-                <ArrowLeft /> All pages
+                <ArrowLeft /> {t("projects1.allPages")}
               </ButtonLink>
             }
           />
@@ -172,6 +174,7 @@ function PageGrid({
   projectId: string;
   truncated: boolean;
 }) {
+  const t = useT();
   if (pending) {
     return (
       <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -185,11 +188,11 @@ function PageGrid({
     return (
       <EmptyState
         icon={FileStack}
-        title="No pages with feedback yet"
-        description="Each page where someone leaves a comment or bug report appears here with its screenshot."
+        title={t("projects1.noPagesYet")}
+        description={t("projects1.noPagesYetDescription")}
         action={
           <ButtonLink href={`/projects/${projectId}`} size="sm" variant="outline">
-            Install the widget
+            {t("projects1.installWidget")}
           </ButtonLink>
         }
       />
@@ -197,21 +200,21 @@ function PageGrid({
   }
   return (
     <div className="p-4">
-      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Pages">
+      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label={t("projects1.pages")}>
         {groups.map((g) => (
           <PageCard key={g.url} group={g} projectId={projectId} />
         ))}
       </ul>
       {truncated && (
-        <p className="mt-4 text-center text-xs text-muted-foreground">
-          Showing pages from the newest 500 items.
-        </p>
+        <p className="mt-4 text-center text-xs text-muted-foreground">{t("projects1.newest500")}</p>
       )}
     </div>
   );
 }
 
 function PageCard({ group: g, projectId }: { group: PageGroup; projectId: string }) {
+  const t = useT();
+  const timeAgo = useTimeAgo();
   // The list rows carry the thumbnail's asset id: no detail request per card.
   const thumb = g.thumbItem?.screenshotAssetId ?? null;
   return (
@@ -234,10 +237,11 @@ function PageCard({ group: g, projectId }: { group: PageGroup; projectId: string
             <p className="truncate font-mono text-sm">{pathOf(g.url)}</p>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span>
-                <span className="font-medium text-foreground tabular-nums">{g.open}</span> open
+                <span className="font-medium text-foreground tabular-nums">{g.open}</span>{" "}
+                {t("projects1.openLower")}
               </span>
               <span>
-                <span className="tabular-nums">{g.closed}</span> closed
+                <span className="tabular-nums">{g.closed}</span> {t("projects1.closedLower")}
               </span>
               <span className="ml-auto">{timeAgo(g.latest)}</span>
             </div>
@@ -269,6 +273,8 @@ type Reviewed = { row: FeedbackRow; detail: FeedbackDetail | undefined };
  * capture) can't be placed honestly, so they are listed as "not on this capture".
  */
 function PageReview({ group, projectId }: { group: PageGroup; projectId: string }) {
+  const t = useT();
+  const timeAgo = useTimeAgo();
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
@@ -341,16 +347,16 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
       <div className="min-w-0 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <Segmented
-            label="Show"
+            label={t("projects1.show")}
             value={show}
             onChange={setShow}
             options={[
-              { value: "open", label: `Open ${group.open}` },
-              { value: "all", label: `All ${group.items.length}` },
+              { value: "open", label: t("projects1.openN", { n: group.open }) },
+              { value: "all", label: t("projects1.allN", { n: group.items.length }) },
             ]}
           />
           <ButtonLink href={group.url} external size="sm" variant="ghost" className="ml-auto">
-            <ExternalLink /> Open page
+            <ExternalLink /> {t("projects1.openPage")}
           </ButtonLink>
         </div>
         {loading && !base ? (
@@ -359,7 +365,7 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
           <>
             <CaptureView
               src={assetUrl(baseShot.id)}
-              alt={`Capture of ${pathOf(group.url)} from #${base.row.number}`}
+              alt={t("projects1.captureAlt", { path: pathOf(group.url), number: base.row.number })}
               markers={markers}
               className="shadow-sm"
               annotations={baseShot.annotations}
@@ -367,7 +373,8 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
             />
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
-                <Layers className="size-3.5" /> Capture from #{base.row.number}, {timeAgo(base.row.createdAt)}
+                <Layers className="size-3.5" />{" "}
+                {t("projects1.captureFrom", { number: base.row.number, ago: timeAgo(base.row.createdAt) })}
                 {baseCapture && (
                   <span className="tabular-nums">
                     {" "}
@@ -376,7 +383,8 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
                 )}
               </span>
               <span>
-                {markers.length} placed{offCapture > 0 && ` · ${offCapture} not on this capture`}
+                {t("projects1.placedCount", { n: markers.length })}
+                {offCapture > 0 && ` · ${t("projects1.notOnCaptureCount", { n: offCapture })}`}
               </span>
               <span className="ml-auto">
                 <AnnotationsToggle
@@ -388,7 +396,9 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
             </p>
             {captures.length > 1 && (
               <div>
-                <p className="mb-1.5 text-xs font-medium text-muted-foreground">Other captures</p>
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                  {t("projects1.otherCaptures")}
+                </p>
                 <ul className="flex gap-2 overflow-x-auto pb-1">
                   {captures.map((c) => {
                     const shot = c.detail ? screenshotOf(c.detail.assets) : undefined;
@@ -400,7 +410,7 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
                           type="button"
                           onClick={() => setCaptureId(c.row.id)}
                           aria-pressed={active}
-                          aria-label={`Use the capture from #${c.row.number}`}
+                          aria-label={t("projects1.useCaptureFrom", { number: c.row.number })}
                           className={cn(
                             "block w-28 overflow-hidden rounded-md border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                             active ? "border-primary" : "border-transparent hover:border-border",
@@ -427,27 +437,27 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
           <div className="grid aspect-[16/10] place-items-center rounded-xl border border-dashed bg-muted/30 p-6 text-center">
             <div>
               <ImageOff className="mx-auto mb-2 size-5 text-muted-foreground" />
-              <p className="text-sm font-medium">No capture of this page yet</p>
+              <p className="text-sm font-medium">{t("projects1.noCaptureYet")}</p>
               <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                Turn on “Screenshot with every comment” in{" "}
+                {t("projects1.captureHintBefore")}{" "}
                 <Link className="underline underline-offset-4" href={`/projects/${projectId}?tab=capture`}>
-                  Capture settings
+                  {t("projects1.captureSettings")}
                 </Link>{" "}
-                to see pins in place.
+                {t("projects1.captureHintAfter")}
               </p>
             </div>
           </div>
         )}
       </div>
 
-      <aside className="min-w-0 lg:sticky lg:top-16" aria-label="Threads on this page">
+      <aside className="min-w-0 lg:sticky lg:top-16" aria-label={t("projects1.threadsOnPage")}>
         <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-          <MessageSquare className="size-4" /> Threads
+          <MessageSquare className="size-4" /> {t("projects1.threads")}
           <span className="font-normal text-muted-foreground tabular-nums">{visible.length}</span>
         </h2>
         {visible.length === 0 ? (
           <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            Nothing open on this page. Switch to All to see resolved threads.
+            {t("projects1.nothingOpen")}
           </p>
         ) : (
           <ul className="space-y-1.5 lg:max-h-[calc(100svh-9rem)] lg:overflow-y-auto lg:pr-1">
@@ -483,13 +493,15 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
                       <span className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                         <StatusIcon status={status} className="size-3.5" />
                         <Kind className="size-3.5" />
-                        {isRegion(r.detail?.feedback.anchor) && <span>Region</span>}
+                        {isRegion(r.detail?.feedback.anchor) && <span>{t("projects1.region")}</span>}
                         <span className="ml-auto">{timeAgo(r.row.createdAt)}</span>
                       </span>
                       {!placed && r.detail && (
                         <Badge variant="outline" className="mt-1.5 font-normal text-muted-foreground">
                           {/* No anchor: a bug report or a comment on the whole page (wave-5 §3.3). */}
-                          {r.detail.feedback.anchor ? "Not on this capture" : "Whole page"}
+                          {r.detail.feedback.anchor
+                            ? t("projects1.notOnThisCapture")
+                            : t("projects1.wholePage")}
                         </Badge>
                       )}
                     </span>
@@ -507,14 +519,14 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
           showCloseButton={false}
           className="p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
         >
-          <SheetTitle className="sr-only">Feedback</SheetTitle>
+          <SheetTitle className="sr-only">{t("projects1.feedback")}</SheetTitle>
           <div className="h-full overflow-y-auto">
             {selected && (
               <>
                 <FeedbackDetailPanel key={selected} id={selected} onClose={() => open(null)} />
                 <div className="flex flex-wrap gap-2 px-5 pb-5">
                   <ButtonLink href={`/inbox?status=all&item=${selected}`} size="sm" variant="outline">
-                    Open in inbox
+                    {t("projects1.openInInbox")}
                   </ButtonLink>
                   <OnPageActions
                     id={selected}
@@ -549,25 +561,26 @@ function geometryOf(d: FeedbackDetail): Capture | null {
  * widget opens in re-pin mode and the next click moves the pin (F-031, wave-5 §3.3).
  */
 function OnPageActions({ id, anchored, hasPage }: { id: string; anchored: boolean; hasPage: boolean }) {
+  const t = useT();
   const { me } = useViewer();
   const [pageLink, linking] = usePageLinkMutation();
   const [repinLink, repinning] = useRepinLinkMutation();
   if (!hasPage) return null;
   const canRepin = !!me && roleCan(me.role, "feedback.update");
-  const go = (make: () => Promise<{ url: string }>, what: string) => {
+  const go = (make: () => Promise<{ url: string }>, failed: string) => {
     // Open the tab inside the click so the browser doesn't block it, then point it at the link.
     const tab = window.open("about:blank", "_blank");
     if (tab) tab.opener = null;
     make()
       .then(({ url }) => {
         const safe = safeHref(url);
-        if (!safe) throw new Error("The page address isn't a web link");
+        if (!safe) throw new Error(t("projects1.pageAddressNotLink"));
         if (tab) tab.location.href = safe;
         else window.open(safe, "_blank", "noopener");
       })
       .catch((e: unknown) => {
         tab?.close();
-        toast.error(`Couldn't ${what}`, { description: errorMessage(e) });
+        toast.error(failed, { description: errorMessage(e) });
       });
   };
   return (
@@ -576,21 +589,23 @@ function OnPageActions({ id, anchored, hasPage }: { id: string; anchored: boolea
         size="sm"
         variant="outline"
         disabled={linking.isLoading}
-        onClick={() => go(() => pageLink(id).unwrap(), "open the page")}
+        onClick={() => go(() => pageLink(id).unwrap(), t("projects1.couldntOpenPage"))}
         data-testid="review-open-on-page"
       >
-        {linking.isLoading ? <Loader2 className="animate-spin" /> : <ExternalLink />} Open on page
+        {linking.isLoading ? <Loader2 className="animate-spin" /> : <ExternalLink />}{" "}
+        {t("projects1.openOnPage")}
       </Button>
       {canRepin && anchored && (
         <Button
           size="sm"
           variant="outline"
           disabled={repinning.isLoading}
-          onClick={() => go(() => repinLink(id).unwrap(), "start re-pinning")}
-          title="Opens the page with the widget in re-pin mode: click where this item belongs"
+          onClick={() => go(() => repinLink(id).unwrap(), t("projects1.couldntRepin"))}
+          title={t("projects1.repinTitle")}
           data-testid="review-repin"
         >
-          {repinning.isLoading ? <Loader2 className="animate-spin" /> : <Crosshair />} Re-pin on page
+          {repinning.isLoading ? <Loader2 className="animate-spin" /> : <Crosshair />}{" "}
+          {t("projects1.repinOnPage")}
         </Button>
       )}
     </>
@@ -604,6 +619,7 @@ const PARAM = /^[A-Za-z0-9_.\-[\]]{1,63}\*?$/;
  * built-in trackers. Saving re-groups the project's existing pages at once.
  */
 function UrlGrouping({ projectId, ignored }: { projectId: string; ignored: string[] }) {
+  const { t, tn } = useI18n();
   const { me } = useViewer();
   const [open, setOpen] = useState(false);
   const [list, setList] = useState<string[]>(ignored);
@@ -618,11 +634,11 @@ function UrlGrouping({ projectId, ignored }: { projectId: string; ignored: strin
     const v = draft.trim();
     if (!v) return;
     if (!PARAM.test(v)) {
-      setError("Use a parameter name, optionally ending in * (for example sid or hsa_*)");
+      setError(t("projects1.paramNameHint"));
       return;
     }
     if (list.length >= 30) {
-      setError("At most 30 parameters");
+      setError(t("projects1.maxParams"));
       return;
     }
     if (!list.includes(v)) setList([...list, v]);
@@ -633,10 +649,10 @@ function UrlGrouping({ projectId, ignored }: { projectId: string; ignored: strin
     try {
       await update({ id: projectId, patch: { widgetConfig: { ignoredQueryParams: list } } }).unwrap();
       const { merged } = await regroup(projectId).unwrap();
-      toast.success(merged ? `Saved · ${merged} page${merged === 1 ? "" : "s"} re-grouped` : "Saved");
+      toast.success(merged ? tn("projects1.pagesRegrouped", merged) : t("projects1.saved"));
       setOpen(false);
     } catch (e) {
-      toast.error("Not saved", { description: errorMessage(e) });
+      toast.error(t("projects1.notSaved"), { description: errorMessage(e) });
     }
   };
 
@@ -653,29 +669,28 @@ function UrlGrouping({ projectId, ignored }: { projectId: string; ignored: strin
         }}
         data-testid="url-grouping"
       >
-        <SlidersHorizontal /> <span className="hidden sm:inline">URL grouping</span>
+        <SlidersHorizontal /> <span className="hidden sm:inline">{t("projects1.urlGrouping")}</span>
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>URL grouping</DialogTitle>
+            <DialogTitle>{t("projects1.urlGrouping")}</DialogTitle>
             <DialogDescription>
-              Pages that differ only in these query parameters count as one page, so their pins and reviews
-              stay together. Campaign and tracking parameters (
-              {IGNORED_QUERY_PARAMS.filter((p) => !p.startsWith("pin") && p !== "pwt").join(", ")}, utm_*) and
-              a trailing slash are always ignored.
+              {t("projects1.urlGroupingDescription", {
+                params: IGNORED_QUERY_PARAMS.filter((p) => !p.startsWith("pin") && p !== "pwt").join(", "),
+              })}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             {list.length > 0 ? (
-              <ul className="flex flex-wrap gap-2" aria-label="Ignored parameters">
+              <ul className="flex flex-wrap gap-2" aria-label={t("projects1.ignoredParams")}>
                 {list.map((p) => (
                   <li key={p}>
                     <Badge variant="secondary" className="h-6 gap-1 pr-1 font-mono">
                       {p}
                       <button
                         type="button"
-                        aria-label={`Remove ${p}`}
+                        aria-label={t("projects1.removeParam", { name: p })}
                         className="rounded p-0.5 hover:bg-foreground/10"
                         onClick={() => setList(list.filter((x) => x !== p))}
                       >
@@ -686,9 +701,7 @@ function UrlGrouping({ projectId, ignored }: { projectId: string; ignored: strin
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                No extra parameters: only the built-in ones are ignored.
-              </p>
+              <p className="text-sm text-muted-foreground">{t("projects1.noExtraParams")}</p>
             )}
             <form
               className="grid gap-1.5"
@@ -706,14 +719,14 @@ function UrlGrouping({ projectId, ignored }: { projectId: string; ignored: strin
                     setDraft(e.target.value);
                     setError(null);
                   }}
-                  placeholder="sessionid or ab_*"
-                  aria-label="Add a parameter"
+                  placeholder={t("projects1.paramPlaceholder")}
+                  aria-label={t("projects1.addAParam")}
                   aria-invalid={error ? true : undefined}
                   aria-describedby={error ? "ignored-param-error" : undefined}
                   className="font-mono"
                 />
                 <Button type="submit" variant="outline" disabled={!draft.trim()}>
-                  <Plus /> Add
+                  <Plus /> {t("projects1.add")}
                 </Button>
               </div>
               {error && (
@@ -725,10 +738,10 @@ function UrlGrouping({ projectId, ignored }: { projectId: string; ignored: strin
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy}>
-              Cancel
+              {t("projects1.cancel")}
             </Button>
             <Button onClick={() => void save()} disabled={busy} data-testid="url-grouping-save">
-              {busy && <Loader2 className="animate-spin" />} Save and re-group
+              {busy && <Loader2 className="animate-spin" />} {t("projects1.saveAndRegroup")}
             </Button>
           </DialogFooter>
         </DialogContent>

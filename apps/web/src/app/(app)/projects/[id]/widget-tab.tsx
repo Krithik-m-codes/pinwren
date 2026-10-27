@@ -12,6 +12,8 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProjectDetail } from "@/lib/api";
+import type { Key } from "@/lib/i18n/en";
+import { useI18n, useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 import { LAUNCHER_ICONS, LauncherPreview } from "./launcher-preview";
 import { useProjectPatch } from "./use-project";
@@ -22,11 +24,17 @@ import { useSyncedState } from "@/lib/use-synced-state";
 import { sliderValue } from "@/lib/form";
 
 const POSITIONS = [
-  { value: "top-left", label: "Top left" },
-  { value: "top-right", label: "Top right" },
-  { value: "bottom-left", label: "Bottom left" },
-  { value: "bottom-right", label: "Bottom right" },
-] as const;
+  { value: "top-left", label: "projects2.topLeft" },
+  { value: "top-right", label: "projects2.topRight" },
+  { value: "bottom-left", label: "projects2.bottomLeft" },
+  { value: "bottom-right", label: "projects2.bottomRight" },
+] as const satisfies readonly { value: string; label: Key }[];
+
+const ICON_TITLES = {
+  pin: "projects2.iconPin",
+  comment: "projects2.iconComment",
+  bug: "projects2.iconBug",
+} as const;
 
 type Errors = Record<string, string>;
 
@@ -35,6 +43,7 @@ type Errors = Record<string, string>;
  * text saves on blur / Enter. Each change is validated against the core schema before it is sent.
  */
 export function WidgetTab({ project }: { project: ProjectDetail }) {
+  const { t, tm } = useI18n();
   const save = useProjectPatch(project.id);
   const server = project.widgetConfig;
   const serverKey = JSON.stringify(server);
@@ -47,12 +56,12 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
     setDraft((d) => mergeConfig(d, patch) as unknown as WidgetConfig);
 
   /** Validate the merged config, then save. Errors are keyed by the failing path. */
-  const commit = (patch: WidgetConfigInput, message = "Widget settings saved") => {
+  const commit = (patch: WidgetConfigInput, message = t("projects2.widgetSettingsSaved")) => {
     preview(patch);
     const parsed = widgetConfig.safeParse(mergeConfig(server, patch));
     if (!parsed.success) {
       const next: Errors = {};
-      for (const issue of parsed.error.issues) next[issue.path.join(".")] = issue.message;
+      for (const issue of parsed.error.issues) next[issue.path.join(".")] = tm(issue.message);
       setErrors(next);
       return;
     }
@@ -72,16 +81,16 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
       <div className="grid min-w-0 gap-4">
         <Card>
           <CardHeader>
-            <CardTitle>Launcher</CardTitle>
-            <CardDescription>The button visitors click to leave feedback.</CardDescription>
+            <CardTitle>{t("projects2.launcher")}</CardTitle>
+            <CardDescription>{t("projects2.launcherDescription")}</CardDescription>
           </CardHeader>
           <CardContent>
             <SettingGroup>
-              <SettingRow label="Position" description="Which corner of the page it sits in.">
+              <SettingRow label={t("projects2.position")} description={t("projects2.positionDescription")}>
                 <div
                   className="grid w-44 grid-cols-2 gap-1 rounded-lg bg-muted p-1"
                   role="radiogroup"
-                  aria-label="Position"
+                  aria-label={t("projects2.position")}
                 >
                   {POSITIONS.map((p) => {
                     const active = l.position === p.value;
@@ -93,7 +102,7 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                         type="button"
                         role="radio"
                         aria-checked={active}
-                        aria-label={p.label}
+                        aria-label={t(p.label)}
                         onClick={() => !active && commit({ launcher: { position: p.value } })}
                         className={cn(
                           "relative h-10 rounded-md border border-transparent transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
@@ -117,15 +126,15 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                 </div>
               </SettingRow>
               <SettingRow
-                label="Distance from the edge"
-                description="Horizontal and vertical offset in pixels."
+                label={t("projects2.distanceFromEdge")}
+                description={t("projects2.distanceFromEdgeDescription")}
               >
                 <div className="grid w-full gap-3 sm:w-64">
                   {(["x", "y"] as const).map((axis) => (
                     <div key={axis} className="flex items-center gap-3">
                       <span className="w-3 text-xs text-muted-foreground uppercase">{axis}</span>
                       <Slider
-                        aria-label={`Offset ${axis}`}
+                        aria-label={t("projects2.offsetAxis", { axis })}
                         min={0}
                         max={200}
                         value={[Math.min(l.offset[axis], 200)]}
@@ -137,7 +146,7 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                         }
                       />
                       <NumberInput
-                        aria-label={`Offset ${axis} in pixels`}
+                        aria-label={t("projects2.offsetAxisPixels", { axis })}
                         className="w-20 shrink-0"
                         value={l.offset[axis]}
                         min={0}
@@ -154,21 +163,23 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                   ))}
                 </div>
               </SettingRow>
-              <SettingRow label="Shape" description="A round icon button, or a pill with a text label.">
+              <SettingRow label={t("projects2.shape")} description={t("projects2.shapeDescription")}>
                 <Segmented
-                  label="Shape"
+                  label={t("projects2.shape")}
                   value={l.shape}
                   onChange={(shape) => commit({ launcher: { shape } })}
                   options={[
-                    { value: "round", label: "Round" },
-                    { value: "pill", label: "Pill" },
+                    { value: "round", label: t("projects2.round") },
+                    { value: "pill", label: t("projects2.pill") },
                   ]}
                 />
               </SettingRow>
               <SettingRow
-                label="Pill label"
+                label={t("projects2.pillLabel")}
                 htmlFor="launcher-label"
-                description={l.shape === "pill" ? "Up to 40 characters." : "Shown when the shape is Pill."}
+                description={
+                  l.shape === "pill" ? t("projects2.upTo40Characters") : t("projects2.shownWhenPill")
+                }
               >
                 <div className="grid w-full gap-1 sm:w-64">
                   <Input
@@ -177,7 +188,7 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                     key={`label-${server.launcher.label ?? ""}`}
                     maxLength={40}
                     disabled={l.shape !== "pill"}
-                    placeholder="Feedback"
+                    placeholder={t("projects2.feedback")}
                     aria-invalid={!!errors["launcher.label"] || undefined}
                     onChange={(e) => preview({ launcher: { label: e.target.value || null } })}
                     onBlur={(e) => textCommit("label", e.target.value)}
@@ -188,18 +199,21 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                   )}
                 </div>
               </SettingRow>
-              <SettingRow label="Icon">
+              <SettingRow label={t("projects2.icon")}>
                 <Segmented
-                  label="Icon"
+                  label={t("projects2.icon")}
                   value={l.icon}
                   onChange={(icon) => commit({ launcher: { icon } })}
                   options={(["pin", "comment", "bug"] as const).map((k) => {
                     const Icon = LAUNCHER_ICONS[k];
-                    return { value: k, title: (k[0]?.toUpperCase() ?? "") + k.slice(1), label: <Icon /> };
+                    return { value: k, title: t(ICON_TITLES[k]), label: <Icon /> };
                   })}
                 />
               </SettingRow>
-              <SettingRow label="Accent colour" description="Launcher, pins and buttons in the widget.">
+              <SettingRow
+                label={t("projects2.accentColour")}
+                description={t("projects2.accentColourDescription")}
+              >
                 <div className="grid gap-1">
                   <ColorPicker
                     id="accent"
@@ -215,9 +229,9 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                 </div>
               </SettingRow>
               <SettingRow
-                label="Tooltip"
+                label={t("projects2.tooltip")}
                 htmlFor="launcher-tooltip"
-                description="Shown on hover. Leave empty for none."
+                description={t("projects2.tooltipDescription")}
               >
                 <div className="grid w-full gap-1 sm:w-64">
                   <Input
@@ -225,7 +239,7 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                     defaultValue={l.tooltip ?? ""}
                     key={`tooltip-${server.launcher.tooltip ?? ""}`}
                     maxLength={80}
-                    placeholder="No tooltip"
+                    placeholder={t("projects2.noTooltip")}
                     onChange={(e) => preview({ launcher: { tooltip: e.target.value || null } })}
                     onBlur={(e) => textCommit("tooltip", e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && textCommit("tooltip", e.currentTarget.value)}
@@ -236,9 +250,9 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                 </div>
               </SettingRow>
               <SettingRow
-                label="Hide the launcher"
+                label={t("projects2.hideLauncher")}
                 htmlFor="launcher-hidden"
-                description="Open the widget only with a keyboard shortcut or Pinwren.open() from your code."
+                description={t("projects2.hideLauncherDescription")}
               >
                 <Switch
                   id="launcher-hidden"
@@ -252,15 +266,15 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Behaviour</CardTitle>
-            <CardDescription>What visitors can do with the widget.</CardDescription>
+            <CardTitle>{t("projects2.behaviour")}</CardTitle>
+            <CardDescription>{t("projects2.behaviourDescription")}</CardDescription>
           </CardHeader>
           <CardContent>
             <SettingGroup>
               <SettingRow
-                label="Pinned comments"
+                label={t("projects2.pinnedComments")}
                 htmlFor="mode-comment"
-                description="Click anywhere on the page to leave a comment."
+                description={t("projects2.pinnedCommentsDescription")}
               >
                 <Switch
                   id="mode-comment"
@@ -269,9 +283,9 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                 />
               </SettingRow>
               <SettingRow
-                label="Bug reports"
+                label={t("projects2.bugReports")}
                 htmlFor="mode-bug"
-                description="Annotated screenshot with console and network details."
+                description={t("projects2.bugReportsDescription")}
               >
                 <Switch
                   id="mode-bug"
@@ -280,12 +294,13 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                 />
               </SettingRow>
               <SettingRow
-                label="Keyboard shortcuts"
+                label={t("projects2.keyboardShortcuts")}
                 htmlFor="shortcuts"
                 description={
                   <>
-                    <kbd className="font-mono">C</kbd> to comment, <kbd className="font-mono">B</kbd> to
-                    report a bug, <kbd className="font-mono">Esc</kbd> to cancel.
+                    <kbd className="font-mono">C</kbd> {t("projects2.shortcutComment")}{" "}
+                    <kbd className="font-mono">B</kbd> {t("projects2.shortcutBug")}{" "}
+                    <kbd className="font-mono">Esc</kbd> {t("projects2.shortcutCancel")}
                   </>
                 }
               >
@@ -296,9 +311,9 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                 />
               </SettingRow>
               <SettingRow
-                label="Right-click to comment"
+                label={t("projects2.rightClickToComment")}
                 htmlFor="right-click"
-                description="Opens the composer at the cursor. Links, inputs and modifier-clicks keep the browser menu."
+                description={t("projects2.rightClickDescription")}
               >
                 <Switch
                   id="right-click"
@@ -307,9 +322,9 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                 />
               </SettingRow>
               <SettingRow
-                label="Read-only"
+                label={t("projects2.readOnly")}
                 htmlFor="read-only"
-                description="Visitors can see pins and threads but can't post, reply or resolve."
+                description={t("projects2.readOnlyDescription")}
               >
                 <Switch
                   id="read-only"
@@ -318,12 +333,12 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                 />
               </SettingRow>
               <SettingRow
-                label="Visitors can resolve"
+                label={t("projects2.visitorsCanResolve")}
                 htmlFor="visitors-resolve"
                 description={
                   project.publicRead
-                    ? "Anyone on the page can mark a pin resolved or reopen it. Reporters can always resolve their own."
-                    : "Needs “Show existing pins to visitors” (Privacy & data). Reporters can always resolve their own."
+                    ? t("projects2.visitorsResolvePublic")
+                    : t("projects2.visitorsResolveNeedsPublic")
                 }
               >
                 <Switch
@@ -338,36 +353,36 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Where it shows</CardTitle>
+            <CardTitle>{t("projects2.whereItShows")}</CardTitle>
             <CardDescription>
-              Keep the widget to staging sites and big screens. A page can still force it with{" "}
+              {t("projects2.whereItShowsDescription")}{" "}
               <code className="font-mono text-xs">data-force-show</code>.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <SettingGroup>
               <SettingRow
-                label="Environments"
+                label={t("projects2.environments")}
                 description={
                   draft.visibility.environments === "non-production"
-                    ? "Hidden on production hosts; shown on localhost, LAN addresses, .local/.test/.internal and staging/preview/dev subdomains."
-                    : "Shown on every allowed site."
+                    ? t("projects2.environmentsNonProduction")
+                    : t("projects2.environmentsAll")
                 }
               >
                 <Segmented
-                  label="Environments"
+                  label={t("projects2.environments")}
                   value={draft.visibility.environments}
                   onChange={(environments) => commit({ visibility: { environments } })}
                   options={[
-                    { value: "all", label: "Everywhere" },
-                    { value: "non-production", label: "Not in production" },
+                    { value: "all", label: t("projects2.everywhere") },
+                    { value: "non-production", label: t("projects2.notInProduction") },
                   ]}
                 />
               </SettingRow>
               <SettingRow
-                label="Minimum screen width"
+                label={t("projects2.minimumScreenWidth")}
                 htmlFor="min-viewport"
-                description="Below this width the launcher is hidden (0 shows it everywhere)."
+                description={t("projects2.minimumScreenWidthDescription")}
               >
                 <div className="grid gap-1">
                   <NumberInput
@@ -400,11 +415,9 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
       </div>
 
       <div className="lg:sticky lg:top-16">
-        <p className="mb-2 text-xs font-medium text-muted-foreground">Live preview</p>
+        <p className="mb-2 text-xs font-medium text-muted-foreground">{t("projects2.livePreview")}</p>
         <LauncherPreview config={draft} />
-        <p className="mt-2 text-xs text-muted-foreground">
-          Changes reach your site the next time a page loads the widget.
-        </p>
+        <p className="mt-2 text-xs text-muted-foreground">{t("projects2.changesReachSite")}</p>
       </div>
     </div>
   );
@@ -423,23 +436,22 @@ function ConsentCard({
   preview: (p: WidgetConfigInput) => void;
   commit: (p: WidgetConfigInput, message?: string) => void;
 }) {
+  const t = useT();
   const c = draft.consent;
   const [urlError, setUrlError] = useState<string | null>(null);
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Consent notice</CardTitle>
-        <CardDescription>Tell reporters what is sent before they send it.</CardDescription>
+        <CardTitle>{t("projects2.consentNotice")}</CardTitle>
+        <CardDescription>{t("projects2.consentNoticeDescription")}</CardDescription>
       </CardHeader>
       <CardContent>
         <SettingGroup>
           <SettingRow
-            label="Ask for consent"
+            label={t("projects2.askForConsent")}
             htmlFor="consent-enabled"
             description={
-              draft.privacyMode
-                ? "Always shown while privacy mode is on (Privacy & data)."
-                : "Shown once; the answer is remembered on that browser."
+              draft.privacyMode ? t("projects2.consentAlwaysShown") : t("projects2.consentShownOnce")
             }
           >
             <Switch
@@ -450,9 +462,9 @@ function ConsentCard({
             />
           </SettingRow>
           <SettingRow
-            label="Notice text"
+            label={t("projects2.noticeText")}
             htmlFor="consent-text"
-            description="Up to 1000 characters. Empty uses the default wording."
+            description={t("projects2.noticeTextDescription")}
             stack
           >
             <Textarea
@@ -462,7 +474,7 @@ function ConsentCard({
               disabled={!c.enabled && !draft.privacyMode}
               key={`consent-${server.consent.text ?? ""}`}
               defaultValue={c.text ?? ""}
-              placeholder="Your comment, the page address, browser details and any screenshot are sent to the site owner."
+              placeholder={t("projects2.consentPlaceholder")}
               onChange={(e) => preview({ consent: { text: e.target.value || null } })}
               onBlur={(e) => {
                 const v = e.target.value.trim() || null;
@@ -474,9 +486,9 @@ function ConsentCard({
             )}
           </SettingRow>
           <SettingRow
-            label="Privacy policy link"
+            label={t("projects2.privacyPolicyLink")}
             htmlFor="consent-url"
-            description="Optional. Must start with https:// or http://."
+            description={t("projects2.privacyPolicyLinkDescription")}
           >
             <div className="grid w-full gap-1 sm:w-72">
               <Input
@@ -492,7 +504,7 @@ function ConsentCard({
                 onBlur={(e) => {
                   const v = e.target.value.trim() || null;
                   if (v && !/^https?:\/\/[^\s]+\.[^\s]+/.test(v)) {
-                    setUrlError("Enter a full URL, like https://example.com/privacy");
+                    setUrlError(t("projects2.enterFullUrl"));
                     return;
                   }
                   if (v !== server.consent.privacyUrl) commit({ consent: { privacyUrl: v } });

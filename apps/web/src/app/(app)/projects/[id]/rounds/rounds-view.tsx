@@ -47,6 +47,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ReviewRound } from "@/lib/api";
 import { roundForm } from "@/lib/form-schemas";
+import { useT } from "@/lib/i18n/provider";
 import {
   errorMessage,
   useCreateRoundMutation,
@@ -66,13 +67,14 @@ const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(
  * export it as CSV or PDF for the client.
  */
 export function RoundsView({ projectId }: { projectId: string }) {
+  const t = useT();
   const project = useProjectQuery(projectId);
   const rounds = useRoundsQuery(projectId);
   const { canWrite } = useViewer();
   const [editing, setEditing] = useState<ReviewRound | "new" | null>(null);
   const [removing, setRemoving] = useState<ReviewRound | null>(null);
   const [deleteRound, removal] = useDeleteRoundMutation();
-  const name = project.data?.project.name ?? "Project";
+  const name = project.data?.project.name ?? t("projects1.projectFallback");
   const list = rounds.data?.rounds ?? [];
 
   return (
@@ -84,7 +86,7 @@ export function RoundsView({ projectId }: { projectId: string }) {
               {name}
             </Link>
             <span className="text-muted-foreground">/</span>
-            Rounds
+            {t("projects1.rounds")}
           </span>
         }
       >
@@ -94,11 +96,11 @@ export function RoundsView({ projectId }: { projectId: string }) {
           variant="ghost"
           className="hidden sm:inline-flex"
         >
-          <Settings /> Settings
+          <Settings /> {t("projects1.settings")}
         </ButtonLink>
         {canWrite && (
           <Button size="sm" onClick={() => setEditing("new")} data-testid="new-round">
-            <Plus /> New round
+            <Plus /> {t("projects1.newRound")}
           </Button>
         )}
       </PageHeader>
@@ -115,12 +117,12 @@ export function RoundsView({ projectId }: { projectId: string }) {
             <CardContent>
               <EmptyState
                 icon={Target}
-                title="No review rounds yet"
-                description="Start a round for each review — “Homepage v2”, “Sprint 14” — and new feedback from the widget joins it. Close it when the review is done and export it for the client."
+                title={t("projects1.noReviewRoundsYet")}
+                description={t("projects1.noReviewRoundsDescription")}
                 action={
                   canWrite && (
                     <Button size="sm" variant="outline" onClick={() => setEditing("new")}>
-                      <Plus /> New round
+                      <Plus /> {t("projects1.newRound")}
                     </Button>
                   )
                 }
@@ -129,7 +131,7 @@ export function RoundsView({ projectId }: { projectId: string }) {
           </Card>
         )}
         {list.length > 0 && (
-          <ul className="grid gap-3 sm:grid-cols-2" aria-label="Review rounds">
+          <ul className="grid gap-3 sm:grid-cols-2" aria-label={t("projects1.reviewRounds")}>
             {list.map((r) => (
               <RoundCard
                 key={r.id}
@@ -152,15 +154,15 @@ export function RoundsView({ projectId }: { projectId: string }) {
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
-        title={`Delete “${removing?.name ?? ""}”?`}
-        description="Its feedback stays in the inbox, no longer in a round."
+        title={t("projects1.deleteRoundTitle", { name: removing?.name ?? "" })}
+        description={t("projects1.deleteRoundDescription")}
         pending={removal.isLoading}
         onConfirm={() => {
           if (!removing) return;
           deleteRound({ id: removing.id, projectId })
             .unwrap()
             .then(() => {
-              toast.success(`Round “${removing.name}” deleted`);
+              toast.success(t("projects1.roundDeleted", { name: removing.name }));
               setRemoving(null);
             })
             .catch((e: unknown) => toast.error(errorMessage(e)));
@@ -183,6 +185,7 @@ function RoundCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const t = useT();
   const [updateRound, update] = useUpdateRoundMutation();
   const { total, open, closed } = r.counts;
   const pct = total ? Math.round((closed / total) * 100) : 0;
@@ -190,7 +193,13 @@ function RoundCard({
   const setStatus = (status: "active" | "closed") => {
     updateRound({ id: r.id, projectId, patch: { status } })
       .unwrap()
-      .then(() => toast.success(status === "closed" ? `“${r.name}” closed` : `“${r.name}” reopened`))
+      .then(() =>
+        toast.success(
+          status === "closed"
+            ? t("projects1.roundClosed", { name: r.name })
+            : t("projects1.roundReopened", { name: r.name }),
+        ),
+      )
       .catch((e: unknown) => toast.error(errorMessage(e)));
   };
   const exportUrl = (format: "csv" | "pdf") => `/api/rounds/${r.id}/export?format=${format}`;
@@ -203,11 +212,11 @@ function RoundCard({
             <span className="min-w-0 flex-1 truncate">{r.name}</span>
             {r.status === "active" ? (
               <Badge variant="secondary" className="gap-1 font-normal">
-                <span className="size-1.5 rounded-full bg-emerald-500" /> Active
+                <span className="size-1.5 rounded-full bg-emerald-500" /> {t("projects1.active")}
               </Badge>
             ) : (
               <Badge variant="outline" className="font-normal text-muted-foreground">
-                Closed
+                {t("projects1.closed")}
               </Badge>
             )}
             <DropdownMenu>
@@ -216,7 +225,7 @@ function RoundCard({
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={`Actions for ${r.name}`}
+                    aria-label={t("projects1.actionsFor", { name: r.name })}
                     className="-my-1"
                   />
                 }
@@ -224,24 +233,28 @@ function RoundCard({
                 <MoreHorizontal />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem render={<a href={exportUrl("csv")} download aria-label="Export CSV" />}>
-                  <Download /> Export CSV
+                <DropdownMenuItem
+                  render={<a href={exportUrl("csv")} download aria-label={t("projects1.exportCsv")} />}
+                >
+                  <Download /> {t("projects1.exportCsv")}
                 </DropdownMenuItem>
-                <DropdownMenuItem render={<a href={exportUrl("pdf")} download aria-label="Export PDF" />}>
-                  <FileText /> Export PDF
+                <DropdownMenuItem
+                  render={<a href={exportUrl("pdf")} download aria-label={t("projects1.exportPdf")} />}
+                >
+                  <FileText /> {t("projects1.exportPdf")}
                 </DropdownMenuItem>
                 {canWrite && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={onEdit}>
-                      <Pencil /> Edit
+                      <Pencil /> {t("projects1.edit")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setStatus(r.status === "active" ? "closed" : "active")}>
                       {r.status === "active" ? <CircleCheck /> : <RotateCcw />}
-                      {r.status === "active" ? "Close round" : "Reopen"}
+                      {r.status === "active" ? t("projects1.closeRound") : t("projects1.reopen")}
                     </DropdownMenuItem>
                     <DropdownMenuItem variant="destructive" onClick={onDelete}>
-                      <Trash2 /> Delete
+                      <Trash2 /> {t("projects1.delete")}
                     </DropdownMenuItem>
                   </>
                 )}
@@ -257,14 +270,14 @@ function RoundCard({
             <CalendarClock className="size-3.5" />
             {r.dueAt ? (
               <span>
-                {overdue ? "Overdue · was due" : "Due"} <LocalDate iso={r.dueAt} />
+                {overdue ? t("projects1.overdueWasDue") : t("projects1.due")} <LocalDate iso={r.dueAt} />
               </span>
             ) : (
-              "No due date"
+              t("projects1.noDueDate")
             )}
             {r.closedAt && (
               <span className="text-muted-foreground">
-                · closed <LocalDate iso={r.closedAt} />
+                · {t("projects1.closedLower")} <LocalDate iso={r.closedAt} />
               </span>
             )}
           </p>
@@ -274,7 +287,7 @@ function RoundCard({
             <div
               className="h-2 overflow-hidden rounded-full bg-muted"
               role="progressbar"
-              aria-label={`${r.name} progress`}
+              aria-label={t("projects1.roundProgress", { name: r.name })}
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={pct}
@@ -289,9 +302,10 @@ function RoundCard({
               data-testid="round-counts"
             >
               <span>
-                <span className="font-medium text-foreground">{closed}</span> of {total} done
+                <span className="font-medium text-foreground">{closed}</span>{" "}
+                {t("projects1.ofTotalDone", { total })}
               </span>
-              <span>{open} open</span>
+              <span>{t("projects1.openCount", { n: open })}</span>
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -299,7 +313,7 @@ function RoundCard({
               href={`/inbox?project=${projectId}&round=${r.id}&status=all`}
               className={buttonVariants({ variant: "outline", size: "sm" })}
             >
-              <Inbox /> View items
+              <Inbox /> {t("projects1.viewItems")}
             </Link>
             {canWrite && r.status === "active" && (
               <Button
@@ -308,7 +322,7 @@ function RoundCard({
                 disabled={update.isLoading}
                 onClick={() => setStatus("closed")}
               >
-                <CircleCheck /> Close
+                <CircleCheck /> {t("projects1.close")}
               </Button>
             )}
           </div>
@@ -347,6 +361,7 @@ function RoundForm({
   round: ReviewRound | null;
   onDone: () => void;
 }) {
+  const t = useT();
   const [create] = useCreateRoundMutation();
   const [update] = useUpdateRoundMutation();
   const form = useZodForm(roundForm, {
@@ -358,7 +373,7 @@ function RoundForm({
     try {
       if (round) await update({ id: round.id, projectId, patch: { name, dueAt: due } }).unwrap();
       else await create({ projectId, body: { name, dueAt: due } }).unwrap();
-      toast.success(round ? `“${name}” saved` : `Round “${name}” started`);
+      toast.success(round ? t("projects1.roundSaved", { name }) : t("projects1.roundStarted", { name }));
       onDone();
     } catch (e) {
       form.setError("root", { message: errorMessage(e) });
@@ -367,24 +382,22 @@ function RoundForm({
   return (
     <form noValidate className="grid gap-4" onSubmit={(e) => void submit(e)}>
       <DialogHeader>
-        <DialogTitle>{round ? "Edit round" : "New review round"}</DialogTitle>
+        <DialogTitle>{round ? t("projects1.editRound") : t("projects1.newReviewRound")}</DialogTitle>
         <DialogDescription>
-          {round
-            ? "Rename it or move its due date."
-            : "New feedback joins it while it is the project's only active round."}
+          {round ? t("projects1.editRoundDescription") : t("projects1.newRoundDescription")}
         </DialogDescription>
       </DialogHeader>
-      <Field id="round-name" label="Name" error={errors.name?.message}>
+      <Field id="round-name" label={t("projects1.name")} error={errors.name?.message}>
         <Input
           {...controlProps("round-name", errors.name?.message)}
           {...form.register("name")}
           maxLength={120}
-          placeholder="Homepage review"
+          placeholder={t("projects1.roundNamePlaceholder")}
           // eslint-disable-next-line jsx-a11y/no-autofocus -- the dialog's first field; focus moves into a dialog on open
           autoFocus
         />
       </Field>
-      <Field id="round-due" label="Due date (optional)" error={errors.dueAt?.message}>
+      <Field id="round-due" label={t("projects1.dueDateOptional")} error={errors.dueAt?.message}>
         <Controller
           control={form.control}
           name="dueAt"
@@ -393,7 +406,7 @@ function RoundForm({
               {...controlProps("round-due", errors.dueAt?.message)}
               value={field.value}
               onChange={field.onChange}
-              placeholder="No due date"
+              placeholder={t("projects1.noDueDate")}
             />
           )}
         />
@@ -401,10 +414,10 @@ function RoundForm({
       <FormError message={errors.root?.message} />
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onDone}>
-          Cancel
+          {t("projects1.cancel")}
         </Button>
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Saving…" : round ? "Save" : "Start round"}
+          {isSubmitting ? t("projects1.saving") : round ? t("projects1.save") : t("projects1.startRound")}
         </Button>
       </DialogFooter>
     </form>

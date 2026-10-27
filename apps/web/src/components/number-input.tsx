@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
+import { useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 import { useSyncedState } from "@/lib/use-synced-state";
 
@@ -38,15 +39,16 @@ export function NumberInput({
   disabled?: boolean;
   "aria-label"?: string;
 }) {
+  const t = useT();
   const [text, setText] = useSyncedState(value === null ? "" : String(value), value);
   const [error, setError] = useState<string | null>(null);
 
-  const parse = (t: string): { ok: true; n: number | null } | { ok: false; msg: string } => {
-    const s = t.trim();
-    if (!s) return allowEmpty ? { ok: true, n: null } : { ok: false, msg: "Required" };
-    if (!/^\d+$/.test(s)) return { ok: false, msg: "Whole numbers only" };
+  const parse = (raw: string): { ok: true; n: number | null } | { ok: false; msg: string } => {
+    const s = raw.trim();
+    if (!s) return allowEmpty ? { ok: true, n: null } : { ok: false, msg: t("components2.numberRequired") };
+    if (!/^\d+$/.test(s)) return { ok: false, msg: t("components2.numberWholeOnly") };
     const n = Number(s);
-    if (n < min || n > max) return { ok: false, msg: `Between ${min} and ${max}` };
+    if (n < min || n > max) return { ok: false, msg: t("components2.numberBetween", { min, max }) };
     return { ok: true, n };
   };
 

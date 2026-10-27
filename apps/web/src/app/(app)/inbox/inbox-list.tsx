@@ -56,6 +56,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
 import { type FeedbackRow, type ItemLabel, isForbidden, type Member, type PresenceUser } from "@/lib/api";
+import { useI18n, useT } from "@/lib/i18n/provider";
 import { CLEAR_FILTERS, exportUrl, extraFilterCount, type FeedbackListArgs } from "@/lib/inbox-filters";
 import { useRoundsQuery } from "@/lib/store/api";
 import type { FeedbackFields, FeedbackPatch, ItemChange } from "@/lib/store/api/feedback";
@@ -101,9 +102,9 @@ export function download(url: string) {
 }
 
 export const EXPORT_FORMATS = [
-  { value: "csv", label: "CSV (spreadsheet)" },
-  { value: "json", label: "JSON" },
-  { value: "pdf", label: "PDF (first 1,000)" },
+  { value: "csv", label: "CSV (spreadsheet)", labelKey: "inbox2.exportCsv" },
+  { value: "json", label: "JSON", labelKey: "inbox2.exportJson" },
+  { value: "pdf", label: "PDF (first 1,000)", labelKey: "inbox2.exportPdf" },
 ] as const;
 
 /**
@@ -139,6 +140,7 @@ export function InboxList({
   onRestore: () => void;
   onPurge: () => void;
 }) {
+  const t = useT();
   const dispatch = useAppDispatch();
   const scroller = useRef<HTMLUListElement>(null);
   // The list is server-rendered; `data-ready` marks when it is interactive (keyboard map attached).
@@ -178,7 +180,7 @@ export function InboxList({
             onClick={showNew}
             data-testid="new-items-pill"
           >
-            <ArrowUp /> {pending.length} new
+            <ArrowUp /> {t("inbox2.newItems", { count: pending.length })}
           </Button>
         </div>
       )}
@@ -186,7 +188,7 @@ export function InboxList({
         ref={scroller}
         onScroll={onScroll}
         className={cn("min-h-0 flex-1 overflow-y-auto", selection.length > 0 && "pb-20")}
-        aria-label={trash ? "Trash" : "Feedback"}
+        aria-label={trash ? t("inbox2.trash") : t("inbox2.listFeedback")}
         data-ready={ready || undefined}
         aria-live="polite"
         aria-busy={feed.isLoading || undefined}
@@ -206,8 +208,8 @@ export function InboxList({
             {trash && isForbidden(feed.error) ? (
               <EmptyState
                 icon={Trash2}
-                title="Only Admins can open the trash"
-                description="Ask a workspace Admin to restore an item you need back."
+                title={t("inbox2.trashAdminOnlyTitle")}
+                description={t("inbox2.trashAdminOnlyDescription")}
               />
             ) : (
               <ErrorState error={feed.error} retry={feed.refetch} />
@@ -263,20 +265,29 @@ export function InboxList({
                 projectId={filters.projectId}
                 canDelete={isAdmin}
                 onStatus={(s) =>
-                  onChange(selection, { status: s }, `${selection.length} moved to ${STATUS_META[s].label}`)
+                  onChange(
+                    selection,
+                    { status: s },
+                    t("inbox2.bulkMovedTo", { count: selection.length, status: t(STATUS_META[s].labelKey) }),
+                  )
                 }
                 onPriority={(p) =>
                   onChange(
                     selection,
                     { priority: p },
-                    `${selection.length} set to ${PRIORITY_META[p].label} priority`,
+                    t("inbox2.bulkSetPriority", {
+                      count: selection.length,
+                      priority: t(PRIORITY_META[p].labelKey),
+                    }),
                   )
                 }
                 onAssign={(id) =>
                   onChange(
                     selection,
                     { assigneeIds: id ? [id] : [] },
-                    id ? `Assigned ${selection.length}` : `Unassigned ${selection.length}`,
+                    id
+                      ? t("inbox2.bulkAssigned", { count: selection.length })
+                      : t("inbox2.bulkUnassigned", { count: selection.length }),
                   )
                 }
                 onLabels={onChangeEach}
@@ -285,8 +296,8 @@ export function InboxList({
                     selection,
                     { roundId: id },
                     id
-                      ? `${selection.length} added to ${name}`
-                      : `${selection.length} taken out of their round`,
+                      ? t("inbox2.bulkAddedToRound", { count: selection.length, name })
+                      : t("inbox2.bulkTakenOutOfRound", { count: selection.length }),
                   )
                 }
                 onExport={(format) => download(exportUrl(args, format, selection))}
@@ -300,6 +311,7 @@ export function InboxList({
 
 /** "Showing 50 of 312", and the next page when the end of the list scrolls into view. */
 function ListFooter({ feed }: { feed: Feed }) {
+  const { t, tn } = useI18n();
   const sentinel = useRef<HTMLLIElement>(null);
   const { hasMore, loadingMore, loadMoreFailed, loadMore } = feed;
   const latest = useRef(loadMore);
@@ -327,18 +339,18 @@ function ListFooter({ feed }: { feed: Feed }) {
       {feed.total !== null && (
         <span className="tabular-nums">
           {feed.items.length < feed.total
-            ? `Showing ${feed.items.length} of ${feed.total}`
-            : `${feed.total} item${feed.total === 1 ? "" : "s"}`}
+            ? t("inbox2.footerShowingOf", { shown: feed.items.length, total: feed.total })
+            : tn("inbox2.footerItems", feed.total)}
         </span>
       )}
       {hasMore &&
         (loadingMore ? (
           <span className="flex items-center gap-1.5">
-            <Loader2 className="size-3.5 animate-spin" /> Loading more…
+            <Loader2 className="size-3.5 animate-spin" /> {t("inbox2.loadingMore")}
           </span>
         ) : (
           <Button variant="outline" size="xs" onClick={loadMore} data-testid="load-more">
-            {loadMoreFailed ? "Couldn't load more. Retry" : "Load more"}
+            {loadMoreFailed ? t("inbox2.loadMoreFailed") : t("inbox2.loadMore")}
           </Button>
         ))}
     </li>
@@ -356,20 +368,21 @@ function TrashBar({
   onPurge: () => void;
   onClear: () => void;
 }) {
+  const t = useT();
   return (
     <div
       role="toolbar"
-      aria-label="Trash actions"
+      aria-label={t("inbox2.trashActions")}
       className="absolute inset-x-3 bottom-3 z-10 mx-auto flex max-w-xl flex-wrap items-center gap-1 rounded-xl border bg-popover p-1.5 pl-3 text-popover-foreground shadow-lg sm:flex-nowrap"
     >
-      <span className="mr-auto text-sm font-medium tabular-nums">{count} selected</span>
+      <span className="mr-auto text-sm font-medium tabular-nums">{t("inbox2.selectedCount", { count })}</span>
       <Button variant="ghost" size="sm" onClick={onRestore}>
-        <RotateCcw /> Restore
+        <RotateCcw /> {t("inbox2.restore")}
       </Button>
       <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={onPurge}>
-        <Trash2 /> Delete forever
+        <Trash2 /> {t("inbox2.deleteForever")}
       </Button>
-      <Button variant="ghost" size="icon-sm" aria-label="Clear selection" onClick={onClear}>
+      <Button variant="ghost" size="icon-sm" aria-label={t("inbox2.clearSelection")} onClick={onClear}>
         <X />
       </Button>
     </div>
@@ -431,6 +444,7 @@ function BulkBar({
   onDelete: () => void;
   onClear: () => void;
 }) {
+  const t = useT();
   const rounds = useRoundsQuery(projectId ?? "", { skip: !projectId });
   const active = rounds.data?.rounds.filter((r) => r.status === "active") ?? [];
   const [labelsOpen, setLabelsOpen] = useState(false);
@@ -440,40 +454,40 @@ function BulkBar({
   return (
     <div
       role="toolbar"
-      aria-label="Bulk actions"
+      aria-label={t("inbox2.bulkActions")}
       className="absolute inset-x-3 bottom-3 z-10 mx-auto flex max-w-2xl flex-wrap items-center gap-1 rounded-xl border bg-popover p-1.5 pl-3 text-popover-foreground shadow-lg"
     >
-      <span className="mr-auto text-sm font-medium tabular-nums">{count} selected</span>
+      <span className="mr-auto text-sm font-medium tabular-nums">{t("inbox2.selectedCount", { count })}</span>
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
-          <CircleDot /> Status
+          <CircleDot /> {t("inbox2.status")}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" side="top" className="w-44">
           {FEEDBACK_STATUSES.map((s) => (
             <DropdownMenuItem key={s} onClick={() => onStatus(s)}>
-              <StatusIcon status={s} /> {STATUS_META[s].label}
+              <StatusIcon status={s} /> {t(STATUS_META[s].labelKey)}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button variant="ghost" size="sm" data-testid="bulk-priority" />}>
-          <Flag /> Priority
+          <Flag /> {t("inbox2.priority")}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" side="top" className="w-40">
           {PRIORITIES.map((p) => (
             <DropdownMenuItem key={p} onClick={() => onPriority(p)}>
-              <PriorityIcon priority={p} /> {PRIORITY_META[p].label}
+              <PriorityIcon priority={p} /> {t(PRIORITY_META[p].labelKey)}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
-          <UserRound /> Assign
+          <UserRound /> {t("inbox2.assign")}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" side="top" className="w-52">
-          <DropdownMenuItem onClick={() => onAssign(null)}>Unassigned</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onAssign(null)}>{t("inbox2.unassigned")}</DropdownMenuItem>
           {members.map((m) => (
             <DropdownMenuItem key={m.id} onClick={() => onAssign(m.id)}>
               <UserAvatar name={m.name} image={m.image} className="size-4" /> {m.name}
@@ -490,53 +504,53 @@ function BulkBar({
           onOpenChange={setLabelsOpen}
           side="top"
           align="end"
-          label="Labels of the selected items"
+          label={t("inbox2.labelsOfSelected")}
           trigger={
             <Button variant="ghost" size="sm" data-testid="bulk-labels">
-              <Tag /> Labels
+              <Tag /> {t("inbox2.labels")}
             </Button>
           }
           onChange={(next) => {
             const each = bulkLabelChanges(rows, next);
-            if (each.length) onLabels(each, `Labels changed on ${each.length}`);
+            if (each.length) onLabels(each, t("inbox2.bulkLabelsChanged", { count: each.length }));
           }}
         />
       ) : (
         <Tooltip>
           <TooltipTrigger render={<span />}>
             <Button variant="ghost" size="sm" disabled>
-              <Tag /> Labels
+              <Tag /> {t("inbox2.labels")}
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Labels belong to a project: select items of one project.</TooltipContent>
+          <TooltipContent>{t("inbox2.labelsNeedOneProject")}</TooltipContent>
         </Tooltip>
       )}
       {projectId && (
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
-            <Target /> Round
+            <Target /> {t("inbox2.round")}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" side="top" className="w-52">
             {active.length === 0 && (
-              <p className="px-2 py-1.5 text-xs text-muted-foreground">No active rounds in this project.</p>
+              <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("inbox2.noActiveRounds")}</p>
             )}
             {active.map((r) => (
               <DropdownMenuItem key={r.id} onClick={() => onRound(r.id, r.name)}>
                 {r.name}
               </DropdownMenuItem>
             ))}
-            <DropdownMenuItem onClick={() => onRound(null, "")}>No round</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onRound(null, "")}>{t("inbox2.noRound")}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )}
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button variant="ghost" size="sm" data-testid="export-selected" />}>
-          <Download /> Export
+          <Download /> {t("inbox2.export")}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" side="top" className="w-44">
           {EXPORT_FORMATS.map((f) => (
             <DropdownMenuItem key={f.value} onClick={() => onExport(f.value)}>
-              {f.label}
+              {t(f.labelKey)}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
@@ -548,10 +562,10 @@ function BulkBar({
           className="text-destructive hover:text-destructive"
           onClick={onDelete}
         >
-          <Trash2 /> Delete
+          <Trash2 /> {t("inbox2.delete")}
         </Button>
       )}
-      <Button variant="ghost" size="icon-sm" aria-label="Clear selection" onClick={onClear}>
+      <Button variant="ghost" size="icon-sm" aria-label={t("inbox2.clearSelection")} onClick={onClear}>
         <X />
       </Button>
     </div>
@@ -560,6 +574,7 @@ function BulkBar({
 
 /** Teammates who have this item open right now (presence, wave-4 §1). */
 export function PresenceStack({ users, className }: { users: PresenceUser[]; className?: string }) {
+  const t = useT();
   if (!users.length) return null;
   const names = users.map((u) => u.name).join(", ");
   return (
@@ -569,7 +584,7 @@ export function PresenceStack({ users, className }: { users: PresenceUser[]; cla
           <span
             className={cn("flex -space-x-1.5", className)}
             data-testid="presence"
-            aria-label={`Viewing now: ${names}`}
+            aria-label={t("inbox2.viewingNow", { names })}
           />
         }
       >
@@ -582,7 +597,7 @@ export function PresenceStack({ users, className }: { users: PresenceUser[]; cla
           </span>
         )}
       </TooltipTrigger>
-      <TooltipContent>Viewing now: {names}</TooltipContent>
+      <TooltipContent>{t("inbox2.viewingNow", { names })}</TooltipContent>
     </Tooltip>
   );
 }
@@ -597,6 +612,7 @@ export function DueDate({
   status: FeedbackStatus;
   className?: string;
 }) {
+  const t = useT();
   // The due day counts until its end. "Now" is read only in the browser, after hydration, so the server
   // HTML and the first client render agree; the colour follows.
   const overdue = useSyncExternalStore(
@@ -611,10 +627,10 @@ export function DueDate({
         overdue && "text-destructive",
         className,
       )}
-      title={overdue ? "Overdue" : "Due"}
+      title={overdue ? t("inbox2.overdue") : t("inbox2.due")}
       data-testid="due-date"
     >
-      <CalendarClock className="size-3.5" aria-label={overdue ? "Overdue" : "Due"} />
+      <CalendarClock className="size-3.5" aria-label={overdue ? t("inbox2.overdue") : t("inbox2.due")} />
       <LocalDate iso={iso} />
     </span>
   );
@@ -653,6 +669,7 @@ function FeedbackListRow({
   onCheck: (range: boolean) => void;
   onOpen: () => void;
 }) {
+  const t = useT();
   const Kind = KIND_META[item.kind].icon;
   const assignees = item.assigneeIds
     .map((id) => members.find((m) => m.id === id))
@@ -694,7 +711,7 @@ function FeedbackListRow({
         >
           <Checkbox
             checked={checked}
-            aria-label={`Select #${item.number}`}
+            aria-label={t("inbox2.selectItem", { number: item.number })}
             onClick={(e) => {
               e.preventDefault();
               onCheck(e.shiftKey);
@@ -724,11 +741,11 @@ function FeedbackListRow({
           </div>
           {!compact && (
             <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-              <Kind className="size-3.5 shrink-0" aria-label={KIND_META[item.kind].label} />
+              <Kind className="size-3.5 shrink-0" aria-label={t(KIND_META[item.kind].labelKey)} />
               {showProject && <span className="max-w-[40%] shrink-0 truncate">{item.projectName}</span>}
               {item.reporterGuest?.verified && (
                 <span className="flex shrink-0 items-center gap-0.5 text-emerald-700 dark:text-emerald-400">
-                  <BadgeCheck className="size-3.5" aria-label="Verified reporter" />
+                  <BadgeCheck className="size-3.5" aria-label={t("inbox2.verifiedReporter")} />
                   <span className="max-w-24 truncate">
                     {item.reporterGuest.name ?? item.reporterGuest.email}
                   </span>
@@ -743,9 +760,11 @@ function FeedbackListRow({
         <div className="flex shrink-0 flex-col items-end gap-1 text-muted-foreground">
           <div className="flex h-5 items-center gap-2">
             <PresenceStack users={viewers} />
-            {item.hasReplay && <Film aria-label="Has session replay" className="size-3.5" />}
-            {item.hasScreenshot && <Camera aria-label="Has screenshot" className="size-3.5" />}
-            {item.attachmentCount > 0 && <Paperclip aria-label="Has attachments" className="size-3.5" />}
+            {item.hasReplay && <Film aria-label={t("inbox2.hasSessionReplay")} className="size-3.5" />}
+            {item.hasScreenshot && <Camera aria-label={t("inbox2.hasScreenshot")} className="size-3.5" />}
+            {item.attachmentCount > 0 && (
+              <Paperclip aria-label={t("inbox2.hasAttachments")} className="size-3.5" />
+            )}
             {item.commentCount > 0 && (
               <span className="flex items-center gap-0.5 text-xs tabular-nums">
                 <MessageSquare className="size-3.5" />
@@ -756,7 +775,7 @@ function FeedbackListRow({
             {assignees.length ? (
               <span
                 className="flex -space-x-1.5"
-                aria-label={`Assigned to ${assignees.map((a) => a.name).join(", ")}`}
+                aria-label={t("inbox2.assignedTo", { names: assignees.map((a) => a.name).join(", ") })}
               >
                 {assignees.slice(0, 2).map((a) => (
                   <UserAvatar
@@ -774,7 +793,7 @@ function FeedbackListRow({
           {!compact &&
             (trash && item.deletedAt ? (
               <span className="text-xs whitespace-nowrap">
-                Deleted <RelativeTime iso={item.deletedAt} />
+                {t("inbox2.deleted")} <RelativeTime iso={item.deletedAt} />
               </span>
             ) : (
               <RelativeTime iso={item.createdAt} className="text-xs whitespace-nowrap" />
@@ -796,13 +815,14 @@ function EmptyInbox({
   trash: boolean;
   status: string;
 }) {
+  const t = useT();
   const { setParams } = useUrlParams();
   if (trash) {
     return (
       <EmptyState
         icon={Trash2}
-        title="The trash is empty"
-        description="Deleted items stay here for 30 days, then they are purged with their files."
+        title={t("inbox2.emptyTrashTitle")}
+        description={t("inbox2.emptyTrashDescription")}
       />
     );
   }
@@ -810,20 +830,18 @@ function EmptyInbox({
     return (
       <EmptyState
         icon={Search}
-        title="No matches"
+        title={t("inbox2.noMatchesTitle")}
         description={
-          status === "all"
-            ? "Try other words, an item number like #12, a reporter's email or part of a page URL."
-            : "Nothing in this tab matches. The item may already be resolved or closed."
+          status === "all" ? t("inbox2.noMatchesAllDescription") : t("inbox2.noMatchesTabDescription")
         }
         action={
           status !== "all" ? (
             <Button size="sm" variant="outline" onClick={() => setParams({ status: "all", item: null })}>
-              Search all statuses
+              {t("inbox2.searchAllStatuses")}
             </Button>
           ) : (
             <Button size="sm" variant="outline" onClick={() => setParams({ q: null, item: null })}>
-              Clear search
+              {t("inbox2.clearSearch")}
             </Button>
           )
         }
@@ -834,11 +852,11 @@ function EmptyInbox({
     return (
       <EmptyState
         icon={SearchX}
-        title="No items match these filters"
-        description="Remove a filter, or clear them all to see everything in this tab."
+        title={t("inbox2.noFilterMatchesTitle")}
+        description={t("inbox2.noFilterMatchesDescription")}
         action={
           <Button size="sm" variant="outline" onClick={() => setParams(CLEAR_FILTERS)}>
-            Clear filters
+            {t("inbox2.clearFilters")}
           </Button>
         }
       />
@@ -850,8 +868,8 @@ function EmptyInbox({
       <NotInstalledEmpty>
         <EmptyState
           icon={InboxIcon}
-          title="Inbox zero"
-          description="Everything is triaged. New pinned comments and bug reports from your sites land here."
+          title={t("inbox2.inboxZeroTitle")}
+          description={t("inbox2.inboxZeroDescription")}
         />
       </NotInstalledEmpty>
     );
@@ -859,15 +877,11 @@ function EmptyInbox({
   return (
     <EmptyState
       icon={InboxIcon}
-      title="Nothing here"
-      description={
-        hasProjects
-          ? "Nothing matches this filter yet."
-          : "Create a project and add the widget to your site to start collecting feedback."
-      }
+      title={t("inbox2.nothingHereTitle")}
+      description={hasProjects ? t("inbox2.nothingMatchesFilterYet") : t("inbox2.createProjectToCollect")}
       action={
         <ButtonLink href={hasProjects ? "/projects" : "/projects?new=1"} size="sm" variant="outline">
-          {hasProjects ? "View projects" : "Create a project"}
+          {hasProjects ? t("inbox2.viewProjects") : t("inbox2.createProject")}
         </ButtonLink>
       }
     />

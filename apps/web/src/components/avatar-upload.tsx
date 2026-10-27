@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { readAsDataUrl } from "@/components/logo-upload";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
+import { useT } from "@/lib/i18n/provider";
 import { errorMessage } from "@/lib/store/api";
 import { useRemoveAvatarMutation, useUploadAvatarMutation } from "@/lib/store/api/people";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ export function AvatarUpload({
   image: string | null;
   onChanged: () => void;
 }) {
+  const t = useT();
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [upload, uploading] = useUploadAvatarMutation();
@@ -35,19 +37,19 @@ export function AvatarUpload({
   async function pick(file: File | undefined) {
     if (!file) return;
     if (!TYPES.includes(file.type)) {
-      toast.error("Use a PNG, JPEG or WebP image");
+      toast.error(t("components2.avatarBadType"));
       return;
     }
     if (file.size > MAX_BYTES) {
-      toast.error("The picture must be 512 KB or smaller");
+      toast.error(t("components2.avatarTooBig"));
       return;
     }
     try {
       await upload({ dataUrl: await readAsDataUrl(file) }).unwrap();
-      toast.success("Profile picture updated");
+      toast.success(t("components2.avatarUpdated"));
       onChanged();
     } catch (e) {
-      toast.error("Upload failed", { description: errorMessage(e) });
+      toast.error(t("components2.avatarUploadFailed"), { description: errorMessage(e) });
     } finally {
       if (input.current) input.current.value = "";
     }
@@ -57,7 +59,7 @@ export function AvatarUpload({
     <div className="flex items-center gap-3">
       <button
         type="button"
-        aria-label={image ? "Replace profile picture" : "Upload a profile picture"}
+        aria-label={image ? t("components2.avatarReplaceLabel") : t("components2.avatarUploadLabel")}
         onClick={() => input.current?.click()}
         onDragOver={(e) => {
           e.preventDefault();
@@ -85,7 +87,12 @@ export function AvatarUpload({
             disabled={busy}
             onClick={() => input.current?.click()}
           >
-            <ImageUp /> {uploading.isLoading ? "Uploading…" : image ? "Replace" : "Upload picture"}
+            <ImageUp />{" "}
+            {uploading.isLoading
+              ? t("components2.uploading")
+              : image
+                ? t("components2.replace")
+                : t("components2.uploadPicture")}
           </Button>
           {image && (
             <Button
@@ -97,17 +104,17 @@ export function AvatarUpload({
                 remove(undefined)
                   .unwrap()
                   .then(() => {
-                    toast.success("Profile picture removed");
+                    toast.success(t("components2.avatarRemoved"));
                     onChanged();
                   })
                   .catch((e: unknown) => toast.error(errorMessage(e)));
               }}
             >
-              <Trash2 /> Remove
+              <Trash2 /> {t("components2.remove")}
             </Button>
           )}
         </div>
-        <p className="text-xs text-muted-foreground">PNG, JPEG or WebP, up to 512 KB.</p>
+        <p className="text-xs text-muted-foreground">{t("components2.avatarHint")}</p>
       </div>
       <input
         ref={input}

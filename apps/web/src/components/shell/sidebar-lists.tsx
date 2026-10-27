@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/sidebar";
 import { ViewDialog } from "@/components/views/view-dialogs";
 import type { SavedView } from "@/lib/api";
+import { useT } from "@/lib/i18n/provider";
 import { paramsForFilters } from "@/lib/inbox-filters";
 import { here } from "@/lib/routes";
 import { errorMessage, useDeleteViewMutation, useProjectsQuery, useViewsQuery } from "@/lib/store/api";
@@ -48,6 +49,7 @@ export function SidebarLists() {
 }
 
 function ViewsGroup() {
+  const t = useT();
   const views = useViewsQuery(undefined);
   const params = useSearchParams();
   const pathname = usePathname();
@@ -61,13 +63,11 @@ function ViewsGroup() {
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Views</SidebarGroupLabel>
+      <SidebarGroupLabel>{t("components2.views")}</SidebarGroupLabel>
       <SidebarGroupContent>
-        <SidebarMenu aria-label="Saved views">
+        <SidebarMenu aria-label={t("components2.savedViews")}>
           {list.length === 0 && (
-            <p className="px-2 text-xs text-muted-foreground">
-              Save inbox filters as a view to see them here.
-            </p>
+            <p className="px-2 text-xs text-muted-foreground">{t("components2.viewsEmpty")}</p>
           )}
           {list.map((v) => {
             const manage = v.mine || (isAdmin && v.shared);
@@ -80,16 +80,21 @@ function ViewsGroup() {
                 {manage && (
                   <DropdownMenu>
                     <DropdownMenuTrigger
-                      render={<SidebarMenuAction showOnHover aria-label={`Actions for view ${v.name}`} />}
+                      render={
+                        <SidebarMenuAction
+                          showOnHover
+                          aria-label={t("components2.viewActions", { name: v.name })}
+                        />
+                      }
                     >
                       <MoreHorizontal />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent side="right" align="start" className="w-44">
                       <DropdownMenuItem onClick={() => setEditing(v)}>
-                        <Pencil /> Edit
+                        <Pencil /> {t("components2.edit")}
                       </DropdownMenuItem>
                       <DropdownMenuItem variant="destructive" onClick={() => setRemoving(v)}>
-                        <Trash2 /> Delete
+                        <Trash2 /> {t("components2.delete")}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -108,11 +113,9 @@ function ViewsGroup() {
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
-        title={`Delete “${removing?.name ?? ""}”?`}
+        title={t("components2.deleteViewTitle", { name: removing?.name ?? "" })}
         description={
-          removing?.shared
-            ? "It disappears for everyone in the workspace."
-            : "Only the view goes; no feedback is deleted."
+          removing?.shared ? t("components2.deleteViewShared") : t("components2.deleteViewPersonal")
         }
         pending={removal.isLoading}
         onConfirm={() => {
@@ -120,7 +123,7 @@ function ViewsGroup() {
           remove(removing.id)
             .unwrap()
             .then(() => {
-              toast.success(`View “${removing.name}” deleted`);
+              toast.success(t("components2.viewDeleted", { name: removing.name }));
               if (active === removing.id) router.replace("/inbox");
               setRemoving(null);
             })
@@ -132,6 +135,7 @@ function ViewsGroup() {
 }
 
 function ProjectsGroup() {
+  const t = useT();
   const projects = useProjectsQuery(undefined);
   const params = useSearchParams();
   const pathname = usePathname();
@@ -140,9 +144,9 @@ function ProjectsGroup() {
   const current = pathname === "/inbox" ? params.get("project") : null;
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Projects</SidebarGroupLabel>
+      <SidebarGroupLabel>{t("components2.projects")}</SidebarGroupLabel>
       {isAdmin && (
-        <SidebarGroupAction title="New project" render={<Link href="/projects?new=1" />}>
+        <SidebarGroupAction title={t("components2.newProject")} render={<Link href="/projects?new=1" />}>
           <Plus />
         </SidebarGroupAction>
       )}
@@ -161,7 +165,7 @@ function ProjectsGroup() {
             </SidebarMenuItem>
           ))}
           {projects.data?.projects.length === 0 && (
-            <p className="px-2 text-xs text-muted-foreground">No projects yet.</p>
+            <p className="px-2 text-xs text-muted-foreground">{t("components2.noProjectsYet")}</p>
           )}
         </SidebarMenu>
       </SidebarGroupContent>

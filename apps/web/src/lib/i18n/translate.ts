@@ -50,6 +50,29 @@ export function translate(cat: Catalog, english: Catalog, key: string, vars?: Va
   return fill(cat[key] ?? english[key] ?? key, vars);
 }
 
+/**
+ * Translate a message that was written as English text (a form-validation message, an error from a schema):
+ * if `message` is exactly one of English's strings, return that key's translation; anything else (text from
+ * the server, say) is returned as it came. Strings with {placeholders} are not matched.
+ */
+export function translateMessage(
+  cat: Catalog,
+  english: Catalog,
+  byText: ReadonlyMap<string, string>,
+  message: string,
+): string {
+  const key = byText.get(message);
+  return key ? translate(cat, english, key) : message;
+}
+
+/** English text → key, for `translateMessage`; the first key wins when two keys share a text. */
+export function indexByText(english: Catalog): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const [key, text] of Object.entries(english))
+    if (!map.has(text) && !text.includes("{")) map.set(text, key);
+  return map;
+}
+
 /** Plural form by the language's rules: `<stem>_<form>` when present, else `_other`; `{n}` is filled in. */
 export function plural(
   cat: Catalog,

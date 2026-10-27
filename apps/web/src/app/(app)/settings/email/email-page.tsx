@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isAdminRole } from "@/lib/api";
 import { useMeQuery } from "@/lib/store/api";
+import { useT } from "@/lib/i18n/provider";
 import { EmailSettingsForm } from "./email-settings";
 
 /**
@@ -15,6 +16,7 @@ import { EmailSettingsForm } from "./email-settings";
  * doesn't run the server is pointed there.
  */
 export function EmailPageContent() {
+  const t = useT();
   const me = useMeQuery(undefined);
   if (me.isLoading) return <Skeleton className="h-96 rounded-xl" />;
   if (me.data?.instanceAdmin) return <EmailSettingsForm />;
@@ -24,16 +26,16 @@ export function EmailPageContent() {
       <CardContent>
         <EmptyState
           icon={orgAdmin ? Server : Mail}
-          title="Email delivery is set up by the server's admin"
+          title={t("settings3.emailDeliverySetByAdmin")}
           description={
             orgAdmin
-              ? "Whoever runs this Pinwren server configures SMTP. You can change what the emails say, who gets them and which emails reporters receive under Notifications."
-              : "Whoever runs this Pinwren server configures SMTP."
+              ? t("settings3.smtpConfiguredByServerAdminOrg")
+              : t("settings3.smtpConfiguredByServerAdmin")
           }
           action={
             orgAdmin ? (
               <ButtonLink href="/settings/notifications?tab=templates" size="sm" variant="outline">
-                Email templates
+                {t("settings3.emailTemplates")}
               </ButtonLink>
             ) : undefined
           }

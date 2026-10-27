@@ -3,6 +3,7 @@
 import { TriangleAlert } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { SetupStatus } from "@/lib/api";
+import { useT } from "@/lib/i18n/provider";
 import { safeNext } from "@/lib/next-path";
 import type { SignInMethods } from "@/lib/store/api/sign-in";
 
@@ -96,6 +97,7 @@ export const isOriginError = (message: string | undefined) => !!message && /orig
  * where the server expects to be reached before anyone types a password.
  */
 export function OriginHint() {
+  const t = useT();
   const { data } = useSetupStatus();
   const here = useSyncExternalStore(
     subscribeNever,
@@ -111,12 +113,12 @@ export function OriginHint() {
     >
       <TriangleAlert className="mt-0.5 size-4 shrink-0" />
       <p className="min-w-0 text-pretty">
-        This server is set up for{" "}
+        {t("other1.originHintBefore")}{" "}
         <a href={data.appUrl} className="font-medium underline underline-offset-4">
           {data.appUrl}
         </a>
-        . Open it there, or change <code className="font-mono text-xs">PINWREN_URL</code> in the server&apos;s
-        environment to this address.
+        {t("other1.originHintMiddle")} <code className="font-mono text-xs">PINWREN_URL</code>{" "}
+        {t("other1.originHintAfter")}
       </p>
     </div>
   );

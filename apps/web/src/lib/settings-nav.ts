@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import type { Route } from "next";
 import { isAdminRole } from "@/lib/api";
+import type { Key } from "@/lib/i18n/en";
+import { tEn } from "@/lib/i18n/english";
 
 /**
  * Who sees a settings page: everyone (no `access`), workspace Admins (`org`), instance admins
@@ -24,7 +26,9 @@ export type SettingsAccess = "org" | "instance" | "email";
 
 export type SettingsPage = {
   href: Route;
+  /** English label (for tests and non-React code); the UI translates `labelKey`. */
   label: string;
+  labelKey: Key;
   icon: LucideIcon;
   access?: SettingsAccess;
   /** Extra words the command palette matches. */
@@ -32,76 +36,83 @@ export type SettingsPage = {
 };
 
 /** Every settings page, in nav order. The settings rail and the command palette both read this list. */
-export const SETTINGS_PAGES: readonly SettingsPage[] = [
+const PAGES: readonly Omit<SettingsPage, "label">[] = [
   {
     href: "/settings",
-    label: "Profile",
+    labelKey: "other1.settingsProfile",
     icon: UserRound,
     keywords: ["account", "password", "avatar", "name", "email", "two-factor", "2fa", "sessions"],
   },
   {
     href: "/settings/workspace",
-    label: "Workspace",
+    labelKey: "other1.settingsWorkspace",
     icon: Building2,
     keywords: ["organisation", "organization", "rename", "leave", "transfer", "delete"],
   },
   {
     href: "/settings/members",
-    label: "Users",
+    labelKey: "other1.settingsUsers",
     icon: Users,
     keywords: ["members", "team", "add user", "invite", "roles", "admin", "editor", "viewer"],
   },
   {
     href: "/settings/notifications",
-    label: "Notifications",
+    labelKey: "other1.notifications",
     icon: Bell,
     keywords: ["email", "alerts", "reporter", "recipients", "templates", "digest"],
   },
   {
     href: "/settings/integrations",
-    label: "Integrations",
+    labelKey: "other1.settingsIntegrations",
     icon: Webhook,
     // Admins only (wave-5 contract §3.7, `integrations.manage`), like BugPin.
     access: "org",
     keywords: ["webhooks", "slack", "discord", "github", "gitlab"],
   },
-  { href: "/settings/tokens", label: "API tokens", icon: KeyRound, keywords: ["api", "mcp", "keys"] },
+  {
+    href: "/settings/tokens",
+    labelKey: "other1.settingsApiTokens",
+    icon: KeyRound,
+    keywords: ["api", "mcp", "keys"],
+  },
   {
     href: "/settings/branding",
-    label: "Branding",
+    labelKey: "other1.settingsBranding",
     icon: Palette,
     access: "org",
     keywords: ["logo", "colour"],
   },
   {
     href: "/settings/ai",
-    label: "AI",
+    labelKey: "other1.settingsAi",
     icon: Sparkles,
     access: "org",
     keywords: ["ai", "llm", "claude", "openai", "ollama", "triage", "summary"],
   },
   {
     href: "/settings/email",
-    label: "Email",
+    labelKey: "other1.email",
     icon: Mail,
     access: "email",
     keywords: ["smtp", "mail", "deliveries", "test email"],
   },
   {
     href: "/settings/security",
-    label: "Security",
+    labelKey: "other1.settingsSecurity",
     icon: ShieldCheck,
     access: "instance",
     keywords: ["sessions", "https", "updates"],
   },
   {
     href: "/settings/license",
-    label: "Licence",
+    labelKey: "other1.settingsLicence",
     icon: Award,
     access: "instance",
     keywords: ["license", "enterprise"],
   },
 ];
+
+export const SETTINGS_PAGES: readonly SettingsPage[] = PAGES.map((p) => ({ ...p, label: tEn(p.labelKey) }));
 
 export type SettingsViewer = { role: string | null | undefined; instanceAdmin: boolean };
 

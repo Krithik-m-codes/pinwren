@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { EmailTemplate, EmailTestResult } from "@/lib/api";
 import { emailTemplateForm } from "@/lib/form-schemas";
+import { useI18n } from "@/lib/i18n/provider";
 import {
   errorMessage,
   isApiError,
@@ -71,6 +72,7 @@ function TemplateEditor({
   current: EmailTemplate;
   onKey: (k: EmailTemplateKey) => void;
 }) {
+  const { t, tm } = useI18n();
   const key = current.key;
   const form = useZodForm(emailTemplateForm, {
     defaultValues: { subject: current.subject, body: current.body },
@@ -92,17 +94,17 @@ function TemplateEditor({
   const items = templates.map((t) => ({ value: t.key, label: t.name }));
   const previewError = preview.error
     ? isApiError(preview.error)
-      ? preview.error.message
-      : "Preview failed"
+      ? tm(preview.error.message)
+      : t("settings2.previewFailed")
     : null;
   const invalid = !subject.trim() || !body.trim() || !!previewError;
 
   const save = form.handleSubmit(async (d) => {
     try {
       const { template } = await saveTemplate({ key, draft: d }).unwrap();
-      toast.success(`“${template.name}” saved`);
+      toast.success(t("settings2.templateSaved", { name: template.name }));
     } catch (e) {
-      toast.error("Not saved", { description: errorMessage(e) });
+      toast.error(t("settings2.notSaved"), { description: errorMessage(e) });
     }
   });
 
@@ -125,36 +127,34 @@ function TemplateEditor({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Email templates</CardTitle>
-        <CardDescription>
-          Change the wording of each notification. Markdown works (**bold**, *italic*, [links](https://…),
-          &gt; quotes, - lists); HTML is shown as text. Values in {"{{double braces}}"} are filled in — and
-          escaped — when the email is sent.
-        </CardDescription>
+        <CardTitle>{t("settings2.emailTemplates")}</CardTitle>
+        <CardDescription>{t("settings2.templateDesc", { braces: "{{double braces}}" })}</CardDescription>
       </CardHeader>
       <CardContent>
         <form className="grid gap-4" noValidate onSubmit={(e) => void save(e)}>
           <div className="flex flex-wrap items-center gap-2">
             <Select items={items} value={key} onValueChange={(v) => v && onKey(v)}>
-              <SelectTrigger className="w-64" aria-label="Template">
+              <SelectTrigger className="w-64" aria-label={t("settings2.template")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {templates.map((t) => (
-                  <SelectItem key={t.key} value={t.key}>
-                    {t.name}
-                    {t.customized && <span className="ml-auto text-xs text-muted-foreground">edited</span>}
+                {templates.map((tpl) => (
+                  <SelectItem key={tpl.key} value={tpl.key}>
+                    {tpl.name}
+                    {tpl.customized && (
+                      <span className="ml-auto text-xs text-muted-foreground">{t("settings2.edited")}</span>
+                    )}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {current.customized ? (
               <Badge variant="secondary" className="font-normal">
-                Customised
+                {t("settings2.customised")}
               </Badge>
             ) : (
               <Badge variant="outline" className="font-normal text-muted-foreground">
-                Default
+                {t("settings2.default")}
               </Badge>
             )}
             <p className="w-full text-sm text-muted-foreground">{current.description}</p>
@@ -162,7 +162,7 @@ function TemplateEditor({
 
           <div className="grid gap-1.5">
             <label htmlFor="template-subject" className="text-sm font-medium">
-              Subject
+              {t("settings2.subject")}
             </label>
             <Input
               {...controlProps("template-subject", errors.subject?.message)}
@@ -173,7 +173,7 @@ function TemplateEditor({
           </div>
           <div className="grid gap-1.5">
             <label htmlFor="template-body" className="text-sm font-medium">
-              Body
+              {t("settings2.body")}
             </label>
             <Textarea
               {...controlProps("template-body", errors.body?.message ?? previewError ?? undefined)}
@@ -191,13 +191,13 @@ function TemplateEditor({
           </div>
 
           <div className="grid gap-1.5">
-            <p className="text-sm font-medium">Variables</p>
-            <ul className="flex flex-wrap gap-1.5" aria-label="Variables">
+            <p className="text-sm font-medium">{t("settings2.variables")}</p>
+            <ul className="flex flex-wrap gap-1.5" aria-label={t("settings2.variables")}>
               {current.variables.map((v) => (
                 <li key={v.name}>
                   <button
                     type="button"
-                    title={`${v.description} — e.g. ${v.sample}`}
+                    title={t("settings2.variableTitle", { description: v.description, sample: v.sample })}
                     onClick={() => insert(v.name)}
                     className="rounded-md border bg-muted/50 px-1.5 py-0.5 font-mono text-xs transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
                   >
@@ -206,24 +206,22 @@ function TemplateEditor({
                 </li>
               ))}
             </ul>
-            <p className="text-xs text-muted-foreground">
-              Click one to insert it at the cursor. Hover for what it holds.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("settings2.clickToInsert")}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 border-t pt-4">
             <Button type="submit" disabled={!isDirty || invalid || saving.isLoading}>
-              {saving.isLoading ? "Saving…" : "Save template"}
+              {saving.isLoading ? t("settings2.saving") : t("settings2.saveTemplate")}
             </Button>
             {isDirty && (
               <Button type="button" variant="ghost" onClick={() => form.reset()}>
-                Discard changes
+                {t("settings2.discardChanges")}
               </Button>
             )}
             <div className="ml-auto flex flex-wrap gap-2">
               {current.customized && (
                 <Button type="button" variant="outline" onClick={() => setConfirmReset(true)}>
-                  <RotateCcw /> Reset to default
+                  <RotateCcw /> {t("settings2.resetToDefault")}
                 </Button>
               )}
               <Button
@@ -239,7 +237,7 @@ function TemplateEditor({
                     );
                 }}
               >
-                <Send /> {testing.isLoading ? "Sending…" : "Send me this email"}
+                <Send /> {testing.isLoading ? t("settings2.sending") : t("settings2.sendMeThisEmail")}
               </Button>
             </div>
           </div>
@@ -259,27 +257,29 @@ function TemplateEditor({
               <CircleX className="mt-0.5 size-4 shrink-0" />
             )}
             {testResult.sent
-              ? `Test sent to ${testResult.to} with sample values.`
+              ? t("settings2.testSentTo", { to: testResult.to })
               : testResult.skipped
-                ? `Not sent: ${testResult.reason}`
-                : `The SMTP server refused it: ${testResult.reason}`}
+                ? t("settings2.notSentReason", { reason: testResult.reason })
+                : t("settings2.smtpRefused", { reason: testResult.reason })}
           </p>
         )}
 
-        <section aria-label="Preview" className="mt-4 grid gap-2">
+        <section aria-label={t("settings2.preview")} className="mt-4 grid gap-2">
           <div className="flex items-center gap-2">
-            <p className="text-sm font-medium">Preview</p>
-            <span className="text-xs text-muted-foreground">with sample values</span>
-            {preview.isFetching && <span className="ml-auto text-xs text-muted-foreground">Updating…</span>}
+            <p className="text-sm font-medium">{t("settings2.preview")}</p>
+            <span className="text-xs text-muted-foreground">{t("settings2.withSampleValues")}</span>
+            {preview.isFetching && (
+              <span className="ml-auto text-xs text-muted-foreground">{t("settings2.updating")}</span>
+            )}
           </div>
           <div className="overflow-hidden rounded-lg border">
             <p className="truncate border-b bg-muted/40 px-3 py-2 text-sm" data-testid="preview-subject">
-              <span className="text-muted-foreground">Subject: </span>
+              <span className="text-muted-foreground">{t("settings2.subjectLabel")} </span>
               {preview.currentData?.preview.subject ?? preview.data?.preview.subject ?? "…"}
             </p>
             {preview.data ? (
               <iframe
-                title="Email preview"
+                title={t("settings2.emailPreview")}
                 sandbox=""
                 srcDoc={preview.data.preview.html}
                 className="block h-[26rem] w-full bg-[#f6f6f9]"
@@ -294,16 +294,16 @@ function TemplateEditor({
       <ConfirmDialog
         open={confirmReset}
         onOpenChange={setConfirmReset}
-        title={`Reset “${current.name}”?`}
-        description="Your wording is replaced by the built-in template. This can't be undone."
-        confirmLabel="Reset"
+        title={t("settings2.resetNamedQ", { name: current.name })}
+        description={t("settings2.resetDesc")}
+        confirmLabel={t("settings2.reset")}
         pending={resetting.isLoading}
         onConfirm={() => {
           resetTemplate(key)
             .unwrap()
             .then(() => {
               setConfirmReset(false);
-              toast.success("Back to the default wording");
+              toast.success(t("settings2.backToDefault"));
             })
             .catch((e: unknown) => toast.error(errorMessage(e)));
         }}

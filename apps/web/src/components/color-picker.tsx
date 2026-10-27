@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Slider } from "@/components/ui/slider";
 import { useSyncedState } from "@/lib/use-synced-state";
 import { sliderValue } from "@/lib/form";
+import { useT } from "@/lib/i18n/provider";
 
 const SWATCHES = [
   "#d63a1c",
@@ -67,7 +68,7 @@ export function ColorPicker({
   onChange,
   onCommit,
   id = "color",
-  label = "Accent colour",
+  label,
 }: {
   value: string;
   /** Live updates while picking (drives the preview). */
@@ -78,6 +79,8 @@ export function ColorPicker({
   /** Accessible name; the current value is appended. */
   label?: string;
 }) {
+  const t = useT();
+  const labelText = label ?? t("components1.accentColour");
   const [text, setText] = useSyncedState(value);
   const valid = HEX.test(value);
   const [h, s0, l0] = valid ? hexToHsl(value) : [240, 60, 60];
@@ -92,7 +95,7 @@ export function ColorPicker({
     >
       <PopoverTrigger
         render={<Button id={id} variant="outline" className="w-36 justify-start gap-2 font-mono" />}
-        aria-label={`${label} ${value}`}
+        aria-label={`${labelText} ${value}`}
       >
         <span
           className="size-4 rounded-[4px] ring-1 ring-foreground/15"
@@ -123,14 +126,14 @@ export function ColorPicker({
           })}
         </div>
         <div className="grid gap-1.5">
-          <span className="text-xs text-muted-foreground">Hue</span>
+          <span className="text-xs text-muted-foreground">{t("components1.hue")}</span>
           <div
             className="h-2 rounded-full"
             style={{ background: `linear-gradient(to right, ${gradient})` }}
             aria-hidden
           />
           <Slider
-            aria-label="Hue"
+            aria-label={t("components1.hue")}
             min={0}
             max={360}
             value={[Math.round(h)]}
@@ -140,7 +143,7 @@ export function ColorPicker({
         </div>
         <div className="grid gap-1">
           <label htmlFor={`${id}-hex`} className="text-xs text-muted-foreground">
-            Hex
+            {t("components1.hex")}
           </label>
           <Input
             id={`${id}-hex`}
@@ -157,7 +160,7 @@ export function ColorPicker({
               if (e.key === "Enter" && HEX.test(text)) onCommit(text.toLowerCase());
             }}
           />
-          {!HEX.test(text) && <p className="text-xs text-destructive">Use a hex colour like #d63a1c</p>}
+          {!HEX.test(text) && <p className="text-xs text-destructive">{t("components1.hexHint")}</p>}
         </div>
       </PopoverContent>
     </Popover>

@@ -18,6 +18,7 @@ import Link from "next/link";
 import { useEffect, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import type { NotificationItem } from "@/lib/api";
+import { useT } from "@/lib/i18n/provider";
 import { useEmailSettingsQuery } from "@/lib/store/api";
 import { useViewer } from "@/lib/viewer";
 import { cn } from "@/lib/utils";
@@ -97,6 +98,7 @@ function dismissBanner() {
  * emails and reporter emails are skipped — with the way to fix it. Dismissible for this browser session.
  */
 export function EmailSetupBanner() {
+  const t = useT();
   const { instanceAdmin } = useViewer();
   const settings = useEmailSettingsQuery(undefined, { skip: !instanceAdmin });
   const dismissed = useSyncExternalStore(subscribeBanner, bannerDismissed, () => true);
@@ -108,17 +110,14 @@ export function EmailSetupBanner() {
       className="flex flex-wrap items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-800 dark:text-amber-300"
     >
       <MailWarning className="size-4 shrink-0" />
-      <span className="min-w-0 flex-1">
-        Email isn&apos;t set up yet: new-report emails, invitations and replies to reporters are not being
-        sent.
-      </span>
+      <span className="min-w-0 flex-1">{t("components1.emailNotSetUpBanner")}</span>
       <Link href="/settings/email" className="font-medium underline-offset-4 hover:underline">
-        Set up SMTP
+        {t("components1.setUpSmtp")}
       </Link>
       <Button
         size="icon-xs"
         variant="ghost"
-        aria-label="Dismiss"
+        aria-label={t("components1.dismiss")}
         className="text-current"
         onClick={dismissBanner}
       >
@@ -133,6 +132,7 @@ export function EmailSetupBanner() {
  * up. Instance admins get the link; everyone else learns who to ask.
  */
 export function EmailNotConfiguredNotice({ className }: { className?: string }) {
+  const t = useT();
   const { instanceAdmin } = useViewer();
   return (
     <div
@@ -145,13 +145,13 @@ export function EmailNotConfiguredNotice({ className }: { className?: string }) 
     >
       <MailWarning className="mt-0.5 size-4 shrink-0" />
       <p className="min-w-0 flex-1">
-        Email isn&apos;t set up on this server, so only the in-app bell notifies anyone.{" "}
+        {t("components1.emailNotSetUpNotice")}{" "}
         {instanceAdmin ? (
           <Link href="/settings/email" className="font-medium underline underline-offset-4">
-            Set up SMTP
+            {t("components1.setUpSmtp")}
           </Link>
         ) : (
-          "Ask whoever runs this Pinwren server to set up SMTP."
+          t("components1.askAdminSmtp")
         )}
       </p>
     </div>

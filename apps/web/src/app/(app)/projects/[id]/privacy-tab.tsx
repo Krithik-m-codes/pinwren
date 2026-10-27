@@ -8,21 +8,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { ProjectDetail } from "@/lib/api";
+import type { Key } from "@/lib/i18n/en";
+import { useT } from "@/lib/i18n/provider";
 import { useViewer } from "@/lib/viewer";
 import { DataExportCard, EraseReporterCard } from "./privacy-data";
 import { useProjectPatch } from "./use-project";
 
 const RETENTION = [
-  { value: "forever", label: "Keep forever" },
-  { value: "30", label: "30 days" },
-  { value: "90", label: "90 days" },
-  { value: "180", label: "6 months" },
-  { value: "365", label: "1 year" },
-  { value: "730", label: "2 years" },
-  { value: "custom", label: "Custom…" },
-];
+  { value: "forever", label: "projects2.keepForever" },
+  { value: "30", label: "projects2.days30" },
+  { value: "90", label: "projects2.days90" },
+  { value: "180", label: "projects2.months6" },
+  { value: "365", label: "projects2.year1" },
+  { value: "730", label: "projects2.years2" },
+  { value: "custom", label: "projects2.custom" },
+] as const satisfies readonly { value: string; label: Key }[];
 
 export function PrivacyTab({ project: p }: { project: ProjectDetail }) {
+  const t = useT();
   const save = useProjectPatch(p.id);
   const preset = p.retentionDays === null ? "forever" : String(p.retentionDays);
   const isPreset = RETENTION.some((r) => r.value === preset);
@@ -38,15 +41,15 @@ export function PrivacyTab({ project: p }: { project: ProjectDetail }) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ShieldCheck className={privacy ? "size-4 text-emerald-600" : "size-4 text-muted-foreground"} />
-            EU privacy mode
+            {t("projects2.euPrivacyMode")}
           </CardTitle>
-          <CardDescription>One switch for stricter data handling on this project.</CardDescription>
+          <CardDescription>{t("projects2.euPrivacyModeDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <SettingRow
-            label="Privacy mode"
+            label={t("projects2.privacyMode")}
             htmlFor="privacy-mode"
-            description="For sites that must keep visitor data to a minimum (GDPR). Turning it on:"
+            description={t("projects2.privacyModeDescription")}
           >
             <Switch
               id="privacy-mode"
@@ -54,29 +57,29 @@ export function PrivacyTab({ project: p }: { project: ProjectDetail }) {
               onCheckedChange={(privacyMode) =>
                 save.mutate({
                   patch: { widgetConfig: { privacyMode } },
-                  message: privacyMode ? "Privacy mode on" : "Privacy mode off",
+                  message: privacyMode ? t("projects2.privacyModeOn") : t("projects2.privacyModeOff"),
                 })
               }
             />
           </SettingRow>
           <ul
             className="mt-3 grid gap-1.5 text-sm text-muted-foreground sm:grid-cols-2"
-            aria-label="What privacy mode does"
+            aria-label={t("projects2.whatPrivacyModeDoes")}
           >
             {[
-              "Shows the consent notice before anything is sent",
-              "Masks every text field in screenshots",
-              "Keeps console errors only — no warnings or logs",
-              "Stores only the browser and OS family, no performance data",
-              "Truncates visitor IP addresses (/24, /48) before they are stored",
-              "Turns off the instance's update check (no third-party calls)",
-              "Shortens “keep forever” retention to 90 days",
-            ].map((t) => (
-              <li key={t} className="flex items-start gap-2">
+              t("projects2.privacyBullet1"),
+              t("projects2.privacyBullet2"),
+              t("projects2.privacyBullet3"),
+              t("projects2.privacyBullet4"),
+              t("projects2.privacyBullet5"),
+              t("projects2.privacyBullet6"),
+              t("projects2.privacyBullet7"),
+            ].map((bullet) => (
+              <li key={bullet} className="flex items-start gap-2">
                 <span
                   className={`mt-1.5 size-1.5 shrink-0 rounded-full ${privacy ? "bg-emerald-500" : "bg-muted-foreground/40"}`}
                 />
-                {t}
+                {bullet}
               </li>
             ))}
           </ul>
@@ -85,14 +88,14 @@ export function PrivacyTab({ project: p }: { project: ProjectDetail }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Visibility</CardTitle>
-          <CardDescription>What visitors on your site can see.</CardDescription>
+          <CardTitle>{t("projects2.visibility")}</CardTitle>
+          <CardDescription>{t("projects2.visibilityDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <SettingRow
-            label="Show existing pins to visitors"
+            label={t("projects2.showExistingPins")}
             htmlFor="public-read"
-            description="Reviewers see each other's comments on the page. Turn off for private bug reporting."
+            description={t("projects2.showExistingPinsDescription")}
           >
             <Switch
               id="public-read"
@@ -105,20 +108,15 @@ export function PrivacyTab({ project: p }: { project: ProjectDetail }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Data</CardTitle>
-          <CardDescription>
-            How long feedback is kept. Emails to reporters are set on the Widget tab.
-          </CardDescription>
+          <CardTitle>{t("projects2.data")}</CardTitle>
+          <CardDescription>{t("projects2.dataDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <SettingGroup>
-            <SettingRow
-              label="Retention"
-              description="Feedback older than this is deleted with its screenshots and files by a daily job."
-            >
+            <SettingRow label={t("projects2.retention")} description={t("projects2.retentionDescription")}>
               <div className="flex flex-wrap items-start gap-2">
                 <Select
-                  items={RETENTION}
+                  items={RETENTION.map((r) => ({ value: r.value, label: t(r.label) }))}
                   value={retentionValue}
                   onValueChange={(v) => {
                     if (!v) return;
@@ -130,36 +128,38 @@ export function PrivacyTab({ project: p }: { project: ProjectDetail }) {
                     const days = v === "forever" ? null : Number(v);
                     save.mutate({
                       patch: { retentionDays: days },
-                      message: days ? `Feedback is kept for ${days} days` : "Feedback is kept forever",
+                      message: days
+                        ? t("projects2.feedbackKeptDays", { days })
+                        : t("projects2.feedbackKeptForever"),
                     });
                   }}
                 >
-                  <SelectTrigger className="w-40" aria-label="Retention">
+                  <SelectTrigger className="w-40" aria-label={t("projects2.retention")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {RETENTION.map((r) => (
                       <SelectItem key={r.value} value={r.value}>
-                        {r.label}
+                        {t(r.label)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {retentionValue === "custom" && (
                   <NumberInput
-                    aria-label="Retention in days"
+                    aria-label={t("projects2.retentionInDays")}
                     className="w-28"
                     value={p.retentionDays}
                     placeholder="60"
                     min={1}
                     max={3650}
-                    suffix="days"
+                    suffix={t("projects2.days")}
                     onCommit={(retentionDays) =>
                       retentionDays !== null &&
                       retentionDays !== p.retentionDays &&
                       save.mutate({
                         patch: { retentionDays },
-                        message: `Feedback is kept for ${retentionDays} days`,
+                        message: t("projects2.feedbackKeptDays", { days: retentionDays }),
                       })
                     }
                   />
@@ -172,15 +172,15 @@ export function PrivacyTab({ project: p }: { project: ProjectDetail }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Abuse protection</CardTitle>
-          <CardDescription>Limits what one visitor can send.</CardDescription>
+          <CardTitle>{t("projects2.abuseProtection")}</CardTitle>
+          <CardDescription>{t("projects2.abuseProtectionDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <SettingGroup>
             <SettingRow
-              label="Use the instance default"
+              label={t("projects2.useInstanceDefault")}
               htmlFor="rate-default"
-              description="The server's WIDGET_RATE_LIMIT_PER_MIN (10 unless your admin changed it)."
+              description={t("projects2.useInstanceDefaultDescription")}
             >
               <Switch
                 id="rate-default"
@@ -191,25 +191,25 @@ export function PrivacyTab({ project: p }: { project: ProjectDetail }) {
               />
             </SettingRow>
             <SettingRow
-              label="Reports and replies per minute"
+              label={t("projects2.reportsPerMinute")}
               htmlFor="rate-limit"
-              description="Per visitor IP address. Between 1 and 1000."
+              description={t("projects2.reportsPerMinuteDescription")}
             >
               <NumberInput
                 id="rate-limit"
                 className="w-32"
                 value={p.widgetRateLimitPerMin}
-                placeholder="Default"
+                placeholder={t("projects2.default")}
                 disabled={p.widgetRateLimitPerMin === null}
                 min={1}
                 max={1000}
-                suffix="/ min"
+                suffix={t("projects2.perMinSuffix")}
                 onCommit={(n) =>
                   n !== null &&
                   n !== p.widgetRateLimitPerMin &&
                   save.mutate({
                     patch: { widgetRateLimitPerMin: n },
-                    message: `Limit set to ${n} per minute`,
+                    message: t("projects2.limitSet", { n }),
                   })
                 }
               />

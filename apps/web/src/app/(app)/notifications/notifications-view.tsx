@@ -5,7 +5,7 @@ import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ButtonLink } from "@/components/button-link";
-import { timeAgo } from "@/components/feedback-meta";
+import { useTimeAgo } from "@/components/feedback-meta";
 import { NotificationIcon } from "@/components/notifications/notification-parts";
 import { PageHeader } from "@/components/page-header";
 import { Segmented } from "@/components/segmented";
@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useT } from "@/lib/i18n/provider";
 import { notificationHref, notificationSubject, notificationText } from "@/lib/notification-text";
 import {
   errorMessage,
@@ -32,6 +33,8 @@ const ALL = "all";
  * a page at a time. The bell's "View all" and digest emails link here.
  */
 export function NotificationsView() {
+  const t = useT();
+  const timeAgo = useTimeAgo();
   const router = useRouter();
   const params = useSearchParams();
   const me = useMeQuery(undefined).data;
@@ -49,26 +52,31 @@ export function NotificationsView() {
   const items = pages.flatMap((p) => p.items);
   const unread = pages[0]?.unreadCount ?? 0;
   const projectItems = [
-    { value: ALL, label: "All projects" },
+    { value: ALL, label: t("other1.allProjects") },
     ...projects.map((p) => ({ value: p.id, label: p.name })),
   ];
 
   return (
     <>
-      <PageHeader title="Notifications" />
+      <PageHeader title={t("other1.notifications")} />
       <div className="mx-auto w-full max-w-3xl space-y-4 p-4 pb-16">
         <div className="flex flex-wrap items-center gap-2">
           <Segmented
-            label="Show"
+            label={t("other1.show")}
             value={tab}
             onChange={setTab}
             options={[
-              { value: "all", label: "All" },
-              { value: "unread", label: unread ? `Unread (${unread > 99 ? "99+" : unread})` : "Unread" },
+              { value: "all", label: t("other1.all") },
+              {
+                value: "unread",
+                label: unread
+                  ? t("other1.unreadCount", { count: unread > 99 ? "99+" : unread })
+                  : t("other1.unread"),
+              },
             ]}
           />
           <Select items={projectItems} value={projectId} onValueChange={(v) => v && setProjectId(v)}>
-            <SelectTrigger size="sm" aria-label="Project" className="min-w-40">
+            <SelectTrigger size="sm" aria-label={t("other1.project")} className="min-w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -87,13 +95,15 @@ export function NotificationsView() {
               onClick={() =>
                 void markRead({ all: true })
                   .unwrap()
-                  .catch((e: unknown) => toast.error("Not marked read", { description: errorMessage(e) }))
+                  .catch((e: unknown) =>
+                    toast.error(t("other1.notMarkedRead"), { description: errorMessage(e) }),
+                  )
               }
             >
-              <CheckCheck /> Mark all read
+              <CheckCheck /> {t("other1.markAllRead")}
             </Button>
             <ButtonLink href="/settings/notifications?tab=mine" size="sm" variant="ghost">
-              <Settings2 /> Settings
+              <Settings2 /> {t("other1.settings")}
             </ButtonLink>
           </div>
         </div>
@@ -112,12 +122,8 @@ export function NotificationsView() {
           {query.isSuccess && !switching && items.length === 0 && (
             <EmptyState
               icon={BellOff}
-              title={tab === "unread" ? "No unread notifications" : "No notifications yet"}
-              description={
-                tab === "unread"
-                  ? "You've read everything here."
-                  : "New reports, assignments, replies, mentions and status changes show up here."
-              }
+              title={tab === "unread" ? t("other1.noUnreadNotifications") : t("other1.noNotificationsYet")}
+              description={tab === "unread" ? t("other1.readEverything") : t("other1.notificationsEmptyHint")}
             />
           )}
           {!switching && (
@@ -142,20 +148,20 @@ export function NotificationsView() {
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm">
-                        <span className={cn(!n.readAt && "font-medium")}>{notificationText(n)}</span>
+                        <span className={cn(!n.readAt && "font-medium")}>{notificationText(n, t)}</span>
                         {n.data.projectName && (
                           <span className="text-muted-foreground"> · {n.data.projectName}</span>
                         )}
                       </span>
                       <span className="block truncate text-sm text-muted-foreground">
-                        {notificationSubject(n)}
+                        {notificationSubject(n, t)}
                       </span>
                     </span>
                     <span className="flex shrink-0 flex-col items-end gap-1.5">
                       <span className="text-xs text-muted-foreground">{timeAgo(n.createdAt)}</span>
                       {!n.readAt && (
                         <span className="size-1.5 rounded-full bg-blue-600">
-                          <span className="sr-only">Unread</span>
+                          <span className="sr-only">{t("other1.unread")}</span>
                         </span>
                       )}
                     </span>
@@ -173,13 +179,13 @@ export function NotificationsView() {
                 onClick={() => void query.fetchNextPage()}
               >
                 {query.isFetchingNextPage ? <Loader2 className="animate-spin" /> : null}
-                {query.isFetchingNextPage ? "Loading…" : "Load older"}
+                {query.isFetchingNextPage ? t("other1.loading") : t("other1.loadOlder")}
               </Button>
             </div>
           )}
           {query.isError && query.data && (
             <p role="alert" className="border-t p-3 text-center text-sm text-destructive">
-              {errorMessage(query.error, "Couldn't load more.")}
+              {errorMessage(query.error, t("other1.couldntLoadMore"))}
             </p>
           )}
         </Card>
@@ -193,6 +199,7 @@ export function NotificationsView() {
  * first (like the inbox does for item links), then drop the parameter.
  */
 function useWorkspaceFromLink(org: string | null, activeOrg: string | undefined): boolean {
+  const t = useT();
   const router = useRouter();
   const needed = !!org && !!activeOrg && org !== activeOrg;
   useEffect(() => {
@@ -206,13 +213,13 @@ function useWorkspaceFromLink(org: string | null, activeOrg: string | undefined)
       const { authClient } = await import("@/lib/auth-client");
       const res = await authClient.organization.setActive({ organizationId: org });
       if (res.error) {
-        toast.error("You don't have access to that workspace's notifications");
+        toast.error(t("other1.noAccessToWorkspaceNotifications"));
         clean();
         return;
       }
       // A full load: every cached list belongs to the previous workspace.
       window.location.replace("/notifications");
     })();
-  }, [org, activeOrg, router]);
+  }, [org, activeOrg, router, t]);
   return needed;
 }

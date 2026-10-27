@@ -5,6 +5,7 @@ import type { Route } from "next";
 import { useSearchParams } from "next/navigation";
 import { ButtonLink } from "@/components/button-link";
 import { EmptyState } from "@/components/states";
+import { useT } from "@/lib/i18n/provider";
 import { useProjectsQuery } from "@/lib/store/api";
 
 /**
@@ -13,6 +14,7 @@ import { useProjectsQuery } from "@/lib/store/api";
  * when one of them has been seen, `children` (the usual empty state) shows instead.
  */
 export function NotInstalledEmpty({ children }: { children: React.ReactNode }) {
+  const t = useT();
   const projects = useProjectsQuery(undefined).data?.projects ?? [];
   const filter = useSearchParams().get("project");
   const scope = filter ? projects.filter((p) => p.id === filter) : projects;
@@ -22,11 +24,15 @@ export function NotInstalledEmpty({ children }: { children: React.ReactNode }) {
   return (
     <EmptyState
       icon={Plug}
-      title={scope.length === 1 ? `Install the widget on ${first.name}` : "Install the widget on your site"}
-      description="Nothing can arrive until the widget is on your site. Paste one snippet, then send a test report from the page."
+      title={
+        scope.length === 1
+          ? t("components2.installWidgetOn", { name: first.name })
+          : t("components2.installWidgetOnSite")
+      }
+      description={t("components2.installWidgetHint")}
       action={
         <ButtonLink href={`/projects/${first.id}?tab=install` as Route} size="sm" data-testid="install-cta">
-          Open the Install tab
+          {t("components2.openInstallTab")}
         </ButtonLink>
       }
     />

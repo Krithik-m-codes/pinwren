@@ -2,7 +2,17 @@
 
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore } from "react";
 import { en, type Key } from "./en";
-import { type AppLocale, type Catalog, plural, translate, type Vars } from "./translate";
+import {
+  type AppLocale,
+  type Catalog,
+  indexByText,
+  plural,
+  translate,
+  translateMessage,
+  type Vars,
+} from "./translate";
+
+const BY_TEXT = indexByText(en);
 
 // Where a component finds its language. Page content sits under <I18nProvider>, which the server fills in
 // (so the server HTML is already in the reader's language). The sidebar is part of the prerendered shell and
@@ -18,11 +28,20 @@ const subscribe = (fn: () => void) => {
   listeners.add(fn);
   return () => void listeners.delete(fn);
 };
+/** For pages with no account: show `locale` in the shell and everything outside an <I18nProvider>. */
+export function setShellLocale(locale: AppLocale, catalog: Catalog) {
+  setShell({ locale, catalog });
+  document.documentElement.lang = locale;
+}
+
 const setShell = (next: State) => {
   if (shell.locale === next.locale && shell.catalog === next.catalog) return;
   shell = next;
   for (const fn of listeners) fn();
 };
+
+/** `tm()` for code that is not a component (the api layer's `errorMessage`): follows the shell's language. */
+export const translateNow = (message: string) => translateMessage(shell.catalog, en, BY_TEXT, message);
 
 const Context = createContext<State | null>(null);
 
@@ -59,6 +78,8 @@ export function useI18n() {
       t: (key: Key, vars?: Vars) => translate(catalog, en, key, vars),
       /** A counted phrase: `<stem>_one` / `_other` (and `_few` / `_many` where the language has them). */
       tn: (stem: string, n: number, vars?: Vars) => plural(catalog, en, locale, stem, n, vars),
+      /** Translate a message written as English text (validation errors); other text is returned unchanged. */
+      tm: (message: string) => translateMessage(catalog, en, BY_TEXT, message),
     }),
     [locale, catalog],
   );

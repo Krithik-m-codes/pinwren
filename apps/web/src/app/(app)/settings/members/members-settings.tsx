@@ -7,7 +7,7 @@ import { Controller, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CopyButton, copyText } from "@/components/copy-button";
-import { timeAgo } from "@/components/feedback-meta";
+import { useTimeAgo } from "@/components/feedback-meta";
 import { controlProps, Field, FieldError, FormError, useZodForm } from "@/components/form";
 import { EmptyState, ErrorState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +47,9 @@ import {
   useRemoveMemberByIdMutation,
   useSetMemberRoleMutation,
 } from "@/lib/store/api/people";
+import type { TFn } from "@/lib/i18n/english";
+import type { Key } from "@/lib/i18n/en";
+import { useT } from "@/lib/i18n/provider";
 import { useOrigin } from "@/lib/use-synced-state";
 import { useViewer } from "@/lib/viewer";
 import { SectionTitle } from "../settings-shell";
@@ -54,17 +57,24 @@ import { SectionTitle } from "../settings-shell";
 // Settings › Users (BugPin model, wave-5 contract §3.1): Admins add accounts directly or invite by email,
 // change roles and remove people. Roles are Admin, Editor and Viewer; the API enforces them.
 
-const ROLES: { value: AppRole; label: string; description: string }[] = [
-  { value: "admin", label: "Admin", description: "Everything: projects, users, integrations and settings" },
-  {
-    value: "editor",
-    label: "Editor",
-    description: "View, edit, assign and bulk-update reports, and add them by hand. No deleting, no settings",
-  },
-  { value: "viewer", label: "Viewer", description: "Read-only: sees everything, changes nothing" },
+const ROLES: { value: AppRole; label: Key; description: Key }[] = [
+  { value: "admin", label: "settings3.roleAdmin", description: "settings3.roleAdminDescription" },
+  { value: "editor", label: "settings3.roleEditor", description: "settings3.roleEditorDescription" },
+  { value: "viewer", label: "settings3.roleViewer", description: "settings3.roleViewerDescription" },
 ];
-const ROLE_PHRASE = { admin: "an Admin", editor: "an Editor", viewer: "a Viewer" } as const;
-const roleLabel = (r: AppRole) => ROLES.find((x) => x.value === r)?.label ?? r;
+const ROLE_PHRASE = {
+  admin: "settings3.rolePhraseAdmin",
+  editor: "settings3.rolePhraseEditor",
+  viewer: "settings3.rolePhraseViewer",
+} as const satisfies Record<AppRole, Key>;
+const roleLabel = (t: TFn, r: AppRole) => {
+  const key = ROLES.find((x) => x.value === r)?.label;
+  return key ? t(key) : r;
+};
+const roleDescription = (t: TFn, r: AppRole) => {
+  const key = ROLES.find((x) => x.value === r)?.description;
+  return key ? t(key) : undefined;
+};
 const isOwner = (role: string) => role.split(",").some((r) => r.trim() === "owner");
 /** The Better Auth role an invitation stores for an app role (`ORG_ROLE_FOR` in @pinwren/core). */
 const INVITE_ROLE = { admin: "admin", editor: "member", viewer: "viewer" } as const;
@@ -77,6 +87,7 @@ function generatePassword(): string {
 }
 
 export function MembersSettings() {
+  const t = useT();
   const { me, userId, instanceAdmin } = useViewer();
   const members = useMembersQuery(undefined);
   const invitations = useInvitationsQuery(undefined);
@@ -88,12 +99,12 @@ export function MembersSettings() {
   return (
     <div className="grid gap-4">
       <SectionTitle
-        title="Users"
-        description="Everyone in this workspace and what they can do."
+        title={t("settings3.users")}
+        description={t("settings3.usersDescription")}
         action={
           canManage && (
             <Button onClick={() => setAdding(true)}>
-              <UserPlus /> Add user
+              <UserPlus /> {t("settings3.addUser")}
             </Button>
           )
         }
@@ -101,9 +112,11 @@ export function MembersSettings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>People</CardTitle>
+          <CardTitle>{t("settings3.people")}</CardTitle>
           <CardDescription>
-            {members.data ? `${list.length} in this workspace` : "People in this workspace"}
+            {members.data
+              ? t("settings3.countInWorkspace", { count: list.length })
+              : t("settings3.peopleInWorkspace")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -115,10 +128,10 @@ export function MembersSettings() {
           )}
           {members.isError && <ErrorState error={members.error} retry={() => void members.refetch()} />}
           {members.data && list.length === 0 && (
-            <EmptyState icon={Users} title="Nobody here yet" className="py-6" />
+            <EmptyState icon={Users} title={t("settings3.nobodyHereYet")} className="py-6" />
           )}
           {list.length > 0 && (
-            <ul className="-my-1 divide-y" aria-label="Members">
+            <ul className="-my-1 divide-y" aria-label={t("settings3.members")}>
               {list.map((m) => (
                 <MemberRow
                   key={m.id}
@@ -137,10 +150,8 @@ export function MembersSettings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Pending invitations</CardTitle>
-          <CardDescription>
-            Invitations expire after 7 days. Copy the link to send it yourself.
-          </CardDescription>
+          <CardTitle>{t("settings3.pendingInvitations")}</CardTitle>
+          <CardDescription>{t("settings3.pendingInvitationsDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           {invitations.isLoading && <Skeleton className="h-11" />}
@@ -148,10 +159,10 @@ export function MembersSettings() {
             <ErrorState error={invitations.error} retry={() => void invitations.refetch()} />
           )}
           {invitations.data?.invitations.length === 0 && (
-            <EmptyState icon={MailPlus} title="No pending invitations" className="py-6" />
+            <EmptyState icon={MailPlus} title={t("settings3.noPendingInvitations")} className="py-6" />
           )}
           {invitations.data && invitations.data.invitations.length > 0 && (
-            <ul className="-my-1 divide-y" aria-label="Pending invitations">
+            <ul className="-my-1 divide-y" aria-label={t("settings3.pendingInvitations")}>
               {invitations.data.invitations.map((inv) => (
                 <InvitationRow key={inv.id} invitation={inv} canManage={canManage} />
               ))}
@@ -162,14 +173,14 @@ export function MembersSettings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Roles</CardTitle>
+          <CardTitle>{t("settings3.roles")}</CardTitle>
         </CardHeader>
         <CardContent>
           <dl className="grid gap-2 text-sm">
             {ROLES.map((r) => (
               <div key={r.value} className="grid gap-0.5 sm:grid-cols-[6rem_1fr] sm:gap-3">
-                <dt className="font-medium">{r.label}</dt>
-                <dd className="text-muted-foreground">{r.description}.</dd>
+                <dt className="font-medium">{t(r.label)}</dt>
+                <dd className="text-muted-foreground">{t(r.description)}.</dd>
               </div>
             ))}
           </dl>
@@ -201,15 +212,20 @@ function RoleSelect({
   label: string;
   size?: "sm";
 }) {
+  const t = useT();
   return (
-    <Select items={ROLES} value={value} onValueChange={(v) => v && onChange(v)}>
+    <Select
+      items={ROLES.map((r) => ({ ...r, label: t(r.label) }))}
+      value={value}
+      onValueChange={(v) => v && onChange(v)}
+    >
       <SelectTrigger {...(size ? { size } : {})} className={size ? "w-28" : "sm:w-32"} aria-label={label}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         {ROLES.map((r) => (
           <SelectItem key={r.value} value={r.value}>
-            {r.label}
+            {t(r.label)}
           </SelectItem>
         ))}
       </SelectContent>
@@ -227,6 +243,7 @@ function AddUserDialog({
   onOpenChange: (open: boolean) => void;
   onInviteInstead: (email: string) => void;
 }) {
+  const t = useT();
   const [addMember] = useAddMemberMutation();
   const [created, setCreated] = useState<{ email: string; password: string; name: string } | null>(null);
   const [taken, setTaken] = useState<string | null>(null);
@@ -249,7 +266,7 @@ function AddUserDialog({
     setTaken(null);
     try {
       await addMember(v).unwrap();
-      toast.success(`${v.name} was added`);
+      toast.success(t("settings3.userAdded", { name: v.name }));
       setCreated({ email: v.email, password: v.password, name: v.name });
     } catch (e) {
       if (isApiError(e) && e.code === "EMAIL_TAKEN") setTaken(v.email);
@@ -263,22 +280,20 @@ function AddUserDialog({
         {created ? (
           <div className="grid gap-4">
             <DialogHeader>
-              <DialogTitle>{created.name} can sign in now</DialogTitle>
-              <DialogDescription>
-                Send them these details. They can change the password in Settings › Profile.
-              </DialogDescription>
+              <DialogTitle>{t("settings3.canSignInNow", { name: created.name })}</DialogTitle>
+              <DialogDescription>{t("settings3.sendTheseDetails")}</DialogDescription>
             </DialogHeader>
             <dl className="grid gap-2 rounded-lg border bg-muted/40 p-3 text-sm">
               <div className="flex items-center gap-2">
-                <dt className="w-20 shrink-0 text-muted-foreground">Sign in at</dt>
+                <dt className="w-20 shrink-0 text-muted-foreground">{t("settings3.signInAt")}</dt>
                 <dd className="min-w-0 flex-1 truncate font-mono text-xs">{signInUrl}</dd>
               </div>
               <div className="flex items-center gap-2">
-                <dt className="w-20 shrink-0 text-muted-foreground">Email</dt>
+                <dt className="w-20 shrink-0 text-muted-foreground">{t("settings3.colEmail")}</dt>
                 <dd className="min-w-0 flex-1 truncate">{created.email}</dd>
               </div>
               <div className="flex items-center gap-2">
-                <dt className="w-20 shrink-0 text-muted-foreground">Password</dt>
+                <dt className="w-20 shrink-0 text-muted-foreground">{t("settings3.password")}</dt>
                 <dd className="min-w-0 flex-1 truncate font-mono" data-testid="new-user-password">
                   {created.password}
                 </dd>
@@ -286,25 +301,27 @@ function AddUserDialog({
             </dl>
             <DialogFooter>
               <CopyButton
-                value={`Sign in at ${signInUrl}\nEmail: ${created.email}\nPassword: ${created.password}`}
-                label="Copy details"
+                value={t("settings3.copiedDetails", {
+                  url: signInUrl,
+                  email: created.email,
+                  password: created.password,
+                })}
+                label={t("settings3.copyDetails")}
                 size="sm"
                 variant="outline"
               />
               <Button type="button" onClick={() => close(false)}>
-                Done
+                {t("settings3.done")}
               </Button>
             </DialogFooter>
           </div>
         ) : (
           <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-4">
             <DialogHeader>
-              <DialogTitle>Add user</DialogTitle>
-              <DialogDescription>
-                Creates the account now and adds it to this workspace. No email needed.
-              </DialogDescription>
+              <DialogTitle>{t("settings3.addUser")}</DialogTitle>
+              <DialogDescription>{t("settings3.addUserDescription")}</DialogDescription>
             </DialogHeader>
-            <Field id="add-name" label="Name" error={errors.name?.message}>
+            <Field id="add-name" label={t("settings3.name")} error={errors.name?.message}>
               <Input
                 {...controlProps("add-name", errors.name?.message)}
                 {...form.register("name")}
@@ -313,7 +330,7 @@ function AddUserDialog({
                 autoFocus
               />
             </Field>
-            <Field id="add-email" label="Email" error={errors.email?.message}>
+            <Field id="add-email" label={t("settings3.colEmail")} error={errors.email?.message}>
               <Input
                 {...controlProps("add-email", errors.email?.message)}
                 {...form.register("email")}
@@ -323,8 +340,8 @@ function AddUserDialog({
             </Field>
             <Field
               id="add-password"
-              label="Password"
-              help="At least 8 characters. You'll see it again to pass on."
+              label={t("settings3.password")}
+              help={t("settings3.passwordHelp")}
               error={errors.password?.message}
             >
               <div className="flex gap-2">
@@ -341,22 +358,20 @@ function AddUserDialog({
                   variant="outline"
                   onClick={() => form.setValue("password", generatePassword(), { shouldValidate: true })}
                 >
-                  <Wand2 /> Generate
+                  <Wand2 /> {t("settings3.generate")}
                 </Button>
               </div>
             </Field>
             <div className="grid gap-1.5">
-              <span className="text-sm font-medium">Role</span>
+              <span className="text-sm font-medium">{t("settings3.role")}</span>
               <Controller
                 control={form.control}
                 name="role"
                 render={({ field }) => (
-                  <RoleSelect value={field.value} onChange={field.onChange} label="Role" />
+                  <RoleSelect value={field.value} onChange={field.onChange} label={t("settings3.role")} />
                 )}
               />
-              <p className="text-xs text-muted-foreground">
-                {ROLES.find((r) => r.value === role)?.description}.
-              </p>
+              <p className="text-xs text-muted-foreground">{roleDescription(t, role)}.</p>
             </div>
             <FormError message={errors.root?.message} />
             {taken && (
@@ -366,15 +381,15 @@ function AddUserDialog({
                 className="justify-self-start"
                 onClick={() => onInviteInstead(taken)}
               >
-                <MailPlus /> Invite {taken} instead
+                <MailPlus /> {t("settings3.inviteInstead", { email: taken })}
               </Button>
             )}
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => close(false)}>
-                Cancel
+                {t("settings3.cancel")}
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Adding…" : "Add user"}
+                {isSubmitting ? t("settings3.adding") : t("settings3.addUser")}
               </Button>
             </DialogFooter>
           </form>
@@ -386,6 +401,7 @@ function AddUserDialog({
 
 /** The second option: an email with a link to join (they create their own password). */
 function InviteCard({ prefill, emailConfigured }: { prefill: string | null; emailConfigured: boolean }) {
+  const t = useT();
   const [invite] = useInviteMemberMutation();
   const origin = useOrigin();
   const form = useZodForm(inviteUserForm, { defaultValues: { email: prefill ?? "", role: "editor" } });
@@ -401,13 +417,13 @@ function InviteCard({ prefill, emailConfigured }: { prefill: string | null; emai
     try {
       const created = (await invite({ email, role: INVITE_ROLE[role] }).unwrap()) as { id?: string } | null;
       if (emailConfigured) {
-        toast.success(`Invitation sent to ${email}`);
+        toast.success(t("settings3.invitationSentTo", { email }));
       } else {
         // Nothing can be emailed: hand the link over instead of pretending it went out.
         const link = created?.id ? `${origin}/accept-invitation/${created.id}` : null;
-        if (link) await copyText(link, "Invitation link copied");
-        toast(`Invitation created for ${email}`, {
-          description: "Email isn't set up on this server, so send them the link yourself (copied).",
+        if (link) await copyText(link, t("settings3.invitationLinkCopied"));
+        toast(t("settings3.invitationCreatedFor", { email }), {
+          description: t("settings3.emailNotSetUpSendLink"),
         });
       }
       form.reset({ email: "", role });
@@ -418,11 +434,9 @@ function InviteCard({ prefill, emailConfigured }: { prefill: string | null; emai
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Invite by email</CardTitle>
+        <CardTitle>{t("settings3.inviteByEmail")}</CardTitle>
         <CardDescription>
-          {emailConfigured
-            ? "They get a link to join and choose their own password."
-            : "Email isn't set up on this server: you'll get a link to send them yourself."}
+          {emailConfigured ? t("settings3.inviteLinkDescription") : t("settings3.inviteNoEmailDescription")}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -433,23 +447,23 @@ function InviteCard({ prefill, emailConfigured }: { prefill: string | null; emai
               {...form.register("email")}
               type="email"
               placeholder="teammate@example.com"
-              aria-label="Email address"
+              aria-label={t("settings3.emailAddress")}
               className="sm:flex-1"
             />
             <Controller
               control={form.control}
               name="role"
               render={({ field }) => (
-                <RoleSelect value={field.value} onChange={field.onChange} label="Role" />
+                <RoleSelect value={field.value} onChange={field.onChange} label={t("settings3.role")} />
               )}
             />
             <Button type="submit" variant="outline" disabled={isSubmitting}>
-              <MailPlus /> {isSubmitting ? "Sending…" : "Send invite"}
+              <MailPlus /> {isSubmitting ? t("settings3.sending") : t("settings3.sendInvite")}
             </Button>
           </div>
           <FieldError id="invite-email" message={errors.email?.message} />
           <FormError message={errors.root?.message} />
-          <p className="text-xs text-muted-foreground">{ROLES.find((r) => r.value === role)?.description}.</p>
+          <p className="text-xs text-muted-foreground">{roleDescription(t, role)}.</p>
         </form>
       </CardContent>
     </Card>
@@ -467,6 +481,7 @@ function MemberRow({
   canManage: boolean;
   canResetPassword: boolean;
 }) {
+  const t = useT();
   const [confirm, setConfirm] = useState(false);
   const [setRole] = useSetMemberRoleMutation();
   const [removeMember, removal] = useRemoveMemberByIdMutation();
@@ -480,14 +495,14 @@ function MemberRow({
     if (role === appRole) return;
     setRole({ userId: m.id, role })
       .unwrap()
-      .then(() => toast.success(`${m.name} is now ${ROLE_PHRASE[role]}`))
+      .then(() => toast.success(t("settings3.isNowRole", { name: m.name, role: t(ROLE_PHRASE[role]) })))
       .catch((e: unknown) => toast.error(errorMessage(e)));
   };
   const remove = () => {
     removeMember(m.id)
       .unwrap()
       .then(() => {
-        toast.success(`${m.name} was removed`);
+        toast.success(t("settings3.userRemoved", { name: m.name }));
         setConfirm(false);
       })
       .catch((e: unknown) => toast.error(errorMessage(e)));
@@ -495,7 +510,7 @@ function MemberRow({
   const copyReset = () => {
     resetLink(m.id)
       .unwrap()
-      .then(({ url }) => copyText(url, `Reset link for ${m.name} copied. It works for 24 hours.`))
+      .then(({ url }) => copyText(url, t("settings3.resetLinkCopied", { name: m.name })))
       .catch((e: unknown) => toast.error(errorMessage(e)));
   };
   const canCopyReset = canResetPassword && !isMe;
@@ -506,36 +521,47 @@ function MemberRow({
       <UserAvatar name={m.name} image={m.image} className="size-8" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">
-          {m.name} {isMe && <span className="font-normal text-muted-foreground">(you)</span>}
+          {m.name} {isMe && <span className="font-normal text-muted-foreground">{t("settings3.you")}</span>}
         </p>
         <p className="truncate text-xs text-muted-foreground">{m.email}</p>
       </div>
       {owner && (
         <Badge variant="secondary" className="font-normal">
-          Owner
+          {t("settings3.owner")}
         </Badge>
       )}
       {editable ? (
-        <RoleSelect value={appRole} onChange={changeRole} label={`Role of ${m.name}`} size="sm" />
+        <RoleSelect
+          value={appRole}
+          onChange={changeRole}
+          label={t("settings3.roleOf", { name: m.name })}
+          size="sm"
+        />
       ) : (
-        <Badge variant="outline">{roleLabel(appRole)}</Badge>
+        <Badge variant="outline">{roleLabel(t, appRole)}</Badge>
       )}
       {menu ? (
         <DropdownMenu>
           <DropdownMenuTrigger
-            render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${m.name}`} />}
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t("settings3.actionsFor", { name: m.name })}
+              />
+            }
           >
             <MoreHorizontal />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
             {canCopyReset && (
               <DropdownMenuItem onClick={copyReset}>
-                <KeyRound /> Copy password reset link
+                <KeyRound /> {t("settings3.copyPasswordResetLink")}
               </DropdownMenuItem>
             )}
             {editable && (
               <DropdownMenuItem variant="destructive" onClick={() => setConfirm(true)}>
-                <UserMinus /> Remove from workspace
+                <UserMinus /> {t("settings3.removeFromWorkspace")}
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>
@@ -546,9 +572,9 @@ function MemberRow({
       <ConfirmDialog
         open={confirm}
         onOpenChange={setConfirm}
-        title={`Remove ${m.name}?`}
-        description="They lose access to this workspace at once. Their account and comments stay."
-        confirmLabel="Remove"
+        title={t("settings3.removeNameQuestion", { name: m.name })}
+        description={t("settings3.removeMemberDescription")}
+        confirmLabel={t("settings3.remove")}
         pending={removal.isLoading}
         onConfirm={remove}
       />
@@ -557,6 +583,8 @@ function MemberRow({
 }
 
 function InvitationRow({ invitation: inv, canManage }: { invitation: Invitation; canManage: boolean }) {
+  const t = useT();
+  const timeAgo = useTimeAgo();
   const [cancelInvitation, revoke] = useCancelInvitationMutation();
   const link = `${useOrigin()}/accept-invitation/${inv.id}`;
   return (
@@ -567,12 +595,26 @@ function InvitationRow({ invitation: inv, canManage }: { invitation: Invitation;
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{inv.email}</p>
         <p className="truncate text-xs text-muted-foreground">
-          {roleLabel(appRoleOf(inv.role))} · invited {timeAgo(inv.createdAt)}
-          {inv.inviter && ` by ${inv.inviter.name}`} · expires {timeAgo(inv.expiresAt)}
+          {inv.inviter
+            ? t("settings3.invitedByLine", {
+                role: roleLabel(t, appRoleOf(inv.role)),
+                created: timeAgo(inv.createdAt),
+                inviter: inv.inviter.name,
+                expires: timeAgo(inv.expiresAt),
+              })
+            : t("settings3.invitedLine", {
+                role: roleLabel(t, appRoleOf(inv.role)),
+                created: timeAgo(inv.createdAt),
+                expires: timeAgo(inv.expiresAt),
+              })}
         </p>
       </div>
-      <Button variant="ghost" size="sm" onClick={() => void copyText(link, "Invitation link copied")}>
-        <Link2 /> Copy link
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => void copyText(link, t("settings3.invitationLinkCopied"))}
+      >
+        <Link2 /> {t("settings3.copyLink")}
       </Button>
       {canManage && (
         <Button
@@ -582,11 +624,11 @@ function InvitationRow({ invitation: inv, canManage }: { invitation: Invitation;
           onClick={() => {
             cancelInvitation(inv.id)
               .unwrap()
-              .then(() => toast.success(`Invitation to ${inv.email} revoked`))
+              .then(() => toast.success(t("settings3.invitationRevoked", { email: inv.email })))
               .catch((e: unknown) => toast.error(errorMessage(e)));
           }}
         >
-          {revoke.isLoading ? "Revoking…" : "Revoke"}
+          {revoke.isLoading ? t("settings3.revoking") : t("settings3.revoke")}
         </Button>
       )}
     </li>

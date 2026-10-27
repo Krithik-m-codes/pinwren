@@ -6,6 +6,7 @@ import { useState } from "react";
 import { DayPicker } from "react-day-picker";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
 const format = (d: Date) => d.toLocaleDateString(undefined, { dateStyle: "medium" });
@@ -18,7 +19,7 @@ export function DatePicker({
   id,
   value,
   onChange,
-  placeholder = "Pick a date",
+  placeholder,
   disabled,
   className,
   "aria-invalid": invalid,
@@ -33,6 +34,7 @@ export function DatePicker({
   "aria-invalid"?: boolean | undefined;
   "aria-describedby"?: string | undefined;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   return (
     <div className={cn("flex items-center gap-1", className)}>
@@ -51,7 +53,7 @@ export function DatePicker({
           }
         >
           <CalendarDays />
-          {value ? format(value) : placeholder}
+          {value ? format(value) : (placeholder ?? t("components2.pickDate"))}
         </PopoverTrigger>
         <PopoverContent align="start" className="pinwren-calendar w-auto p-2">
           <DayPicker
@@ -70,7 +72,7 @@ export function DatePicker({
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label="Clear date"
+          aria-label={t("components2.clearDate")}
           onClick={() => onChange(null)}
         >
           <X />

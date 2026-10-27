@@ -23,6 +23,9 @@ import { z } from "zod";
 import { controlProps, Field, FormError, useZodForm } from "@/components/form";
 import type { IssueIntegration, ProjectDetail } from "@/lib/api";
 import { trackerForm } from "@/lib/form-schemas";
+import { en, type Key } from "@/lib/i18n/en";
+import type { TFn } from "@/lib/i18n/english";
+import { useI18n, useT } from "@/lib/i18n/provider";
 import {
   errorMessage,
   isForbidden,
@@ -39,15 +42,15 @@ type AutoCreate = (typeof ISSUE_AUTO_CREATE)[number];
 
 type Meta = {
   name: string;
-  repoLabel: string;
+  repoLabel: Key;
   repoPlaceholder: string;
   /** null: the provider has no base URL (Linear). */
-  url: { label: string; placeholder: string; required: boolean } | null;
-  tokenLabel: string;
-  tokenHelp: string;
+  url: { label: Key; placeholder: string; required: boolean } | null;
+  tokenLabel: Key;
+  tokenHelp: Key;
   /** What closes the item on the tracker's side. */
-  closes: string;
-  hookHelp: React.ReactNode;
+  closes: Key;
+  hookHelp: (t: TFn) => React.ReactNode;
   /** Linear generates the signing secret itself, so it is pasted here instead of revealed. */
   pasteSecret: boolean;
   /** Needs the Enterprise `jira` licence feature (blueprint 07). */
@@ -57,20 +60,21 @@ type Meta = {
 const META: Record<IssueProvider, Meta> = {
   github: {
     name: "GitHub",
-    repoLabel: "Repository",
+    repoLabel: "projects2.repository",
     repoPlaceholder: "owner/name",
     url: {
-      label: "GitHub Enterprise API URL",
+      label: "projects2.githubEnterpriseApiUrl",
       placeholder: "https://github.example.com/api/v3",
       required: false,
     },
-    tokenLabel: "Access token",
-    tokenHelp: "A fine-grained personal access token with Issues: read & write on the repository.",
-    closes: "Closing the issue resolves the item; resolving the item closes the issue.",
-    hookHelp: (
+    tokenLabel: "projects2.accessToken",
+    tokenHelp: "projects2.githubTokenHelp",
+    closes: "projects2.closesGithubGitlab",
+    hookHelp: (t) => (
       <>
-        In the repository: <b>Settings › Webhooks › Add webhook</b>. Content type{" "}
-        <code>application/json</code>, the secret below, events: <b>Issues</b>.
+        {t("projects2.hookGithubIntro")} <b>{t("projects2.hookGithubPath")}</b>.{" "}
+        {t("projects2.hookContentType")} <code>application/json</code>, {t("projects2.hookSecretBelowEvents")}{" "}
+        <b>{t("projects2.issues")}</b>.
       </>
     ),
     pasteSecret: false,
@@ -78,16 +82,21 @@ const META: Record<IssueProvider, Meta> = {
   },
   gitlab: {
     name: "GitLab",
-    repoLabel: "Project path",
+    repoLabel: "projects2.projectPath",
     repoPlaceholder: "group/subgroup/project",
-    url: { label: "Self-managed GitLab URL", placeholder: "https://gitlab.example.com", required: false },
-    tokenLabel: "Access token",
-    tokenHelp: "A project or personal access token with the api scope.",
-    closes: "Closing the issue resolves the item; resolving the item closes the issue.",
-    hookHelp: (
+    url: {
+      label: "projects2.selfManagedGitlabUrl",
+      placeholder: "https://gitlab.example.com",
+      required: false,
+    },
+    tokenLabel: "projects2.accessToken",
+    tokenHelp: "projects2.gitlabTokenHelp",
+    closes: "projects2.closesGithubGitlab",
+    hookHelp: (t) => (
       <>
-        In the project: <b>Settings › Webhooks › Add new webhook</b>. Put the secret below in{" "}
-        <b>Secret token</b>, and tick <b>Issues events</b>.
+        {t("projects2.hookGitlabIntro")} <b>{t("projects2.hookGitlabPath")}</b>.{" "}
+        {t("projects2.hookPutSecretIn")} <b>{t("projects2.hookSecretToken")}</b>, {t("projects2.hookAndTick")}{" "}
+        <b>{t("projects2.hookIssuesEvents")}</b>.
       </>
     ),
     pasteSecret: false,
@@ -95,17 +104,17 @@ const META: Record<IssueProvider, Meta> = {
   },
   linear: {
     name: "Linear",
-    repoLabel: "Team key",
+    repoLabel: "projects2.teamKey",
     repoPlaceholder: "ENG",
     url: null,
-    tokenLabel: "API key",
-    tokenHelp: "A personal API key from Linear: Settings › Account › Security & access › Personal API keys.",
-    closes:
-      "Moving the issue to a completed or canceled state resolves the item; resolving the item completes the issue.",
-    hookHelp: (
+    tokenLabel: "projects2.apiKey",
+    tokenHelp: "projects2.linearTokenHelp",
+    closes: "projects2.closesLinear",
+    hookHelp: (t) => (
       <>
-        In Linear: <b>Settings › API › Webhooks › New webhook</b>. Paste the URL below, pick the team, tick{" "}
-        <b>Issues</b>, save, then paste Linear&apos;s <b>signing secret</b> here.
+        {t("projects2.hookLinearIntro")} <b>{t("projects2.hookLinearPath")}</b>.{" "}
+        {t("projects2.hookPasteUrlPickTeamTick")} <b>{t("projects2.issues")}</b>,{" "}
+        {t("projects2.hookSaveThenPaste")} <b>{t("projects2.hookSigningSecret")}</b> {t("projects2.hookHere")}
       </>
     ),
     pasteSecret: true,
@@ -113,17 +122,17 @@ const META: Record<IssueProvider, Meta> = {
   },
   jira: {
     name: "Jira",
-    repoLabel: "Project key",
+    repoLabel: "projects2.projectKey",
     repoPlaceholder: "WEB",
-    url: { label: "Jira site URL", placeholder: "https://acme.atlassian.net", required: true },
-    tokenLabel: "API token",
-    tokenHelp:
-      "An API token from id.atlassian.com › Security › API tokens, for an account that can create issues.",
-    closes: "Moving the issue to a Done status resolves the item; resolving the item moves it to Done.",
-    hookHelp: (
+    url: { label: "projects2.jiraSiteUrl", placeholder: "https://acme.atlassian.net", required: true },
+    tokenLabel: "projects2.apiToken",
+    tokenHelp: "projects2.jiraTokenHelp",
+    closes: "projects2.closesJira",
+    hookHelp: (t) => (
       <>
-        In Jira: <b>Settings › System › WebHooks › Create a WebHook</b>. Paste the URL and the secret below,
-        limit it with JQL <code>project = KEY</code>, and tick <b>Issue › updated</b>.
+        {t("projects2.hookJiraIntro")} <b>{t("projects2.hookJiraPath")}</b>.{" "}
+        {t("projects2.hookPasteUrlSecretLimit")} <code>project = KEY</code>, {t("projects2.hookAndTick")}{" "}
+        <b>{t("projects2.hookIssueUpdated")}</b>.
       </>
     ),
     pasteSecret: false,
@@ -131,11 +140,13 @@ const META: Record<IssueProvider, Meta> = {
   },
 };
 
-const AUTO_OPTIONS: { value: AutoCreate; label: string }[] = [
-  { value: "manual", label: "Manually" },
-  { value: "bugs", label: "Bugs" },
-  { value: "all", label: "Everything" },
+const AUTO_OPTIONS: { value: AutoCreate; label: Key }[] = [
+  { value: "manual", label: "projects2.manually" },
+  { value: "bugs", label: "projects2.bugs" },
+  { value: "all", label: "projects2.everything" },
 ];
+
+const autoOptions = (t: TFn) => AUTO_OPTIONS.map((o) => ({ value: o.value, label: t(o.label) }));
 
 const parseLabels = (s: string) =>
   [
@@ -153,6 +164,7 @@ const parseLabels = (s: string) =>
  * Enterprise licence.
  */
 export function TrackersTab({ project }: { project: ProjectDetail }) {
+  const t = useT();
   const query = useTrackersQuery(project.id);
   const entitlements = useEntitlementsQuery(undefined);
   const jiraLicensed = !!entitlements.data?.features.includes("jira");
@@ -163,8 +175,8 @@ export function TrackersTab({ project }: { project: ProjectDetail }) {
         <CardContent>
           <EmptyState
             icon={PlugZap}
-            title="Workspace Admins only"
-            description="Ask a workspace Admin to connect GitHub, GitLab, Linear or Jira. You can still send items to a connected tracker from the inbox."
+            title={t("projects2.workspaceAdminsOnly")}
+            description={t("projects2.workspaceAdminsOnlyDescription")}
           />
         </CardContent>
       </Card>
@@ -188,6 +200,7 @@ export function TrackersTab({ project }: { project: ProjectDetail }) {
 }
 
 function EnterpriseNote({ connected }: { connected?: boolean }) {
+  const t = useT();
   return (
     <p
       className="flex items-start gap-1.5 text-sm text-amber-700 dark:text-amber-400"
@@ -195,13 +208,10 @@ function EnterpriseNote({ connected }: { connected?: boolean }) {
     >
       <Sparkles className="mt-0.5 size-4 shrink-0" />
       <span>
-        Jira is an Enterprise feature.{" "}
-        {connected
-          ? "This connection is paused until a licence with Jira is installed"
-          : "Install a licence with Jira to connect it"}{" "}
-        (
+        {t("projects2.jiraEnterpriseFeature")}{" "}
+        {connected ? t("projects2.jiraConnectionPaused") : t("projects2.jiraInstallLicence")} (
         <Link href="/settings/license" className="underline underline-offset-2">
-          Settings › Licence
+          {t("projects2.settingsLicence")}
         </Link>
         ).
       </span>
@@ -218,6 +228,7 @@ function ConnectCard({
   provider: IssueProvider;
   locked: boolean;
 }) {
+  const t = useT();
   const m = META[provider];
   const [open, setOpen] = useState(false);
   const [create] = useCreateTrackerMutation();
@@ -249,7 +260,7 @@ function ConnectCard({
           ...(m.pasteSecret && v.webhookSecret ? { webhookSecret: v.webhookSecret } : {}),
         },
       }).unwrap();
-      toast.success(`${m.name} connected`);
+      toast.success(t("projects2.nameConnected", { name: m.name }));
     } catch (err) {
       form.setError("root", { message: errorMessage(err) });
     }
@@ -263,7 +274,7 @@ function ConnectCard({
           <TrackerIcon provider={provider} className="size-4" /> {m.name}
           {m.enterprise && (
             <Badge variant="outline" className="font-normal">
-              Enterprise
+              {t("projects2.enterprise")}
             </Badge>
           )}
           {!open && (
@@ -274,12 +285,12 @@ function ConnectCard({
               disabled={locked}
               onClick={() => setOpen(true)}
             >
-              Connect {m.name}
+              {t("projects2.connectName", { name: m.name })}
             </Button>
           )}
         </CardTitle>
         <CardDescription>
-          Open an issue for each item (automatically or with “Send to {m.name}”). {m.closes}
+          {t("projects2.openIssueForEachItem", { name: m.name })} {t(m.closes)}
         </CardDescription>
         {locked && <EnterpriseNote />}
       </CardHeader>
@@ -287,7 +298,7 @@ function ConnectCard({
         <CardContent>
           <form noValidate className="grid gap-4" onSubmit={(e) => void submit(e)}>
             {m.url?.required && (
-              <Field id={id("url")} label={m.url.label} error={errors.apiUrl?.message}>
+              <Field id={id("url")} label={t(m.url.label)} error={errors.apiUrl?.message}>
                 <Input
                   {...controlProps(id("url"), errors.apiUrl?.message)}
                   inputMode="url"
@@ -301,8 +312,8 @@ function ConnectCard({
             {provider === "jira" && (
               <Field
                 id={id("email")}
-                label="Account email"
-                help="The Atlassian account the API token belongs to."
+                label={t("projects2.accountEmail")}
+                help={t("projects2.accountEmailHelp")}
                 error={errors.email?.message}
               >
                 <Input
@@ -314,7 +325,12 @@ function ConnectCard({
                 />
               </Field>
             )}
-            <Field id={id("token")} label={m.tokenLabel} help={m.tokenHelp} error={errors.token?.message}>
+            <Field
+              id={id("token")}
+              label={t(m.tokenLabel)}
+              help={t(m.tokenHelp)}
+              error={errors.token?.message}
+            >
               <Input
                 {...controlProps(id("token"), errors.token?.message, true)}
                 type="password"
@@ -322,7 +338,7 @@ function ConnectCard({
                 {...form.register("token")}
               />
             </Field>
-            <Field id={id("repo")} label={m.repoLabel} error={errors.repo?.message}>
+            <Field id={id("repo")} label={t(m.repoLabel)} error={errors.repo?.message}>
               <Input
                 {...controlProps(id("repo"), errors.repo?.message)}
                 spellCheck={false}
@@ -334,8 +350,8 @@ function ConnectCard({
             {m.url && !m.url.required && (
               <Field
                 id={id("url")}
-                label={m.url.label}
-                help="Optional. Leave empty for the public service."
+                label={t(m.url.label)}
+                help={t("projects2.optionalLeaveEmpty")}
                 error={errors.apiUrl?.message}
               >
                 <Input
@@ -350,12 +366,8 @@ function ConnectCard({
             )}
             <Field
               id={id("labels")}
-              label="Labels"
-              help={
-                provider === "linear"
-                  ? "Comma-separated names of existing Linear labels, added to every issue."
-                  : "Comma-separated, added to every issue."
-              }
+              label={t("projects2.labels")}
+              help={provider === "linear" ? t("projects2.linearLabelsHelp") : t("projects2.labelsHelp")}
               error={errors.labels?.message}
             >
               <Input
@@ -364,16 +376,16 @@ function ConnectCard({
               />
             </Field>
             <div className="grid gap-1.5">
-              <p className="text-sm font-medium">Open issues for</p>
+              <p className="text-sm font-medium">{t("projects2.openIssuesFor")}</p>
               <Controller
                 control={form.control}
                 name="autoCreate"
                 render={({ field }) => (
                   <Segmented
-                    label={`Open ${m.name} issues for`}
+                    label={t("projects2.openNameIssuesFor", { name: m.name })}
                     value={field.value}
                     onChange={field.onChange}
-                    options={AUTO_OPTIONS}
+                    options={autoOptions(t)}
                   />
                 )}
               />
@@ -381,10 +393,10 @@ function ConnectCard({
             <FormError message={errors.root?.message} />
             <div className="flex justify-end gap-2 border-t pt-4">
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-                Cancel
+                {t("projects2.cancel")}
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Connecting…" : `Connect ${m.name}`}
+                {isSubmitting ? t("projects2.connecting") : t("projects2.connectName", { name: m.name })}
               </Button>
             </div>
           </form>
@@ -403,6 +415,7 @@ function ConnectedCard({
   integration: IssueIntegration;
   unlicensed: boolean;
 }) {
+  const { t, tm } = useI18n();
   const m = META[i.provider];
   const [labels, setLabels] = useState(i.labels.join(", "));
   const [hook, setHook] = useState<{ secret: string; url: string } | null>(null);
@@ -419,7 +432,7 @@ function ConnectedCard({
       updateTracker({ id: i.id, projectId: project.id, patch })
         .unwrap()
         .then(() => toast.success(message))
-        .catch((e: unknown) => toast.error("Not saved", { description: errorMessage(e) }));
+        .catch((e: unknown) => toast.error(t("projects2.notSaved"), { description: errorMessage(e) }));
     },
   };
   const runTest = () => {
@@ -438,7 +451,7 @@ function ConnectedCard({
     deleteTracker({ id: i.id, projectId: project.id })
       .unwrap()
       .then(() => {
-        toast.success(`${m.name} disconnected`);
+        toast.success(t("projects2.nameDisconnected", { name: m.name }));
         setConfirmRemove(false);
       })
       .catch((e: unknown) => toast.error(errorMessage(e)));
@@ -458,24 +471,24 @@ function ConnectedCard({
             <span
               className={`size-1.5 rounded-full ${i.active && !unlicensed ? "bg-emerald-500" : "bg-muted-foreground"}`}
             />
-            {i.active && !unlicensed ? "Connected" : "Paused"}
+            {i.active && !unlicensed ? t("projects2.connected") : t("projects2.paused")}
           </Badge>
         </CardTitle>
         {unlicensed && <EnterpriseNote connected />}
         {i.lastError && (
           <p className="flex items-start gap-2 text-sm text-destructive" role="alert">
-            <CircleAlert className="mt-0.5 size-4 shrink-0" /> Last error: {i.lastError}
+            <CircleAlert className="mt-0.5 size-4 shrink-0" /> {t("projects2.lastError")} {i.lastError}
           </p>
         )}
       </CardHeader>
       <CardContent>
         <SettingGroup>
           <SettingRow
-            label="Open issues for"
-            description="New items that get an issue without anyone pressing a button."
+            label={t("projects2.openIssuesFor")}
+            description={t("projects2.openIssuesForDescription")}
           >
             <Segmented
-              label={`Open ${m.name} issues for`}
+              label={t("projects2.openNameIssuesFor", { name: m.name })}
               value={i.autoCreate}
               disabled={unlicensed}
               onChange={(autoCreate) =>
@@ -483,14 +496,20 @@ function ConnectedCard({
                   patch: { autoCreate },
                   message:
                     autoCreate === "manual"
-                      ? "Issues are opened by hand"
-                      : `Issues open for ${autoCreate === "all" ? "every item" : "bugs"}`,
+                      ? t("projects2.issuesOpenedByHand")
+                      : autoCreate === "all"
+                        ? t("projects2.issuesOpenForEveryItem")
+                        : t("projects2.issuesOpenForBugs"),
                 })
               }
-              options={AUTO_OPTIONS}
+              options={autoOptions(t)}
             />
           </SettingRow>
-          <SettingRow label="Labels" htmlFor={`${p}-labels-edit`} description="Comma-separated.">
+          <SettingRow
+            label={t("projects2.labels")}
+            htmlFor={`${p}-labels-edit`}
+            description={t("projects2.commaSeparated")}
+          >
             <Input
               id={`${p}-labels-edit`}
               className="w-full sm:w-64"
@@ -500,65 +519,76 @@ function ConnectedCard({
               onBlur={() => {
                 const next = parseLabels(labels);
                 if (next.join(",") !== i.labels.join(","))
-                  update.mutate({ patch: { labels: next }, message: "Labels saved" });
+                  update.mutate({ patch: { labels: next }, message: t("projects2.labelsSaved") });
               }}
             />
           </SettingRow>
           {p === "jira" && (
-            <SettingRow label="Site" description={i.email ? `Signed in as ${i.email}.` : undefined}>
+            <SettingRow
+              label={t("projects2.site")}
+              description={i.email ? t("projects2.signedInAs", { email: i.email }) : undefined}
+            >
               <code className="font-mono text-xs break-all">{i.apiUrl}</code>
             </SettingRow>
           )}
           <SettingRow
-            label={m.tokenLabel}
+            label={t(m.tokenLabel)}
             htmlFor={`${p}-token-edit`}
-            description={`Saved (ends ${i.tokenHint.replace("…", "")}). Paste a new one to replace it.`}
+            description={t("projects2.tokenSavedDescription", { hint: i.tokenHint.replace("…", "") })}
           >
             <ReplaceToken
               id={`${p}-token-edit`}
               disabled={unlicensed}
-              onReplace={(token) => update.mutate({ patch: { token }, message: `${m.tokenLabel} replaced` })}
+              onReplace={(token) =>
+                update.mutate({
+                  patch: { token },
+                  message: t("projects2.tokenReplaced", { label: t(m.tokenLabel) }),
+                })
+              }
             />
           </SettingRow>
           <SettingRow
-            label="Sync"
+            label={t("projects2.sync")}
             htmlFor={`${p}-active`}
-            description="Pause to stop creating and updating issues."
+            description={t("projects2.syncDescription")}
           >
             <Switch
               id={`${p}-active`}
               checked={i.active}
               disabled={unlicensed && !i.active}
               onCheckedChange={(active) =>
-                update.mutate({ patch: { active }, message: active ? "Sync resumed" : "Sync paused" })
+                update.mutate({
+                  patch: { active },
+                  message: active ? t("projects2.syncResumed") : t("projects2.syncPaused"),
+                })
               }
             />
           </SettingRow>
-          <SettingRow label="Two-way status" description={m.hookHelp} stack>
+          <SettingRow label={t("projects2.twoWayStatus")} description={m.hookHelp(t)} stack>
             <div className="grid gap-2">
               <div className="flex items-center gap-2 rounded-lg border bg-muted/50 p-2 pl-3">
-                <span className="w-14 shrink-0 text-xs text-muted-foreground">URL</span>
+                <span className="w-14 shrink-0 text-xs text-muted-foreground">{t("projects2.url")}</span>
                 <code className="min-w-0 flex-1 font-mono text-xs break-all">{i.webhookUrl}</code>
-                <CopyButton value={i.webhookUrl} label="Copy URL" />
+                <CopyButton value={i.webhookUrl} label={t("projects2.copyUrl")} />
               </div>
               {m.pasteSecret ? (
                 <PasteSecret
                   id={`${p}-secret-edit`}
                   disabled={unlicensed}
                   onSave={(webhookSecret) =>
-                    update.mutate({ patch: { webhookSecret }, message: "Signing secret saved" })
+                    update.mutate({ patch: { webhookSecret }, message: t("projects2.signingSecretSaved") })
                   }
                 />
               ) : hook ? (
                 <div className="flex items-center gap-2 rounded-lg border bg-muted/50 p-2 pl-3">
-                  <span className="w-14 shrink-0 text-xs text-muted-foreground">Secret</span>
+                  <span className="w-14 shrink-0 text-xs text-muted-foreground">{t("projects2.secret")}</span>
                   <code
                     className="min-w-0 flex-1 font-mono text-xs break-all select-all"
                     data-testid="tracker-secret"
                   >
                     {hook.secret}
                   </code>
-                  <CopyButton value={hook.secret} label="Copy secret" />
+                  <CopyButton value={hook.secret} label={t("projects2.copySecret")} />
                 </div>
               ) : (
                 <Button
@@ -568,7 +598,7 @@ function ConnectedCard({
                   disabled={reveal.isFetching}
                   onClick={showSecret}
                 >
-                  <Eye /> Reveal webhook secret
+                  <Eye /> {t("projects2.revealWebhookSecret")}
                 </Button>
               )}
             </div>
@@ -576,7 +606,7 @@ function ConnectedCard({
         </SettingGroup>
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4">
           <Button variant="outline" size="sm" disabled={test.isLoading || unlicensed} onClick={runTest}>
-            <PlugZap /> {test.isLoading ? "Testing…" : "Test connection"}
+            <PlugZap /> {test.isLoading ? t("projects2.testing") : t("projects2.testConnection")}
           </Button>
           {testResult && (
             <span
@@ -584,7 +614,7 @@ function ConnectedCard({
               className={`flex items-center gap-1.5 text-sm ${testResult.ok ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}`}
             >
               {testResult.ok ? <CircleCheck className="size-4" /> : <CircleAlert className="size-4" />}
-              {testResult.ok ? `Can reach ${testResult.name}` : testResult.message}
+              {testResult.ok ? t("projects2.canReach", { name: testResult.name }) : tm(testResult.message)}
             </span>
           )}
           <Button
@@ -593,16 +623,16 @@ function ConnectedCard({
             className="ml-auto text-destructive hover:text-destructive"
             onClick={() => setConfirmRemove(true)}
           >
-            <Trash2 /> Disconnect
+            <Trash2 /> {t("projects2.disconnect")}
           </Button>
         </div>
       </CardContent>
       <ConfirmDialog
         open={confirmRemove}
         onOpenChange={setConfirmRemove}
-        title={`Disconnect ${m.name}?`}
-        description="Existing issues stay where they are, but stop syncing. The links on items are removed."
-        confirmLabel="Disconnect"
+        title={t("projects2.disconnectNameQuestion", { name: m.name })}
+        description={t("projects2.disconnectDescription")}
+        confirmLabel={t("projects2.disconnect")}
         pending={remove.isLoading}
         onConfirm={disconnect}
       />
@@ -624,6 +654,7 @@ function ReplaceToken({
   onReplace: (token: string) => void;
   disabled?: boolean;
 }) {
+  const t = useT();
   const form = useZodForm(replaceTokenForm, { defaultValues: { token: "" } });
   const token = useWatch({ control: form.control, name: "token" });
   const submit = form.handleSubmit((v) => {
@@ -637,13 +668,13 @@ function ReplaceToken({
         type="password"
         autoComplete="off"
         className="w-full sm:w-48"
-        placeholder="New token"
+        placeholder={t("projects2.newToken")}
         disabled={disabled}
         aria-invalid={form.formState.errors.token ? true : undefined}
         {...form.register("token")}
       />
       <Button type="submit" variant="outline" size="default" disabled={!!disabled || token.trim().length < 8}>
-        Replace
+        {t("projects2.replace")}
       </Button>
     </form>
   );
@@ -654,7 +685,7 @@ const pasteSecretForm = z.object({
   secret: z
     .string()
     .trim()
-    .min(16, "Paste the whole signing secret")
+    .min(16, "projects2.pasteWholeSigningSecret")
     .pipe(issueIntegrationUpdate.shape.webhookSecret.unwrap()),
 });
 
@@ -667,9 +698,12 @@ function PasteSecret({
   onSave: (secret: string) => void;
   disabled?: boolean;
 }) {
+  const t = useT();
   const form = useZodForm(pasteSecretForm, { defaultValues: { secret: "" } });
   const secret = useWatch({ control: form.control, name: "secret" });
-  const error = form.formState.errors.secret?.message;
+  const rawError = form.formState.errors.secret?.message;
+  // The schema carries a catalogue key for its own message; the core rules' messages show as they are.
+  const error = rawError && rawError in en ? t(rawError as Key) : rawError;
   const submit = form.handleSubmit((v) => {
     onSave(v.secret);
     form.reset({ secret: "" });
@@ -677,7 +711,7 @@ function PasteSecret({
   return (
     <form className="grid gap-1" noValidate onSubmit={(e) => void submit(e)}>
       <label htmlFor={id} className="text-xs text-muted-foreground">
-        Signing secret from Linear
+        {t("projects2.signingSecretFromLinear")}
       </label>
       <div className="flex gap-2">
         <Input
@@ -691,7 +725,7 @@ function PasteSecret({
           {...form.register("secret")}
         />
         <Button type="submit" variant="outline" disabled={!!disabled || !secret.trim()}>
-          <KeyRound /> Save
+          <KeyRound /> {t("projects2.save")}
         </Button>
       </div>
       <FormError message={error} />
