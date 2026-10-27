@@ -100,6 +100,17 @@ export function SiteFooter() {
           <p>© 2026 Pinwren contributors · v{VERSION}</p>
           <p>Server and dashboard AGPL-3.0 · widget, SDK and tools MIT</p>
         </div>
+        <div className="container-page pb-5">
+          <a href="https://toolindex.net/?ref=badge" target="_blank" rel="nofollow noopener">
+            {/* eslint-disable-next-line @next/next/no-img-element -- the badge markup is supplied as-is by Tool Index */}
+            <img
+              src="https://toolindex.net/badges/listed-on-toolindex.svg"
+              alt="Listed on Tool Index"
+              width="200"
+              height="54"
+            />
+          </a>
+        </div>
       </div>
     </footer>
   );
