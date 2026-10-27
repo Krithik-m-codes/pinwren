@@ -81,12 +81,16 @@ jobs:
         run: pnpm --filter @pinwren/widget build
       - name: Playwright (fixture page on :5180, API mocked)
         run: pnpm --filter @pinwren/widget test:e2e
+      - name: React wrapper Playwright
+        run: pnpm --filter @pinwren/react test:e2e
       - name: Upload traces
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: widget-playwright-traces
-          path: packages/widget/test-results/
+          path: |
+            packages/widget/test-results/
+            packages/react/test-results/
           retention-days: 7
 
   dashboard-e2e:
@@ -182,6 +186,94 @@ jobs:
               echo "| $(basename "$f") | $(gzip -c "$f" | wc -c) |"
             done
           } >> "$GITHUB_STEP_SUMMARY"
+
+  extended-e2e:
+    name: Extended E2E (${{ matrix.suite }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [website, journey, api-smoke]
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: pinwren
+          POSTGRES_PASSWORD: pinwren
+          POSTGRES_DB: pinwren
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U pinwren"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://pinwren:pinwren@127.0.0.1:5433/pinwren
+      PINWREN_URL: http://localhost:3100
+      PINWREN_SECRET: ci-only-secret-0123456789abcdef0123456789abcdef
+      PINWREN_DATA_DIR: ${{ github.workspace }}/data
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pinwren/widget --filter @pinwren/sdk --filter @pinwren/mcp --filter @pinwren/cli build
+      - name: Install Chromium
+        if: matrix.suite != 'api-smoke'
+        working-directory: apps/www
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Website accessibility, links and demo
+        if: matrix.suite == 'website'
+        run: pnpm --filter @pinwren/www test:e2e
+      - name: Fresh-install journey
+        if: matrix.suite == 'journey'
+        shell: bash
+        run: |
+          pnpm --filter @pinwren/web dev > app.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..120}; do
+            if curl --fail --silent http://localhost:3100/api/health >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://localhost:3100/api/health
+          pnpm --filter @pinwren/web exec playwright test -c playwright.journey.config.ts
+      - name: API smoke
+        if: matrix.suite == 'api-smoke'
+        env:
+          PINWREN_TRUST_PROXY: "1"
+          PINWREN_DISABLE_SIGNUP: "false"
+          PINWREN_OUTBOUND_ALLOWLIST: "127.0.0.1"
+          GITHUB_API_URL: http://127.0.0.1:4790
+          PINWREN_ADMIN_EMAILS: smoke-admin@example.com,e2e-admin@example.com
+        shell: bash
+        run: |
+          pnpm --filter @pinwren/web dev > app.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..120}; do
+            if curl --fail --silent http://localhost:3100/api/health >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://localhost:3100/api/health
+          node scripts/smoke.mjs http://localhost:3100
+      - name: Upload diagnostic logs and traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: extended-${{ matrix.suite }}-diagnostics
+          path: |
+            app.log
+            apps/www/test-results/
+            node_modules/.cache/journey-results/
+          retention-days: 7
 
   docker:
     name: Docker image

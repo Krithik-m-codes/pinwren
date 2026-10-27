@@ -7,7 +7,10 @@ const PRODUCTS = ["Pinwren", "Marker.io", "BugHerd", "Userback", "BugPin", "Site
 
 type Cell = true | false | string;
 const ROWS: { label: string; cells: Cell[] }[] = [
-  { label: "Open source", cells: ["AGPL-3.0, widget MIT", false, false, false, "Open core, AGPL", "MIT"] },
+  {
+    label: "Open source",
+    cells: ["AGPL-3.0, widget MIT", false, false, false, "AGPL-3.0 server/admin; MIT widget", "MIT"],
+  },
   { label: "Self-hosted", cells: ["Docker + Postgres", false, false, false, true, "Inside your own app"] },
   { label: "Comments pinned to page elements", cells: [true, false, true, "Partial", false, true] },
   {
@@ -17,14 +20,24 @@ const ROWS: { label: string; cells: Cell[] }[] = [
   { label: "Console and network capture", cells: [true, true, "Partial", true, true, true] },
   { label: "Session replay", cells: ["New in 0.1", true, false, true, false, false] },
   { label: "Triage dashboard", cells: ["Built in", true, true, true, true, "React component"] },
-  { label: "GitHub / GitLab issue sync", cells: ["Two-way", true, true, true, "GitHub", true] },
+  {
+    label: "GitHub / GitLab issue sync",
+    cells: ["Two-way", true, true, true, "GitHub, two-way status sync", true],
+  },
   {
     label: "Jira, Linear and other trackers",
-    cells: ["Linear; Jira (Enterprise)", true, true, true, "Via webhooks", false],
+    cells: ["Linear; Jira (Enterprise)", true, true, true, "Custom API/webhooks (Enterprise)", false],
   },
   {
     label: "Price (approx.)",
-    cells: ["Free to self-host", "~$39–199/mo", "~$50–150/mo", "~$7–23/seat", "Free to self-host", "Free"],
+    cells: [
+      "Free to self-host",
+      "~$39–199/mo",
+      "~$50–150/mo",
+      "~$7–23/seat",
+      "Community free; Enterprise paid",
+      "Free",
+    ],
   },
 ];
 
@@ -41,7 +54,9 @@ const SOURCES = [
     label: "Feedbucket: Userback alternatives",
     href: "https://feedbucket.app/alternatives/userback-alternatives",
   },
-  { label: "BugPin docs", href: "https://docs.bugpin.io/" },
+  { label: "BugPin licensing", href: "https://github.com/aranticlabs/bugpin#license" },
+  { label: "BugPin GitHub sync", href: "https://docs.bugpin.io/integrations/github" },
+  { label: "BugPin editions", href: "https://bugpin.io/editions/" },
   { label: "SitePing on GitHub", href: "https://github.com/NeosiaNexus/SitePing" },
 ];
 

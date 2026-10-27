@@ -1,4 +1,5 @@
 // Every public URL the website links to, in one place. Change the domain or repository here only.
+import { version } from "../../../../package.json";
 
 export const SITE_URL = "https://pinwren.xride-labs.in";
 export const SITE_NAME = "Pinwren";
@@ -20,7 +21,7 @@ export const npmUrl = (pkg: string) => `https://www.npmjs.com/package/${pkg}`;
 
 export const DOCKER_IMAGE = "ghcr.io/krithik-m-codes/pinwren";
 
-export const VERSION = "0.1.0";
+export const VERSION = version;
 
 /** Absolute URL for a site path (canonical links, sitemap, JSON-LD). */
 export const absoluteUrl = (path = "/") => new URL(path, SITE_URL).toString();

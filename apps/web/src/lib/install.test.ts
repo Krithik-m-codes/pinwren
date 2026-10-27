@@ -24,10 +24,10 @@ describe("install snippets", () => {
 
   it("builds the doctor command with an origin when a site is known", () => {
     expect(doctorCommand("https://f.example.com", "pk_1")).toBe(
-      "npx pinwren doctor --url https://f.example.com --key pk_1",
+      "npx @pinwren/cli doctor --url https://f.example.com --key pk_1",
     );
     expect(doctorCommand("https://f.example.com", "pk_1", "www.shop.com")).toBe(
-      "npx pinwren doctor --url https://f.example.com --key pk_1 --origin https://www.shop.com",
+      "npx @pinwren/cli doctor --url https://f.example.com --key pk_1 --origin https://www.shop.com",
     );
     expect(doctorCommand("https://f.example.com", "pk_1", "*.shop.com")).toContain(
       "--origin https://www.shop.com",

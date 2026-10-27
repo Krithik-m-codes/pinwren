@@ -26,9 +26,9 @@ const CHUNKS = ["panel", "report", "editor", "capture", "replay", "flows"];
 const src = join(pkgDir, "src");
 const pkg = JSON.parse(await readFile(join(pkgDir, "package.json"), "utf8"));
 
-// Gzip budgets in KB (blueprint 05 §2, wave-4 §7). Over budget is reported, not fatal — capture is SnapDOM's
-// own pre-minified bundle; the e2e suite enforces the hard limits.
-const BUDGET = { widget: 35, panel: 15, report: 15, editor: 30, capture: 75, replay: 60, flows: 10 };
+// Hard gzip budgets in KiB, also checked in wave4.e2e.ts. ADR 0022 records the existing 92 KiB capture
+// exception: SnapDOM alone exceeds the original 75 KiB target; it is downloaded only on capture.
+const BUDGET = { widget: 35, panel: 15, report: 15, editor: 30, capture: 92, replay: 60, flows: 10 };
 
 // Chunks share the core's modules through `window.__pinwrenLib` (src/lib.ts) instead of bundling copies:
 // an import of one of these from a chunk becomes a read of the object the core put there.
@@ -192,6 +192,7 @@ function report(manifest, ms) {
   const max = Math.max(...i18n.map(([, f]) => manifest.files[f].gzip));
   console.log(`  ${`${i18n.length} locale files`.padEnd(32)} ≤${kb(max).padStart(8)}`);
   console.log(`  built in ${ms} ms${over.length ? ` — over budget: ${over.join(", ")}` : ""}\n`);
+  if (over.length) throw new Error(`Widget gzip size budget exceeded: ${over.join(", ")}`);
 }
 
 await buildAll();

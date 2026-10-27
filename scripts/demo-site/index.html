@@ -149,7 +149,7 @@
     <script>
       // Load the widget against a local Pinwren: ?key=pk_…&host=http://localhost:3100
       // This page only ever talks to a Pinwren on this machine: `host` picks the port, nothing else. The
-      // script URL is rebuilt from a fixed origin and a number, so a crafted link can't load other code.
+      // API URL is rebuilt from a fixed origin and a number; scripts come from this demo server.
       const p = new URLSearchParams(location.search);
       const key = /^pk_[A-Za-z0-9_-]{8,64}$/.test(p.get("key") || "") ? p.get("key") : null;
       let port = 3100;
@@ -162,7 +162,8 @@
       }
       if (key) {
         const s = document.createElement("script");
-        s.src = `http://localhost:${port}/widget.js`;
+        s.src = "/widget.js";
+        s.dataset.endpoint = `http://localhost:${port}`;
         s.dataset.project = key;
         s.async = true;
         document.body.append(s);

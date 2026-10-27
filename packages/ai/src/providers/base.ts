@@ -2,12 +2,25 @@ import type { z } from "zod";
 
 export const DEFAULT_AI_TIMEOUT_MS = 15000;
 
+/** Linear scan: an unanchored trailing-slash regex retries at every slash. */
+export function trimTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url[end - 1] === "/") end--;
+  return url.slice(0, end);
+}
+
 export function extractJsonString(raw: string): string {
   const trimmed = raw.trim();
   // Strip markdown code fences if present: ```json ... ``` or ``` ... ```
-  const fenceMatch = /```(?:json)?\s*([\s\S]*?)\s*```/i.exec(trimmed);
-  if (fenceMatch?.[1]) {
-    return fenceMatch[1].trim();
+  const start = trimmed.indexOf("```");
+  if (start !== -1) {
+    let contentStart = start + 3;
+    if (trimmed.slice(contentStart, contentStart + 4).toLowerCase() === "json") contentStart += 4;
+    const end = trimmed.indexOf("```", contentStart);
+    if (end !== -1) {
+      const content = trimmed.slice(contentStart, end).trim();
+      if (content) return content;
+    }
   }
   // Find outermost JSON object
   const firstBrace = trimmed.indexOf("{");

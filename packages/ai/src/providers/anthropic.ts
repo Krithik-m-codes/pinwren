@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { AiFetch, AiProvider, CompleteOptions } from "../types";
-import { DEFAULT_AI_TIMEOUT_MS, parseJsonWithSchema } from "./base";
+import { DEFAULT_AI_TIMEOUT_MS, parseJsonWithSchema, trimTrailingSlashes } from "./base";
 
 export class AnthropicProvider implements AiProvider {
   readonly id = "anthropic" as const;
@@ -18,7 +18,7 @@ export class AnthropicProvider implements AiProvider {
     this.model = options.model;
     this.fetch = options.fetch ?? ((url, init) => fetch(url, init));
     this.apiKey = options.apiKey;
-    this.baseUrl = options.baseUrl?.replace(/\/+$/, "") || "https://api.anthropic.com";
+    this.baseUrl = trimTrailingSlashes(options.baseUrl ?? "") || "https://api.anthropic.com";
   }
 
   async complete<T>(prompt: string, schema: z.ZodType<T>, options?: CompleteOptions): Promise<T> {

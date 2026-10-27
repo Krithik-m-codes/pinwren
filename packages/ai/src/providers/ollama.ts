@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { AiFetch, AiProvider, CompleteOptions } from "../types";
-import { DEFAULT_AI_TIMEOUT_MS, parseJsonWithSchema } from "./base";
+import { DEFAULT_AI_TIMEOUT_MS, parseJsonWithSchema, trimTrailingSlashes } from "./base";
 
 export class OllamaProvider implements AiProvider {
   readonly id = "ollama" as const;
@@ -11,7 +11,7 @@ export class OllamaProvider implements AiProvider {
   constructor(options: { model: string; baseUrl?: string | undefined; fetch?: AiFetch | undefined }) {
     this.model = options.model;
     this.fetch = options.fetch ?? ((url, init) => fetch(url, init));
-    this.baseUrl = options.baseUrl?.replace(/\/+$/, "") || "http://localhost:11434";
+    this.baseUrl = trimTrailingSlashes(options.baseUrl ?? "") || "http://localhost:11434";
   }
 
   async complete<T>(prompt: string, schema: z.ZodType<T>, options?: CompleteOptions): Promise<T> {

@@ -26,7 +26,7 @@ in a keyboard-first triage inbox you run yourself.
 <!-- Screenshot placeholder: add docs/assets/screenshot.png (the widget on a page next to the inbox) and
      embed it here. -->
 
-> **Status: v0.1 — early.** The core loop (pin, report, triage, sync to your tracker) works and is covered by
+> **Status: v0.2 — early.** The core loop (pin, report, triage, sync to your tracker) works and is covered by
 > unit, Playwright and end-to-end API tests. Expect rough edges and breaking changes before 1.0. The full
 > product spec and roadmap live in [`blueprint/`](blueprint/README.md).
 
@@ -92,18 +92,18 @@ in a keyboard-first triage inbox you run yourself.
 
 ## How it compares
 
-|                                  | **Pinwren**               | Marker.io | BugHerd   | Userback  | BugPin            | SitePing               |
-| -------------------------------- | ------------------------- | --------- | --------- | --------- | ----------------- | ---------------------- |
-| Open source                      | ✅ AGPL-3.0, widget MIT   | —         | —         | —         | Open core, AGPL   | ✅ MIT                 |
-| Self-hosted                      | ✅ Docker + Postgres      | —         | —         | —         | ✅                | ✅ inside your own app |
-| Comments pinned to page elements | ✅                        | —         | ✅        | Partial   | —                 | ✅                     |
-| Annotated screenshot bug reports | ✅                        | ✅        | ✅        | ✅        | ✅                | Partial (area capture) |
-| Console and network capture      | ✅                        | ✅        | Partial   | ✅        | ✅                | ✅                     |
-| Session replay                   | ✅ new in 0.1             | ✅        | —         | ✅        | —                 | —                      |
-| Triage dashboard                 | ✅ built in               | ✅        | ✅        | ✅        | ✅                | ✅ React component     |
-| GitHub / GitLab issue sync       | ✅ two-way                | ✅        | ✅        | ✅        | GitHub            | ✅                     |
-| Jira, Linear and other trackers  | Linear; Jira (Enterprise) | ✅        | ✅        | ✅        | Via webhooks      | —                      |
-| Price                            | Free to self-host         | Paid SaaS | Paid SaaS | Paid SaaS | Free to self-host | Free                   |
+|                                  | **Pinwren**               | Marker.io | BugHerd   | Userback  | BugPin                            | SitePing               |
+| -------------------------------- | ------------------------- | --------- | --------- | --------- | --------------------------------- | ---------------------- |
+| Open source                      | ✅ AGPL-3.0, widget MIT   | —         | —         | —         | AGPL-3.0 server/admin; MIT widget | ✅ MIT                 |
+| Self-hosted                      | ✅ Docker + Postgres      | —         | —         | —         | ✅                                | ✅ inside your own app |
+| Comments pinned to page elements | ✅                        | —         | ✅        | Partial   | —                                 | ✅                     |
+| Annotated screenshot bug reports | ✅                        | ✅        | ✅        | ✅        | ✅                                | Partial (area capture) |
+| Console and network capture      | ✅                        | ✅        | Partial   | ✅        | ✅                                | ✅                     |
+| Session replay                   | ✅ new in 0.1             | ✅        | —         | ✅        | —                                 | —                      |
+| Triage dashboard                 | ✅ built in               | ✅        | ✅        | ✅        | ✅                                | ✅ React component     |
+| GitHub / GitLab issue sync       | ✅ two-way                | ✅        | ✅        | ✅        | GitHub, two-way status sync       | ✅                     |
+| Jira, Linear and other trackers  | Linear; Jira (Enterprise) | ✅        | ✅        | ✅        | Custom API/webhooks (Enterprise)  | —                      |
+| Price                            | Free to self-host         | Paid SaaS | Paid SaaS | Paid SaaS | Community free; Enterprise paid   | Free                   |
 
 Competitor columns reflect their public documentation as of October 2026 and change often; if a cell is
 wrong, please [open an issue][issues]. "Partial" means the feature exists with notable limits or only on
@@ -153,7 +153,7 @@ ready-made configs are in [`docs/self-hosting/reverse-proxy.md`](docs/self-hosti
 ### Add the widget to your site
 
 Paste the snippet from the project's **Install** tab before `</body>` (the tab also has Next.js, Google Tag
-Manager, npm and React versions, prefilled with your key and server address, and a `npx pinwren doctor`
+Manager, npm and React versions, prefilled with your key and server address, and a `npx @pinwren/cli doctor`
 command that checks the setup from your terminal):
 
 ```html

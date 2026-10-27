@@ -77,6 +77,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
           registry-url: https://registry.npmjs.org
+      - name: Install npm with trusted publishing support
+        run: npm install --global npm@11.15.0
       - run: pnpm install --frozen-lockfile
       - name: Unit tests
         run: pnpm --filter @pinwren/widget test
@@ -87,7 +89,14 @@ jobs:
         # Already on npm (e.g. the owner published this version by hand): nothing to do.
         run: |
           if npm view "$(node -p "require('./package.json').name")@$(node -p "require('./package.json').version")" version >/dev/null 2>&1; then echo "already published"; exit 0; fi
-          pnpm publish --access public --provenance --no-git-checks
+          # pnpm packs rewrite workspace: dependencies; npm performs the supported OIDC exchange.
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            unset NODE_AUTH_TOKEN
+            npm config delete //registry.npmjs.org/:_authToken --location=user
+          fi
+          mkdir -p "$RUNNER_TEMP/pinwren-widget"
+          pnpm pack --pack-destination "$RUNNER_TEMP/pinwren-widget"
+          npm publish "$RUNNER_TEMP/pinwren-widget/"*.tgz --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -121,16 +130,34 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
           registry-url: https://registry.npmjs.org
+      - name: Install npm with trusted publishing support
+        run: npm install --global npm@11.15.0
       - run: pnpm install --frozen-lockfile
       - name: Build and test
         run: |
           pnpm --filter @pinwren/sdk --filter @pinwren/mcp --filter @pinwren/cli --filter @pinwren/react build
           pnpm --filter @pinwren/sdk --filter @pinwren/mcp --filter @pinwren/cli --filter @pinwren/react test
-      # pnpm publish (not npm) rewrites workspace: ranges. The SDK goes first: the MCP package depends on it.
+      # Pack with pnpm to rewrite workspace: ranges, then publish the tarball with npm's OIDC client.
+      # The SDK goes first: the MCP package depends on it.
       - name: Publish
         run: |
           # A version that is already on npm (published by hand) is skipped.
-          publish() { (cd "packages/$1" && if npm view "$(node -p "require('./package.json').name")@$(node -p "require('./package.json').version")" version >/dev/null 2>&1; then echo "$1 already published"; else pnpm publish --access public --provenance --no-git-checks; fi); }
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            unset NODE_AUTH_TOKEN
+            npm config delete //registry.npmjs.org/:_authToken --location=user
+          fi
+          publish() {
+            (
+              cd "packages/$1"
+              if npm view "$(node -p "require('./package.json').name")@$(node -p "require('./package.json').version")" version >/dev/null 2>&1; then
+                echo "$1 already published"
+              else
+                mkdir -p "$RUNNER_TEMP/pinwren-$1"
+                pnpm pack --pack-destination "$RUNNER_TEMP/pinwren-$1"
+                npm publish "$RUNNER_TEMP/pinwren-$1/"*.tgz --access public --provenance
+              fi
+            )
+          }
           if [ "$SDK" = "true" ]; then publish sdk; fi
           if [ "$MCP" = "true" ]; then publish mcp; fi
           if [ "$CLI" = "true" ]; then publish cli; fi

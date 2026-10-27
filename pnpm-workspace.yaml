@@ -18,6 +18,8 @@ minimumReleaseAgeExclude:
   - better-auth@1.7.12
 # Security overrides for transitive dev tooling (pnpm audit). Remove each once its parent ships the fix.
 overrides:
+  # Test tooling still resolves an older peer; GHSA-834v-8h66-3h79 is fixed in 21.0.4.
+  "happy-dom@<21.0.4": "21.0.4"
   # shadcn CLI > @modelcontextprotocol/sdk > express: DoS via trailing bytes (GHSA, fixed in 2.4.0).
   "body-parser@>=2.0.0 <2.4.0": "^2.4.0"
   # drizzle-kit > @esbuild-kit/core-utils pins esbuild 0.18, whose dev server answers any website

@@ -47,12 +47,12 @@ export function installSnippets(publicUrl: string, projectKey: string): Record<I
   };
 }
 
-/** `npx pinwren doctor …`: checks the server, widget.js and the config for this key from an origin. */
+/** `npx @pinwren/cli doctor …`: checks the server, widget.js and the config for this key from an origin. */
 export function doctorCommand(publicUrl: string, projectKey: string, site?: string): string {
   const origin = site
     ? ` --origin ${site.includes("://") ? site : `https://${site.replace(/^\*\./, "www.")}`}`
     : "";
-  return `npx pinwren doctor --url ${trimSlash(publicUrl)} --key ${projectKey}${origin}`;
+  return `npx @pinwren/cli doctor --url ${trimSlash(publicUrl)} --key ${projectKey}${origin}`;
 }
 
 /**

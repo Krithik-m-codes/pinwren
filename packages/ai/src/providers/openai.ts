@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { AiFetch, AiProvider, CompleteOptions } from "../types";
-import { DEFAULT_AI_TIMEOUT_MS, parseJsonWithSchema } from "./base";
+import { DEFAULT_AI_TIMEOUT_MS, parseJsonWithSchema, trimTrailingSlashes } from "./base";
 
 export class OpenAiProvider implements AiProvider {
   readonly id = "openai" as const;
@@ -18,7 +18,7 @@ export class OpenAiProvider implements AiProvider {
     this.model = options.model;
     this.fetch = options.fetch ?? ((url, init) => fetch(url, init));
     this.apiKey = options.apiKey;
-    const cleanUrl = options.baseUrl?.replace(/\/+$/, "") || "https://api.openai.com/v1";
+    const cleanUrl = trimTrailingSlashes(options.baseUrl ?? "") || "https://api.openai.com/v1";
     this.baseUrl = cleanUrl.endsWith("/v1") ? cleanUrl : `${cleanUrl}/v1`;
   }
 
