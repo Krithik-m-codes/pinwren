@@ -115,7 +115,7 @@ test.describe.serial("fresh install journey", () => {
   });
 
   test("2. onboarding creates the workspace and the first project", async () => {
-    await expect(dash.getByText("Set up your workspace")).toBeVisible();
+    await expect(dash.getByText("Set up your workspace", { exact: true })).toBeVisible();
     await dash.getByLabel("Workspace name").fill("Horizon Studio");
     await dash.getByLabel("First project").fill("Marketing site");
     await dash.getByLabel("Website domain").fill(SITE);
@@ -128,8 +128,9 @@ test.describe.serial("fresh install journey", () => {
     await expect(dash.getByTestId("install-waiting")).toBeVisible();
     snippet = ((await dash.locator("pre").first().textContent()) ?? "").trim();
     expect(snippet).toMatch(
-      /^<script src="http:\/\/localhost:3100\/widget\.js" data-project="pk_[^"]+" async><\/script>$/,
+      /^<script src="https?:\/\/[^"/]+\/widget\.js" data-project="pk_[^"]+" async><\/script>$/,
     );
+    expect(snippet).toContain(`src="${new URL(dash.url()).origin}/widget.js"`);
     await shot(dash, "03-install-waiting");
     const site = await customerPage(admin);
     await expect(dash.getByTestId("install-connected")).toBeVisible({ timeout: 60_000 });

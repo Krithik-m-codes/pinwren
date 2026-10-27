@@ -1506,11 +1506,13 @@ try {
         check(
           "update check reads the latest release",
           r.body.checked === true && r.body.state?.latest === "v99.0.0",
+          JSON.stringify(r.body),
         );
         r = await call("/api/me", { jar: adminJar });
         check(
           "instance admins see Update available",
           r.body.instanceAdmin === true && r.body.update?.latest === "v99.0.0",
+          JSON.stringify(r.body.update),
         );
         r = await call("/api/me");
         check("non-admins don't", r.body.update === null);

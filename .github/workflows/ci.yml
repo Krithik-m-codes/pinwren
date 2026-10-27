@@ -251,11 +251,11 @@ jobs:
           PINWREN_TRUST_PROXY: "1"
           PINWREN_DISABLE_SIGNUP: "false"
           PINWREN_OUTBOUND_ALLOWLIST: "127.0.0.1"
-          GITHUB_API_URL: http://127.0.0.1:4790
           PINWREN_ADMIN_EMAILS: smoke-admin@example.com,e2e-admin@example.com
         shell: bash
         run: |
-          pnpm --filter @pinwren/web dev > app.log 2>&1 &
+          # GitHub reserves GITHUB_* runner variables. Set the mock API on the child process itself.
+          GITHUB_API_URL=http://127.0.0.1:4790 pnpm --filter @pinwren/web dev > app.log 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           for attempt in {1..120}; do

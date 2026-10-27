@@ -19,9 +19,12 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "pnpm build && pnpm start",
+    // Start Next directly: a pnpm lifecycle wrapper can leave the Linux server process alive after
+    // the suite finishes. Bound graceful shutdown so CI cannot spend its remaining budget in teardown.
+    command: "pnpm build && node node_modules/next/dist/bin/next start -p 3200",
     url: `${BASE}/robots.txt`,
     reuseExistingServer: true,
     timeout: 300_000,
+    gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },
   },
 });

@@ -95,7 +95,7 @@ Not connecting?
 - **Allowed sites**: the widget only loads on the domains listed there. When it refuses a site, the card says
   so — "Blocked a request from https://www.example.com, 2 min ago" — with an **Allow** button. A warning shows
   while the list is empty.
-- **Verify from your terminal**: the tab shows a ready-to-paste `npx pinwren doctor --url … --key … --origin …`
+- **Verify from your terminal**: the tab shows a ready-to-paste `npx @pinwren/cli doctor --url … --key … --origin …`
   command that checks the server, `widget.js` and the project's settings for your site, and says what to fix.
 - If you opened the dashboard on another address than `PINWREN_URL`, the tab says so: snippets always use
   `PINWREN_URL`, so make sure it is the public address.

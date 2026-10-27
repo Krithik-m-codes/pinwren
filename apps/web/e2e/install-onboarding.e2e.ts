@@ -15,7 +15,7 @@ test.describe("install and onboarding", () => {
     await expect(page.getByText('import { init } from "@pinwren/widget"')).toBeVisible();
     await page.getByRole("tab", { name: "React", exact: true }).click();
     await expect(page.getByText(`<Pinwren projectKey="${publicKey}"`)).toBeVisible();
-    await expect(page.getByText(/npx pinwren doctor --url .* --key/)).toBeVisible();
+    await expect(page.getByText(/npx @pinwren\/cli doctor --url .* --key/)).toBeVisible();
     await shoot(page, "project-install", { fullPage: true });
   });
 
