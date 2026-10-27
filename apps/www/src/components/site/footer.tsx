@@ -100,7 +100,7 @@ export function SiteFooter() {
           <p>© 2026 Pinwren contributors · v{VERSION}</p>
           <p>Server and dashboard AGPL-3.0 · widget, SDK and tools MIT</p>
         </div>
-        <div className="container-page pb-5">
+        <div className="container-page flex flex-wrap items-center gap-4 pb-5">
           <a href="https://toolindex.net/?ref=badge" target="_blank" rel="nofollow noopener">
             {/* eslint-disable-next-line @next/next/no-img-element -- the badge markup is supplied as-is by Tool Index */}
             <img
@@ -108,6 +108,23 @@ export function SiteFooter() {
               alt="Listed on Tool Index"
               width="200"
               height="54"
+            />
+          </a>
+          <a
+            href={
+              "https://www.producthunt.com/products/pinwren?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-pinwren"
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- the badge markup is supplied as-is by Product Hunt */}
+            <img
+              alt="Pinwren - Pinwren is a self-hostable visual feedback tool | Product Hunt"
+              width="250"
+              height="54"
+              src={
+                "https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1294130&theme=light&t=1793078291449"
+              }
             />
           </a>
         </div>
