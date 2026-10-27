@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/Krithik-m-codes/pinwren/compare/widget-v0.3.0...widget-v0.3.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* harden release readiness and repair onboarding ([f6c091e](https://github.com/Krithik-m-codes/pinwren/commit/f6c091e232d5624eb440ef6bcee5d31d38e8088b)), closes [#16](https://github.com/Krithik-m-codes/pinwren/issues/16)
+
 ## [0.3.0](https://github.com/Krithik-m-codes/pinwren/compare/widget-v0.2.0...widget-v0.3.0) (2026-10-26)
 
 

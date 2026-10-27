@@ -8,6 +8,21 @@ From the first release on, release-please adds a section per version from the Co
 `main`; the widget's own changes are also listed in [`packages/widget/CHANGELOG.md`](packages/widget/CHANGELOG.md)
 once it is published.
 
+## [0.3.0](https://github.com/Krithik-m-codes/pinwren/compare/v0.2.0...v0.3.0) (2026-10-27)
+
+
+### Features
+
+* **web:** dashboard translation system, language preference and picker ([13a448f](https://github.com/Krithik-m-codes/pinwren/commit/13a448fb0c9e03ae32b84452dcb2b82c86cec933))
+* **web:** translate the dashboard into ten more languages ([530a09d](https://github.com/Krithik-m-codes/pinwren/commit/530a09d1c3a44fdd00b7a1c18208f4cd24f3deb3))
+* **www:** add the Product Hunt badge to the site footer ([a76b992](https://github.com/Krithik-m-codes/pinwren/commit/a76b992d077f398f9ec5a9d39e40c86c70356953))
+* **www:** add the Tool Index badge to the site footer ([0908d06](https://github.com/Krithik-m-codes/pinwren/commit/0908d0654ef8864b18f410df5d515609c3f55689))
+
+
+### Bug Fixes
+
+* harden release readiness and repair onboarding ([f6c091e](https://github.com/Krithik-m-codes/pinwren/commit/f6c091e232d5624eb440ef6bcee5d31d38e8088b)), closes [#16](https://github.com/Krithik-m-codes/pinwren/issues/16)
+
 ## [0.2.0](https://github.com/Krithik-m-codes/pinwren/compare/v0.1.0...v0.2.0) (2026-10-26)
 
 
