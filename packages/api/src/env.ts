@@ -70,7 +70,7 @@ const schema = z.object({
     .string()
     .regex(/^[\w.-]+\/[\w.-]+$/)
     .default("Krithik-m-codes/pinwren"),
-  PINWREN_VERSION: z.string().default("0.2.0"), // x-release-please-version
+  PINWREN_VERSION: z.string().default("0.3.0"), // x-release-please-version
 
   // Enterprise licence (F-098). A file path here overrides and locks the upload in Settings › Licence.
   PINWREN_LICENSE_FILE: optionalString,

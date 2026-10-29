@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/Krithik-m-codes/pinwren/compare/widget-v0.3.0...widget-v0.4.0) (2026-10-29)
+
+
+### Features
+
+* **guest:** add capability-based feedback portal ([#19](https://github.com/Krithik-m-codes/pinwren/issues/19)) ([4291864](https://github.com/Krithik-m-codes/pinwren/commit/4291864ef208ef4dd7a443464d91fcec6e6e81c4))
+
+
+### Bug Fixes
+
+* harden release readiness and repair onboarding ([f6c091e](https://github.com/Krithik-m-codes/pinwren/commit/f6c091e232d5624eb440ef6bcee5d31d38e8088b)), closes [#16](https://github.com/Krithik-m-codes/pinwren/issues/16)
+
 ## [0.3.0](https://github.com/Krithik-m-codes/pinwren/compare/widget-v0.2.0...widget-v0.3.0) (2026-10-26)
 
 
