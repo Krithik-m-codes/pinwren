@@ -1,16 +1,12 @@
-import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { type Database, getRuntimeDb } from "./connection";
+import { activeTenantDatabase, type TenantDatabase } from "./tenant-context";
 import * as schema from "./schema";
 
 export * from "./schema";
 export { schema };
-
-function createDb(url: string) {
-  const client = postgres(url, { max: Number(process.env.DATABASE_POOL_MAX ?? 10) });
-  return drizzle(client, { schema, casing: "snake_case" });
-}
-
-export type Database = ReturnType<typeof createDb>;
+export type { Database } from "./connection";
+export { withOrg, currentOrgId, type TenantDatabase } from "./tenant-context";
 
 /**
  * Tests only: forget the sign-in / sign-up attempts the auth rate limiter has counted, so an end-to-end
@@ -26,14 +22,11 @@ export async function clearAuthRateLimits(url: string): Promise<void> {
   }
 }
 
-// One pool per process. Next.js dev reloads modules, so keep it on globalThis.
-const globalForDb = globalThis as unknown as { __pinwrenDb?: Database };
-
-export function getDb(): Database {
-  if (!globalForDb.__pinwrenDb) {
-    const url = process.env.DATABASE_URL;
-    if (!url) throw new Error("DATABASE_URL is not set");
-    globalForDb.__pinwrenDb = createDb(url);
+export function getDb(): Database | TenantDatabase {
+  const scoped = activeTenantDatabase();
+  if (scoped) return scoped;
+  if (process.env.PINWREN_MODE === "cloud") {
+    throw new Error("Organization context is required for Cloud database access");
   }
-  return globalForDb.__pinwrenDb;
+  return getRuntimeDb();
 }
