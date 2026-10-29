@@ -19,6 +19,8 @@ export const PANEL_CSS = /* css */ `
   box-shadow: var(--shadow); display: flex; flex-direction: column; animation: slide .18s ease-out; }
 .phead { display: flex; align-items: center; gap: 6px; padding: 16px 12px 12px 18px; }
 .ptitle { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+.pfooter { padding: 12px 14px; border-top: 1px solid var(--line); }
+.pfooter a { color: var(--fg); text-decoration: none; }
 .stats { display: grid; gap: 8px; padding: 10px 18px 12px; border-block: 1px solid var(--line);
   background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 6%, var(--bg)), var(--bg)); }
 .srow { display: flex; align-items: center; gap: 14px; }

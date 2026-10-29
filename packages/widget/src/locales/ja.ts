@@ -2,6 +2,7 @@ import type { Catalog } from "../i18n";
 
 // Japanese (ja) — translated from en.ts; keep keys and {placeholders} identical.
 export default {
+  openMyFeedback: "自分のフィードバックを開く",
   // Launcher and menu
   feedback: "フィードバック",
   giveFeedback: "フィードバックを送る",

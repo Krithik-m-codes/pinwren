@@ -17,6 +17,7 @@ export const enPanel = {
   newTab: "{label} (opens in a new tab)",
 
   // Panel
+  openMyFeedback: "Open my feedback",
   filter: "Filter",
   filterOpen: "Open",
   filterResolved: "Resolved",

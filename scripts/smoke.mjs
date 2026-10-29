@@ -162,6 +162,28 @@ r = await W("/w/feedback", { method: "POST", json: report });
 check("widget submits a bug report", r.status === 201, r.status);
 const fid = r.body.feedback?.id;
 const firstToken = r.body.feedback?.reporterToken;
+const guestHeaders = { "x-pinwren-reporter-tokens": firstToken };
+r = await call(`/api/guest/${publicKey}/feedback`, {
+  jar: { cookie: "" },
+  headers: guestHeaders,
+});
+check(
+  "guest portal lists only reports proved by reporter token without a team session",
+  r.status === 200 && r.body.items?.length === 1 && r.body.items[0]?.id === fid,
+  r.status,
+);
+r = await call(`/api/guest/${publicKey}/feedback`, {
+  jar: { cookie: "" },
+  headers: { ...guestHeaders, "x-pinwren-page-tokens": "forged.signature" },
+});
+check("guest portal ignores forged page capabilities", r.status === 200 && r.body.items?.length === 1);
+r = await call(`/api/guest/${publicKey}/feedback/${fid}/comments`, {
+  method: "POST",
+  jar: { cookie: "" },
+  headers: guestHeaders,
+  json: { body: "Hello", author: { name: "Impersonated" }, visibility: "internal" },
+});
+check("guest reply rejects client supplied author and visibility", r.status === 400, r.status);
 r = await W("/w/feedback", { method: "POST", json: report });
 check("resubmit with same clientId is idempotent", r.status === 200 && r.body.feedback.id === fid);
 const replayHasToken = r.body.feedback?.reporterToken !== undefined;
@@ -198,6 +220,20 @@ check("team reply", r.status === 201);
 const teamCommentId = r.body.comment?.id;
 r = await W(`/w/feedback/${fid}/comments`);
 check("public reply visible in widget", r.body.items?.length === 1 && r.body.items[0].team === true);
+r = await call(`/api/feedback/${fid}/comments`, {
+  method: "POST",
+  json: { body: "Internal team note", visibility: "internal" },
+});
+check("internal team note created for guest isolation check", r.status === 201, r.status);
+r = await call(`/api/guest/${publicKey}/feedback/${fid}`, {
+  jar: { cookie: "" },
+  headers: guestHeaders,
+});
+check(
+  "guest thread contains public replies but excludes internal team notes",
+  r.status === 200 && r.body.replies?.length === 1 && r.body.replies[0]?.body === "Fixed in v1.2",
+  r.status,
+);
 r = await call(`/api/feedback/${fid}`);
 check("activity recorded", r.body.activity.length >= 3, r.body.activity.length);
 
@@ -295,6 +331,21 @@ const r2 = await W("/w/feedback", {
 });
 const fid2 = r2.body.feedback?.id;
 const token2 = r2.body.feedback?.reporterToken;
+r = await call(`/api/guest/${publicKey}/feedback`, { jar: { cookie: "" }, headers: guestHeaders });
+check(
+  "guest portal cannot see a different reporter's report",
+  r.status === 200 && !r.body.items?.some((item) => item.id === fid2),
+  r.status,
+);
+r = await call(`/api/guest/${publicKey}/feedback`, {
+  jar: { cookie: "" },
+  headers: { "x-pinwren-reporter-tokens": token2 },
+});
+check(
+  "second reporter sees only their own report",
+  r.status === 200 && r.body.items?.length === 1 && r.body.items[0]?.id === fid2,
+  r.status,
+);
 r = await W(`/w/feedback/${fid2}`, { method: "PATCH", json: { status: "resolved" } });
 check(
   "resolve from page without token is 403",

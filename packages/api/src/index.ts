@@ -22,6 +22,7 @@ import { teamUnsubscribe, unsubscribe } from "./routes/unsubscribe";
 import { v1 } from "./routes/v1";
 import { aiRoutes } from "./routes/ai";
 import { widget } from "./routes/widget";
+import { guestPortal } from "./routes/guest";
 import { workspace } from "./routes/workspace";
 
 export { getAuth } from "./auth";
@@ -122,6 +123,7 @@ export const app = new Hono()
   .route("/api", inbound)
   .route("/api", unsubscribe)
   .route("/api", teamUnsubscribe)
+  .route("/api", guestPortal)
   .route("/api", dashboard)
   // Users and workspace settings (wave-5 §3.1); after `dashboard`, whose session and viewer guards
   // (`use` on /api/*) run for them too.

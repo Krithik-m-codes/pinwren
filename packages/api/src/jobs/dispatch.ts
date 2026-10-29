@@ -109,7 +109,7 @@ async function sendReporter(
     projectName: ctx.payload.projectName,
     title: ctx.payload.title?.trim() || excerpt(ctx.payload.body, 80),
     pageUrl: feedbackVars(summary(ctx)).pageUrl ?? "",
-    threadUrl: reporterThreadUrl(ctx.payload.id, ctx.payload.pageUrl),
+    threadUrl: reporterThreadUrl(ctx.payload.id, ctx.payload.pageUrl, ctx.projectKey),
   };
   await enqueueOnce(
     e.id ? `${e.id}:reporter:${key}` : null,

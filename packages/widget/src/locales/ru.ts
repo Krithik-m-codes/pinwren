@@ -3,6 +3,7 @@ import type { Catalog } from "../i18n";
 // Russian (ru) — translated from en.ts; keep keys and {placeholders} identical. Russian has three integer
 // plural forms, so counted strings add `_few` (2–4, 22–24…) and `_many` (0, 5–20, 25…) to `_one`/`_other`.
 export default {
+  openMyFeedback: "Открыть мои отзывы",
   // Launcher and menu
   feedback: "Отзыв",
   giveFeedback: "Оставить отзыв",

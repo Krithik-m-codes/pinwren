@@ -2,6 +2,7 @@ import type { Catalog } from "../i18n";
 
 // Brazilian Portuguese (pt-BR) — translated from en.ts; keep keys and {placeholders} identical.
 export default {
+  openMyFeedback: "Abrir meus comentários",
   // Launcher and menu
   feedback: "Feedback",
   giveFeedback: "Enviar feedback",
