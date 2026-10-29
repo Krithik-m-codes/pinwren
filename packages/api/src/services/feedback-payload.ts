@@ -34,6 +34,7 @@ export type ProjectNotifySettings = {
 export type FeedbackContext = {
   payload: FeedbackPayload;
   orgId: string;
+  projectKey: string;
   reporterEmail: string | null;
   /** The reporter when they are a member (signed-in widget or dashboard report), else null. */
   reporterId: string | null;
@@ -49,6 +50,7 @@ export async function loadFeedbackContext(feedbackId: string): Promise<FeedbackC
     .select({
       f: feedback,
       projectName: project.name,
+      projectKey: project.publicKey,
       notifyReporter: project.notifyReporter,
       notify: {
         memberIds: project.notifyMemberIds,
@@ -81,6 +83,7 @@ export async function loadFeedbackContext(feedbackId: string): Promise<FeedbackC
   }
   return {
     orgId: f.orgId,
+    projectKey: row.projectKey,
     reporterEmail,
     reporterId: f.reporterId,
     notifyReporter: row.notifyReporter,

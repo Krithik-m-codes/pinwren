@@ -23,6 +23,7 @@ const PAGE = "https://shop.example/pricing";
 
 function setup(rows: PanelRow[], over: { cfg?: Partial<WidgetConfig>; remote?: Pin[] | Error } = {}) {
   const api = {
+    endpoint: "https://feedback.example/deploy///",
     pins: vi.fn(() =>
       over.remote instanceof Error
         ? Promise.reject(over.remote)
@@ -84,6 +85,53 @@ describe("helpers", () => {
 });
 
 describe("sidebar", () => {
+  it("opens this project's portal with reporter access only in the fragment, including read-only projects", () => {
+    store.addMine("pk_test", { id: "a", token: "reporter_token_0123456789" });
+    const { panel } = setup([], { cfg: { readOnly: true } });
+    const link = panel.el.querySelector<HTMLAnchorElement>("a.portal");
+    expect(link?.textContent).toBe("Open my feedback");
+    expect(link?.target).toBe("_blank");
+    expect(link?.rel).toBe("noopener noreferrer");
+    const url = new URL(link?.href ?? "https://missing.example");
+    expect(url.origin + url.pathname).toBe("https://feedback.example/deploy/guest/pk_test");
+    expect(url.search).toBe("");
+    expect(JSON.parse(decodeURIComponent(url.hash.slice(8)))).toEqual({
+      reporterTokens: ["reporter_token_0123456789"],
+      pageTokens: [],
+    });
+  });
+
+  it("has no portal entry without saved reporter access or when storage is blocked", () => {
+    expect(setup([]).panel.el.querySelector("a.portal")).toBeNull();
+    const get = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    try {
+      expect(setup([]).panel.el.querySelector("a.portal")).toBeNull();
+    } finally {
+      get.mockRestore();
+    }
+  });
+
+  it("ignores malformed saved credentials and refreshes the entry when access is removed", () => {
+    for (const raw of [
+      "not json",
+      "null",
+      "{}",
+      '[null,{}, {"id":"a","token":123}, {"id":"tmp:a","token":"reporter_token_0123456789"}]',
+    ]) {
+      localStorage.setItem("pinwren:mine:pk_test", raw);
+      const { panel } = setup([]);
+      expect(panel.el.querySelector("a.portal")).toBeNull();
+      panel.destroy();
+    }
+    store.addMine("pk_test", { id: "a", token: "reporter_token_0123456789" });
+    const { panel } = setup([]);
+    expect(panel.el.querySelector("a.portal")).not.toBeNull();
+    localStorage.removeItem("pinwren:mine:pk_test");
+    panel.render();
+    expect(panel.el.querySelector("a.portal")).toBeNull();
+  });
   const rows: PanelRow[] = [
     { pin: pin({ id: "a", number: 1, kind: "bug" }), onPage: true, moved: false },
     {

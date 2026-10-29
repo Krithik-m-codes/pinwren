@@ -2,6 +2,7 @@ import type { Pin, WidgetApi } from "./api";
 import type { WidgetConfig } from "./config";
 import { adoptStyle, focused, h, icon } from "./dom";
 import { errText } from "./env";
+import { guestPortalUrl } from "./guest-portal";
 import { cleanPageUrl, deepLink, download, fileName, toCsv, toJson, toRows } from "./export";
 import { addEnglish, t, tn } from "./i18n";
 import * as I from "./icons";
@@ -24,7 +25,7 @@ export type PanelHost = {
   root: HTMLElement;
   cfg: WidgetConfig;
   projectKey: string;
-  api: Pick<WidgetApi, "pins" | "setStatus" | "remove">;
+  api: Pick<WidgetApi, "endpoint" | "pins" | "setStatus" | "remove">;
   /** This page's items: placed markers plus page-level and unplaced ones. */
   rows(): PanelRow[];
   canComment: boolean;
@@ -94,6 +95,7 @@ export class Panel {
   private busy = false;
 
   private readonly list = h("div", { class: "plist", role: "list" });
+  private readonly footer = h("div", { class: "pfooter", hidden: true });
   private readonly stats = h("div", { class: "stats" });
   private readonly selbar = h("div", { class: "selbar" });
   private readonly confirmBox = h("div", {
@@ -239,6 +241,7 @@ export class Panel {
       ),
       this.selbar,
       this.list,
+      this.footer,
       this.confirmBox,
     );
     this.el.addEventListener("keydown", (e) => {
@@ -332,6 +335,23 @@ export class Panel {
   // --- Render -----------------------------------------------------------------------------------------
 
   render() {
+    const portal = guestPortalUrl(
+      this.host.api.endpoint,
+      this.host.projectKey,
+      store.mine(this.host.projectKey),
+    );
+    this.footer.hidden = !portal;
+    this.footer.replaceChildren(
+      ...(portal
+        ? [
+            h(
+              "a",
+              { class: "btn portal", href: portal, target: "_blank", rel: "noopener noreferrer" },
+              t("openMyFeedback"),
+            ),
+          ]
+        : []),
+    );
     const all = this.scoped();
     const rows = this.visible();
     for (const id of this.selected) if (!rows.some((r) => r.pin.id === id)) this.selected.delete(id);

@@ -2,6 +2,7 @@ import type { Catalog } from "../i18n";
 
 // Simplified Chinese (zh) — translated from en.ts; keep keys and {placeholders} identical.
 export default {
+  openMyFeedback: "打开我的反馈",
   // Launcher and menu
   feedback: "反馈",
   giveFeedback: "提交反馈",

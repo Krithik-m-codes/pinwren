@@ -1,5 +1,6 @@
 export * from "./api-types";
 export * from "./config";
+export * from "./guest";
 export * from "./license";
 export * from "./origins";
 export * from "./realtime";

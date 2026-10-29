@@ -2,6 +2,7 @@ import type { Catalog } from "../i18n";
 
 // Dutch (nl) — translated from en.ts; keep keys and {placeholders} identical.
 export default {
+  openMyFeedback: "Mijn feedback openen",
   // Launcher and menu
   feedback: "Feedback",
   giveFeedback: "Feedback geven",

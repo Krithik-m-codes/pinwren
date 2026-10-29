@@ -145,6 +145,20 @@ describe("rich team emails", () => {
     expect(reporterThreadUrl(id, "javascript:alert(1)")).toBe("");
   });
 
+  it("sends reporters to their capability-protected guest portal", async () => {
+    const { reporterThreadUrl } = await import("./jobs/thread-url");
+    const id = "0192f0c4-4f6e-7c1a-8d55-9a3e2b1c4d5e";
+    const url = new URL(reporterThreadUrl(id, "https://shop.example.com/checkout", "pk_shop"));
+    expect(url.origin).toBe("http://localhost:3100");
+    expect(url.pathname).toBe("/guest/pk_shop");
+    expect(url.search).toBe("");
+    expect(url.hash).toMatch(/^#access=/);
+    const access = JSON.parse(decodeURIComponent(url.hash.slice(8))) as { pageTokens: string[] };
+    expect(access.pageTokens).toHaveLength(1);
+    const { verifyPageLinkToken } = await import("./services/page-link");
+    expect(verifyPageLinkToken(access.pageTokens[0])?.feedbackId).toBe(id);
+  });
+
   it("counts console errors and failed requests from diagnostics", async () => {
     const { diagnosticCounts } = await import("./services/feedback-payload");
     expect(

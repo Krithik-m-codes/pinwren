@@ -2,6 +2,7 @@ import type { Catalog } from "../i18n";
 
 // Hindi (hi) — translated from en.ts; keep keys and {placeholders} identical.
 export default {
+  openMyFeedback: "मेरी प्रतिक्रिया खोलें",
   // Launcher and menu
   feedback: "फ़ीडबैक",
   giveFeedback: "फ़ीडबैक दें",
