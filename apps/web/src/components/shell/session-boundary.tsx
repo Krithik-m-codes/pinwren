@@ -7,6 +7,7 @@ import { EmailSetupBanner } from "@/components/notifications/notification-parts"
 import type { Project, SavedView } from "@/lib/api";
 import { serverApi } from "@/lib/server/api";
 import { getOrgBranding } from "@/lib/server/org-data";
+import { BrandingFavicon } from "@/components/shell/branding-favicon";
 import { requireViewer } from "@/lib/server/session";
 import { HydrateQueries } from "@/lib/store/hydrate";
 import { ActivateWorkspace } from "./activate-workspace";
@@ -49,6 +50,7 @@ export async function SessionBoundary({ children }: { children: React.ReactNode 
       ]}
     >
       <I18nProvider locale={locale} catalog={catalog}>
+        <BrandingFavicon href={branding.faviconUrl} />
         <BrandTheme accent={branding.accent} />
         <RealtimeConnection />
         <WorkspaceFromLink orgId={me.orgId} />

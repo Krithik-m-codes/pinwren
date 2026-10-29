@@ -1,23 +1,13 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
-import { useBrandingQuery } from "@/lib/store/api";
+import { useEffect } from "react";
 
-const subscribe = () => () => undefined;
-
-/** Apply the active workspace icon after the existing authenticated branding query resolves. */
-export function BrandingFavicon() {
-  const ready = useSyncExternalStore(
-    subscribe,
-    () => true,
-    () => false,
-  );
-  const { data } = useBrandingQuery(undefined, { skip: !ready });
-
+/** Apply the favicon from the signed-in server boundary's already-fetched workspace branding. */
+export function BrandingFavicon({ href }: { href: string | null }) {
   useEffect(() => {
     const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-    if (link) link.href = data?.branding.faviconUrl ?? "/pinwren-icon.svg";
-  }, [data?.branding.faviconUrl]);
+    if (link) link.href = href ?? "/pinwren-icon.svg";
+  }, [href]);
 
   return null;
 }
