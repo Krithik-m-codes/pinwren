@@ -13,7 +13,9 @@ import { BrandingFavicon } from "@/components/shell/branding-favicon";
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <SidebarProvider>
-      <BrandingFavicon />
+      <Suspense fallback={null}>
+        <BrandingFavicon />
+      </Suspense>
       <AppSidebar />
       <SidebarInset className="min-w-0">
         <Suspense fallback={<ScreenSkeleton />}>
