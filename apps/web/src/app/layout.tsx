@@ -9,6 +9,7 @@ const mono = JetBrains_Mono({ variable: "--font-geist-mono", subsets: ["latin"],
 export const metadata: Metadata = {
   title: { default: "Pinwren", template: "%s · Pinwren" },
   description: "Pinned feedback and bug reports for your websites.",
+  icons: { icon: "/pinwren-icon.svg" },
   robots: { index: false, follow: false },
 };
 

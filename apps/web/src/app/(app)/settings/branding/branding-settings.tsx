@@ -21,7 +21,7 @@ import { useSyncedState } from "@/lib/use-synced-state";
 
 const DEFAULT_ACCENT = "#d63a1c";
 
-type Patch = Partial<Pick<OrgBranding, "productName" | "accent" | "logoAssetId">>;
+type Patch = Partial<Pick<OrgBranding, "productName" | "accent" | "logoAssetId" | "faviconAssetId">>;
 
 /** Settings › Branding (F-094): product name, logo and accent for the dashboard and emails. */
 export function BrandingSettings() {
@@ -106,6 +106,34 @@ export function BrandingSettings() {
                   onBlur={commitName}
                   onKeyDown={(e) => e.key === "Enter" && commitName()}
                 />
+              </SettingRow>
+              <SettingRow
+                label="Favicon"
+                description="Image shown in browser tabs. PNG recommended; up to 512 KB."
+                stack
+              >
+                <div className="grid gap-2">
+                  <LogoUpload
+                    label="Upload favicon"
+                    value={b.faviconUrl}
+                    onUploaded={(asset) =>
+                      save.mutate({ patch: { faviconAssetId: asset.id }, message: "Favicon updated" })
+                    }
+                  />
+                  {b.faviconUrl && (
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="ghost"
+                      className="justify-self-start text-muted-foreground"
+                      onClick={() =>
+                        save.mutate({ patch: { faviconAssetId: null }, message: "Favicon removed" })
+                      }
+                    >
+                      Remove favicon
+                    </Button>
+                  )}
+                </div>
               </SettingRow>
               <SettingRow label={t("settings1.logo")} description={t("settings1.logoDescription")} stack>
                 <div className="grid gap-2">

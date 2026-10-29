@@ -124,6 +124,9 @@ export const widgetConfig = z.object({
       label: z.string().trim().max(40).nullable().default("Feedback"),
       icon: z.enum(LAUNCHER_ICONS).default("pin"),
       accent: hexColor.default("#d63a1c"),
+      lightAccent: hexColor.nullable().default(null),
+      darkAccent: hexColor.nullable().default(null),
+      hoverEffect: z.boolean().default(true),
       tooltip: z.string().trim().max(80).nullable().default("Give feedback"),
       hidden: z.boolean().default(false),
     })

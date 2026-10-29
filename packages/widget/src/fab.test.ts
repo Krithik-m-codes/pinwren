@@ -53,6 +53,16 @@ describe("speed-dial launcher", () => {
     expect(host.press).toHaveBeenCalled();
   });
 
+  it("applies light and dark launcher colors and supports disabling hover motion", () => {
+    const { fab } = setup(
+      {},
+      { accent: "#123456", lightAccent: "#abcdef", darkAccent: "#fedcba", hoverEffect: false },
+    );
+    expect(fab.button?.style.getPropertyValue("--launcher-light")).toBe("#abcdef");
+    expect(fab.button?.style.getPropertyValue("--launcher-dark")).toBe("#fedcba");
+    expect(fab.button?.classList.contains("no-hover")).toBe(true);
+  });
+
   it("fans out labelled actions and focuses the first", () => {
     const { fab, root, host } = setup();
     fab.open();

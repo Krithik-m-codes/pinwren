@@ -13,7 +13,9 @@ import type { authClient as AuthClient } from "@/lib/auth-client";
 import { type ApiError, baseApi, LIST, fulfilled } from "./base";
 
 export type NotificationsResponse = { items: NotificationItem[]; unreadCount: number };
-export type BrandingPatch = Partial<Pick<OrgBranding, "productName" | "accent" | "logoAssetId">>;
+export type BrandingPatch = Partial<
+  Pick<OrgBranding, "productName" | "accent" | "logoAssetId" | "faviconAssetId">
+>;
 /** A Better Auth organisation role (`member.role`); the dashboard shows Admin / Editor / Viewer. */
 export type OrgRole = "owner" | "admin" | "member" | "viewer";
 

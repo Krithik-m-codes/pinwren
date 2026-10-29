@@ -22,11 +22,18 @@ export type OrgBranding = {
   productName: string | null;
   accent: string | null;
   logoAssetId: string | null;
+  faviconAssetId: string | null;
   /** Absolute URL of the logo, or null. */
   logoUrl: string | null;
+  faviconUrl: string | null;
 };
 
-type Stored = { productName?: string | null; accent?: string | null; logoAssetId?: string | null };
+type Stored = {
+  productName?: string | null;
+  accent?: string | null;
+  logoAssetId?: string | null;
+  faviconAssetId?: string | null;
+};
 
 export const brandAssetUrl = (id: string) =>
   `${env().PINWREN_URL.replace(/\/$/, "")}/api/brand-assets/${encodeURIComponent(id)}`;
@@ -38,11 +45,14 @@ export async function getOrgBranding(orgId: string): Promise<OrgBranding> {
     .where(and(eq(orgSetting.orgId, orgId), eq(orgSetting.key, BRANDING_KEY)));
   const s = (row?.value ?? {}) as Stored;
   const logoAssetId = typeof s.logoAssetId === "string" ? s.logoAssetId : null;
+  const faviconAssetId = typeof s.faviconAssetId === "string" ? s.faviconAssetId : null;
   return {
     productName: typeof s.productName === "string" && s.productName.trim() ? s.productName : null,
     accent: typeof s.accent === "string" ? s.accent : null,
     logoAssetId,
     logoUrl: logoAssetId ? brandAssetUrl(logoAssetId) : null,
+    faviconAssetId,
+    faviconUrl: faviconAssetId ? brandAssetUrl(faviconAssetId) : null,
   };
 }
 
@@ -74,19 +84,23 @@ export async function updateOrgBranding(
   userId: string,
 ): Promise<OrgBranding> {
   const db = getDb();
-  if (patch.logoAssetId) {
+  for (const [assetId, label] of [
+    [patch.logoAssetId, "Logo"],
+    [patch.faviconAssetId, "Favicon"],
+  ] as const) {
+    if (!assetId) continue;
     const [a] = await db
       .select({ id: brandAsset.id })
       .from(brandAsset)
-      .where(and(eq(brandAsset.id, patch.logoAssetId), eq(brandAsset.orgId, orgId)));
-    if (!a) throw notFound("Logo");
+      .where(and(eq(brandAsset.id, assetId), eq(brandAsset.orgId, orgId)));
+    if (!a) throw notFound(label);
   }
   const [row] = await db
     .select({ value: orgSetting.value })
     .from(orgSetting)
     .where(and(eq(orgSetting.orgId, orgId), eq(orgSetting.key, BRANDING_KEY)));
   const next: Stored = { ...((row?.value ?? {}) as Stored) };
-  for (const k of ["productName", "accent", "logoAssetId"] as const) {
+  for (const k of ["productName", "accent", "logoAssetId", "faviconAssetId"] as const) {
     if (patch[k] !== undefined) next[k] = patch[k];
   }
   await db

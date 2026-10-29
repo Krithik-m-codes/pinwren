@@ -44,10 +44,14 @@ textarea { min-height: 76px; field-sizing: content; max-height: 220px; }
 
 /* Launcher: a speed dial (fab.ts) */
 .launcher { position: fixed; z-index: 2147483600; height: 52px; min-width: 52px; border-radius: 999px;
-  background: var(--accent); color: var(--accent-fg); box-shadow: 0 8px 24px -6px color-mix(in srgb, var(--accent) 60%, transparent), var(--shadow);
+  --launcher-bg: var(--launcher-light, var(--accent)); --launcher-fg: var(--launcher-light-fg, var(--accent-fg));
+  background: var(--launcher-bg); color: var(--launcher-fg); box-shadow: 0 8px 24px -6px color-mix(in srgb, var(--launcher-bg) 60%, transparent), var(--shadow);
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: transform .16s ease, box-shadow .16s; }
 .launcher.pill { height: 44px; padding: 0 18px 0 14px; font-weight: 600; font-size: 14px; }
-.launcher:hover { transform: translateY(-1px) scale(1.04); }
+.root[data-theme=dark] .launcher { --launcher-bg: var(--launcher-dark, var(--accent)); --launcher-fg: var(--launcher-dark-fg, var(--accent-fg)); }
+@media (prefers-color-scheme: dark) { .root:not([data-theme=light]) .launcher { --launcher-bg: var(--launcher-dark, var(--accent)); --launcher-fg: var(--launcher-dark-fg, var(--accent-fg)); } }
+.launcher:hover:not(.no-hover) { transform: translateY(-1px) scale(1.04); }
+.launcher.no-hover { transition: none; }
 .launcher:active { transform: scale(.97); }
 .launcher svg { width: 22px; height: 22px; transition: transform .2s ease; }
 .launcher.pill svg { width: 18px; height: 18px; }

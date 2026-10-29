@@ -1,9 +1,14 @@
+import { widgetConfig } from "@pinwren/core";
 import { SITE_ORIGIN, seed, shoot } from "./env";
 import { expect, test } from "./fixtures";
 
 test.describe("project settings", () => {
   test("widget tab: every change previews live and persists", async ({ page, request }) => {
     const { projectId, publicKey } = seed();
+    const reset = await request.patch(`/api/projects/${projectId}`, {
+      data: { widgetConfig: widgetConfig.parse({}) },
+    });
+    expect(reset.ok()).toBe(true);
     await page.goto(`/projects/${projectId}?tab=widget`);
     const preview = page.getByTestId("launcher-preview");
     await expect(preview).toBeVisible();
@@ -20,7 +25,10 @@ test.describe("project settings", () => {
     // Position, icon, accent (swatch), tooltip, offset.
     await page.getByRole("radio", { name: "Top left" }).click();
     await page.getByRole("group", { name: "Icon" }).getByRole("button", { name: "Bug" }).click();
-    await page.getByRole("button", { name: /Accent colour/ }).click();
+    await page
+      .getByRole("button", { name: /Accent colour/ })
+      .first()
+      .click();
     await page.getByRole("button", { name: "#e5484d" }).click();
     await page.keyboard.press("Escape");
     const tooltip = page.getByLabel("Tooltip");
@@ -67,7 +75,8 @@ test.describe("project settings", () => {
           label: "Send feedback",
           position: "top-left",
           icon: "bug",
-          accent: "#e5484d",
+          accent: "#d63a1c",
+          lightAccent: "#e5484d",
           tooltip: "Found a problem?",
           offset: { x: 48 },
         },
