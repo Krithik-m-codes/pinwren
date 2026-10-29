@@ -1,6 +1,7 @@
 import postgres from "postgres";
 import { type Database, getRuntimeDb } from "./connection";
 import { activeTenantDatabase, type TenantDatabase } from "./tenant-context";
+import { deploymentMode } from "./deployment-mode";
 import * as schema from "./schema";
 
 export * from "./schema";
@@ -25,7 +26,7 @@ export async function clearAuthRateLimits(url: string): Promise<void> {
 export function getDb(): Database | TenantDatabase {
   const scoped = activeTenantDatabase();
   if (scoped) return scoped;
-  if (process.env.PINWREN_MODE === "cloud") {
+  if (deploymentMode() === "cloud") {
     throw new Error("Organization context is required for Cloud database access");
   }
   return getRuntimeDb();

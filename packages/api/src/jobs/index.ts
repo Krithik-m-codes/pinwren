@@ -11,6 +11,7 @@ import { dispatchEvent } from "./dispatch";
 import { runDigest } from "./digest";
 import { applyRetention, cleanupTrash } from "./maintenance";
 import { type AiEnrichJob, runAiEnrichmentJob } from "./ai";
+import { ensureCloudDatabaseSecurity } from "../cloud-startup";
 
 export { enqueue, getBoss, QUEUES } from "./boss";
 
@@ -20,7 +21,9 @@ const g = globalThis as unknown as { __pinwrenWorkers?: Promise<void> | undefine
  * Start the job workers in this process (called from the Next.js Node instrumentation hook).
  * Safe to call more than once. `PINWREN_ROLE=web` processes only enqueue.
  */
-export function startJobs(): Promise<void> {
+export async function startJobs(): Promise<void> {
+  // Security failures must propagate instead of entering the queue's catch-and-continue handler.
+  await ensureCloudDatabaseSecurity();
   g.__pinwrenWorkers ??= (async () => {
     if (env().PINWREN_ROLE === "web") return;
     const boss = await getBoss();

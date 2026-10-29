@@ -3,6 +3,7 @@ import { PRODUCTION_KEYS } from "./license/keys";
 import { mergeStalePages } from "./services/page-merge";
 import { hasAnyUser, promoteFirstAccount } from "./services/setup";
 import { encryptLegacyChatWebhookUrls } from "./webhooks/url";
+export { assertCloudDatabaseSecurity } from "@pinwren/db/cloud-security";
 
 // One-off work at server start (called from the dashboard's instrumentation hook). Each step logs and
 // carries on: none of it may keep the server from starting.

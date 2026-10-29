@@ -24,6 +24,9 @@ const result = spawnSync(
     "src/tenant-context-db.test.ts",
     "src/tenant-isolation.test.ts",
     "src/tenant-migration-db.test.ts",
+    "src/cloud-configuration.test.ts",
+    "src/cloud-startup.test.ts",
+    "src/cloud-security-db.test.ts",
   ],
   {
     cwd: root,

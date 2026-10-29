@@ -1,8 +1,8 @@
 # Cloud tenant isolation
 
 Status: implementation in progress. Cloud signup is not ready for customers. The transaction context,
-policy definitions and relationship constraints are implemented. Cloud provisioning, startup validation
-and request/worker integration have not yet been delivered. The approved design and implementation plan are in
+policy definitions, relationship constraints, Cloud provisioning and startup validation are implemented.
+Request and worker query integration remains unfinished. The approved design and implementation plan are in
 `docs/superpowers/specs/2026-10-29-cloud-tenant-isolation-design.md` and
 `docs/superpowers/plans/2026-10-29-cloud-tenant-isolation.md`.
 
@@ -87,7 +87,7 @@ configuration is missing. The test administrator must be able to create fixture 
 The suite creates a distinct non-owner runtime role and cleans its fixture rows, grants, roles and
 temporary databases. Never point it at customer data.
 
-Current local PostgreSQL 16 evidence: 80 checks pass across inventory, context, real pooled connection
+The policy/context tranche passed 80 checks on local PostgreSQL 16 across inventory, context, real pooled connection
 reuse/rollback, row policies and migration failure tests. All 27 protected tables have scoped read and
 missing-context cases. All 23 direct ownership tables reject ownership changes and foreign
 UPDATE/DELETE RETURNING. Valid local CRUD succeeds. Twenty-one composite tenant foreign keys are
@@ -103,6 +103,56 @@ named constraint, allowing the operator to investigate rather than losing or rea
 The custom label triggers and policies are intentionally installed with versioned SQL migrations;
 future Cloud startup validation must check them in addition to the Drizzle schema inventory.
 
-Operator provisioning commands, worker integration, route-wide foreign-resource tests, and rollback
-instructions will be recorded with their implementation.
+## Provisioning and process credentials
+
+Provisioning is currently for isolated verification while application integration is completed.
+Use PostgreSQL 16+ and separately created LOGIN roles without superuser, BYPASSRLS, CREATEDB,
+CREATEROLE, REPLICATION or inherited privileged memberships. In `psql` as the database administrator:
+
+```sql
+CREATE ROLE pinwren_runtime LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+CREATE ROLE pinwren_service LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+\password pinwren_runtime
+\password pinwren_service
+```
+
+Set connection URLs in the indicated process environment. All URLs must name the same database
+endpoint, with distinct runtime and service roles. The application must not receive the privileged
+migration URL. Provisioning configures existing roles and never sets or prints their passwords.
+
+| Process              | `DATABASE_URL`            | `PINWREN_SERVICE_DATABASE_URL` | `PINWREN_MIGRATION_DATABASE_URL` | Command                                      |
+| -------------------- | ------------------------- | ------------------------------ | -------------------------------- | -------------------------------------------- |
+| Offline migrations   | Privileged migration role | Unset                          | Unset                            | `pnpm --filter @pinwren/db migrate`          |
+| Offline provisioning | Runtime role              | Service role                   | Privileged migration role        | `pnpm --filter @pinwren/db provision:cloud`  |
+| Cloud application    | Runtime role              | Service role                   | Unset                            | Application starts with `PINWREN_MODE=cloud` |
+
+The provisioning command locks the database change transaction, revokes PUBLIC/table/CREATE grants,
+grants CONNECT and schema USAGE to the two roles, grants tenant CRUD to the runtime role and
+identity/system CRUD to the service role, enables and forces RLS on all protected tables, and validates
+the actual roles and catalogs before committing. A failed validation rolls the changes back. Repeating
+successful provisioning is supported. Existing extra permissive policies cause a failure rather than
+being silently deleted.
+
+Cloud startup validates role attributes/membership/ownership, DDL and TRUNCATE capabilities,
+unreviewed callable security-definer functions, table coverage, exact policy definitions, runtime CRUD
+grants, service exclusion from tenant tables, composite foreign keys, and integrity trigger/function
+definitions. Malformed connection URL errors omit credentials. The Next.js startup hook awaits this
+check before maintenance or workers; it never runs migrations using Cloud runtime credentials.
+Standalone API requests and worker startup apply the same gate. Setting `PINWREN_SKIP_MIGRATIONS`
+does not skip the Cloud guard. Selfhost retains its existing migration behavior.
+
+The Cloud database mode is persistent: changing the application flag to selfhost does not disable
+RLS or grant additional table privileges. Return to a previously compatible application version or
+restore the database/configuration from a tested backup during rollback; do not automatically remove
+policies to work around a startup error. Authenticated/public/worker integration and route-wide
+evidence remain required before treating Cloud as usable.
+
+CI is configured to run the isolation suite against PostgreSQL 16 and 17 using disposable administrator fixtures and
+separate runtime/service roles. Local startup/provisioning cases cover idempotency, revoked PUBLIC
+CONNECT access, dangerous role attributes, inherited memberships, table ownership, missing grants,
+unknown tables, disabled RLS/FORCE/triggers, missing/extra policies, weakened trigger conditions,
+unreviewed security definers, service access to tenant rows, and failed-provisioning rollback.
+The combined local suite currently passes 112 checks. The existing selfhost API unit suite passes
+199 checks; its 88 database-only checks are skipped in ordinary unit runs and exercised separately
+by the configured integration runner. Repository typecheck passes all 14 tasks.
 Until those checks pass, this document records work in progress and provides no Cloud readiness claim.

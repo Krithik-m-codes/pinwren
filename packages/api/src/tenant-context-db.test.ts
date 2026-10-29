@@ -57,4 +57,10 @@ describe.skipIf(!process.env.PINWREN_TEST_DATABASE_URL)("organization context on
       expect(await setting()).toBe("org-a");
     });
   });
+
+  it("preserves identities across concurrently queued transactions on one pooled connection", async () => {
+    const identities = Array.from({ length: 12 }, (_, i) => `concurrent-org-${i}`);
+    const results = await Promise.all(identities.map((org) => withOrg(org, async () => setting())));
+    expect(results).toEqual(identities);
+  });
 });
