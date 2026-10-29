@@ -187,8 +187,24 @@ test.describe("wave 3", () => {
 
   test("branding: name, logo and accent reach the header", async ({ page }) => {
     await page.goto("/settings/branding");
-    await page.getByLabel("Product name").fill("Acme Feedback");
-    await page.getByLabel("Product name").press("Enter");
+    const productName = page.getByLabel("Product name");
+    if (await productName.inputValue()) {
+      await productName.fill("");
+      await productName.press("Enter");
+      await expect(page.getByText("Name reset to Pinwren").first()).toBeVisible();
+    }
+    const removeFavicon = page.getByRole("button", { name: "Remove favicon" });
+    if (await removeFavicon.count()) {
+      await removeFavicon.click();
+      await expect(page.getByText("Favicon removed").first()).toBeVisible();
+    }
+    const removeLogo = page.getByRole("button", { name: "Remove logo" });
+    if (await removeLogo.count()) {
+      await removeLogo.click();
+      await expect(page.getByText("Logo removed").first()).toBeVisible();
+    }
+    await productName.fill("Acme Feedback");
+    await productName.press("Enter");
     await expect(page.getByText("Now called Acme Feedback").first()).toBeVisible();
     await expect(page.getByTestId("product-name")).toHaveText("Acme Feedback");
 
@@ -207,7 +223,7 @@ test.describe("wave 3", () => {
     });
     await page
       .getByTestId("logo-file")
-      .first()
+      .nth(1)
       .setInputFiles({
         name: "logo.png",
         mimeType: "image/png",
@@ -220,7 +236,7 @@ test.describe("wave 3", () => {
 
     await page
       .getByTestId("logo-file")
-      .nth(1)
+      .first()
       .setInputFiles({
         name: "favicon.png",
         mimeType: "image/png",

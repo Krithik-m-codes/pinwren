@@ -20,7 +20,10 @@ test.describe("project settings", () => {
     // Position, icon, accent (swatch), tooltip, offset.
     await page.getByRole("radio", { name: "Top left" }).click();
     await page.getByRole("group", { name: "Icon" }).getByRole("button", { name: "Bug" }).click();
-    await page.getByRole("button", { name: /Accent colour/ }).click();
+    await page
+      .getByRole("button", { name: /Accent colour/ })
+      .first()
+      .click();
     await page.getByRole("button", { name: "#e5484d" }).click();
     await page.keyboard.press("Escape");
     const tooltip = page.getByLabel("Tooltip");
