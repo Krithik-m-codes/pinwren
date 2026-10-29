@@ -22,6 +22,7 @@ const result = spawnSync(
     "src/tenant-entrypoints.test.ts",
     "src/tenant-context.test.ts",
     "src/tenant-context-db.test.ts",
+    "src/tenant-request-db.test.ts",
     "src/tenant-isolation.test.ts",
     "src/tenant-migration-db.test.ts",
     "src/cloud-configuration.test.ts",

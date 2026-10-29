@@ -73,7 +73,7 @@ jobs:
             --env POSTGRES_PASSWORD="$fixture_password" postgres:${{ matrix.postgres }}-alpine
           printf 'PINWREN_ISOLATION_ADMIN_URL=postgres://pinwren:%s@127.0.0.1:5433/pinwren_isolation\n' "$fixture_password" >> "$GITHUB_ENV"
           for attempt in {1..30}; do
-            if docker exec pinwren-isolation pg_isready -U pinwren; then exit 0; fi
+            if docker exec pinwren-isolation pg_isready --host 127.0.0.1 --username pinwren --dbname pinwren_isolation; then exit 0; fi
             sleep 1
           done
           docker logs pinwren-isolation

@@ -1,14 +1,28 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const fake = vi.hoisted(() => {
-  const tx = { execute: vi.fn(() => Promise.resolve([])) };
-  const root = { transaction: vi.fn((run: (db: unknown) => Promise<unknown>) => run(tx)) };
-  return { tx, root };
+  const makeTx = () => ({
+    execute: vi.fn(() => Promise.resolve([])),
+    transaction: vi.fn((run: (db: unknown) => Promise<unknown>): Promise<unknown> => run(makeTx())),
+  });
+  let tx = makeTx();
+  const root = {
+    transaction: vi.fn((run: (db: unknown) => Promise<unknown>) => {
+      tx = makeTx();
+      return run(tx);
+    }),
+  };
+  return {
+    get tx() {
+      return tx;
+    },
+    root,
+  };
 });
 
 vi.mock("../../db/src/connection", () => ({ getRuntimeDb: () => fake.root }));
 
-import { getDb, withOrg, currentOrgId } from "../../db/src";
+import { getDb, withOrg, currentOrgId, afterOrgCommit } from "../../db/src";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -94,5 +108,48 @@ describe("organization transaction context", () => {
     });
     release();
     await detached;
+  });
+
+  it("runs side effects after the transaction and outside tenant context", async () => {
+    const events: string[] = [];
+    await withOrg("org-a", () => {
+      afterOrgCommit(() => {
+        expect(currentOrgId()).toBeUndefined();
+        events.push("committed");
+      });
+      expect(events).toEqual([]);
+      events.push("write");
+      return Promise.resolve();
+    });
+    expect(events).toEqual(["write", "committed"]);
+  });
+
+  it("discards side effects when the transaction rolls back", async () => {
+    const effect = vi.fn();
+    await expect(
+      withOrg("org-a", () => {
+        afterOrgCommit(effect);
+        return Promise.reject(new Error("rollback"));
+      }),
+    ).rejects.toThrow("rollback");
+    expect(effect).not.toHaveBeenCalled();
+  });
+
+  it("defers same-org nested effects until the enclosing commit", async () => {
+    const effect = vi.fn();
+    await withOrg("org-a", async () => {
+      await withOrg("org-a", () => {
+        afterOrgCommit(effect);
+        return Promise.resolve();
+      });
+      expect(effect).not.toHaveBeenCalled();
+    });
+    expect(effect).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps autocommit side effects immediate outside an organization transaction", () => {
+    const effect = vi.fn();
+    afterOrgCommit(effect);
+    expect(effect).toHaveBeenCalledTimes(1);
   });
 });

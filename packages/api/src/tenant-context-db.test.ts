@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { getDb, withOrg } from "../../db/src";
+import { getDb, withOrg, afterOrgCommit } from "../../db/src";
 import { getRuntimeDb } from "../../db/src/connection";
 
 // Ordinary unit runs need no database. CI and the isolated integration runner supply this URL.
@@ -62,5 +62,30 @@ describe.skipIf(!process.env.PINWREN_TEST_DATABASE_URL)("organization context on
     const identities = Array.from({ length: 12 }, (_, i) => `concurrent-org-${i}`);
     const results = await Promise.all(identities.map((org) => withOrg(org, async () => setting())));
     expect(results).toEqual(identities);
+  });
+
+  it("uses the savepoint database in nested services and discards effects from a rolled-back savepoint", async () => {
+    const effects: string[] = [];
+    await withOrg("org-a", async (db) => {
+      await expect(
+        db.transaction((nested) => {
+          expect(getDb()).toBe(nested);
+          afterOrgCommit(() => {
+            effects.push("rolled back");
+          });
+          return Promise.reject(new Error("savepoint rollback"));
+        }),
+      ).rejects.toThrow("savepoint rollback");
+      expect(getDb()).toBe(db);
+      await db.transaction(async (nested) => {
+        expect(getDb()).toBe(nested);
+        await nested.execute(sql`select 1`);
+        afterOrgCommit(() => {
+          effects.push("committed");
+        });
+      });
+      expect(effects).toEqual([]);
+    });
+    expect(effects).toEqual(["committed"]);
   });
 });

@@ -7,7 +7,7 @@ import * as schema from "./schema";
 export * from "./schema";
 export { schema };
 export type { Database } from "./connection";
-export { withOrg, currentOrgId, type TenantDatabase } from "./tenant-context";
+export { withOrg, currentOrgId, afterOrgCommit, type TenantDatabase } from "./tenant-context";
 
 /**
  * Tests only: forget the sign-in / sign-up attempts the auth rate limiter has counted, so an end-to-end
