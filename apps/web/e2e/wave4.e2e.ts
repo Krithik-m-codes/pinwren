@@ -255,7 +255,8 @@ test.describe("wave 4", () => {
       await page.getByRole("menuitem", { name: "Priority" }).hover();
       await expect(high).toBeVisible({ timeout: 1_500 });
     }).toPass({ timeout: 15_000 });
-    await high.click();
+    await high.focus();
+    await page.keyboard.press("Enter");
     await page.keyboard.press("Escape");
     const chips = page.getByRole("list", { name: "Active filters" });
     await expect(chips).toContainText("Priority: High");

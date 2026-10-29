@@ -1,9 +1,14 @@
+import { widgetConfig } from "@pinwren/core";
 import { SITE_ORIGIN, seed, shoot } from "./env";
 import { expect, test } from "./fixtures";
 
 test.describe("project settings", () => {
   test("widget tab: every change previews live and persists", async ({ page, request }) => {
     const { projectId, publicKey } = seed();
+    const reset = await request.patch(`/api/projects/${projectId}`, {
+      data: { widgetConfig: widgetConfig.parse({}) },
+    });
+    expect(reset.ok()).toBe(true);
     await page.goto(`/projects/${projectId}?tab=widget`);
     const preview = page.getByTestId("launcher-preview");
     await expect(preview).toBeVisible();
@@ -70,7 +75,8 @@ test.describe("project settings", () => {
           label: "Send feedback",
           position: "top-left",
           icon: "bug",
-          accent: "#e5484d",
+          accent: "#d63a1c",
+          lightAccent: "#e5484d",
           tooltip: "Found a problem?",
           offset: { x: 48 },
         },
