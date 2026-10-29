@@ -1,11 +1,18 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useBrandingQuery } from "@/lib/store/api";
+
+const subscribe = () => () => undefined;
 
 /** Apply the active workspace icon after the existing authenticated branding query resolves. */
 export function BrandingFavicon() {
-  const { data } = useBrandingQuery(undefined);
+  const ready = useSyncExternalStore(
+    subscribe,
+    () => true,
+    () => false,
+  );
+  const { data } = useBrandingQuery(undefined, { skip: !ready });
 
   useEffect(() => {
     const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
