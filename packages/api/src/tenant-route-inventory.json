@@ -1,0 +1,867 @@
+{
+  "ALL /mcp": {
+    "boundary": "tenant",
+    "databaseLifetime": "stream",
+    "check": "foreign tenant: ALL /mcp"
+  },
+  "DELETE /api/admin/instance-admins/:userId": {
+    "boundary": "system",
+    "databaseLifetime": "finite",
+    "check": "system authorization: DELETE /api/admin/instance-admins/:userId"
+  },
+  "DELETE /api/admin/license": {
+    "boundary": "system",
+    "databaseLifetime": "finite",
+    "check": "system authorization: DELETE /api/admin/license"
+  },
+  "DELETE /api/comments/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/comments/:id"
+  },
+  "DELETE /api/email-templates/:key": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/email-templates/:key"
+  },
+  "DELETE /api/feedback/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/feedback/:id"
+  },
+  "DELETE /api/feedback/:id/forever": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/feedback/:id/forever"
+  },
+  "DELETE /api/feedback/:id/watch": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/feedback/:id/watch"
+  },
+  "DELETE /api/integrations/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/integrations/:id"
+  },
+  "DELETE /api/labels/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/labels/:id"
+  },
+  "DELETE /api/me/avatar": {
+    "boundary": "identity",
+    "databaseLifetime": "external",
+    "check": "identity authorization: DELETE /api/me/avatar"
+  },
+  "DELETE /api/members/:userId": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/members/:userId"
+  },
+  "DELETE /api/review-links/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/review-links/:id"
+  },
+  "DELETE /api/rounds/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/rounds/:id"
+  },
+  "DELETE /api/tokens/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/tokens/:id"
+  },
+  "DELETE /api/views/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/views/:id"
+  },
+  "DELETE /api/webhooks/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/webhooks/:id"
+  },
+  "DELETE /api/workspace": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/workspace"
+  },
+  "DELETE /w/feedback/:id": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /w/feedback/:id"
+  },
+  "GET /api/admin/instance-admins": {
+    "boundary": "system",
+    "databaseLifetime": "finite",
+    "check": "system authorization: GET /api/admin/instance-admins"
+  },
+  "GET /api/admin/license": {
+    "boundary": "system",
+    "databaseLifetime": "finite",
+    "check": "system authorization: GET /api/admin/license"
+  },
+  "GET /api/admin/settings/email": {
+    "boundary": "system",
+    "databaseLifetime": "finite",
+    "check": "system authorization: GET /api/admin/settings/email"
+  },
+  "GET /api/admin/settings/email/deliveries": {
+    "boundary": "system",
+    "databaseLifetime": "finite",
+    "check": "system authorization: GET /api/admin/settings/email/deliveries"
+  },
+  "GET /api/admin/settings/security": {
+    "boundary": "system",
+    "databaseLifetime": "finite",
+    "check": "system authorization: GET /api/admin/settings/security"
+  },
+  "GET /api/admin/settings/sign-in": {
+    "boundary": "system",
+    "databaseLifetime": "finite",
+    "check": "system authorization: GET /api/admin/settings/sign-in"
+  },
+  "GET /api/assets/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: GET /api/assets/:id"
+  },
+  "GET /api/auth/*": {
+    "boundary": "identity",
+    "databaseLifetime": "finite",
+    "check": "identity authorization: GET /api/auth/*"
+  },
+  "GET /api/avatars/:userId": {
+    "boundary": "identity",
+    "databaseLifetime": "external",
+    "check": "identity authorization: GET /api/avatars/:userId"
+  },
+  "GET /api/brand-assets/:id": {
+    "boundary": "capability",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: GET /api/brand-assets/:id"
+  },
+  "GET /api/branding": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/branding"
+  },
+  "GET /api/email-assets/:token": {
+    "boundary": "capability",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: GET /api/email-assets/:token"
+  },
+  "GET /api/email-templates": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/email-templates"
+  },
+  "GET /api/email-templates/:key": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/email-templates/:key"
+  },
+  "GET /api/feedback": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/feedback"
+  },
+  "GET /api/feedback/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/feedback/:id"
+  },
+  "GET /api/feedback/:id/reproduction": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/feedback/:id/reproduction"
+  },
+  "GET /api/feedback/export": {
+    "boundary": "tenant",
+    "databaseLifetime": "stream",
+    "check": "foreign tenant: GET /api/feedback/export"
+  },
+  "GET /api/guest/:key/feedback": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/guest/:key/feedback"
+  },
+  "GET /api/guest/:key/feedback/:id": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/guest/:key/feedback/:id"
+  },
+  "GET /api/health": {
+    "boundary": "public",
+    "databaseLifetime": "finite",
+    "check": "public authorization: GET /api/health"
+  },
+  "GET /api/integrations/:id/webhook-secret": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/integrations/:id/webhook-secret"
+  },
+  "GET /api/invitations": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/invitations"
+  },
+  "GET /api/me": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/me"
+  },
+  "GET /api/me/entitlements": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/me/entitlements"
+  },
+  "GET /api/me/invitations": {
+    "boundary": "identity",
+    "databaseLifetime": "finite",
+    "check": "identity authorization: GET /api/me/invitations"
+  },
+  "GET /api/me/preferences": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/me/preferences"
+  },
+  "GET /api/members": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/members"
+  },
+  "GET /api/notification-preferences": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/notification-preferences"
+  },
+  "GET /api/notifications": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/notifications"
+  },
+  "GET /api/privacy/erasures": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/privacy/erasures"
+  },
+  "GET /api/projects": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects"
+  },
+  "GET /api/projects/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects/:id"
+  },
+  "GET /api/projects/:id/action-secret": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects/:id/action-secret"
+  },
+  "GET /api/projects/:id/ai": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects/:id/ai"
+  },
+  "GET /api/projects/:id/export": {
+    "boundary": "tenant",
+    "databaseLifetime": "stream",
+    "check": "foreign tenant: GET /api/projects/:id/export"
+  },
+  "GET /api/projects/:id/export/download": {
+    "boundary": "tenant",
+    "databaseLifetime": "stream",
+    "check": "foreign tenant: GET /api/projects/:id/export/download"
+  },
+  "GET /api/projects/:id/identity-secret": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects/:id/identity-secret"
+  },
+  "GET /api/projects/:id/integrations": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects/:id/integrations"
+  },
+  "GET /api/projects/:id/labels": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects/:id/labels"
+  },
+  "GET /api/projects/:id/notifications": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects/:id/notifications"
+  },
+  "GET /api/projects/:id/review-links": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects/:id/review-links"
+  },
+  "GET /api/projects/:id/rounds": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects/:id/rounds"
+  },
+  "GET /api/rounds/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/rounds/:id"
+  },
+  "GET /api/rounds/:id/export": {
+    "boundary": "tenant",
+    "databaseLifetime": "stream",
+    "check": "foreign tenant: GET /api/rounds/:id/export"
+  },
+  "GET /api/settings/ai": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/settings/ai"
+  },
+  "GET /api/setup": {
+    "boundary": "public",
+    "databaseLifetime": "finite",
+    "check": "public authorization: GET /api/setup"
+  },
+  "GET /api/setup-checklist": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/setup-checklist"
+  },
+  "GET /api/sign-in-methods": {
+    "boundary": "public",
+    "databaseLifetime": "finite",
+    "check": "public authorization: GET /api/sign-in-methods"
+  },
+  "GET /api/stream": {
+    "boundary": "tenant",
+    "databaseLifetime": "stream",
+    "check": "foreign tenant: GET /api/stream"
+  },
+  "GET /api/tokens": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/tokens"
+  },
+  "GET /api/unsubscribe": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/unsubscribe"
+  },
+  "GET /api/unsubscribe/team": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/unsubscribe/team"
+  },
+  "GET /api/v1/assets/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: GET /api/v1/assets/:id"
+  },
+  "GET /api/v1/feedback": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/feedback"
+  },
+  "GET /api/v1/feedback/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/feedback/:id"
+  },
+  "GET /api/v1/feedback/:id/reproduction": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/feedback/:id/reproduction"
+  },
+  "GET /api/v1/projects": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/projects"
+  },
+  "GET /api/v1/projects/:id/rounds": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/projects/:id/rounds"
+  },
+  "GET /api/v1/rounds/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/rounds/:id"
+  },
+  "GET /api/v1/token": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/token"
+  },
+  "GET /api/views": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/views"
+  },
+  "GET /api/webhooks": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/webhooks"
+  },
+  "GET /api/webhooks/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/webhooks/:id"
+  },
+  "GET /api/webhooks/:id/deliveries": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/webhooks/:id/deliveries"
+  },
+  "GET /w/config": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /w/config"
+  },
+  "GET /w/feedback": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /w/feedback"
+  },
+  "GET /w/feedback/:id": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /w/feedback/:id"
+  },
+  "GET /w/feedback/:id/comments": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /w/feedback/:id/comments"
+  },
+  "GET /w/mine": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /w/mine"
+  },
+  "GET /w/review-link": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /w/review-link"
+  },
+  "OPTIONS /w/*": {
+    "boundary": "public",
+    "databaseLifetime": "finite",
+    "check": "public authorization: OPTIONS /w/*"
+  },
+  "PATCH /api/admin/settings/email": {
+    "boundary": "system",
+    "databaseLifetime": "finite",
+    "check": "system authorization: PATCH /api/admin/settings/email"
+  },
+  "PATCH /api/admin/settings/security": {
+    "boundary": "system",
+    "databaseLifetime": "finite",
+    "check": "system authorization: PATCH /api/admin/settings/security"
+  },
+  "PATCH /api/admin/settings/sign-in": {
+    "boundary": "system",
+    "databaseLifetime": "finite",
+    "check": "system authorization: PATCH /api/admin/settings/sign-in"
+  },
+  "PATCH /api/branding": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/branding"
+  },
+  "PATCH /api/comments/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/comments/:id"
+  },
+  "PATCH /api/feedback/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/feedback/:id"
+  },
+  "PATCH /api/feedback/:id/anchor": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/feedback/:id/anchor"
+  },
+  "PATCH /api/integrations/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/integrations/:id"
+  },
+  "PATCH /api/labels/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/labels/:id"
+  },
+  "PATCH /api/me/preferences": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/me/preferences"
+  },
+  "PATCH /api/me/profile": {
+    "boundary": "identity",
+    "databaseLifetime": "finite",
+    "check": "identity authorization: PATCH /api/me/profile"
+  },
+  "PATCH /api/members/:userId": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/members/:userId"
+  },
+  "PATCH /api/projects/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/projects/:id"
+  },
+  "PATCH /api/projects/:id/ai": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/projects/:id/ai"
+  },
+  "PATCH /api/projects/:id/notifications": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/projects/:id/notifications"
+  },
+  "PATCH /api/rounds/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/rounds/:id"
+  },
+  "PATCH /api/v1/feedback/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/v1/feedback/:id"
+  },
+  "PATCH /api/v1/rounds/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/v1/rounds/:id"
+  },
+  "PATCH /api/views/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/views/:id"
+  },
+  "PATCH /api/webhooks/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/webhooks/:id"
+  },
+  "PATCH /api/workspace": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/workspace"
+  },
+  "PATCH /w/feedback/:id": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /w/feedback/:id"
+  },
+  "PATCH /w/feedback/:id/anchor": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /w/feedback/:id/anchor"
+  },
+  "POST /api/admin/instance-admins": {
+    "boundary": "system",
+    "databaseLifetime": "finite",
+    "check": "system authorization: POST /api/admin/instance-admins"
+  },
+  "POST /api/admin/license": {
+    "boundary": "system",
+    "databaseLifetime": "finite",
+    "check": "system authorization: POST /api/admin/license"
+  },
+  "POST /api/admin/settings/email/deliveries/:id/resend": {
+    "boundary": "system",
+    "databaseLifetime": "external",
+    "check": "system authorization: POST /api/admin/settings/email/deliveries/:id/resend"
+  },
+  "POST /api/admin/settings/email/deliveries/resend-skipped": {
+    "boundary": "system",
+    "databaseLifetime": "external",
+    "check": "system authorization: POST /api/admin/settings/email/deliveries/resend-skipped"
+  },
+  "POST /api/admin/settings/email/test": {
+    "boundary": "system",
+    "databaseLifetime": "external",
+    "check": "system authorization: POST /api/admin/settings/email/test"
+  },
+  "POST /api/admin/update-check": {
+    "boundary": "system",
+    "databaseLifetime": "finite",
+    "check": "system authorization: POST /api/admin/update-check"
+  },
+  "POST /api/auth/*": {
+    "boundary": "identity",
+    "databaseLifetime": "finite",
+    "check": "identity authorization: POST /api/auth/*"
+  },
+  "POST /api/branding/assets": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/branding/assets"
+  },
+  "POST /api/email-templates/:key/preview": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/email-templates/:key/preview"
+  },
+  "POST /api/email-templates/:key/test": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/email-templates/:key/test"
+  },
+  "POST /api/feedback/:id/actions/:actionId": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/feedback/:id/actions/:actionId"
+  },
+  "POST /api/feedback/:id/ai/apply": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/feedback/:id/ai/apply"
+  },
+  "POST /api/feedback/:id/ai/translate": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/feedback/:id/ai/translate"
+  },
+  "POST /api/feedback/:id/comments": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/feedback/:id/comments"
+  },
+  "POST /api/feedback/:id/issues": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/feedback/:id/issues"
+  },
+  "POST /api/feedback/:id/page-link": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/feedback/:id/page-link"
+  },
+  "POST /api/feedback/:id/restore": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/feedback/:id/restore"
+  },
+  "POST /api/feedback/:id/watch": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/feedback/:id/watch"
+  },
+  "POST /api/guest/:key/feedback/:id/comments": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/guest/:key/feedback/:id/comments"
+  },
+  "POST /api/integrations/:id/rotate-webhook-secret": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/integrations/:id/rotate-webhook-secret"
+  },
+  "POST /api/integrations/:id/test": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/integrations/:id/test"
+  },
+  "POST /api/integrations/github/webhook": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/integrations/github/webhook"
+  },
+  "POST /api/integrations/gitlab/webhook": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/integrations/gitlab/webhook"
+  },
+  "POST /api/integrations/jira/webhook": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/integrations/jira/webhook"
+  },
+  "POST /api/integrations/linear/webhook": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/integrations/linear/webhook"
+  },
+  "POST /api/me/avatar": {
+    "boundary": "identity",
+    "databaseLifetime": "external",
+    "check": "identity authorization: POST /api/me/avatar"
+  },
+  "POST /api/me/email": {
+    "boundary": "identity",
+    "databaseLifetime": "finite",
+    "check": "identity authorization: POST /api/me/email"
+  },
+  "POST /api/members": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/members"
+  },
+  "POST /api/members/:userId/reset-link": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/members/:userId/reset-link"
+  },
+  "POST /api/notifications/read": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/notifications/read"
+  },
+  "POST /api/presence": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/presence"
+  },
+  "POST /api/privacy/erase": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/privacy/erase"
+  },
+  "POST /api/projects": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/projects"
+  },
+  "POST /api/projects/:id/action-secret/rotate": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/projects/:id/action-secret/rotate"
+  },
+  "POST /api/projects/:id/export": {
+    "boundary": "tenant",
+    "databaseLifetime": "stream",
+    "check": "foreign tenant: POST /api/projects/:id/export"
+  },
+  "POST /api/projects/:id/identity-secret/rotate": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/projects/:id/identity-secret/rotate"
+  },
+  "POST /api/projects/:id/integrations": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/projects/:id/integrations"
+  },
+  "POST /api/projects/:id/labels": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/projects/:id/labels"
+  },
+  "POST /api/projects/:id/pages/regroup": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/projects/:id/pages/regroup"
+  },
+  "POST /api/projects/:id/review-links": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/projects/:id/review-links"
+  },
+  "POST /api/projects/:id/rotate-key": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/projects/:id/rotate-key"
+  },
+  "POST /api/projects/:id/rounds": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/projects/:id/rounds"
+  },
+  "POST /api/settings/ai/test": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/settings/ai/test"
+  },
+  "POST /api/setup/claim": {
+    "boundary": "public",
+    "databaseLifetime": "finite",
+    "check": "public authorization: POST /api/setup/claim"
+  },
+  "POST /api/tokens": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/tokens"
+  },
+  "POST /api/unsubscribe": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/unsubscribe"
+  },
+  "POST /api/unsubscribe/team": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/unsubscribe/team"
+  },
+  "POST /api/v1/feedback/:id/comments": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/v1/feedback/:id/comments"
+  },
+  "POST /api/views": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/views"
+  },
+  "POST /api/webhook-deliveries/:id/redeliver": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/webhook-deliveries/:id/redeliver"
+  },
+  "POST /api/webhooks": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/webhooks"
+  },
+  "POST /api/webhooks/:id/rotate-secret": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/webhooks/:id/rotate-secret"
+  },
+  "POST /api/webhooks/:id/test": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/webhooks/:id/test"
+  },
+  "POST /api/workspace/transfer": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/workspace/transfer"
+  },
+  "POST /w/feedback": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /w/feedback"
+  },
+  "POST /w/feedback/:id/comments": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /w/feedback/:id/comments"
+  },
+  "PUT /api/email-templates/:key": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PUT /api/email-templates/:key"
+  },
+  "PUT /api/notification-preferences": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PUT /api/notification-preferences"
+  },
+  "PUT /api/settings/ai": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PUT /api/settings/ai"
+  }
+}
