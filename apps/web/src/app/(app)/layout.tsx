@@ -3,16 +3,7 @@ import { AppSidebar } from "@/components/shell/app-sidebar";
 import { SessionBoundary } from "@/components/shell/session-boundary";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Metadata } from "next";
-import { getSession } from "@/lib/server/session";
-import { getOrgBranding } from "@/lib/server/org-data";
-
-export async function generateMetadata(): Promise<Metadata> {
-  const session = await getSession();
-  if (!session?.activeOrgId) return {};
-  const branding = await getOrgBranding(session.activeOrgId);
-  return branding.faviconUrl ? { icons: { icon: branding.faviconUrl } } : {};
-}
+import { BrandingFavicon } from "@/components/shell/branding-favicon";
 
 /**
  * Signed-in screens. The sidebar chrome and the page frame are prerendered into the static shell; the
@@ -22,6 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <SidebarProvider>
+      <BrandingFavicon />
       <AppSidebar />
       <SidebarInset className="min-w-0">
         <Suspense fallback={<ScreenSkeleton />}>

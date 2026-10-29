@@ -207,7 +207,7 @@ test.describe("wave 3", () => {
     });
     await page
       .getByTestId("logo-file")
-      .nth(1)
+      .first()
       .setInputFiles({
         name: "logo.png",
         mimeType: "image/png",
@@ -218,11 +218,14 @@ test.describe("wave 3", () => {
     await expect(headerLogo).toBeVisible();
     await expect(headerLogo).toHaveAttribute("src", /\/api\/brand-assets\//);
 
-    await page.getByTestId("logo-file").setInputFiles({
-      name: "favicon.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(png, "base64"),
-    });
+    await page
+      .getByTestId("logo-file")
+      .nth(1)
+      .setInputFiles({
+        name: "favicon.png",
+        mimeType: "image/png",
+        buffer: Buffer.from(png, "base64"),
+      });
     await expect(page.getByText("Favicon updated").first()).toBeVisible();
     await expect(page.locator('head link[rel="icon"]').first()).toHaveAttribute(
       "href",
