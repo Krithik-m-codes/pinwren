@@ -1,7 +1,8 @@
 # Cloud tenant isolation
 
-Status: implementation in progress. Cloud signup is not ready for customers. Policy activation and
-runtime enforcement have not yet been delivered. The approved design and implementation plan are in
+Status: implementation in progress. Cloud signup is not ready for customers. The transaction context,
+policy definitions and relationship constraints are implemented. Cloud provisioning, startup validation
+and request/worker integration have not yet been delivered. The approved design and implementation plan are in
 `docs/superpowers/specs/2026-10-29-cloud-tenant-isolation-design.md` and
 `docs/superpowers/plans/2026-10-29-cloud-tenant-isolation.md`.
 
@@ -80,6 +81,28 @@ does not replace validating stored resource ownership.
 
 Inventory assertions were observed failing with an empty table inventory, an empty route inventory,
 and a missing duplicate-feedback parent. These verify that the coverage gate detects omissions.
-Database enforcement, operator provisioning commands, migration evidence, worker integration,
-route-wide foreign-resource tests, and rollback instructions will be recorded with their implementation.
+The focused runner `node scripts/tenant-isolation.mjs` requires `PINWREN_ISOLATION_ADMIN_URL` pointing
+to a disposable PostgreSQL database whose name contains `isolation`; it exits with an error if that
+configuration is missing. The test administrator must be able to create fixture roles and databases.
+The suite creates a distinct non-owner runtime role and cleans its fixture rows, grants, roles and
+temporary databases. Never point it at customer data.
+
+Current local PostgreSQL 16 evidence: 80 checks pass across inventory, context, real pooled connection
+reuse/rollback, row policies and migration failure tests. All 27 protected tables have scoped read and
+missing-context cases. All 23 direct ownership tables reject ownership changes and foreign
+UPDATE/DELETE RETURNING. Valid local CRUD succeeds. Twenty-one composite tenant foreign keys are
+validated. Foreign project references, duplicate links and cross-tenant label joins are rejected,
+including label inconsistencies introduced by privileged maintenance. Upgrade tests prove that
+inconsistent legacy page ownership and label joins abort the migration without changing rows or
+leaving partial indexes. These are database boundary checks, not full application isolation evidence.
+
+Migrations install policy definitions without enabling RLS on selfhost databases. The integration
+fixture activates ENABLE/FORCE RLS locally for its restricted runtime tests. Composite foreign keys
+and label integrity checks apply in all modes; inconsistent legacy data aborts the upgrade with a
+named constraint, allowing the operator to investigate rather than losing or reassigning rows.
+The custom label triggers and policies are intentionally installed with versioned SQL migrations;
+future Cloud startup validation must check them in addition to the Drizzle schema inventory.
+
+Operator provisioning commands, worker integration, route-wide foreign-resource tests, and rollback
+instructions will be recorded with their implementation.
 Until those checks pass, this document records work in progress and provides no Cloud readiness claim.
