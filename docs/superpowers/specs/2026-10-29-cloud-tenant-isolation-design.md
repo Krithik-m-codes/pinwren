@@ -2,7 +2,7 @@
 
 Date: 2026-10-29
 
-Status: approach approved; written specification ready for review.
+Status: written specification approved by the user on 2026-10-29.
 
 ## Intent and scope
 
