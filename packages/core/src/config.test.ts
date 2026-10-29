@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { captureConfig, mergeConfig, parseCaptureConfig, parseWidgetConfig, widgetConfig } from "./config";
-import { widgetFeedbackCreate } from "./schemas";
+import { orgBrandingUpdate, widgetFeedbackCreate } from "./schemas";
 
 describe("widget config", () => {
   it("fills every default from an empty object", () => {
@@ -12,6 +12,9 @@ describe("widget config", () => {
       label: "Feedback",
       icon: "pin",
       accent: "#d63a1c",
+      lightAccent: null,
+      darkAccent: null,
+      hoverEffect: true,
       tooltip: "Give feedback",
       hidden: false,
     });
@@ -25,10 +28,22 @@ describe("widget config", () => {
   });
 
   it("keeps stored values and fills the rest", () => {
-    const c = parseWidgetConfig({ launcher: { position: "top-left" }, readOnly: true });
+    const c = parseWidgetConfig({ launcher: { position: "top-left", accent: "#123456" }, readOnly: true });
     expect(c.launcher.position).toBe("top-left");
     expect(c.launcher.shape).toBe("round");
+    expect(c.launcher.lightAccent).toBeNull();
+    expect(c.launcher.darkAccent).toBeNull();
+    expect(c.launcher.accent).toBe("#123456");
     expect(c.readOnly).toBe(true);
+  });
+
+  it("validates launcher theme colours and hover effect", () => {
+    expect(
+      widgetConfig.safeParse({
+        launcher: { lightAccent: "#112233", darkAccent: "#445566", hoverEffect: false },
+      }).success,
+    ).toBe(true);
+    expect(widgetConfig.safeParse({ launcher: { lightAccent: "red" } }).success).toBe(false);
   });
 
   it("falls back per field when stored JSON is invalid", () => {
@@ -51,6 +66,14 @@ describe("widget config", () => {
 
   it("rejects a non-http privacy URL", () => {
     expect(widgetConfig.safeParse({ consent: { privacyUrl: "javascript:alert(1)" } }).success).toBe(false);
+  });
+});
+
+describe("organization favicon branding", () => {
+  it("accepts a nullable organization-scoped asset id", () => {
+    expect(orgBrandingUpdate.safeParse({ faviconAssetId: null }).success).toBe(true);
+    expect(orgBrandingUpdate.safeParse({ faviconAssetId: crypto.randomUUID() }).success).toBe(true);
+    expect(orgBrandingUpdate.safeParse({ faviconAssetId: "not-an-id" }).success).toBe(false);
   });
 });
 

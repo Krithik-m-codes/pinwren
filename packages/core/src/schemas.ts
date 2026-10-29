@@ -686,6 +686,7 @@ export const orgBrandingUpdate = z.object({
   accent: hex.nullable().optional(),
   /** A brand asset uploaded with `POST /api/branding/assets`. null removes the logo. */
   logoAssetId: z.uuid().nullable().optional(),
+  faviconAssetId: z.uuid().nullable().optional(),
 });
 export type OrgBrandingUpdate = z.infer<typeof orgBrandingUpdate>;
 

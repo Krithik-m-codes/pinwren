@@ -106,7 +106,11 @@ export function LauncherPreview({ config }: { config: WidgetConfig }) {
                 launcher.hidden &&
                   "opacity-25 outline-2 outline-offset-2 outline-foreground/40 outline-dashed",
               )}
-              style={{ background: launcher.accent, color: onAccent(launcher.accent) }}
+              style={{
+                background: launcher.lightAccent ?? launcher.accent,
+                color: onAccent(launcher.lightAccent ?? launcher.accent),
+                transform: launcher.hoverEffect ? undefined : "none",
+              }}
             >
               <Icon className={pill ? "size-4" : "size-5"} />
               {pill && <span>{launcher.label}</span>}

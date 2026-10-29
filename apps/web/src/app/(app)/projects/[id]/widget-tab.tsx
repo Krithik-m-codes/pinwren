@@ -214,19 +214,39 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                 label={t("projects2.accentColour")}
                 description={t("projects2.accentColourDescription")}
               >
-                <div className="grid gap-1">
-                  <ColorPicker
-                    id="accent"
-                    value={l.accent}
-                    onChange={(accent) => preview({ launcher: { accent } })}
-                    onCommit={(accent) =>
-                      accent !== server.launcher.accent && commit({ launcher: { accent } })
-                    }
-                  />
-                  {errors["launcher.accent"] && (
-                    <p className="text-xs text-destructive">{errors["launcher.accent"]}</p>
-                  )}
+                <div className="grid gap-2">
+                  {(["lightAccent", "darkAccent"] as const).map((field) => (
+                    <div key={field} className="flex items-center gap-2">
+                      <span className="w-20 text-xs text-muted-foreground">
+                        {field === "lightAccent" ? "Light" : "Dark"}
+                      </span>
+                      <ColorPicker
+                        id={field}
+                        value={l[field] ?? l.accent}
+                        onChange={(value) => preview({ launcher: { [field]: value } })}
+                        onCommit={(value) =>
+                          value !== server.launcher[field] && commit({ launcher: { [field]: value } })
+                        }
+                      />
+                      {l[field] && (
+                        <button
+                          type="button"
+                          className="text-xs underline"
+                          onClick={() => commit({ launcher: { [field]: null } })}
+                        >
+                          Use fallback
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
+              </SettingRow>
+              <SettingRow label="Hover effect" htmlFor="launcher-hover-effect">
+                <Switch
+                  id="launcher-hover-effect"
+                  checked={l.hoverEffect}
+                  onCheckedChange={(hoverEffect) => commit({ launcher: { hoverEffect } })}
+                />
               </SettingRow>
               <SettingRow
                 label={t("projects2.tooltip")}

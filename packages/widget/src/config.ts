@@ -14,6 +14,9 @@ export type WidgetConfig = {
     label: string | null;
     icon: "pin" | "comment" | "bug";
     accent: string;
+    lightAccent: string | null;
+    darkAccent: string | null;
+    hoverEffect: boolean;
     tooltip: string | null;
     hidden: boolean;
   };
@@ -69,6 +72,9 @@ export const DEFAULT_CONFIG: WidgetConfig = {
     label: "Feedback",
     icon: "pin",
     accent: "#d63a1c",
+    lightAccent: null,
+    darkAccent: null,
+    hoverEffect: true,
     tooltip: "Give feedback",
     hidden: false,
   },
@@ -120,8 +126,14 @@ export function resolveConfig(raw: unknown, accentOverride?: string): WidgetConf
   if (!["round", "pill"].includes(l.shape)) l.shape = "round";
   if (!["pin", "comment", "bug"].includes(l.icon)) l.icon = "pin";
   if (accentOverride && HEX.test(accentOverride)) l.accent = accentOverride;
+  if (accentOverride && HEX.test(accentOverride)) {
+    l.lightAccent = accentOverride;
+    l.darkAccent = accentOverride;
+  }
   // The accent goes into a CSS custom property; only plain hex colours are accepted.
   if (!HEX.test(l.accent)) l.accent = DEFAULT_CONFIG.launcher.accent;
+  if (l.lightAccent !== null && !HEX.test(l.lightAccent)) l.lightAccent = null;
+  if (l.darkAccent !== null && !HEX.test(l.darkAccent)) l.darkAccent = null;
   const clampOff = (n: number) => (Number.isFinite(n) ? Math.min(400, Math.max(0, n)) : 20);
   l.offset = { x: clampOff(l.offset.x), y: clampOff(l.offset.y) };
   c.panelActions = sanitizeActions(c.panelActions);

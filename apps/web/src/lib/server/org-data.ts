@@ -22,12 +22,17 @@ export async function getOrgBranding(orgId: string): Promise<OrgBranding> {
   });
   const s = row?.value ?? {};
   const logoAssetId = typeof s.logoAssetId === "string" ? s.logoAssetId : null;
+  const faviconAssetId = typeof s.faviconAssetId === "string" ? s.faviconAssetId : null;
   return {
     productName: typeof s.productName === "string" && s.productName.trim() ? s.productName : null,
     accent: typeof s.accent === "string" ? s.accent : null,
     logoAssetId,
     logoUrl: logoAssetId
       ? `${env().PINWREN_URL.replace(/\/$/, "")}/api/brand-assets/${encodeURIComponent(logoAssetId)}`
+      : null,
+    faviconAssetId,
+    faviconUrl: faviconAssetId
+      ? `${env().PINWREN_URL.replace(/\/$/, "")}/api/brand-assets/${encodeURIComponent(faviconAssetId)}`
       : null,
   };
 }

@@ -205,15 +205,29 @@ test.describe("wave 3", () => {
       ctx.fill();
       return c.toDataURL("image/png").split(",")[1] ?? "";
     });
-    await page.getByTestId("logo-file").setInputFiles({
-      name: "logo.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(png, "base64"),
-    });
+    await page
+      .getByTestId("logo-file")
+      .nth(1)
+      .setInputFiles({
+        name: "logo.png",
+        mimeType: "image/png",
+        buffer: Buffer.from(png, "base64"),
+      });
     await expect(page.getByText("Logo updated").first()).toBeVisible();
     const headerLogo = page.getByTestId("brand-logo").first();
     await expect(headerLogo).toBeVisible();
     await expect(headerLogo).toHaveAttribute("src", /\/api\/brand-assets\//);
+
+    await page.getByTestId("logo-file").setInputFiles({
+      name: "favicon.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(png, "base64"),
+    });
+    await expect(page.getByText("Favicon updated").first()).toBeVisible();
+    await expect(page.locator('head link[rel="icon"]').first()).toHaveAttribute(
+      "href",
+      /\/api\/brand-assets\//,
+    );
 
     await page.getByRole("button", { name: /Brand colour/ }).click();
     await page.getByRole("button", { name: "#30a46c" }).click();

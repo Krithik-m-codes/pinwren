@@ -1,4 +1,4 @@
-import type { WidgetConfig } from "./config";
+import { readableOn, type WidgetConfig } from "./config";
 import { focused, h, ICONS, icon } from "./dom";
 import { t, tn } from "./i18n";
 import { UI_ICONS } from "./ui";
@@ -55,7 +55,7 @@ export class Fab {
     const b = h(
       "button",
       {
-        class: `launcher ${l.shape} ${v} ${hz}`,
+        class: `launcher ${l.shape} ${v} ${hz}${l.hoverEffect ? "" : " no-hover"}`,
         "aria-label": name,
         "aria-haspopup": "menu",
         "aria-expanded": "false",
@@ -79,6 +79,12 @@ export class Fab {
     );
     b.style.setProperty(v, `${l.offset.y}px`);
     b.style.setProperty(hz, `${l.offset.x}px`);
+    const light = l.lightAccent ?? l.accent;
+    const dark = l.darkAccent ?? l.accent;
+    b.style.setProperty("--launcher-light", light);
+    b.style.setProperty("--launcher-light-fg", readableOn(light));
+    b.style.setProperty("--launcher-dark", dark);
+    b.style.setProperty("--launcher-dark-fg", readableOn(dark));
     this.button = b;
     o.root.append(b);
   }

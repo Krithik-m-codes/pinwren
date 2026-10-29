@@ -3,6 +3,16 @@ import { AppSidebar } from "@/components/shell/app-sidebar";
 import { SessionBoundary } from "@/components/shell/session-boundary";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { Metadata } from "next";
+import { getSession } from "@/lib/server/session";
+import { getOrgBranding } from "@/lib/server/org-data";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const session = await getSession();
+  if (!session?.activeOrgId) return {};
+  const branding = await getOrgBranding(session.activeOrgId);
+  return branding.faviconUrl ? { icons: { icon: branding.faviconUrl } } : {};
+}
 
 /**
  * Signed-in screens. The sidebar chrome and the page frame are prerendered into the static shell; the

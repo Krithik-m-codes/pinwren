@@ -371,6 +371,8 @@ export type OrgBranding = {
   accent: string | null;
   logoAssetId: string | null;
   logoUrl: string | null;
+  faviconAssetId: string | null;
+  faviconUrl: string | null;
 };
 
 export type EmailTemplate = {
