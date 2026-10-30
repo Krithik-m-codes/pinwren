@@ -1,6 +1,5 @@
 import "server-only";
-import { getAuth } from "@pinwren/api";
-import { getDb } from "@pinwren/db";
+import { getAuth, firstOrganizationFor } from "@pinwren/api";
 import { cacheLife } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -30,14 +29,6 @@ export async function getSession(): Promise<Session | null> {
 }
 
 /** A workspace the person belongs to (the first they joined), when none is active. */
-async function firstWorkspace(userId: string): Promise<string | null> {
-  const m = await getDb().query.member.findFirst({
-    where: (t, { eq }) => eq(t.userId, userId),
-    orderBy: (t, { asc }) => asc(t.createdAt),
-    columns: { organizationId: true },
-  });
-  return m?.organizationId ?? null;
-}
 
 export type Viewer =
   | { kind: "member"; me: MeResponse; session: Session }
@@ -55,7 +46,7 @@ export async function requireViewer(): Promise<Viewer> {
   if (me.ok) return { kind: "member", me: me.data, session };
   if (me.status === 401) redirect("/sign-in");
   // NO_ACTIVE_ORG (409) or NOT_A_MEMBER (403, removed from the active one): pick another workspace.
-  const orgId = await firstWorkspace(session.user.id);
+  const orgId = await firstOrganizationFor(session.user.id);
   if (!orgId || orgId === session.activeOrgId) redirect("/onboarding");
   return { kind: "activate", orgId };
 }

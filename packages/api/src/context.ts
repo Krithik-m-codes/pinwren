@@ -1,5 +1,5 @@
-import { getDb, member } from "@pinwren/db";
-import { and, eq } from "drizzle-orm";
+import { membershipFor } from "./db/identity";
+import { tenantRequestScope } from "./tenant-scope";
 import { createMiddleware } from "hono/factory";
 import { getAuth } from "./auth";
 import { ApiError, unauthorized } from "./errors";
@@ -20,16 +20,12 @@ export const requireSession = createMiddleware<{ Variables: SessionVars }>(async
   if (!session) throw unauthorized();
   const orgId = session.session.activeOrganizationId;
   if (!orgId) throw new ApiError(409, "NO_ACTIVE_ORG", "Create or select an organisation first");
-  const [m] = await getDb()
-    .select({ role: member.role })
-    .from(member)
-    .where(and(eq(member.organizationId, orgId), eq(member.userId, session.user.id)))
-    .limit(1);
+  const m = await membershipFor(orgId, session.user.id);
   if (!m) throw new ApiError(403, "NOT_A_MEMBER", "You are not a member of this organisation");
   c.set("userId", session.user.id);
   c.set("orgId", orgId);
   c.set("role", m.role);
-  await next();
+  await tenantRequestScope(c, next);
 });
 
 export const isOrgAdmin = (role: string) =>

@@ -5,23 +5,17 @@ import postgres from "postgres";
 import { deploymentMode } from "./deployment-mode";
 import { parseCloudDatabaseUrl, sameDatabaseEndpoint } from "./cloud-database-url";
 import * as schema from "./schema";
-import { tenantInventory } from "./tenant-inventory";
+import { tenantInventory, isTenantProtected } from "./tenant-inventory";
+import { expectedTenantPolicies } from "./tenant-policies";
 
 type CatalogConnection = postgres.Sql | postgres.TransactionSql;
 const normalize = (value: string) => value.replace(/\s+/g, " ").trim();
-
-function expectedPolicy(table: string, direct: boolean): string {
-  if (direct) return "(org_id = NULLIF(current_setting('pinwren.org_id'::text, true), ''::text))";
-  const feedback = `(EXISTS ( SELECT 1 FROM feedback parent WHERE (parent.id = ${table}.feedback_id)))`;
-  return table === "feedback_label"
-    ? `(${feedback} AND (EXISTS ( SELECT 1 FROM label parent WHERE (parent.id = feedback_label.label_id))))`
-    : feedback;
-}
 
 /** Catalog-only access: usable before tenant context exists, without granting tenant content access. */
 export async function validateCloudCatalog(
   db: CatalogConnection,
   kind: "runtime" | "service",
+  serviceRole: string,
 ): Promise<void> {
   const [role] = await db<
     {
@@ -36,7 +30,8 @@ export async function validateCloudCatalog(
   >`select current_user as name,
     (r.rolsuper or r.rolbypassrls or r.rolcreaterole or r.rolcreatedb or r.rolreplication) as unsafe,
     exists(select 1 from pg_roles p where p.oid <> r.oid and pg_has_role(current_user,p.oid,'MEMBER')
-      and (p.rolsuper or p.rolbypassrls or p.rolcreaterole or p.rolcreatedb or p.rolreplication or p.rolname like 'pg_%')) as membership,
+      and (p.rolsuper or p.rolbypassrls or p.rolcreaterole or p.rolcreatedb or p.rolreplication or p.rolname like 'pg_%'
+        or (${kind}::text='runtime' and p.rolname=${serviceRole}))) as membership,
     (exists(select 1 from pg_class c where c.relnamespace='public'::regnamespace and pg_has_role(current_user,c.relowner,'MEMBER'))
       or exists(select 1 from pg_proc p where p.pronamespace='public'::regnamespace and pg_has_role(current_user,p.proowner,'MEMBER'))) as owns,
     (has_database_privilege(current_user,current_database(),'CREATE') or exists (
@@ -66,6 +61,7 @@ export async function validateCloudCatalog(
       truncates: boolean;
       content: boolean;
       complete: boolean;
+      deletes: boolean;
     }[]
   >`
     select c.relname as name,c.relrowsecurity as enabled,c.relforcerowsecurity as forced,
@@ -73,7 +69,8 @@ export async function validateCloudCatalog(
       (has_any_column_privilege(current_user,c.oid,'SELECT') or has_any_column_privilege(current_user,c.oid,'INSERT')
        or has_any_column_privilege(current_user,c.oid,'UPDATE') or has_table_privilege(current_user,c.oid,'DELETE')) as content,
       (has_table_privilege(current_user,c.oid,'SELECT') and has_table_privilege(current_user,c.oid,'INSERT')
-       and has_table_privilege(current_user,c.oid,'UPDATE') and has_table_privilege(current_user,c.oid,'DELETE')) as complete
+       and has_table_privilege(current_user,c.oid,'UPDATE') and has_table_privilege(current_user,c.oid,'DELETE')) as complete,
+      has_table_privilege(current_user,c.oid,'DELETE') as deletes
     from pg_class c where c.relnamespace='public'::regnamespace and c.relkind in ('r','p')`;
   const expectedNames = new Set(tenantInventory.map((entry) => entry.table));
   if (tables.length !== expectedNames.size || tables.some((table) => !expectedNames.has(table.name))) {
@@ -82,12 +79,7 @@ export async function validateCloudCatalog(
   for (const table of tables) {
     if (table.truncates) throw new Error(`Cloud ${kind} has unsafe TRUNCATE privileges on ${table.name}`);
     const entry = tenantInventory.find((value) => value.table === table.name);
-    if (
-      kind === "runtime" &&
-      table.content &&
-      entry?.ownership !== "direct" &&
-      entry?.ownership !== "parent"
-    ) {
+    if (kind === "runtime" && table.content && (!entry || !isTenantProtected(entry))) {
       throw new Error(`Cloud runtime has unrestricted identity/system privileges on ${table.name}`);
     }
   }
@@ -103,28 +95,58 @@ export async function validateCloudCatalog(
     }[]
   >`
     select tablename,policyname,permissive,roles,cmd,qual,with_check from pg_policies where schemaname='public'`;
-  for (const entry of tenantInventory.filter(
-    (value) => value.ownership === "direct" || value.ownership === "parent",
-  )) {
+  const columns = await db<
+    { table_name: string; column_name: string; reads: boolean; inserts: boolean; updates: boolean }[]
+  >`
+    select c.relname as table_name,a.attname as column_name,
+      has_column_privilege(current_user,c.oid,a.attnum,'SELECT') as reads,
+      has_column_privilege(current_user,c.oid,a.attnum,'INSERT') as inserts,
+      has_column_privilege(current_user,c.oid,a.attnum,'UPDATE') as updates
+    from pg_class c join pg_attribute a on a.attrelid=c.oid
+    where c.relnamespace='public'::regnamespace and c.relkind in ('r','p') and a.attnum>0 and not a.attisdropped`;
+  for (const entry of tenantInventory.filter(isTenantProtected)) {
     const table = tables.find((value) => value.name === entry.table);
     if (!table?.enabled || !table.forced) throw new Error(`Cloud FORCE RLS is missing for ${entry.table}`);
-    if (kind === "runtime" && !table.complete)
+    if (kind === "runtime" && !entry.runtimeColumns && !table.complete)
       throw new Error(`Cloud runtime CRUD grant privileges are missing for ${entry.table}`);
     if (table.truncates) throw new Error(`Cloud ${kind} has unsafe TRUNCATE privileges on ${entry.table}`);
-    if (kind === "service" && table.content)
+    if (kind === "service" && entry.ownership !== "identity" && !entry.bootstrapColumns && table.content)
       throw new Error(`Cloud service role can access tenant table ${entry.table} directly`);
+    const projection =
+      kind === "runtime"
+        ? entry.runtimeColumns
+        : entry.ownership === "identity"
+          ? undefined
+          : entry.bootstrapColumns;
+    if (projection) {
+      const actual = columns.filter((value) => value.table_name === entry.table);
+      const readable = actual
+        .filter((value) => value.reads)
+        .map((value) => value.column_name)
+        .sort();
+      if (
+        table.deletes ||
+        actual.some((value) => value.inserts || value.updates) ||
+        JSON.stringify(readable) !== JSON.stringify([...projection].sort())
+      ) {
+        throw new Error(`Cloud ${kind} column projection privileges are invalid for ${entry.table}`);
+      }
+    }
     const matches = policies.filter((value) => value.tablename === entry.table);
-    const policy = matches[0];
-    const expected = normalize(expectedPolicy(entry.table, entry.ownership === "direct"));
+    const expected = expectedTenantPolicies(entry, serviceRole);
     if (
-      matches.length !== 1 ||
-      policy?.policyname !== "pinwren_tenant" ||
-      policy.permissive !== "PERMISSIVE" ||
-      policy.cmd !== "ALL" ||
-      policy.roles.length !== 1 ||
-      policy.roles[0] !== "public" ||
-      normalize(policy.qual ?? "") !== expected ||
-      normalize(policy.with_check ?? "") !== expected
+      matches.length !== expected.length ||
+      expected.some((definition) => {
+        const policy = matches.find((value) => value.policyname === definition.name);
+        return (
+          policy?.permissive !== "PERMISSIVE" ||
+          policy.cmd !== definition.command ||
+          policy.roles.length !== 1 ||
+          policy.roles[0] !== definition.role ||
+          normalize(policy.qual ?? "") !== normalize(definition.using) ||
+          normalize(policy.with_check ?? "") !== normalize(definition.check ?? "")
+        );
+      })
     ) {
       throw new Error(`Cloud policy definition is invalid for ${entry.table}`);
     }
@@ -205,7 +227,7 @@ export async function assertCloudDatabaseSecurity(): Promise<void> {
   ] as const) {
     const db = postgres(url, { max: 1 });
     try {
-      await validateCloudCatalog(db, kind);
+      await validateCloudCatalog(db, kind, decodeURIComponent(service.username));
     } finally {
       await db.end();
     }

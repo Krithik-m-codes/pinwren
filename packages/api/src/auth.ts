@@ -1,5 +1,6 @@
+import { identityDatabase } from "@pinwren/db/identity";
 import { MAX_SESSION_DAYS, MIN_PASSWORD_LENGTH } from "@pinwren/core";
-import { getDb, schema, user as userTable, userPreference } from "@pinwren/db";
+import { schema, user as userTable, userPreference } from "@pinwren/db";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
@@ -117,7 +118,7 @@ function createAuth() {
     baseURL: e.PINWREN_URL,
     basePath: "/api/auth",
     secret: e.PINWREN_SECRET,
-    database: drizzleAdapter(getDb(), { provider: "pg", schema }),
+    database: drizzleAdapter(identityDatabase(), { provider: "pg", schema }),
     emailAndPassword: {
       enabled: true,
       // Who may sign up is decided in `policyHooks` (first account, invitees, or open sign-up).
@@ -144,7 +145,7 @@ function createAuth() {
         if (!(await emailConfigured())) return;
         // Better Auth sends the change-email link to the new address with that address as `user.email`;
         // the stored address is still the old one until it's confirmed.
-        const [stored] = await getDb()
+        const [stored] = await identityDatabase()
           .select({ email: userTable.email })
           .from(userTable)
           .where(eq(userTable.id, user.id));
@@ -187,7 +188,7 @@ function createAuth() {
               } first.`,
             });
           }
-          const [pref] = await getDb()
+          const [pref] = await identityDatabase()
             .select({ avatarKey: userPreference.avatarKey })
             .from(userPreference)
             .where(eq(userPreference.userId, user.id));
@@ -289,7 +290,7 @@ function createAuth() {
         storeToken: "hashed",
         async sendMagicLink({ email, url }) {
           const address = email.trim().toLowerCase();
-          const [existing] = await getDb()
+          const [existing] = await identityDatabase()
             .select({ name: userTable.name })
             .from(userTable)
             .where(eq(sql`lower(${userTable.email})`, address))
@@ -318,7 +319,7 @@ function createAuth() {
     // the longest allowed lifetime; each session row gets its own expiry when it is created, and
     // sessions are not slid forward, so the admin's lifetime is a hard limit from sign-in.
     session: {
-      cookieCache: { enabled: true, maxAge: 60 },
+      cookieCache: { enabled: e.PINWREN_MODE !== "cloud", maxAge: 60 },
       expiresIn: MAX_SESSION_DAYS * 24 * 3600,
       disableSessionRefresh: true,
     },

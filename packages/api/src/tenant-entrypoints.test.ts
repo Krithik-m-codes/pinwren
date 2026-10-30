@@ -2,7 +2,7 @@ import { getTableName, is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import * as schema from "../../db/src/schema";
-import { tenantInventory } from "../../db/src/tenant-inventory";
+import { tenantInventory, isTenantProtected } from "../../db/src/tenant-inventory";
 import routeInventory from "./tenant-route-inventory.json";
 
 const tables = Object.values(schema).filter((value) => is(value, PgTable));
@@ -21,8 +21,14 @@ describe("Cloud database boundary inventory", () => {
         expect(getTableConfig(table).columns.some((column) => column.name === "org_id")).toBe(true);
       }
       if (entry.ownership === "parent") expect(entry.parents.length).toBeGreaterThan(0);
+      const columns = getTableConfig(table).columns.map((column) => column.name);
+      if (entry.scopeColumn) expect(columns).toContain(entry.scopeColumn);
+      for (const column of [...(entry.runtimeColumns ?? []), ...(entry.bootstrapColumns ?? [])])
+        expect(columns).toContain(column);
+      if (entry.runtimeColumns) expect(entry.profileScope).toBe(true);
       for (const parent of entry.parents) {
-        expect(tenantInventory.find((value) => value.table === parent)?.ownership).toMatch(/direct|parent/);
+        const parentEntry = tenantInventory.find((value) => value.table === parent);
+        expect(parentEntry && isTenantProtected(parentEntry)).toBe(true);
       }
       const tenantParents = getTableConfig(table)
         .foreignKeys.map((key) => getTableName(key.reference().foreignTable))

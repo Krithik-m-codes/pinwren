@@ -1,4 +1,5 @@
 import type { WebhookEvent } from "@pinwren/core";
+import { afterOrgCommit } from "@pinwren/db";
 import { enqueue, QUEUES } from "./jobs/boss";
 import { publishDomainEvent } from "./realtime/publish";
 
@@ -30,9 +31,10 @@ export function emit(...events: EventInput[]): void {
   const at = new Date().toISOString();
   for (const input of events) {
     const e = { ...input, id: crypto.randomUUID() };
-    void enqueue(QUEUES.dispatch, { ...e, at });
-    // Real-time inbox (SSE): same moment, not through the queue, so the dashboard sees it at once.
-    publishDomainEvent(e).catch((err: unknown) => console.warn("[pinwren] realtime publish failed", err));
+    afterOrgCommit(() => {
+      void enqueue(QUEUES.dispatch, { ...e, at });
+      publishDomainEvent(e).catch((err: unknown) => console.warn("[pinwren] realtime publish failed", err));
+    });
   }
 }
 

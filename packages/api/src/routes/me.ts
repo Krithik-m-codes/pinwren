@@ -1,7 +1,15 @@
 import { appRoleOf } from "@pinwren/core";
-import { account as authAccount, getDb, invitation, organization, user, userPreference } from "@pinwren/db";
+import {
+  avatarKeyOf,
+  invitationsFor,
+  updateAccountName,
+  saveAccountAvatar,
+  clearAccountAvatar,
+  accountPassword,
+  accountEmailTaken,
+  updateAccountEmail,
+} from "../db/accounts";
 import { zValidator } from "@hono/zod-validator";
-import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { z } from "zod";
@@ -45,14 +53,6 @@ export const avatarUrl = (userId: string, version: number) =>
 const contentTypeOf = (key: string) =>
   Object.entries(EXTENSIONS).find(([, ext]) => key.endsWith(`.${ext}`))?.[0] ?? "application/octet-stream";
 
-async function avatarKeyOf(userId: string): Promise<string | null> {
-  const [pref] = await getDb()
-    .select({ avatarKey: userPreference.avatarKey })
-    .from(userPreference)
-    .where(eq(userPreference.userId, userId));
-  return pref?.avatarKey ?? null;
-}
-
 async function removeFile(key: string | null) {
   if (!key) return;
   await storage()
@@ -66,37 +66,14 @@ export const account = new Hono<{ Variables: AccountVars }>()
    * Matched case-insensitively, pending and unexpired, as Better Auth checks on accept.
    */
   .get("/me/invitations", requireAccount, async (c) => {
-    const rows = await getDb()
-      .select({
-        id: invitation.id,
-        organizationId: invitation.organizationId,
-        organizationName: organization.name,
-        role: invitation.role,
-        expiresAt: invitation.expiresAt,
-        inviterName: user.name,
-      })
-      .from(invitation)
-      .innerJoin(organization, eq(organization.id, invitation.organizationId))
-      .leftJoin(user, eq(user.id, invitation.inviterId))
-      .where(
-        and(
-          sql`lower(${invitation.email}) = ${c.var.email.toLowerCase()}`,
-          eq(invitation.status, "pending"),
-          gt(invitation.expiresAt, new Date()),
-        ),
-      )
-      .orderBy(desc(invitation.createdAt));
+    const rows = await invitationsFor(c.var.email);
     return c.json({
       invitations: rows.map((r) => ({ ...r, appRole: appRoleOf(r.role ?? "member") })),
     });
   })
 
   .patch("/me/profile", requireAccount, zValidator("json", profileUpdate), async (c) => {
-    const [u] = await getDb()
-      .update(user)
-      .set({ name: c.req.valid("json").name, updatedAt: new Date() })
-      .where(eq(user.id, c.var.userId))
-      .returning({ id: user.id, name: user.name, email: user.email, image: user.image });
+    const u = await updateAccountName(c.var.userId, c.req.valid("json").name);
     if (!u) throw notFound("Account");
     return c.json({ user: u });
   })
@@ -115,28 +92,15 @@ export const account = new Hono<{ Variables: AccountVars }>()
     const key = `avatars/${crypto.randomUUID()}.${EXTENSIONS[file.contentType] ?? "bin"}`;
     await storage().put(key, file.bytes, file.contentType);
     const previous = await avatarKeyOf(c.var.userId);
-    const db = getDb();
-    await db
-      .insert(userPreference)
-      .values({ userId: c.var.userId, avatarKey: key })
-      .onConflictDoUpdate({
-        target: userPreference.userId,
-        set: { avatarKey: key, updatedAt: new Date() },
-      });
     const image = avatarUrl(c.var.userId, Date.now());
-    await db.update(user).set({ image, updatedAt: new Date() }).where(eq(user.id, c.var.userId));
+    await saveAccountAvatar(c.var.userId, key, image);
     await removeFile(previous);
     return c.json({ image });
   })
 
   .delete("/me/avatar", requireAccount, async (c) => {
     const previous = await avatarKeyOf(c.var.userId);
-    const db = getDb();
-    await db
-      .update(userPreference)
-      .set({ avatarKey: null, updatedAt: new Date() })
-      .where(eq(userPreference.userId, c.var.userId));
-    await db.update(user).set({ image: null, updatedAt: new Date() }).where(eq(user.id, c.var.userId));
+    await clearAccountAvatar(c.var.userId);
     await removeFile(previous);
     return c.json({ image: null });
   })
@@ -181,26 +145,15 @@ export const account = new Hono<{ Variables: AccountVars }>()
     if (next === c.var.email.toLowerCase()) {
       throw new ApiError(400, "SAME_EMAIL", "That's already your email address");
     }
-    const db = getDb();
-    const [cred] = await db
-      .select({ password: authAccount.password })
-      .from(authAccount)
-      .where(and(eq(authAccount.userId, c.var.userId), eq(authAccount.providerId, "credential")));
+    const passwordHash = await accountPassword(c.var.userId);
     const ctx = await getAuth().$context;
-    if (!cred?.password || !(await ctx.password.verify({ hash: cred.password, password }))) {
+    if (!passwordHash || !(await ctx.password.verify({ hash: passwordHash, password }))) {
       throw new ApiError(400, "INVALID_PASSWORD", "That password isn't right");
     }
-    const [taken] = await db
-      .select({ id: user.id })
-      .from(user)
-      .where(sql`lower(${user.email}) = ${next}`);
+    const taken = await accountEmailTaken(next);
     if (taken) throw new ApiError(409, "EMAIL_TAKEN", "Another account already uses that address");
     try {
-      const [u] = await db
-        .update(user)
-        .set({ email: next, emailVerified: false, updatedAt: new Date() })
-        .where(eq(user.id, c.var.userId))
-        .returning({ id: user.id, name: user.name, email: user.email, image: user.image });
+      const u = await updateAccountEmail(c.var.userId, next);
       return c.json({ user: u });
     } catch (err) {
       if ((err as { code?: string; cause?: { code?: string } }).cause?.code === "23505") {

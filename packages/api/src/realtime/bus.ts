@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { PRESENCE_TTL_MS, type PresenceUser, type StreamEventName } from "@pinwren/core";
-import { getDb } from "@pinwren/db";
-import { sql } from "drizzle-orm";
+import { notifyRealtime, REALTIME_CHANNEL } from "../db/system";
 import postgres from "postgres";
 import { env } from "../env";
 
@@ -11,7 +10,7 @@ import { env } from "../env";
 // payloads are capped by Postgres at 8000 bytes, so messages carry ids and small fields only; clients
 // refetch details.
 
-export const CHANNEL = "pinwren_events";
+export const CHANNEL = REALTIME_CHANNEL;
 export const MAX_PAYLOAD_BYTES = 7000;
 const RING_SIZE = 500;
 const SWEEP_MS = 5_000;
@@ -128,7 +127,7 @@ export function encodeMessage(msg: BusMessage): string {
 export async function publish(msg: BusMessage): Promise<void> {
   if (msg.t === "e") msg.id ??= `${Date.now().toString(36)}-${randomBytes(6).toString("base64url")}`;
   try {
-    await getDb().execute(sql`select pg_notify(${CHANNEL}, ${encodeMessage(msg)})`);
+    await notifyRealtime(encodeMessage(msg));
   } catch (err) {
     console.warn("[pinwren] realtime publish failed", err);
   }

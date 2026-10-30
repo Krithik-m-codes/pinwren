@@ -1,3 +1,4 @@
+import { accountProfileFor } from "../db/identity";
 import { randomBytes } from "node:crypto";
 import {
   captureConfig,
@@ -17,7 +18,7 @@ import {
   widgetBranding,
   widgetConfig,
 } from "@pinwren/core";
-import { activity, comment, feedback, getDb, project, user } from "@pinwren/db";
+import { activity, comment, feedback, getDb, project } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
@@ -140,17 +141,7 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
 
   // --- Me -----------------------------------------------------------------------------------------
   .get("/me", async (c) => {
-    const [u] = await getDb()
-      .select({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        image: user.image,
-        emailVerified: user.emailVerified,
-        twoFactorEnabled: user.twoFactorEnabled,
-      })
-      .from(user)
-      .where(eq(user.id, c.var.userId));
+    const u = await accountProfileFor(c.var.userId);
     // Instance admins also learn whether a newer release exists ("Update available").
     const [instanceAdmin, needed, smtp, open] = await Promise.all([
       isInstanceAdmin(c.var.userId),

@@ -1,5 +1,5 @@
 import { presenceUpdate, STREAM_PING_MS, streamQuery } from "@pinwren/core";
-import { feedback, getDb, project, user } from "@pinwren/db";
+import { afterOrgCommit, feedback, getDb, project, user, withOrg } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { Hono } from "hono";
@@ -20,10 +20,12 @@ export const realtime = new Hono<{ Variables: SessionVars }>()
     const { projectIds } = c.req.valid("query");
     const orgId = c.var.orgId;
     if (projectIds.length) {
-      const found = await getDb()
-        .select({ id: project.id })
-        .from(project)
-        .where(and(eq(project.orgId, orgId), inArray(project.id, projectIds)));
+      const found = await withOrg(orgId, (db) =>
+        db
+          .select({ id: project.id })
+          .from(project)
+          .where(and(eq(project.orgId, orgId), inArray(project.id, projectIds))),
+      );
       if (found.length !== new Set(projectIds).size) throw notFound("Project");
     }
     const lastEventId = c.req.header("last-event-id") ?? c.req.query("lastEventId") ?? null;
@@ -94,6 +96,6 @@ export const realtime = new Hono<{ Variables: SessionVars }>()
       .from(user)
       .where(eq(user.id, c.var.userId));
     if (!u) throw new ApiError(401, "UNAUTHORIZED", "Sign in required");
-    await publish({ t: "p", orgId: c.var.orgId, projectId, feedbackId, user: u });
+    afterOrgCommit(() => publish({ t: "p", orgId: c.var.orgId, projectId, feedbackId, user: u }));
     return c.json({ ok: true });
   });

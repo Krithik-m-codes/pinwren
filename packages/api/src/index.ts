@@ -27,6 +27,7 @@ import { guestPortal } from "./routes/guest";
 import { workspace } from "./routes/workspace";
 
 export { getAuth } from "./auth";
+export { firstOrganizationFor } from "./db/identity";
 export { env } from "./env";
 export { startJobs, stopJobs } from "./jobs";
 export { installPeerStamp } from "./net";

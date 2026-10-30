@@ -1,5 +1,5 @@
 import { withOrg } from "@pinwren/db";
-import { createMiddleware } from "hono/factory";
+import type { Context, Next } from "hono";
 import { matchedRoutes } from "hono/route";
 import { env } from "./env";
 import routeInventory from "./tenant-route-inventory.json";
@@ -8,7 +8,12 @@ const inventory: Record<string, { boundary: string; databaseLifetime: string }> 
 class RollbackResponse extends Error {}
 
 /** Called only after session/token validation. Mixed I/O handlers enter finite scopes explicitly. */
-export const tenantRequestScope = createMiddleware<{ Variables: { orgId: string } }>(async (c, next) => {
+// Hono Context is invariant in its variables; retain the caller's complete variable type.
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
+export async function tenantRequestScope<V extends { orgId: string }>(
+  c: Context<{ Variables: V }>,
+  next: Next,
+) {
   if (env().PINWREN_MODE !== "cloud") return next();
   const method = c.req.method === "HEAD" ? "GET" : c.req.method;
   // Hono may match both a literal route and a later :id route; the first handler wins.
@@ -28,4 +33,4 @@ export const tenantRequestScope = createMiddleware<{ Variables: { orgId: string 
   } catch (error) {
     if (!(error instanceof RollbackResponse)) throw error;
   }
-});
+}

@@ -258,6 +258,9 @@ export const feedback = pgTable(
     index("feedback_search_idx").using("gin", t.search),
     index("feedback_duplicate_of_idx").on(t.duplicateOfId),
     index("feedback_review_link_idx").on(t.reviewLinkId),
+    index("feedback_org_reporter_idx")
+      .on(t.orgId, t.reporterId)
+      .where(sql`${t.reporterId} is not null`),
     uniqueIndex("feedback_id_org_uq").on(t.id, t.orgId),
     tenantReference("feedback_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
     tenantReference("feedback_page_tenant_fk", t.pageId, t.orgId, page.id, page.orgId),
@@ -392,6 +395,9 @@ export const comment = pgTable(
   },
   (t) => [
     index("comment_feedback_idx").on(t.feedbackId, t.createdAt),
+    index("comment_org_author_idx")
+      .on(t.orgId, t.authorId)
+      .where(sql`${t.authorId} is not null`),
     tenantReference("comment_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
   ],
 );
@@ -412,6 +418,9 @@ export const activity = pgTable(
   },
   (t) => [
     index("activity_feedback_idx").on(t.feedbackId, t.createdAt),
+    index("activity_org_actor_idx")
+      .on(t.orgId, t.actorId)
+      .where(sql`${t.actorId} is not null`),
     tenantReference("activity_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
   ],
 );

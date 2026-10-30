@@ -23,6 +23,7 @@ const fake = vi.hoisted(() => {
 vi.mock("../../db/src/connection", () => ({ getRuntimeDb: () => fake.root }));
 
 import { getDb, withOrg, currentOrgId, afterOrgCommit } from "../../db/src";
+import { identityDatabase } from "../../db/src/identity";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -151,5 +152,14 @@ describe("organization transaction context", () => {
     const effect = vi.fn();
     afterOrgCommit(effect);
     expect(effect).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the auth adapter on a stable pool instead of capturing a request transaction", async () => {
+    vi.stubEnv("PINWREN_MODE", "selfhost");
+    await withOrg("org-a", () => {
+      expect(getDb()).toBe(fake.tx);
+      expect(identityDatabase()).toBe(fake.root);
+      return Promise.resolve();
+    });
   });
 });

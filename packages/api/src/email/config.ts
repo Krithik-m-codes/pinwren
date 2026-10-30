@@ -1,6 +1,5 @@
 import type { EmailSettingsUpdate } from "@pinwren/core";
-import { getDb, setting } from "@pinwren/db";
-import { eq } from "drizzle-orm";
+import { readInstanceSetting, saveInstanceSetting } from "../db/system";
 import { decryptSecret, encryptSecret } from "../crypto";
 import { env } from "../env";
 
@@ -57,7 +56,7 @@ export type EmailSettingsView = {
 };
 
 async function readStored(): Promise<{ value: Stored; secret: string | null }> {
-  const [row] = await getDb().select().from(setting).where(eq(setting.key, EMAIL_SETTING_KEY));
+  const row = await readInstanceSetting(EMAIL_SETTING_KEY);
   return { value: row?.value ?? {}, secret: row?.secret ?? null };
 }
 
@@ -166,12 +165,6 @@ export async function updateEmailSettings(patch: EmailSettingsUpdate, userId: st
   if (patch.password === null) nextSecret = null;
   else if (typeof patch.password === "string") nextSecret = encryptSecret(patch.password);
 
-  await getDb()
-    .insert(setting)
-    .values({ key: EMAIL_SETTING_KEY, value: next, secret: nextSecret, updatedBy: userId })
-    .onConflictDoUpdate({
-      target: setting.key,
-      set: { value: next, secret: nextSecret, updatedBy: userId, updatedAt: new Date() },
-    });
+  await saveInstanceSetting({ key: EMAIL_SETTING_KEY, value: next, secret: nextSecret, updatedBy: userId });
   return [];
 }

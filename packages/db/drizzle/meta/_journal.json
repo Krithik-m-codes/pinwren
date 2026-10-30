@@ -71,6 +71,13 @@
       "when": 1793260129825,
       "tag": "0009_tenant_label_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793295396760,
+      "tag": "0010_tenant_identity_scope",
+      "breakpoints": true
     }
   ]
 }

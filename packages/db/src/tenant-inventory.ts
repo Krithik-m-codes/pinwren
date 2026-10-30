@@ -2,7 +2,28 @@ export type TenantTable = {
   table: string;
   ownership: "direct" | "parent" | "identity" | "system";
   parents: readonly string[];
+  scopeColumn?: string;
+  profileScope?: boolean;
+  runtimeColumns?: readonly string[];
+  bootstrapColumns?: readonly string[];
 };
+
+export const PROFILE_PARTICIPANTS = [
+  ["member", "user_id"],
+  ["feedback", "reporter_id"],
+  ["comment", "author_id"],
+  ["activity", "actor_id"],
+  ["feedback_watcher", "user_id"],
+] as const;
+
+export function isTenantProtected(entry: TenantTable): boolean {
+  return (
+    entry.ownership === "direct" ||
+    entry.ownership === "parent" ||
+    entry.scopeColumn !== undefined ||
+    entry.profileScope === true
+  );
+}
 
 export const tenantInventory: readonly TenantTable[] = [
   { table: "project", ownership: "direct", parents: [] },
@@ -31,7 +52,12 @@ export const tenantInventory: readonly TenantTable[] = [
   { table: "email_delivery", ownership: "direct", parents: [] },
   { table: "webhook_endpoint", ownership: "direct", parents: ["project"] },
   { table: "webhook_delivery", ownership: "direct", parents: ["webhook_endpoint"] },
-  { table: "api_token", ownership: "direct", parents: [] },
+  {
+    table: "api_token",
+    ownership: "direct",
+    parents: [],
+    bootstrapColumns: ["id", "org_id", "user_id", "prefix", "hash", "scopes", "expires_at", "last_used_at"],
+  },
   { table: "org_setting", ownership: "direct", parents: [] },
   { table: "brand_asset", ownership: "direct", parents: [] },
   { table: "email_template", ownership: "direct", parents: [] },
@@ -41,13 +67,19 @@ export const tenantInventory: readonly TenantTable[] = [
   { table: "email_suppression", ownership: "direct", parents: [] },
   { table: "license", ownership: "system", parents: [] },
   { table: "review_link", ownership: "direct", parents: ["project"] },
-  { table: "user", ownership: "identity", parents: [] },
+  {
+    table: "user",
+    ownership: "identity",
+    parents: PROFILE_PARTICIPANTS.map(([table]) => table),
+    profileScope: true,
+    runtimeColumns: ["id", "name", "email", "image"],
+  },
   { table: "session", ownership: "identity", parents: [] },
   { table: "account", ownership: "identity", parents: [] },
   { table: "verification", ownership: "identity", parents: [] },
-  { table: "organization", ownership: "identity", parents: [] },
-  { table: "member", ownership: "identity", parents: [] },
-  { table: "invitation", ownership: "identity", parents: [] },
+  { table: "organization", ownership: "identity", parents: [], scopeColumn: "id" },
+  { table: "member", ownership: "identity", parents: [], scopeColumn: "organization_id" },
+  { table: "invitation", ownership: "identity", parents: [], scopeColumn: "organization_id" },
   { table: "auth_rate_limit", ownership: "system", parents: [] },
   { table: "two_factor", ownership: "identity", parents: [] },
   { table: "passkey", ownership: "identity", parents: [] },

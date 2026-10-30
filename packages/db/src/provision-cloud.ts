@@ -1,6 +1,7 @@
 import postgres from "postgres";
 import { validateCloudCatalog } from "./cloud-security";
-import { tenantInventory } from "./tenant-inventory";
+import { tenantInventory, isTenantProtected } from "./tenant-inventory";
+import { expectedTenantPolicies } from "./tenant-policies";
 import { parseCloudDatabaseUrl } from "./cloud-database-url";
 
 export async function provisionCloudDatabase(
@@ -31,10 +32,31 @@ export async function provisionCloudDatabase(
       }
       await tx`revoke all on all tables in schema public from public`;
       for (const entry of tenantInventory) {
-        if (entry.ownership === "direct" || entry.ownership === "parent") {
+        if (isTenantProtected(entry)) {
           await tx`alter table public.${tx(entry.table)} enable row level security`;
           await tx`alter table public.${tx(entry.table)} force row level security`;
-          await tx`grant select,insert,update,delete on public.${tx(entry.table)} to ${tx(options.runtimeRole)}`;
+          if (entry.runtimeColumns) {
+            await tx`grant select (${tx([...entry.runtimeColumns])}) on public.${tx(entry.table)} to ${tx(options.runtimeRole)}`;
+          } else {
+            await tx`grant select,insert,update,delete on public.${tx(entry.table)} to ${tx(options.runtimeRole)}`;
+          }
+          for (const policy of expectedTenantPolicies(entry, options.serviceRole).filter(
+            (value) => value.name !== "pinwren_tenant",
+          )) {
+            const existing =
+              await tx`select 1 from pg_policies where schemaname='public' and tablename=${entry.table} and policyname=${policy.name}`;
+            if (existing.length) continue;
+            if (policy.command === "ALL") {
+              await tx`create policy ${tx(policy.name)} on public.${tx(entry.table)} for all to ${tx(options.serviceRole)} using (true) with check (true)`;
+            } else {
+              await tx`create policy ${tx(policy.name)} on public.${tx(entry.table)} for select to ${tx(options.serviceRole)} using (true)`;
+            }
+          }
+          if (entry.ownership === "identity") {
+            await tx`grant select,insert,update,delete on public.${tx(entry.table)} to ${tx(options.serviceRole)}`;
+          } else if (entry.bootstrapColumns) {
+            await tx`grant select (${tx([...entry.bootstrapColumns])}) on public.${tx(entry.table)} to ${tx(options.serviceRole)}`;
+          }
         } else {
           await tx`grant select,insert,update,delete on public.${tx(entry.table)} to ${tx(options.serviceRole)}`;
         }
@@ -45,7 +67,7 @@ export async function provisionCloudDatabase(
         [options.serviceRole, "service"],
       ] as const) {
         await tx`set local role ${tx(role)}`;
-        await validateCloudCatalog(tx, kind);
+        await validateCloudCatalog(tx, kind, options.serviceRole);
         await tx`reset role`;
       }
     });

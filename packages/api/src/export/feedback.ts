@@ -1,5 +1,5 @@
 import { type FeedbackStatus, feedbackListQuery, kindLabel } from "@pinwren/core";
-import { getDb, member, project, user } from "@pinwren/db";
+import { getDb, member, project, user, withOrg } from "@pinwren/db";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { feedbackLink } from "../services/feedback-payload";
@@ -123,10 +123,12 @@ async function* exportPages(orgId: string, q: FeedbackExportQuery) {
   const { format: _format, ids, ...filters } = q;
   let cursor: string | undefined;
   for (;;) {
-    const page = await listFeedback(
-      orgId,
-      { ...filters, limit: PAGE, ...(cursor ? { cursor } : {}) },
-      { count: false, ...(ids ? { ids } : {}) },
+    const page = await withOrg(orgId, () =>
+      listFeedback(
+        orgId,
+        { ...filters, limit: PAGE, ...(cursor ? { cursor } : {}) },
+        { count: false, ...(ids ? { ids } : {}) },
+      ),
     );
     yield page.items;
     if (!page.nextCursor) return;
@@ -168,16 +170,18 @@ const HEADERS = {
 } as const;
 
 export async function exportFeedback(orgId: string, q: FeedbackExportQuery): Promise<Response> {
-  const [names, projectName] = await Promise.all([
-    memberNames(orgId),
-    q.projectId
-      ? getDb()
-          .select({ name: project.name })
-          .from(project)
-          .where(and(eq(project.id, q.projectId), eq(project.orgId, orgId)))
-          .then((r) => r[0]?.name ?? null)
-      : Promise.resolve(null),
-  ]);
+  const [names, projectName] = await withOrg(orgId, () =>
+    Promise.all([
+      memberNames(orgId),
+      q.projectId
+        ? getDb()
+            .select({ name: project.name })
+            .from(project)
+            .where(and(eq(project.id, q.projectId), eq(project.orgId, orgId)))
+            .then((r) => r[0]?.name ?? null)
+        : Promise.resolve(null),
+    ]),
+  );
   const day = new Date().toISOString().slice(0, 10);
   const filename = `${fileSlug(projectName ?? "pinwren")}-feedback-${day}.${q.format}`;
   const headers = {

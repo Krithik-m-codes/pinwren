@@ -14,6 +14,24 @@ classified. Direct ownership means a protected `org_id`; parent ownership means 
 organization through all declared protected parents. Identity tables serve users across memberships;
 system tables serve explicitly authorized instance operations.
 
+Cloud also protects organization, membership and invitation rows by their organization identifier.
+Tenant reads of user profiles expose only `id`, `name`, `email` and `image`, and only for members or
+contributors linked to that organization's feedback, comments, activity or watcher rows. Private account
+flags remain available only through the authenticated account repository. There are 31 protected tables.
+
+Better Auth uses a separate, stable identity pool. Its service role has identity/system grants and a
+fixed eight-column token-verification projection; it cannot read tenant feedback or token display names.
+Additional policies are restricted to that service role and validated during startup. Cloud sessions
+disable Better Auth's cookie cache so revocation takes effect on the next request. Current membership
+is checked for every session and token request. Self-host authentication retains its existing cache.
+
+Finite authenticated tenant handlers commit only on a successful response. Handled errors roll back
+their writes; jobs and broadcasts wait for the outer commit, including successful nested savepoints.
+Exports open a new scope for each database batch. SSE project validation finishes before subscription,
+and reconnects recheck the session and membership. Server branding/name cache misses use the organization
+already verified by the viewer check. Cloud entitlement seat counts are scoped to that organization and
+do not reuse the self-host process-wide resolved entitlement cache.
+
 The four tables without their own organization column are `diagnostics`, `feedback_translation`,
 `feedback_watcher`, and `feedback_label`. The last references both feedback and labels. Self-references
 for duplicate feedback, and AI duplicate candidates, must also preserve tenancy. Nullable

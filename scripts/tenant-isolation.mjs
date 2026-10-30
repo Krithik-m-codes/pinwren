@@ -19,6 +19,8 @@ const result = spawnSync(
     "--root",
     "packages/api",
     "--no-file-parallelism",
+    "--hookTimeout",
+    "120000",
     "src/tenant-entrypoints.test.ts",
     "src/tenant-context.test.ts",
     "src/tenant-context-db.test.ts",
@@ -28,6 +30,8 @@ const result = spawnSync(
     "src/cloud-configuration.test.ts",
     "src/cloud-startup.test.ts",
     "src/cloud-security-db.test.ts",
+    "src/cloud-identity-db.test.ts",
+    "src/cloud-api-db.test.ts",
   ],
   {
     cwd: root,

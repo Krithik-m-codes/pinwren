@@ -1,4 +1,5 @@
-import { feedbackAsset, getDb } from "@pinwren/db";
+import { withOrg } from "@pinwren/db";
+import { feedbackAsset } from "@pinwren/db";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "../errors";
 import { storage } from "../storage";
@@ -9,10 +10,12 @@ import { storage } from "../storage";
  * never as something other than their checked type.
  */
 export async function assetResponse(orgId: string, id: string): Promise<Response> {
-  const [a] = await getDb()
-    .select()
-    .from(feedbackAsset)
-    .where(and(eq(feedbackAsset.id, id), eq(feedbackAsset.orgId, orgId)));
+  const [a] = await withOrg(orgId, (db) =>
+    db
+      .select()
+      .from(feedbackAsset)
+      .where(and(eq(feedbackAsset.id, id), eq(feedbackAsset.orgId, orgId))),
+  );
   if (!a) throw notFound("Asset");
   const file = await storage().get(a.storageKey);
   if (!file) throw notFound("Asset file");

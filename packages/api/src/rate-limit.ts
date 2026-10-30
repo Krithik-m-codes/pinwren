@@ -1,3 +1,5 @@
+import { identityDatabase } from "@pinwren/db/identity";
+import { env } from "./env";
 import { getDb, rateLimit } from "@pinwren/db";
 import { sql } from "drizzle-orm";
 
@@ -6,7 +8,7 @@ import { sql } from "drizzle-orm";
  * the window. One upsert per call; old rows are overwritten when their window has passed.
  */
 export async function consume(key: string, limit: number, windowSeconds: number): Promise<boolean> {
-  const [row] = await getDb()
+  const [row] = await rateLimitDatabase()
     .insert(rateLimit)
     .values({ key, count: 1, resetAt: sql`now() + make_interval(secs => ${windowSeconds})` })
     .onConflictDoUpdate({
@@ -31,7 +33,7 @@ export async function consumeAmount(
   windowSeconds: number,
 ): Promise<boolean> {
   const n = Math.max(0, Math.ceil(amount));
-  const [row] = await getDb()
+  const [row] = await rateLimitDatabase()
     .insert(rateLimit)
     .values({ key, count: n, resetAt: sql`now() + make_interval(secs => ${windowSeconds})` })
     .onConflictDoUpdate({
@@ -47,9 +49,12 @@ export async function consumeAmount(
 
 /** Has `key` already used up `limit` in its current window? Reads only. */
 export async function exhausted(key: string, limit: number): Promise<boolean> {
-  const [row] = await getDb()
+  const [row] = await rateLimitDatabase()
     .select({ count: rateLimit.count })
     .from(rateLimit)
     .where(sql`${rateLimit.key} = ${key} and ${rateLimit.resetAt} >= now()`);
   return (row?.count ?? 0) >= limit;
 }
+
+// Fixed system-table repository; never returns tenant content.
+const rateLimitDatabase = () => (env().PINWREN_MODE === "cloud" ? identityDatabase() : getDb());

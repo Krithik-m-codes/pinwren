@@ -1,6 +1,6 @@
 import "server-only";
 import { env } from "@pinwren/api";
-import { getDb } from "@pinwren/db";
+import { withOrg } from "@pinwren/db";
 import { cacheLife, cacheTag } from "next/cache";
 import type { OrgBranding } from "@/lib/api";
 
@@ -16,10 +16,12 @@ export async function getOrgBranding(orgId: string): Promise<OrgBranding> {
   "use cache";
   cacheTag(brandingTag(orgId));
   cacheLife("hours");
-  const row = await getDb().query.orgSetting.findFirst({
-    where: (t, { and, eq }) => and(eq(t.orgId, orgId), eq(t.key, "branding")),
-    columns: { value: true },
-  });
+  const row = await withOrg(orgId, (db) =>
+    db.query.orgSetting.findFirst({
+      where: (t, { and, eq }) => and(eq(t.orgId, orgId), eq(t.key, "branding")),
+      columns: { value: true },
+    }),
+  );
   const s = row?.value ?? {};
   const logoAssetId = typeof s.logoAssetId === "string" ? s.logoAssetId : null;
   const faviconAssetId = typeof s.faviconAssetId === "string" ? s.faviconAssetId : null;
@@ -44,9 +46,11 @@ export async function getWorkspaceName(orgId: string): Promise<string | null> {
   "use cache";
   cacheTag(workspaceTag(orgId));
   cacheLife("hours");
-  const o = await getDb().query.organization.findFirst({
-    where: (t, { eq }) => eq(t.id, orgId),
-    columns: { name: true },
-  });
+  const o = await withOrg(orgId, (db) =>
+    db.query.organization.findFirst({
+      where: (t, { eq }) => eq(t.id, orgId),
+      columns: { name: true },
+    }),
+  );
   return o?.name ?? null;
 }

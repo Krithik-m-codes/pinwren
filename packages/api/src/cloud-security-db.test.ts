@@ -232,4 +232,40 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud provisioning an
       await fixture`alter table public.project enable row level security`;
     }
   });
+
+  it("refuses runtime membership in the authentication service role", async () => {
+    await fixture`grant ${fixture(serviceRole)} to ${fixture(runtimeRole)}`;
+    try {
+      await expect(assertCloudDatabaseSecurity()).rejects.toThrow(/membership/i);
+    } finally {
+      await fixture`revoke ${fixture(serviceRole)} from ${fixture(runtimeRole)}`;
+    }
+  });
+
+  it("refuses broadening the service's token-verification column projection", async () => {
+    await fixture`grant select on public.api_token to ${fixture(serviceRole)}`;
+    try {
+      await expect(assertCloudDatabaseSecurity()).rejects.toThrow(/projection|privilege/i);
+    } finally {
+      await fixture`revoke select on public.api_token from ${fixture(serviceRole)}`;
+    }
+  });
+
+  it("refuses tenant access to private authentication profile columns", async () => {
+    await fixture`grant select on public."user" to ${fixture(runtimeRole)}`;
+    try {
+      await expect(assertCloudDatabaseSecurity()).rejects.toThrow(/projection|privilege/i);
+    } finally {
+      await fixture`revoke select on public."user" from ${fixture(runtimeRole)}`;
+    }
+  });
+
+  it("refuses broadening the token bootstrap policy to PUBLIC", async () => {
+    await fixture`alter policy pinwren_bootstrap_service on public.api_token to public`;
+    try {
+      await expect(assertCloudDatabaseSecurity()).rejects.toThrow(/policy/i);
+    } finally {
+      await fixture`alter policy pinwren_bootstrap_service on public.api_token to ${fixture(serviceRole)}`;
+    }
+  });
 });

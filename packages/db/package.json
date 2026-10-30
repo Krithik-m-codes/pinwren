@@ -19,7 +19,8 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
     "./migrate": "./src/migrate.ts",
-    "./cloud-security": "./src/cloud-security.ts"
+    "./cloud-security": "./src/cloud-security.ts",
+    "./identity": "./src/identity.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

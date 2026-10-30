@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
-function createDb(url: string) {
+export function createDb(url: string) {
   const client = postgres(url, { max: Number(process.env.DATABASE_POOL_MAX ?? 10) });
   return drizzle(client, { schema, casing: "snake_case" });
 }
