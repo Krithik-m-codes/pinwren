@@ -1,3 +1,4 @@
+import { withOrg, afterOrgCommit } from "@pinwren/db";
 import { CLOSED_STATUSES, type FeedbackStatus, isClosedStatus, kindLabel } from "@pinwren/core";
 import { activity, feedback, getDb, issueIntegration, issueLink } from "@pinwren/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
@@ -194,28 +195,38 @@ async function recordError(i: Integration, err: unknown) {
  * Create the issue for one feedback item (idempotent: an existing link is returned). Throws
  * `TrackerError` on tracker failures so the job retries and the "Send to …" button can say why.
  */
-export async function createIssueFor(feedbackId: string, integrationId: string): Promise<Link> {
-  const db = getDb();
-  const i = await integrationFor(integrationId);
+export async function createIssueFor(
+  feedbackId: string,
+  integrationId: string,
+  orgId?: string,
+): Promise<Link> {
+  const i = orgId
+    ? await withOrg(orgId, () => integrationFor(integrationId))
+    : await integrationFor(integrationId);
   if (!i) throw notFound("Integration");
-  const [existing] = await db
-    .select()
-    .from(issueLink)
-    .where(and(eq(issueLink.feedbackId, feedbackId), eq(issueLink.integrationId, i.id)));
-  if (existing) return existing;
-  const ctx = await loadFeedbackContext(feedbackId);
-  if (ctx?.payload.projectId !== i.projectId) throw notFound("Feedback");
-  const [row] = await db
-    .select({ environment: feedback.environment, status: feedback.status })
-    .from(feedback)
-    .where(eq(feedback.id, feedbackId));
-  if (!(await providerLicensed(i.provider))) {
-    throw new TrackerError(
-      "Jira is an Enterprise feature: install a licence with it (Settings › Licence)",
-      null,
-    );
-  }
-  const brand = await emailBrand(i.orgId);
+  const prepared = await withOrg(i.orgId, async (db) => {
+    const [existing] = await db
+      .select()
+      .from(issueLink)
+      .where(and(eq(issueLink.feedbackId, feedbackId), eq(issueLink.integrationId, i.id)));
+    if (existing) return { existing };
+    const ctx = await loadFeedbackContext(feedbackId);
+    if (ctx?.payload.projectId !== i.projectId) throw notFound("Feedback");
+    const [row] = await db
+      .select({ environment: feedback.environment, status: feedback.status })
+      .from(feedback)
+      .where(eq(feedback.id, feedbackId));
+    if (!(await providerLicensed(i.provider))) {
+      throw new TrackerError(
+        "Jira is an Enterprise feature: install a licence with it (Settings › Licence)",
+        null,
+      );
+    }
+    const brand = await emailBrand(i.orgId);
+    return { ctx, row, brand };
+  });
+  if ("existing" in prepared) return prepared.existing;
+  const { ctx, row, brand } = prepared;
   const f = ctx.payload;
   const input: IssueBodyInput = {
     number: f.number,
@@ -238,52 +249,56 @@ export async function createIssueFor(feedbackId: string, integrationId: string):
       ...(i.provider === "jira" ? { adf: issueAdf(input) } : {}),
     });
   } catch (err) {
-    await recordError(i, err);
+    await withOrg(i.orgId, () => recordError(i, err));
     throw err;
   }
-  const [link] = await db
-    .insert(issueLink)
-    .values({
+  return withOrg(i.orgId, async (db) => {
+    const [link] = await db
+      .insert(issueLink)
+      .values({
+        orgId: i.orgId,
+        feedbackId,
+        integrationId: i.id,
+        provider: i.provider,
+        number: ref.number,
+        url: ref.url,
+        state: "open",
+      })
+      .onConflictDoNothing({ target: [issueLink.feedbackId, issueLink.integrationId] })
+      .returning();
+    if (i.lastError) {
+      await db.update(issueIntegration).set({ lastError: null }).where(eq(issueIntegration.id, i.id));
+    }
+    if (!link) {
+      // A concurrent create won the race; keep theirs.
+      const [other] = await db
+        .select()
+        .from(issueLink)
+        .where(and(eq(issueLink.feedbackId, feedbackId), eq(issueLink.integrationId, i.id)));
+      if (!other) throw new Error("issue link vanished");
+      return other;
+    }
+    await db.insert(activity).values({
       orgId: i.orgId,
       feedbackId,
-      integrationId: i.id,
-      provider: i.provider,
-      number: ref.number,
-      url: ref.url,
-      state: "open",
-    })
-    .onConflictDoNothing({ target: [issueLink.feedbackId, issueLink.integrationId] })
-    .returning();
-  if (i.lastError) {
-    await db.update(issueIntegration).set({ lastError: null }).where(eq(issueIntegration.id, i.id));
-  }
-  if (!link) {
-    // A concurrent create won the race; keep theirs.
-    const [other] = await db
-      .select()
-      .from(issueLink)
-      .where(and(eq(issueLink.feedbackId, feedbackId), eq(issueLink.integrationId, i.id)));
-    if (!other) throw new Error("issue link vanished");
-    return other;
-  }
-  await db.insert(activity).values({
-    orgId: i.orgId,
-    feedbackId,
-    actorKind: "integration",
-    type: "issue_linked",
-    data: {
-      provider: i.provider,
-      number: ref.number,
-      url: ref.url,
-      via: i.provider,
-      ...(ref.key ? { key: ref.key } : {}),
-    },
+      actorKind: "integration",
+      type: "issue_linked",
+      data: {
+        provider: i.provider,
+        number: ref.number,
+        url: ref.url,
+        via: i.provider,
+        ...(ref.key ? { key: ref.key } : {}),
+      },
+    });
+    // Already closed in Pinwren (e.g. sent after resolving): close the new issue too.
+    if (row && isClosedStatus(row.status)) {
+      afterOrgCommit(() =>
+        enqueue(QUEUES.issues, { type: "state", linkId: link.id, state: "closed" } satisfies IssueJob),
+      );
+    }
+    return link;
   });
-  // Already closed in Pinwren (e.g. sent after resolving): close the new issue too.
-  if (row && isClosedStatus(row.status)) {
-    await enqueue(QUEUES.issues, { type: "state", linkId: link.id, state: "closed" } satisfies IssueJob);
-  }
-  return link;
 }
 
 /** On `feedback.created`: queue issue creation for integrations set to auto-create. */
@@ -396,30 +411,32 @@ export async function applyInboundState(
 
 /** Synchronous "Send to GitHub/GitLab/Linear/Jira" from the dashboard. */
 export async function sendToTracker(orgId: string, feedbackId: string, integrationId: string): Promise<Link> {
-  const db = getDb();
-  const [i] = await db
-    .select()
-    .from(issueIntegration)
-    .where(and(eq(issueIntegration.id, integrationId), eq(issueIntegration.orgId, orgId)));
-  if (!i) throw notFound("Integration");
-  const [f] = await db
-    .select({ id: feedback.id })
-    .from(feedback)
-    .where(
-      and(
-        eq(feedback.id, feedbackId),
-        eq(feedback.orgId, orgId),
-        eq(feedback.projectId, i.projectId),
-        isNull(feedback.deletedAt),
-      ),
-    );
-  if (!f) throw notFound("Feedback");
-  if (!i.active) throw new ApiError(409, "INTEGRATION_DISABLED", "This integration is switched off");
-  if (!(await providerLicensed(i.provider))) {
-    throw new ApiError(403, "LICENSE_REQUIRED", "Jira is an Enterprise feature: install a licence with it");
-  }
+  const i = await withOrg(orgId, async (db) => {
+    const [i] = await db
+      .select()
+      .from(issueIntegration)
+      .where(and(eq(issueIntegration.id, integrationId), eq(issueIntegration.orgId, orgId)));
+    if (!i) throw notFound("Integration");
+    const [f] = await db
+      .select({ id: feedback.id })
+      .from(feedback)
+      .where(
+        and(
+          eq(feedback.id, feedbackId),
+          eq(feedback.orgId, orgId),
+          eq(feedback.projectId, i.projectId),
+          isNull(feedback.deletedAt),
+        ),
+      );
+    if (!f) throw notFound("Feedback");
+    if (!i.active) throw new ApiError(409, "INTEGRATION_DISABLED", "This integration is switched off");
+    if (!(await providerLicensed(i.provider))) {
+      throw new ApiError(403, "LICENSE_REQUIRED", "Jira is an Enterprise feature: install a licence with it");
+    }
+    return i;
+  });
   try {
-    return await createIssueFor(feedbackId, integrationId);
+    return await createIssueFor(feedbackId, integrationId, orgId);
   } catch (err) {
     if (err instanceof TrackerError) {
       throw new ApiError(502, "TRACKER_ERROR", `${PROVIDER_NAMES[i.provider]}: ${err.message}`);

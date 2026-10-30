@@ -1,3 +1,4 @@
+import { withOrg } from "@pinwren/db";
 import { randomUUID } from "node:crypto";
 import {
   activity,
@@ -136,8 +137,10 @@ export async function requestExport(
 
 /** The finished archive, for `GET /api/projects/:id/export/download`. */
 export async function exportDownload(orgId: string, projectId: string): Promise<Response> {
-  const p = await assertProject(orgId, projectId);
-  const s = await readState(orgId, projectId);
+  const { p, s } = await withOrg(orgId, async () => ({
+    p: await assertProject(orgId, projectId),
+    s: await readState(orgId, projectId),
+  }));
   if (s?.status !== "ready" || !s.storageKey || !exportView(projectId, s)) throw notFound("Export");
   const file = await storage().get(s.storageKey);
   if (!file) throw notFound("Export file");

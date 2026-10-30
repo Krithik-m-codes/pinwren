@@ -1,4 +1,13 @@
-import { feedback, feedbackAsset, getDb, notification, project, rateLimit } from "@pinwren/db";
+import {
+  afterOrgCommit,
+  currentOrgId,
+  feedback,
+  feedbackAsset,
+  getDb,
+  notification,
+  project,
+  rateLimit,
+} from "@pinwren/db";
 import { and, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { storage } from "../storage";
 import { pruneDeliveries as pruneEmailDeliveries } from "../email/deliveries";
@@ -17,13 +26,17 @@ export async function purgeFeedback(ids: string[]): Promise<number> {
     .from(feedbackAsset)
     .where(inArray(feedbackAsset.feedbackId, ids));
   const deleted = await db.delete(feedback).where(inArray(feedback.id, ids)).returning({ id: feedback.id });
-  // Files go after the rows: a crash in between leaves an orphan file, never a row pointing at nothing.
-  for (const a of assets) {
-    if (!a.key) continue;
-    await storage()
-      .remove(a.key)
-      .catch((err: unknown) => console.warn(`[pinwren] could not remove asset ${a.key}`, err));
-  }
+  const removeFiles = async () => {
+    // Files go after the rows: a crash in between leaves an orphan file, never a row pointing at nothing.
+    for (const a of assets) {
+      if (!a.key) continue;
+      await storage()
+        .remove(a.key)
+        .catch((err: unknown) => console.warn(`[pinwren] could not remove asset ${a.key}`, err));
+    }
+  };
+  if (currentOrgId()) afterOrgCommit(removeFiles);
+  else await removeFiles();
   return deleted.length;
 }
 

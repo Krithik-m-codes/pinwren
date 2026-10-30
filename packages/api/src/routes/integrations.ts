@@ -1,3 +1,4 @@
+import { withOrg } from "@pinwren/db";
 import {
   type IssueProvider,
   issueCreate,
@@ -206,17 +207,19 @@ export const integrations = new Hono<{ Variables: SessionVars }>()
 
   /** Can the token see the repository? Always 200; `{ ok, message }`. */
   .post("/integrations/:id/test", requireOrgAdmin, async (c) => {
-    const i = await ownIntegration(c.var.orgId, c.req.param("id"));
+    const i = await withOrg(c.var.orgId, () => ownIntegration(c.var.orgId, c.req.param("id")));
     let result: Awaited<ReturnType<typeof checkAccess>>;
     try {
       result = await checkAccess(trackerConfig(i));
     } catch (err) {
       result = { ok: false, message: err instanceof TrackerError ? err.message : "failed" };
     }
-    await getDb()
-      .update(issueIntegration)
-      .set({ lastError: result.ok ? null : result.message.slice(0, 300) })
-      .where(eq(issueIntegration.id, i.id));
+    await withOrg(c.var.orgId, (db) =>
+      db
+        .update(issueIntegration)
+        .set({ lastError: result.ok ? null : result.message.slice(0, 300) })
+        .where(eq(issueIntegration.id, i.id)),
+    );
     return c.json(result);
   })
 

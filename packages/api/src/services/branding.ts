@@ -1,3 +1,4 @@
+import { withOrg } from "@pinwren/db";
 import {
   BRAND_ASSET_TYPES,
   MAX_BRAND_ASSET_BYTES,
@@ -123,16 +124,18 @@ export async function saveBrandAsset(orgId: string, dataUrl: string, userId: str
   }
   const key = `branding/${crypto.randomUUID()}.${EXTENSIONS[file.contentType] ?? "bin"}`;
   await storage().put(key, file.bytes, file.contentType);
-  const [a] = await getDb()
-    .insert(brandAsset)
-    .values({
-      orgId,
-      storageKey: key,
-      contentType: file.contentType,
-      bytes: file.bytes.length,
-      createdBy: userId,
-    })
-    .returning({ id: brandAsset.id, contentType: brandAsset.contentType, bytes: brandAsset.bytes });
+  const [a] = await withOrg(orgId, (db) =>
+    db
+      .insert(brandAsset)
+      .values({
+        orgId,
+        storageKey: key,
+        contentType: file.contentType,
+        bytes: file.bytes.length,
+        createdBy: userId,
+      })
+      .returning({ id: brandAsset.id, contentType: brandAsset.contentType, bytes: brandAsset.bytes }),
+  );
   if (!a) throw new Error("brand asset insert failed");
   return { ...a, url: brandAssetUrl(a.id) };
 }

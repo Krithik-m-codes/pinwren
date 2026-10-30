@@ -225,9 +225,9 @@
     "check": "identity authorization: GET /api/me/invitations"
   },
   "GET /api/me/preferences": {
-    "boundary": "tenant",
+    "boundary": "identity",
     "databaseLifetime": "finite",
-    "check": "foreign tenant: GET /api/me/preferences"
+    "check": "identity authorization: GET /api/me/preferences"
   },
   "GET /api/members": {
     "boundary": "tenant",
@@ -271,7 +271,7 @@
   },
   "GET /api/projects/:id/export": {
     "boundary": "tenant",
-    "databaseLifetime": "stream",
+    "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/projects/:id/export"
   },
   "GET /api/projects/:id/export/download": {
@@ -500,9 +500,9 @@
     "check": "foreign tenant: PATCH /api/labels/:id"
   },
   "PATCH /api/me/preferences": {
-    "boundary": "tenant",
+    "boundary": "identity",
     "databaseLifetime": "finite",
-    "check": "foreign tenant: PATCH /api/me/preferences"
+    "check": "identity authorization: PATCH /api/me/preferences"
   },
   "PATCH /api/me/profile": {
     "boundary": "identity",
@@ -631,7 +631,7 @@
   },
   "POST /api/feedback/:id/ai/translate": {
     "boundary": "tenant",
-    "databaseLifetime": "finite",
+    "databaseLifetime": "external",
     "check": "foreign tenant: POST /api/feedback/:id/ai/translate"
   },
   "POST /api/feedback/:id/comments": {
@@ -741,7 +741,7 @@
   },
   "POST /api/projects/:id/export": {
     "boundary": "tenant",
-    "databaseLifetime": "stream",
+    "databaseLifetime": "finite",
     "check": "foreign tenant: POST /api/projects/:id/export"
   },
   "POST /api/projects/:id/identity-secret/rotate": {
@@ -816,7 +816,7 @@
   },
   "POST /api/webhook-deliveries/:id/redeliver": {
     "boundary": "tenant",
-    "databaseLifetime": "finite",
+    "databaseLifetime": "external",
     "check": "foreign tenant: POST /api/webhook-deliveries/:id/redeliver"
   },
   "POST /api/webhooks": {

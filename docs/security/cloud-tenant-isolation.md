@@ -2,7 +2,8 @@
 
 Status: implementation in progress. Cloud signup is not ready for customers. The transaction context,
 policy definitions, relationship constraints, Cloud provisioning and startup validation are implemented.
-Request and worker query integration remains unfinished. The approved design and implementation plan are in
+Authenticated request integration includes identity repositories, finite tenant scopes, streams and mixed-I/O
+handlers. Public capability and worker query integration remains unfinished. The approved design and implementation plan are in
 `docs/superpowers/specs/2026-10-29-cloud-tenant-isolation-design.md` and
 `docs/superpowers/plans/2026-10-29-cloud-tenant-isolation.md`.
 
@@ -106,7 +107,7 @@ The suite creates a distinct non-owner runtime role and cleans its fixture rows,
 temporary databases. Never point it at customer data.
 
 The policy/context tranche passed 80 checks on local PostgreSQL 16 across inventory, context, real pooled connection
-reuse/rollback, row policies and migration failure tests. All 27 protected tables have scoped read and
+reuse/rollback, row policies and migration failure tests. The original 27 content tables have scoped read and
 missing-context cases. All 23 direct ownership tables reject ownership changes and foreign
 UPDATE/DELETE RETURNING. Valid local CRUD succeeds. Twenty-one composite tenant foreign keys are
 validated. Foreign project references, duplicate links and cross-tenant label joins are rejected,
@@ -145,8 +146,9 @@ migration URL. Provisioning configures existing roles and never sets or prints t
 | Cloud application    | Runtime role              | Service role                   | Unset                            | Application starts with `PINWREN_MODE=cloud` |
 
 The provisioning command locks the database change transaction, revokes PUBLIC/table/CREATE grants,
-grants CONNECT and schema USAGE to the two roles, grants tenant CRUD to the runtime role and
-identity/system CRUD to the service role, enables and forces RLS on all protected tables, and validates
+grants CONNECT and schema USAGE to the two roles, grants tenant CRUD plus the restricted user-profile
+projection to runtime, and grants identity/system CRUD plus the fixed token-verification projection to
+the service role. It enables and forces RLS on all protected tables, and validates
 the actual roles and catalogs before committing. A failed validation rolls the changes back. Repeating
 successful provisioning is supported. Existing extra permissive policies cause a failure rather than
 being silently deleted.
@@ -170,7 +172,9 @@ separate runtime/service roles. Local startup/provisioning cases cover idempoten
 CONNECT access, dangerous role attributes, inherited memberships, table ownership, missing grants,
 unknown tables, disabled RLS/FORCE/triggers, missing/extra policies, weakened trigger conditions,
 unreviewed security definers, service access to tenant rows, and failed-provisioning rollback.
-The combined local suite currently passes 112 checks. The existing selfhost API unit suite passes
-199 checks; its 88 database-only checks are skipped in ordinary unit runs and exercised separately
-by the configured integration runner. Repository typecheck passes all 14 tasks.
-Until those checks pass, this document records work in progress and provides no Cloud readiness claim.
+The focused runner includes real cookies and API tokens, current-membership/session revocation, MCP
+delegation, account preferences/deletion, invitation rendering, finite export batches, SSE reconnects,
+and post-commit jobs, broadcasts and file removal. Network/storage transport fixtures assert that no
+tenant transaction remains open during external operations. Database-only cases are skipped in ordinary
+selfhost unit runs and exercised by the integration runner. Public capability and worker integration,
+final route-wide evidence and branch review remain required before Cloud is ready.

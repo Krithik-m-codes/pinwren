@@ -1,9 +1,12 @@
+import type * as ApiModule from "./index";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const guard = vi.hoisted(() => vi.fn<() => Promise<void>>());
 vi.mock("@pinwren/db/cloud-security", () => ({ assertCloudDatabaseSecurity: guard }));
 
-beforeEach(() => {
+let app: typeof ApiModule.app;
+
+beforeEach(async () => {
   vi.resetModules();
   guard.mockReset();
   guard.mockRejectedValue(new Error("Unsafe Cloud database role"));
@@ -13,14 +16,15 @@ beforeEach(() => {
   vi.stubEnv("PINWREN_URL", "http://localhost:3100");
   vi.stubEnv("PINWREN_SECRET", "x".repeat(48));
   vi.spyOn(console, "error").mockImplementation(() => undefined);
-});
+  // Cold application imports belong to setup; request assertions retain their normal timeout.
+  app = (await import("./index")).app;
+}, 120_000);
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
 
 it("fails closed before a standalone Cloud API can serve requests", async () => {
-  const { app } = await import("./index");
   const response = await app.request("/api/health");
   expect(response.status).toBe(500);
   expect(guard).toHaveBeenCalledTimes(1);
@@ -29,7 +33,6 @@ it("fails closed before a standalone Cloud API can serve requests", async () => 
 
 it("retries a failed startup check and shares a successful check", async () => {
   guard.mockRejectedValueOnce(new Error("not provisioned")).mockResolvedValue(undefined);
-  const { app } = await import("./index");
   expect((await app.request("/api/health")).status).toBe(500);
   expect((await app.request("/api/health")).status).toBe(200);
   expect((await app.request("/api/health")).status).toBe(200);
@@ -39,7 +42,6 @@ it("retries a failed startup check and shares a successful check", async () => {
 it("preserves selfhost health checks without Cloud credentials", async () => {
   vi.stubEnv("PINWREN_MODE", "selfhost");
   vi.stubEnv("PINWREN_SERVICE_DATABASE_URL", undefined);
-  const { app } = await import("./index");
   expect((await app.request("/api/health")).status).toBe(200);
   expect(guard).not.toHaveBeenCalled();
 });

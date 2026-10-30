@@ -92,3 +92,28 @@ export async function updateAccountEmail(userId: string, next: string) {
     .returning(profileColumns);
   return u;
 }
+
+const preferenceColumns = {
+  emailDigest: userPreference.emailDigest,
+  emailPaused: userPreference.emailPaused,
+  locale: userPreference.locale,
+};
+export async function preferencesFor(userId: string) {
+  const [row] = await accountDatabase()
+    .select(preferenceColumns)
+    .from(userPreference)
+    .where(eq(userPreference.userId, userId));
+  return row;
+}
+export async function updateAccountPreferences(
+  userId: string,
+  patch: Pick<typeof userPreference.$inferInsert, "emailDigest" | "emailPaused" | "locale">,
+) {
+  const set = Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined));
+  const [row] = await accountDatabase()
+    .insert(userPreference)
+    .values({ userId, ...set })
+    .onConflictDoUpdate({ target: userPreference.userId, set: { ...set, updatedAt: new Date() } })
+    .returning(preferenceColumns);
+  return row;
+}

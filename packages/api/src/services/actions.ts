@@ -1,3 +1,4 @@
+import { withOrg } from "@pinwren/db";
 import { parseWidgetConfig } from "@pinwren/core";
 import { activity, feedback, getDb, project } from "@pinwren/db";
 import { and, eq, isNull } from "drizzle-orm";
@@ -57,33 +58,35 @@ export async function runPanelAction(
   actionId: string,
   fetchImpl: OutboundFetch = safeFetch,
 ): Promise<ActionResult> {
-  const db = getDb();
-  const [row] = await db
-    .select({ p: project })
-    .from(feedback)
-    .innerJoin(project, eq(project.id, feedback.projectId))
-    .where(and(eq(feedback.id, feedbackId), eq(feedback.orgId, orgId), isNull(feedback.deletedAt)));
-  if (!row) throw notFound("Feedback");
-  const action = parseWidgetConfig(row.p.widgetConfig).panelActions.find((a) => a.id === actionId);
-  if (!action) throw new ApiError(404, "ACTION_NOT_FOUND", "This project has no such action");
-  if (action.kind !== "webhook") {
-    throw new ApiError(400, "NOT_A_WEBHOOK_ACTION", "Link actions open in the browser");
-  }
-  const ctx = await loadFeedbackContext(feedbackId);
-  if (!ctx) throw notFound("Feedback");
-  const secret = await ensureActionSecret(row.p);
-  const payload: WebhookPayload = {
-    id: crypto.randomUUID(),
-    event: "action.run",
-    apiVersion: WEBHOOK_API_VERSION,
-    createdAt: new Date().toISOString(),
-    data: {
-      feedback: ctx.payload,
-      action: { id: action.id, label: action.label },
-      actor: { kind: "user", id: userId },
-    },
-  };
-  const req = buildRequest("generic", payload, secret);
+  const { action, req } = await withOrg(orgId, async (db) => {
+    const [row] = await db
+      .select({ p: project })
+      .from(feedback)
+      .innerJoin(project, eq(project.id, feedback.projectId))
+      .where(and(eq(feedback.id, feedbackId), eq(feedback.orgId, orgId), isNull(feedback.deletedAt)));
+    if (!row) throw notFound("Feedback");
+    const action = parseWidgetConfig(row.p.widgetConfig).panelActions.find((a) => a.id === actionId);
+    if (!action) throw new ApiError(404, "ACTION_NOT_FOUND", "This project has no such action");
+    if (action.kind !== "webhook") {
+      throw new ApiError(400, "NOT_A_WEBHOOK_ACTION", "Link actions open in the browser");
+    }
+    const ctx = await loadFeedbackContext(feedbackId);
+    if (!ctx) throw notFound("Feedback");
+    const secret = await ensureActionSecret(row.p);
+    const payload: WebhookPayload = {
+      id: crypto.randomUUID(),
+      event: "action.run",
+      apiVersion: WEBHOOK_API_VERSION,
+      createdAt: new Date().toISOString(),
+      data: {
+        feedback: ctx.payload,
+        action: { id: action.id, label: action.label },
+        actor: { kind: "user", id: userId },
+      },
+    };
+    const req = buildRequest("generic", payload, secret);
+    return { action, req };
+  });
   let result: ActionResult;
   try {
     // Same outbound guard as webhooks (ADR 0021): no private addresses, no redirects, capped body.
@@ -107,19 +110,21 @@ export async function runPanelAction(
   } catch (err) {
     result = { ok: false, status: 0, message: null, error: outboundErrorText(err) };
   }
-  await db.insert(activity).values({
-    orgId,
-    feedbackId,
-    actorId: userId,
-    type: "action_run",
-    data: {
-      actionId: action.id,
-      label: action.label,
-      ok: result.ok,
-      status: result.status,
-      message: result.message,
-      error: result.error,
-    },
-  });
+  await withOrg(orgId, (db) =>
+    db.insert(activity).values({
+      orgId,
+      feedbackId,
+      actorId: userId,
+      type: "action_run",
+      data: {
+        actionId: action.id,
+        label: action.label,
+        ok: result.ok,
+        status: result.status,
+        message: result.message,
+        error: result.error,
+      },
+    }),
+  );
   return result;
 }

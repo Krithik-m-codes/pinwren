@@ -1,6 +1,6 @@
 import { identityDatabase } from "@pinwren/db/identity";
 import { MAX_SESSION_DAYS, MIN_PASSWORD_LENGTH } from "@pinwren/core";
-import { schema, user as userTable, userPreference } from "@pinwren/db";
+import { schema, user as userTable, userPreference, withOrg } from "@pinwren/db";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
@@ -272,13 +272,15 @@ function createAuth() {
         async sendInvitationEmail(data) {
           await enqueue(QUEUES.email, {
             to: data.email,
-            ...(await renderEmail(data.organization.id, "invitation", {
-              orgName: data.organization.name,
-              inviterName: data.inviter.user.name || data.inviter.user.email,
-              role: data.role,
-              acceptUrl: acceptInvitationUrl(data.id),
-              expiresAt: new Date(data.invitation.expiresAt).toUTCString(),
-            })),
+            ...(await withOrg(data.organization.id, () =>
+              renderEmail(data.organization.id, "invitation", {
+                orgName: data.organization.name,
+                inviterName: data.inviter.user.name || data.inviter.user.email,
+                role: data.role,
+                acceptUrl: acceptInvitationUrl(data.id),
+                expiresAt: new Date(data.invitation.expiresAt).toUTCString(),
+              }),
+            )),
           });
         },
       }),

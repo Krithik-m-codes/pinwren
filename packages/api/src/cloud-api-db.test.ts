@@ -1,3 +1,5 @@
+import type * as StorageModule from "./storage";
+import type * as OutboundModule from "./outbound/safe-fetch";
 import type * as ApiModule from "./index";
 import type * as BossModule from "./jobs/boss";
 import type * as BusModule from "./realtime/bus";
@@ -13,6 +15,10 @@ const effects = vi.hoisted(() => ({
   enqueue: vi.fn<(...args: unknown[]) => Promise<void>>(),
   publish: vi.fn<(...args: unknown[]) => Promise<void>>(),
   subscribe: vi.fn(),
+  put: vi.fn<(...args: unknown[]) => Promise<void>>(),
+  get: vi.fn<(...args: unknown[]) => Promise<null>>(),
+  remove: vi.fn<(...args: unknown[]) => Promise<void>>(),
+  fetch: vi.fn<(...args: unknown[]) => Promise<Response>>(),
 }));
 vi.mock("./jobs/boss", async (original) => ({
   ...(await original<typeof BossModule>()),
@@ -22,6 +28,15 @@ vi.mock("./realtime/bus", async (original) => ({
   ...(await original<typeof BusModule>()),
   publish: effects.publish,
   subscribe: effects.subscribe,
+}));
+
+vi.mock("./storage", async (original) => ({
+  ...(await original<typeof StorageModule>()),
+  storage: () => ({ put: effects.put, get: effects.get, remove: effects.remove }),
+}));
+vi.mock("./outbound/safe-fetch", async (original) => ({
+  ...(await original<typeof OutboundModule>()),
+  safeFetch: effects.fetch,
 }));
 
 describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud authenticated HTTP API isolation", () => {
@@ -43,6 +58,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud authenticated H
   const readToken = `pwt_${randomUUID().replaceAll("-", "")}${randomUUID().replaceAll("-", "")}`;
   const cookiesA = new Map<string, string>(),
     cookiesB = new Map<string, string>();
+  const externalContexts: (string | undefined)[] = [];
   const queueContexts: (string | undefined)[] = [],
     publishContexts: (string | undefined)[] = [];
   const database = () => {
@@ -123,6 +139,27 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud authenticated H
     await signIn(userB, orgB, cookiesB);
   }, 120_000);
   beforeEach(() => {
+    effects.put.mockClear();
+    effects.get.mockClear();
+    effects.remove.mockClear();
+    effects.fetch.mockClear();
+    externalContexts.length = 0;
+    effects.put.mockImplementation(() => {
+      externalContexts.push(currentOrgId());
+      return Promise.resolve();
+    });
+    effects.get.mockImplementation(() => {
+      externalContexts.push(currentOrgId());
+      return Promise.resolve(null);
+    });
+    effects.remove.mockImplementation(() => {
+      externalContexts.push(currentOrgId());
+      return Promise.resolve();
+    });
+    effects.fetch.mockImplementation(() => {
+      externalContexts.push(currentOrgId());
+      return Promise.resolve(Response.json({ ok: true, message: "done" }));
+    });
     effects.enqueue.mockClear();
     effects.publish.mockClear();
     queueContexts.length = 0;
@@ -338,6 +375,245 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud authenticated H
     expect(response.status).toBe(200);
     await vi.waitFor(() => expect(effects.publish).toHaveBeenCalled());
     expect(publishContexts).toEqual([undefined]);
+  });
+
+  it("rejects foreign resources before mixed storage or network operations", async () => {
+    for (const [method, path, body] of [
+      ["GET", `/api/projects/${projectB}/export`, undefined],
+      ["POST", `/api/projects/${projectB}/export`, {}],
+      ["GET", `/api/projects/${projectB}/export/download`, undefined],
+      ["GET", `/api/rounds/${randomUUID()}/export?format=csv`, undefined],
+      ["POST", `/api/feedback/${feedbackB}/actions/test`, {}],
+      ["POST", `/api/feedback/${feedbackB}/issues`, { integrationId: randomUUID() }],
+      ["POST", `/api/integrations/${randomUUID()}/test`, {}],
+      ["POST", `/api/webhooks/${randomUUID()}/test`, {}],
+    ] as const) {
+      const response = await request(path, { method, jar: cookiesA, body });
+      expect.soft(response.status, `${method} ${path}`).toBe(404);
+    }
+  });
+
+  it("reads export status and commits export requests before enqueueing", async () => {
+    expect((await request(`/api/projects/${projectA}/export`, { jar: cookiesA })).status).toBe(200);
+    expect(
+      (await request(`/api/projects/${projectA}/export`, { method: "POST", jar: cookiesA, body: {} })).status,
+    ).toBe(202);
+    expect(effects.enqueue).toHaveBeenCalled();
+    expect(queueContexts).toEqual([undefined]);
+  });
+
+  it("prepares a test email and reporter-erasure preview with finite tenant reads", async () => {
+    expect
+      .soft(
+        (
+          await request("/api/email-templates/reporter_received/test", {
+            method: "POST",
+            jar: cookiesA,
+            body: {},
+          })
+        ).status,
+      )
+      .toBe(200);
+    const response = await request("/api/privacy/erase", {
+      method: "POST",
+      jar: cookiesA,
+      body: { email: "absent@test.invalid", dryRun: true },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      result: { feedback: 0, comments: 0, emails: 0, dryRun: true },
+    });
+  });
+
+  it("uploads branding files outside the transaction and saves only its tenant metadata", async () => {
+    const response = await request("/api/branding/assets", {
+      method: "POST",
+      jar: cookiesA,
+      body: {
+        dataUrl:
+          "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jHnQAAAAASUVORK5CYII=",
+      },
+    });
+    expect(response.status).toBe(201);
+    expect(effects.put).toHaveBeenCalled();
+    expect(externalContexts).toEqual([undefined]);
+    expect(await database()`select org_id from brand_asset`).toMatchObject([{ org_id: orgA }]);
+  });
+
+  it("runs actions and webhook tests between finite database scopes", async () => {
+    await database()`update project set widget_config=${database().json({ panelActions: [{ id: "send", label: "Send", kind: "webhook", url: "https://example.test/action" }] })} where id=${projectA}`;
+    const action = await request(`/api/feedback/${feedbackA}/actions/send`, {
+      method: "POST",
+      jar: cookiesA,
+      body: {},
+    });
+    expect(action.status).toBe(200);
+    expect(await action.json()).toMatchObject({ ok: true });
+    const endpoint = randomUUID();
+    await database()`insert into webhook_endpoint (id,org_id,url) values (${endpoint},${orgA},'https://example.test/hook')`;
+    const hook = await request(`/api/webhooks/${endpoint}/test`, { method: "POST", jar: cookiesA, body: {} });
+    expect(hook.status).toBe(200);
+    expect(await hook.json()).toMatchObject({ delivery: { status: "success" } });
+    expect(externalContexts).toEqual([undefined, undefined]);
+  });
+
+  it("erases only the active tenant's reporter rows and removes their files after commit", async () => {
+    const idA = randomUUID(),
+      idB = randomUUID(),
+      key = `${projectA}/${randomUUID()}.png`;
+    for (const [id, org, projectId] of [
+      [idA, orgA, projectA],
+      [idB, orgB, projectB],
+    ] as const) {
+      await database()`insert into feedback (id,org_id,project_id,number,kind,body,client_id,reporter_guest) values (${id},${org},${projectId},99,'bug','erase fixture',${randomUUID()},${database().json({ email: "erase@test.invalid" })})`;
+    }
+    await database()`insert into feedback_asset (org_id,feedback_id,kind,storage_key,content_type,bytes) values (${orgA},${idA},'screenshot',${key},'image/png',1)`;
+    const response = await request("/api/privacy/erase", {
+      method: "POST",
+      jar: cookiesA,
+      body: { email: "erase@test.invalid" },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ result: { feedback: 1, dryRun: false } });
+    await vi.waitFor(() => expect(effects.remove).toHaveBeenCalledWith(key));
+    expect(externalContexts).toEqual([undefined]);
+    expect(await database()`select id from feedback where id=${idA}`).toHaveLength(0);
+    expect(await database()`select id from feedback where id=${idB}`).toHaveLength(1);
+  });
+
+  it("translates feedback with the provider call outside tenant transactions", async () => {
+    vi.stubEnv("AI_API_KEY", randomUUID());
+    vi.stubEnv("AI_PROVIDER", "anthropic");
+    effects.fetch.mockImplementation(() => {
+      externalContexts.push(currentOrgId());
+      return Promise.resolve(
+        Response.json({
+          content: [{ type: "text", text: JSON.stringify({ ok: true, translatedText: "Translated" }) }],
+        }),
+      );
+    });
+    const response = await request(`/api/feedback/${feedbackA}/ai/translate`, {
+      method: "POST",
+      jar: cookiesA,
+      body: { targetLocale: "fr" },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ body: "Translated" });
+    expect(externalContexts.length).toBeGreaterThan(0);
+    expect(externalContexts.every((value) => value === undefined)).toBe(true);
+  });
+
+  it("tests AI provider settings without a transaction spanning the provider request", async () => {
+    effects.fetch.mockImplementation(() => {
+      externalContexts.push(currentOrgId());
+      return Promise.resolve(Response.json({ content: [{ type: "text", text: '{"ok":true}' }] }));
+    });
+    const response = await request("/api/settings/ai/test", {
+      method: "POST",
+      jar: cookiesA,
+      body: { provider: "anthropic", model: "fixture", apiKey: randomUUID() },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true });
+    expect(externalContexts).toEqual([undefined]);
+  });
+
+  it("redelivers webhooks without holding the previous request transaction", async () => {
+    const endpoint = randomUUID(),
+      delivery = { id: randomUUID() };
+    const payload = {
+      id: randomUUID(),
+      event: "ping",
+      apiVersion: "2025-01-01",
+      createdAt: new Date().toISOString(),
+      data: {},
+    };
+    await database()`insert into webhook_endpoint (id,org_id,url) values (${endpoint},${orgA},'https://example.test/redeliver')`;
+    await database()`insert into webhook_delivery (id,org_id,endpoint_id,event_id,event,payload,status) values (${delivery.id},${orgA},${endpoint},${payload.id},'ping',${database().json(payload)},'success')`;
+    const response = await request(`/api/webhook-deliveries/${delivery.id}/redeliver`, {
+      method: "POST",
+      jar: cookiesA,
+      body: {},
+    });
+    expect(response.status).toBe(200);
+    expect(externalContexts).toEqual([undefined]);
+  });
+
+  it("checks and creates tracker issues between finite tenant database scopes", async () => {
+    const integration = randomUUID();
+    const { encryptSecret } = await import("./crypto");
+    await database()`insert into issue_integration (id,org_id,project_id,provider,token,token_hint,repo,webhook_secret) values (${integration},${orgA},${projectA},'github',${encryptSecret(randomUUID())},'test','fixture/repo',${encryptSecret(randomUUID())})`;
+    effects.fetch.mockImplementation(() => {
+      externalContexts.push(currentOrgId());
+      return Promise.resolve(Response.json({ number: 123, html_url: "https://example.test/issues/123" }));
+    });
+    const checked = await request(`/api/integrations/${integration}/test`, {
+      method: "POST",
+      jar: cookiesA,
+      body: {},
+    });
+    expect(checked.status).toBe(200);
+    const created = await request(`/api/feedback/${feedbackA}/issues`, {
+      method: "POST",
+      jar: cookiesA,
+      body: { integrationId: integration },
+    });
+    expect(created.status).toBe(201);
+    expect(await created.json()).toMatchObject({ issue: { number: 123 } });
+    expect(externalContexts).toEqual([undefined, undefined]);
+  });
+
+  it("deletes an account's sole-owned workspace and cleans files after the tenant commit", async () => {
+    const org = `delete-${randomUUID()}`,
+      person = `delete-${randomUUID()}`,
+      projectId = randomUUID(),
+      item = randomUUID(),
+      key = `${projectId}/${randomUUID()}.png`;
+    await database()`insert into organization (id,name,slug) values (${org},${org},${org})`;
+    await database()`insert into "user" (id,name,email,email_verified) values (${person},${person},${`${person}@test.invalid`},true)`;
+    await database()`insert into account (id,account_id,provider_id,user_id,password) values (${randomUUID()},${person},'credential',${person},${await hashPassword(password)})`;
+    await database()`insert into member (id,organization_id,user_id,role) values (${randomUUID()},${org},${person},'owner')`;
+    await database()`insert into project (id,org_id,name,slug,public_key) values (${projectId},${org},'delete','delete',${projectId})`;
+    await database()`insert into feedback (id,org_id,project_id,number,kind,body,client_id) values (${item},${org},${projectId},1,'bug','delete',${randomUUID()})`;
+    await database()`insert into feedback_asset (org_id,feedback_id,kind,storage_key,content_type,bytes) values (${org},${item},'screenshot',${key},'image/png',1)`;
+    const jar = new Map<string, string>();
+    await signIn(person, org, jar);
+    const response = await request("/api/auth/delete-user", { method: "POST", jar, body: { password } });
+    expect(response.status).toBe(200);
+    await vi.waitFor(() => expect(effects.remove).toHaveBeenCalledWith(key));
+    expect(externalContexts).toEqual([undefined]);
+    expect(await database()`select id from organization where id=${org}`).toHaveLength(0);
+    expect(await database()`select id from organization where id=${orgB}`).toHaveLength(1);
+  });
+
+  it("reads and updates only the verified account's global preferences", async () => {
+    const response = await request("/api/me/preferences", {
+      method: "PATCH",
+      jar: cookiesA,
+      body: { emailPaused: true, locale: "fr" },
+    });
+    expect.soft(response.status).toBe(200);
+    const own = await request("/api/me/preferences", { jar: cookiesA });
+    expect.soft(own.status).toBe(200);
+    expect(await own.json()).toMatchObject({ preferences: { emailPaused: true, locale: "fr" } });
+    const other = await request("/api/me/preferences", { jar: cookiesB });
+    expect(other.status).toBe(200);
+    expect(await other.json()).toMatchObject({ preferences: { emailPaused: false, locale: null } });
+  });
+
+  it("renders invitation email overrides inside the organization validated by Better Auth", async () => {
+    await database()`insert into email_template (org_id,key,subject,body) values (${orgA},'invitation','Scoped invitation A','Invitation to {{orgName}}')`;
+    const response = await request("/api/auth/organization/invite-member", {
+      method: "POST",
+      jar: cookiesA,
+      body: { organizationId: orgA, email: `invite-${randomUUID()}@test.invalid`, role: "member" },
+    });
+    expect(response.status).toBe(200);
+    expect(effects.enqueue).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ subject: "Scoped invitation A" }),
+    );
+    expect(queueContexts).toEqual([undefined]);
   });
 
   it("immediately rejects a revoked Cloud session instead of trusting its previously issued cookie cache", async () => {

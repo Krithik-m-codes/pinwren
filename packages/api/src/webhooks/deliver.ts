@@ -1,3 +1,4 @@
+import { withOrg, afterOrgCommit } from "@pinwren/db";
 import { getDb, webhookDelivery, webhookEndpoint } from "@pinwren/db";
 import { and, eq, lt, sql } from "drizzle-orm";
 import { decryptSecret } from "../crypto";
@@ -118,22 +119,25 @@ export async function queueDelivery(
  */
 export async function runDelivery(
   deliveryId: string,
-  opts: { retry: boolean } = { retry: true },
+  opts: { retry: boolean; orgId?: string } = { retry: true },
 ): Promise<(Delivery & AttemptResult) | null> {
-  const db = getDb();
-  const [row] = await db
-    .select({ d: webhookDelivery, e: webhookEndpoint })
-    .from(webhookDelivery)
-    .innerJoin(webhookEndpoint, eq(webhookEndpoint.id, webhookDelivery.endpointId))
-    .where(eq(webhookDelivery.id, deliveryId));
+  const read = () =>
+    getDb()
+      .select({ d: webhookDelivery, e: webhookEndpoint })
+      .from(webhookDelivery)
+      .innerJoin(webhookEndpoint, eq(webhookEndpoint.id, webhookDelivery.endpointId))
+      .where(eq(webhookDelivery.id, deliveryId));
+  const [row] = opts.orgId ? await withOrg(opts.orgId, read) : await read();
   if (!row) return null;
   const { d, e } = row;
   if (d.status !== "pending") return null; // already attempted (job redelivered after a crash)
   if (!e.active && d.event !== "ping") {
-    await db
-      .update(webhookDelivery)
-      .set({ status: "failed", error: "endpoint disabled" })
-      .where(eq(webhookDelivery.id, d.id));
+    await withOrg(d.orgId, (db) =>
+      db
+        .update(webhookDelivery)
+        .set({ status: "failed", error: "endpoint disabled" })
+        .where(eq(webhookDelivery.id, d.id)),
+    );
     return null;
   }
 
@@ -142,58 +146,65 @@ export async function runDelivery(
   const delay = canRetry ? (RETRY_DELAYS_S[d.attempt - 1] ?? null) : null;
   const nextRetryAt = delay !== null ? new Date(Date.now() + delay * 1000) : null;
 
-  const [updated] = await db
-    .update(webhookDelivery)
-    .set({
-      status: result.ok ? "success" : nextRetryAt ? "retrying" : "failed",
-      responseCode: result.responseCode,
-      responseBody: null,
-      error: result.error,
-      durationMs: result.durationMs,
-      nextRetryAt,
-    })
-    .where(eq(webhookDelivery.id, d.id))
-    .returning();
+  return withOrg(d.orgId, async (db) => {
+    const [updated] = await db
+      .update(webhookDelivery)
+      .set({
+        status: result.ok ? "success" : nextRetryAt ? "retrying" : "failed",
+        responseCode: result.responseCode,
+        responseBody: null,
+        error: result.error,
+        durationMs: result.durationMs,
+        nextRetryAt,
+      })
+      .where(eq(webhookDelivery.id, d.id))
+      .returning();
 
-  if (d.event !== "ping") {
-    if (result.ok) {
-      if (e.failingSince)
-        await db.update(webhookEndpoint).set({ failingSince: null }).where(eq(webhookEndpoint.id, e.id));
-    } else if (!e.failingSince) {
-      await db.update(webhookEndpoint).set({ failingSince: new Date() }).where(eq(webhookEndpoint.id, e.id));
-    } else if (Date.now() - e.failingSince.getTime() > DISABLE_AFTER_MS) {
-      // Three days of continuous failure: stop sending until an admin re-enables it, and tell the admins.
-      // Only the attempt that flips `active` notifies (concurrent attempts see no row returned).
-      const [off] = await db
-        .update(webhookEndpoint)
-        .set({ active: false })
-        .where(and(eq(webhookEndpoint.id, e.id), eq(webhookEndpoint.active, true)))
-        .returning();
-      if (off) {
-        console.warn(`[pinwren] webhook ${e.id} disabled after 3 days of failures`);
-        await notifyWebhookDisabled(off, result.error).catch((err: unknown) =>
-          console.warn("[pinwren] webhook-disabled notification failed", err),
-        );
+    if (d.event !== "ping") {
+      if (result.ok) {
+        if (e.failingSince)
+          await db.update(webhookEndpoint).set({ failingSince: null }).where(eq(webhookEndpoint.id, e.id));
+      } else if (!e.failingSince) {
+        await db
+          .update(webhookEndpoint)
+          .set({ failingSince: new Date() })
+          .where(eq(webhookEndpoint.id, e.id));
+      } else if (Date.now() - e.failingSince.getTime() > DISABLE_AFTER_MS) {
+        // Three days of continuous failure: stop sending until an admin re-enables it, and tell the admins.
+        // Only the attempt that flips `active` notifies (concurrent attempts see no row returned).
+        const [off] = await db
+          .update(webhookEndpoint)
+          .set({ active: false })
+          .where(and(eq(webhookEndpoint.id, e.id), eq(webhookEndpoint.active, true)))
+          .returning();
+        if (off) {
+          console.warn(`[pinwren] webhook ${e.id} disabled after 3 days of failures`);
+          afterOrgCommit(async () => {
+            await notifyWebhookDisabled(off, result.error).catch((err: unknown) =>
+              console.warn("[pinwren] webhook-disabled notification failed", err),
+            );
+          });
+        }
       }
     }
-  }
 
-  if (nextRetryAt && delay !== null) {
-    const [next] = await db
-      .insert(webhookDelivery)
-      .values({
-        orgId: d.orgId,
-        endpointId: d.endpointId,
-        eventId: d.eventId,
-        event: d.event,
-        payload: d.payload,
-        attempt: d.attempt + 1,
-        status: "pending",
-      })
-      .returning({ id: webhookDelivery.id });
-    if (next) await enqueueAfter(QUEUES.webhook, { deliveryId: next.id }, delay);
-  }
-  return updated ? { ...updated, ...result } : null;
+    if (nextRetryAt && delay !== null) {
+      const [next] = await db
+        .insert(webhookDelivery)
+        .values({
+          orgId: d.orgId,
+          endpointId: d.endpointId,
+          eventId: d.eventId,
+          event: d.event,
+          payload: d.payload,
+          attempt: d.attempt + 1,
+          status: "pending",
+        })
+        .returning({ id: webhookDelivery.id });
+      if (next) afterOrgCommit(() => enqueueAfter(QUEUES.webhook, { deliveryId: next.id }, delay));
+    }
+    return updated ? { ...updated, ...result } : null;
+  });
 }
 
 /** Delete delivery logs older than 30 days. */
