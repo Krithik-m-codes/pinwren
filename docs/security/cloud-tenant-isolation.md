@@ -3,7 +3,8 @@
 Status: implementation in progress. Cloud signup is not ready for customers. The transaction context,
 policy definitions, relationship constraints, Cloud provisioning and startup validation are implemented.
 Authenticated request integration includes identity repositories, finite tenant scopes, streams and mixed-I/O
-handlers. Public capability and worker query integration remains unfinished. The approved design and implementation plan are in
+handlers. Public capability integration includes key/Origin, guest/review, signed asset/unsubscribe and inbound
+signature boundaries. Worker query integration remains unfinished. The approved design and implementation plan are in
 `docs/superpowers/specs/2026-10-29-cloud-tenant-isolation-design.md` and
 `docs/superpowers/plans/2026-10-29-cloud-tenant-isolation.md`.
 
@@ -49,7 +50,7 @@ required.
 the ALL-method `/mcp` handler. Each record names its authorization boundary, whether its handler needs
 special treatment for streaming/external work, and its required authorization test case. These names
 are planned coverage identifiers, not claims that the corresponding integration test already passes.
-The final acceptance step must associate them with real test evidence before Cloud can start.
+The final acceptance step must associate them with real test evidence before Cloud is ready.
 
 | Boundary               | Organization authority                        | Database behavior required                             |
 | ---------------------- | --------------------------------------------- | ------------------------------------------------------ |
@@ -68,6 +69,26 @@ The route list protects mounted signatures, not just source declarations. New en
 coverage comparison until explicitly classified. Middleware signatures are excluded, with `/mcp`
 included because its ALL-method handler is a real endpoint. The auth wildcard remains an identity
 entry point delegated to Better Auth.
+
+## Public capability repositories
+
+`packages/api/src/db/bootstrap.ts` exposes fixed capability lookups. The Cloud service role can read
+five project authority columns, asset id/organization pairs, and seven integration signature columns.
+It cannot read project configuration or signing keys, storage keys, tracker access tokens, or feedback
+content. Provisioning installs role-specific SELECT policies and exact column grants, and startup
+rejects extra readable columns. Run offline provisioning after an application upgrade adds projections.
+
+Content is re-read through the runtime role after key/Origin or signature validation. Widget/guest
+queries retain project, reporter, signed-item and public-comment restrictions. Project keys and inbound
+integration state are checked again before content access; report writes recheck key/Origin after
+uploads. Signed image links are checked against a live, non-trashed parent. Cross-project issue links
+are ignored even when their organizations match.
+
+Uploads and object reads run outside tenant transactions. Failed uploads create no page/report rows;
+failed database writes clean up staged files. Diagnostic inserts follow their new feedback parent in a
+second command within the same transaction, so parent-derived RLS sees the row and all writes remain
+atomic. Concurrent retries return one record and emit one success event. Unsubscribe changes and the
+remaining database work share a transaction so later failures roll back suppression state.
 
 ## Background and deferred work audit
 
@@ -176,5 +197,4 @@ The focused runner includes real cookies and API tokens, current-membership/sess
 delegation, account preferences/deletion, invitation rendering, finite export batches, SSE reconnects,
 and post-commit jobs, broadcasts and file removal. Network/storage transport fixtures assert that no
 tenant transaction remains open during external operations. Database-only cases are skipped in ordinary
-selfhost unit runs and exercised by the integration runner. Public capability and worker integration,
-final route-wide evidence and branch review remain required before Cloud is ready.
+selfhost unit runs and exercised by the integration runner. Worker integration, final route-wide evidence and branch review remain required before Cloud is ready.

@@ -1,12 +1,6 @@
-import {
-  feedback,
-  feedbackAsset,
-  getDb,
-  member,
-  notificationPreference,
-  organization,
-  project,
-} from "@pinwren/db";
+import { withOrg } from "@pinwren/db";
+import { projectOwnerForClaim, imageAssetOwner } from "../db/bootstrap";
+import { feedback, feedbackAsset, member, notificationPreference, organization, project } from "@pinwren/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { type TeamUnsubscribe, verifyEmailImageToken, verifyTeamUnsubscribeToken } from "../email/links";
@@ -44,12 +38,14 @@ ${body}
 }
 
 async function orgName(orgId: string): Promise<string> {
-  const [o] = await getDb()
-    .select({ name: organization.name })
-    .from(organization)
-    .where(eq(organization.id, orgId));
-  const brand = await emailBrand(orgId);
-  return brand.productName !== "Pinwren" ? brand.productName : (o?.name ?? "this team");
+  return withOrg(orgId, async (db) => {
+    const [o] = await db
+      .select({ name: organization.name })
+      .from(organization)
+      .where(eq(organization.id, orgId));
+    const brand = await emailBrand(orgId);
+    return brand.productName !== "Pinwren" ? brand.productName : (o?.name ?? "this team");
+  });
 }
 
 const invalid = () =>
@@ -74,20 +70,27 @@ export const unsubscribe = new Hono()
   .post("/unsubscribe", async (c) => {
     const who = verifyUnsubscribeToken(c.req.query("token") ?? "");
     if (!who) return invalid();
-    await suppress(who.orgId, who.email);
+    const name = await withOrg(who.orgId, async () => {
+      await suppress(who.orgId, who.email);
+      return orgName(who.orgId);
+    });
     // A mail client's one-click POST only needs a 2xx; people get a readable page.
     return page(
       "You're unsubscribed",
-      `<p style="font-size:14px;line-height:1.5">${esc(who.email)} won't get further emails from ${esc(await orgName(who.orgId))} about feedback.</p>`,
+      `<p style="font-size:14px;line-height:1.5">${esc(who.email)} won't get further emails from ${esc(name)} about feedback.</p>`,
     );
   });
 
 async function projectName(projectId: string): Promise<{ orgId: string; name: string } | null> {
-  const [p] = await getDb()
-    .select({ orgId: project.orgId, name: project.name })
-    .from(project)
-    .where(eq(project.id, projectId));
-  return p ?? null;
+  const owner = await projectOwnerForClaim(projectId);
+  if (!owner) return null;
+  return withOrg(owner.orgId, async (db) => {
+    const [p] = await db
+      .select({ orgId: project.orgId, name: project.name })
+      .from(project)
+      .where(eq(project.id, projectId));
+    return p ?? null;
+  });
 }
 
 const describeTeam = (who: TeamUnsubscribe, name: string) =>
@@ -97,26 +100,27 @@ const describeTeam = (who: TeamUnsubscribe, name: string) =>
 
 /** Apply a team unsubscribe. A member who has left the workspace has nothing left to turn off. */
 async function applyTeam(who: TeamUnsubscribe, orgId: string): Promise<void> {
-  const db = getDb();
-  if (who.kind === "address") {
+  await withOrg(orgId, async (db) => {
+    if (who.kind === "address") {
+      await db
+        .update(project)
+        .set({ notifyEmails: sql`array_remove(${project.notifyEmails}, ${who.email})` })
+        .where(eq(project.id, who.projectId));
+      return;
+    }
+    const [m] = await db
+      .select({ id: member.id })
+      .from(member)
+      .where(and(eq(member.organizationId, orgId), eq(member.userId, who.userId)));
+    if (!m) return;
     await db
-      .update(project)
-      .set({ notifyEmails: sql`array_remove(${project.notifyEmails}, ${who.email})` })
-      .where(eq(project.id, who.projectId));
-    return;
-  }
-  const [m] = await db
-    .select({ id: member.id })
-    .from(member)
-    .where(and(eq(member.organizationId, orgId), eq(member.userId, who.userId)));
-  if (!m) return;
-  await db
-    .insert(notificationPreference)
-    .values({ orgId, userId: who.userId, projectId: who.projectId, email: false })
-    .onConflictDoUpdate({
-      target: [notificationPreference.userId, notificationPreference.projectId],
-      set: { email: false, updatedAt: new Date() },
-    });
+      .insert(notificationPreference)
+      .values({ orgId, userId: who.userId, projectId: who.projectId, email: false })
+      .onConflictDoUpdate({
+        target: [notificationPreference.userId, notificationPreference.projectId],
+        set: { email: false, updatedAt: new Date() },
+      });
+  });
 }
 
 export const teamUnsubscribe = new Hono()
@@ -148,11 +152,15 @@ export const teamUnsubscribe = new Hono()
   .get("/email-assets/:token", async (c) => {
     const assetId = verifyEmailImageToken(c.req.param("token"));
     if (!assetId) return c.body(null, 404);
-    const [a] = await getDb()
-      .select({ key: feedbackAsset.storageKey, contentType: feedbackAsset.contentType })
-      .from(feedbackAsset)
-      .innerJoin(feedback, eq(feedback.id, feedbackAsset.feedbackId))
-      .where(and(eq(feedbackAsset.id, assetId), isNull(feedback.deletedAt)));
+    const owner = await imageAssetOwner(assetId);
+    if (!owner) return c.body(null, 404);
+    const [a] = await withOrg(owner.orgId, (db) =>
+      db
+        .select({ key: feedbackAsset.storageKey, contentType: feedbackAsset.contentType })
+        .from(feedbackAsset)
+        .innerJoin(feedback, eq(feedback.id, feedbackAsset.feedbackId))
+        .where(and(eq(feedbackAsset.id, assetId), isNull(feedback.deletedAt))),
+    );
     // Only images: the token names a screenshot, but never serve anything else under it.
     if (!a?.contentType.startsWith("image/")) return c.body(null, 404);
     const file = await storage().get(a.key);

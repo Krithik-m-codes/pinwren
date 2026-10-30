@@ -32,6 +32,7 @@ const result = spawnSync(
     "src/cloud-security-db.test.ts",
     "src/cloud-identity-db.test.ts",
     "src/cloud-api-db.test.ts",
+    "src/cloud-public-db.test.ts",
   ],
   {
     cwd: root,

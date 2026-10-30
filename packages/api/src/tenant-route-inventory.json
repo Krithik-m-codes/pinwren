@@ -841,7 +841,7 @@
   },
   "POST /w/feedback": {
     "boundary": "capability",
-    "databaseLifetime": "finite",
+    "databaseLifetime": "external",
     "check": "foreign tenant: POST /w/feedback"
   },
   "POST /w/feedback/:id/comments": {

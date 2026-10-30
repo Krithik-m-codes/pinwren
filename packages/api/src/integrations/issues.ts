@@ -378,12 +378,20 @@ export async function applyInboundState(
     .from(issueLink)
     .where(and(eq(issueLink.integrationId, i.id), eq(issueLink.number, number)));
   if (!link) return null;
-  await db.update(issueLink).set({ state }).where(eq(issueLink.id, link.id));
   const [f] = await db
-    .select({ id: feedback.id, status: feedback.status, orgId: feedback.orgId })
+    .select({
+      id: feedback.id,
+      status: feedback.status,
+      orgId: feedback.orgId,
+      deletedAt: feedback.deletedAt,
+    })
     .from(feedback)
-    .where(and(eq(feedback.id, link.feedbackId), isNull(feedback.deletedAt)));
+    .where(
+      and(eq(feedback.id, link.feedbackId), eq(feedback.orgId, i.orgId), eq(feedback.projectId, i.projectId)),
+    );
   if (!f) return null;
+  await db.update(issueLink).set({ state }).where(eq(issueLink.id, link.id));
+  if (f.deletedAt) return null;
   const closed = (CLOSED_STATUSES as readonly string[]).includes(f.status);
   const to: FeedbackStatus | null =
     state === "closed" && !closed ? "resolved" : state === "open" && closed ? "open" : null;

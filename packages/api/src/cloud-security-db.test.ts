@@ -268,4 +268,17 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud provisioning an
       await fixture`alter policy pinwren_bootstrap_service on public.api_token to ${fixture(serviceRole)}`;
     }
   });
+  it.each([
+    ["project", "widget_config"],
+    ["issue_integration", "token"],
+    ["feedback_asset", "storage_key"],
+    ["brand_asset", "storage_key"],
+  ] as const)("refuses widening bootstrap projection %s.%s", async (table, column) => {
+    await fixture`grant select (${fixture(column)}) on public.${fixture(table)} to ${fixture(serviceRole)}`;
+    try {
+      await expect(assertCloudDatabaseSecurity()).rejects.toThrow(/column|projection|privilege/i);
+    } finally {
+      await fixture`revoke select (${fixture(column)}) on public.${fixture(table)} from ${fixture(serviceRole)}`;
+    }
+  });
 });

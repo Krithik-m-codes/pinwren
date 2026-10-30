@@ -1,4 +1,6 @@
-import { brandAsset, getDb, issueIntegration } from "@pinwren/db";
+import { withOrg } from "@pinwren/db";
+import { brandAssetOwner, integrationSignatureCandidates } from "../db/bootstrap";
+import { brandAsset, issueIntegration } from "@pinwren/db";
 import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -26,21 +28,28 @@ type Integration = typeof issueIntegration.$inferSelect;
 
 const MAX_BODY = 1024 * 1024;
 
-async function candidates(provider: Integration["provider"], repo: unknown): Promise<Integration[]> {
-  if (typeof repo !== "string" || !repo || repo.length > 300) return [];
-  return getDb()
-    .select()
-    .from(issueIntegration)
-    .where(
-      and(
-        eq(issueIntegration.provider, provider),
-        eq(issueIntegration.active, true),
-        sql`lower(${issueIntegration.repo}) = lower(${repo})`,
-      ),
-    );
+type SignatureCandidate = Awaited<ReturnType<typeof integrationSignatureCandidates>>[number];
+async function applyVerifiedInbound(i: SignatureCandidate, number: number, state: "open" | "closed") {
+  return withOrg(i.orgId, async (db) => {
+    const [current] = await db
+      .select()
+      .from(issueIntegration)
+      .where(
+        and(
+          eq(issueIntegration.id, i.id),
+          eq(issueIntegration.projectId, i.projectId),
+          eq(issueIntegration.provider, i.provider),
+          eq(issueIntegration.active, true),
+          eq(issueIntegration.webhookSecret, i.webhookSecret),
+          sql`lower(${issueIntegration.repo})=lower(${i.repo})`,
+        ),
+      );
+    if (!current) throw invalidSignature();
+    return applyInboundState(current, number, state);
+  });
 }
 
-function secretOf(i: Integration): string | null {
+function secretOf(i: Pick<Integration, "webhookSecret">): string | null {
   try {
     return decryptSecret(i.webhookSecret);
   } catch {
@@ -96,10 +105,14 @@ const invalidSignature = () => new ApiError(401, "INVALID_SIGNATURE", "Signature
 export const inbound = new Hono()
   /** Logos for branding. Random ids; images only (never SVG), sandboxed, cacheable. */
   .get("/brand-assets/:id", async (c) => {
-    const [a] = await getDb()
-      .select()
-      .from(brandAsset)
-      .where(eq(brandAsset.id, c.req.param("id")));
+    const owner = await brandAssetOwner(c.req.param("id"));
+    if (!owner) throw notFound("Asset");
+    const [a] = await withOrg(owner.orgId, (db) =>
+      db
+        .select()
+        .from(brandAsset)
+        .where(eq(brandAsset.id, c.req.param("id"))),
+    );
     if (!a) throw notFound("Asset");
     const file = await storage().get(a.storageKey);
     if (!file) throw notFound("Asset file");
@@ -127,7 +140,7 @@ export const inbound = new Hono()
     if (!/^sha256=[0-9a-f]{64}$/.test(sig)) throw invalidSignature();
     const body = parse(raw);
     const repo = obj(body.repository).full_name;
-    const match = (await candidates("github", repo)).find((i) => {
+    const match = (await integrationSignatureCandidates("github", repo)).find((i) => {
       const secret = secretOf(i);
       return !!secret && timingSafeEqualStr(`sha256=${hmacSha256Hex(secret, raw)}`, sig);
     });
@@ -142,7 +155,7 @@ export const inbound = new Hono()
     if (event !== "issues" || (action !== "closed" && action !== "reopened") || !Number.isInteger(number)) {
       return c.json({ ok: true, ignored: true });
     }
-    const result = await applyInboundState(match, number, action === "closed" ? "closed" : "open");
+    const result = await applyVerifiedInbound(match, number, action === "closed" ? "closed" : "open");
     return c.json({ ok: true, ...(result ? { feedback: result } : { ignored: true }) });
   })
 
@@ -153,7 +166,7 @@ export const inbound = new Hono()
     if (!token || token.length > 200) throw invalidSignature();
     const body = parse(raw);
     const repo = obj(body.project).path_with_namespace;
-    const match = (await candidates("gitlab", repo)).find((i) => {
+    const match = (await integrationSignatureCandidates("gitlab", repo)).find((i) => {
       const secret = secretOf(i);
       return !!secret && timingSafeEqualStr(secret, token);
     });
@@ -172,7 +185,7 @@ export const inbound = new Hono()
     ) {
       return c.json({ ok: true, ignored: true });
     }
-    const result = await applyInboundState(match, number, action === "close" ? "closed" : "open");
+    const result = await applyVerifiedInbound(match, number, action === "close" ? "closed" : "open");
     return c.json({ ok: true, ...(result ? { feedback: result } : { ignored: true }) });
   })
 
@@ -189,7 +202,7 @@ export const inbound = new Hono()
     const data = obj(body.data);
     const teamKey =
       obj(data.team).key ?? (typeof data.identifier === "string" ? data.identifier.split("-")[0] : null);
-    const match = (await candidates("linear", teamKey)).find((i) => {
+    const match = (await integrationSignatureCandidates("linear", teamKey)).find((i) => {
       const secret = secretOf(i);
       return !!secret && verifyLinearSignature(secret, raw, sig);
     });
@@ -200,7 +213,7 @@ export const inbound = new Hono()
     }
     const ev = linearIssueEvent(body);
     if (!ev) return c.json({ ok: true, ignored: true });
-    const result = await applyInboundState(match, ev.number, ev.state);
+    const result = await applyVerifiedInbound(match, ev.number, ev.state);
     return c.json({ ok: true, ...(result ? { feedback: result } : { ignored: true }) });
   })
 
@@ -217,7 +230,7 @@ export const inbound = new Hono()
     const issue = obj(body.issue);
     const projectKey =
       obj(obj(issue.fields).project).key ?? (typeof issue.key === "string" ? issue.key.split("-")[0] : null);
-    const match = (await candidates("jira", projectKey)).find((i) => {
+    const match = (await integrationSignatureCandidates("jira", projectKey)).find((i) => {
       const secret = secretOf(i);
       return !!secret && verifyJiraSignature(secret, raw, sig);
     });
@@ -225,9 +238,10 @@ export const inbound = new Hono()
     if (!(await firstDelivery("jira", match.id, c.req.header("x-atlassian-webhook-identifier"), raw))) {
       return c.json({ ok: true, duplicate: true });
     }
-    if (!(await hasFeature("jira"))) return c.json({ ok: true, ignored: true, reason: "license" });
+    if (!(await withOrg(match.orgId, () => hasFeature("jira"))))
+      return c.json({ ok: true, ignored: true, reason: "license" });
     const ev = jiraIssueEvent(body);
     if (!ev) return c.json({ ok: true, ignored: true });
-    const result = await applyInboundState(match, ev.number, ev.state);
+    const result = await applyVerifiedInbound(match, ev.number, ev.state);
     return c.json({ ok: true, ...(result ? { feedback: result } : { ignored: true }) });
   });
