@@ -1,10 +1,19 @@
 import { readFile } from "node:fs/promises";
-import { type Entitlements, LICENSE_FEATURES, type LicenseFeature, type LicensePayload } from "@pinwren/core";
+import {
+  type BillingPlan,
+  type BillingPlanId,
+  type Entitlements,
+  LICENSE_FEATURES,
+  type LicenseFeature,
+  type LicensePayload,
+} from "@pinwren/core";
 import { currentOrgId, getDb, member, user } from "@pinwren/db";
 import { count, eq } from "drizzle-orm";
 import { latestInstanceLicense, saveInstanceLicense, removeInstanceLicenses } from "../db/system";
 import { env } from "../env";
 import { ApiError } from "../errors";
+import { billingEnabled } from "../billing/config";
+import { planFor } from "../billing/service";
 import { trustedKeys } from "./keys";
 import { licenseTimeState, verifyLicense } from "./verify";
 
@@ -89,12 +98,37 @@ export function entitlementsFor(
   };
 }
 
+async function cloudPlan() {
+  const orgId = currentOrgId();
+  if (!orgId) throw new Error("Cloud entitlements require a verified organization");
+  return planFor(getDb(), orgId);
+}
+
+/**
+ * Cloud billing feeds the same entitlement model (WP-22): the plan in force adds its features to whatever a
+ * licence grants and sets the seat limit. Without billing configured (staging, tests) nothing changes.
+ */
+export function withCloudPlan(
+  base: Resolved,
+  plan: { plan: BillingPlanId; definition: BillingPlan },
+): Resolved {
+  if (!billingEnabled()) return base;
+  const features = [...new Set<LicenseFeature>([...base.features, ...plan.definition.features])];
+  return {
+    ...base,
+    edition: base.edition === "enterprise" ? "enterprise" : "cloud",
+    features,
+    seats: { ...base.seats, limit: base.seats.limit ?? plan.definition.limits.seats },
+    plan: plan.plan,
+  };
+}
+
 /** Resolved entitlements, cached per process for a minute (uploads clear the cache). */
 export function resolveEntitlements(): Promise<Resolved> {
   if (env().PINWREN_MODE === "cloud") {
     // A process-wide resolved value includes seat counts and must never cross tenant boundaries.
-    return Promise.all([currentRaw(), seatsUsed()]).then(([current, used]) =>
-      entitlementsFor(current?.raw ?? null, current?.source ?? null, used),
+    return Promise.all([currentRaw(), seatsUsed(), cloudPlan()]).then(([current, used, plan]) =>
+      withCloudPlan(entitlementsFor(current?.raw ?? null, current?.source ?? null, used), plan),
     );
   }
   const hit = g.__pinwrenLicense;

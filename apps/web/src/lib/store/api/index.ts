@@ -10,6 +10,9 @@ export const {
   // account
   useMeQuery,
   useEntitlementsQuery,
+  useBillingQuery,
+  useStartCheckoutMutation,
+  useOpenBillingPortalMutation,
   useBrandingQuery,
   useUpdateBrandingMutation,
   useUploadBrandAssetMutation,

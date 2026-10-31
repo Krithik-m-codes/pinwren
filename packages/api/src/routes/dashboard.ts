@@ -1,3 +1,4 @@
+import { assertProjectQuota } from "../billing/service";
 import { accountProfileFor } from "../db/identity";
 import { randomBytes } from "node:crypto";
 import {
@@ -201,6 +202,7 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       const { preset, ...body } = c.req.valid("json");
       const defaults = presetValues(preset);
       const db = getDb();
+      await assertProjectQuota(db, c.var.orgId);
       const base = slugify(body.name);
       const [{ n } = { n: 0 }] = await db
         .select({ n: count() })

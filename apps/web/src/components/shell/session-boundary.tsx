@@ -13,6 +13,7 @@ import { HydrateQueries } from "@/lib/store/hydrate";
 import { ActivateWorkspace } from "./activate-workspace";
 import { CommandPalette } from "./command-palette";
 import { GlobalShortcuts } from "./global-shortcuts";
+import { BillingBanner } from "./billing-banner";
 import { LicenseBanner } from "./license-banner";
 import { RealtimeConnection } from "./realtime-connection";
 import { WorkspaceFromLink } from "./workspace-from-link";
@@ -55,6 +56,7 @@ export async function SessionBoundary({ children }: { children: React.ReactNode 
         <RealtimeConnection />
         <WorkspaceFromLink orgId={me.orgId} />
         <LicenseBanner />
+        <BillingBanner />
         <EmailSetupBanner />
         <CommandPalette />
         <GlobalShortcuts />

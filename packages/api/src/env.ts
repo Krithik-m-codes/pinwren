@@ -79,6 +79,20 @@ const schema = z.object({
   /** Optional: licences with an `instance` binding only verify on the instance with this id. */
   PINWREN_INSTANCE_ID: optionalString,
 
+  // Cloud billing (WP-22, Dodo Payments). Only read when PINWREN_MODE=cloud; billing is off while the API
+  // key is unset. Product ids map the Pro plan's intervals to Dodo products created in its dashboard.
+  DODO_PAYMENTS_API_KEY: optionalString,
+  DODO_PAYMENTS_ENVIRONMENT: z.enum(["test_mode", "live_mode"]).default("test_mode"),
+  /** Overrides the API origin derived from the environment (tests, proxies). */
+  DODO_PAYMENTS_BASE_URL: z
+    .url()
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  /** Signing secret of the webhook endpoint pointing at /api/billing/webhook (`whsec_�`). */
+  DODO_PAYMENTS_WEBHOOK_KEY: optionalString,
+  DODO_PRO_MONTHLY_PRODUCT_ID: optionalString,
+  DODO_PRO_ANNUAL_PRODUCT_ID: optionalString,
+
   // Sign-in with Google / GitHub (Settings › Security › Sign-in methods). A provider is offered only when
   // both its id and secret are set; the callback is PINWREN_URL/api/auth/callback/<google|github>.
   GOOGLE_CLIENT_ID: optionalString,

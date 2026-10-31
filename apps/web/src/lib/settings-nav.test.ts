@@ -7,7 +7,9 @@ const labels = (role: string, instanceAdmin: boolean) =>
 describe("settings pages shown to each person", () => {
   it("shows everything to an instance admin who is a workspace admin", () => {
     // Other areas add pages to the list; every one of them is visible to someone with every role.
-    expect(labels("owner", true)).toEqual(SETTINGS_PAGES.map((p) => p.label));
+    expect(labels("owner", true)).toEqual(
+      SETTINGS_PAGES.filter((p) => p.label !== "Billing").map((p) => p.label),
+    );
     expect(labels("owner", true)).toEqual(
       expect.arrayContaining([
         "Profile",
@@ -39,5 +41,20 @@ describe("settings pages shown to each person", () => {
     expect(l).toContain("Email");
     expect(l).toContain("Branding");
     expect(l).not.toContain("Security");
+  });
+});
+
+describe("billing page", () => {
+  const labelsFor = (role: string, cloud: boolean) =>
+    visibleSettingsPages({ role, instanceAdmin: false, cloud }).map((p) => p.label);
+
+  it("is for workspace admins on Cloud only", () => {
+    expect(labelsFor("owner", true)).toContain("Billing");
+    expect(labelsFor("admin", true)).toContain("Billing");
+    expect(labelsFor("member", true)).not.toContain("Billing");
+    expect(labelsFor("owner", false)).not.toContain("Billing");
+    expect(visibleSettingsPages({ role: "owner", instanceAdmin: true }).map((p) => p.label)).not.toContain(
+      "Billing",
+    );
   });
 });

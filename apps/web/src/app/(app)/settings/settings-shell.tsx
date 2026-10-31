@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { useT } from "@/lib/i18n/provider";
 import { SETTINGS_PAGES, visibleSettingsPages } from "@/lib/settings-nav";
-import { useMeQuery } from "@/lib/store/api";
+import { useEntitlementsQuery, useMeQuery } from "@/lib/store/api";
 import { cn } from "@/lib/utils";
 
 /** Settings: one main column with a section nav — a rail on desktop, a scrolling strip on phones. */
@@ -15,7 +15,8 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
   const me = useMeQuery(undefined).data;
   // Hide what the user can't change: branding and templates are for workspace admins, SMTP and
   // security for instance admins. The command palette uses the same list and filter (lib/settings-nav).
-  const nav = visibleSettingsPages({ role: me?.role, instanceAdmin: !!me?.instanceAdmin });
+  const cloud = useEntitlementsQuery(undefined).data?.edition === "cloud";
+  const nav = visibleSettingsPages({ role: me?.role, instanceAdmin: !!me?.instanceAdmin, cloud });
   const current = SETTINGS_PAGES.find((n) => n.href === pathname) ?? SETTINGS_PAGES[0];
 
   return (

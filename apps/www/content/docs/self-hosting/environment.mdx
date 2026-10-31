@@ -117,6 +117,25 @@ Optional. Set these to configure the AI provider once for the whole instance; an
 | `WIDGET_PROJECT_MB_PER_HOUR`     | `500`   | Megabytes of files (screenshots, attachments, replays) stored per project and hour (`429 PROJECT_STORAGE_LIMITED`). |
 | `PINWREN_INVITES_PER_HOUR`       | `30`    | Invitations one organisation may send per hour.                                                                     |
 
+## Cloud billing (Dodo Payments)
+
+Self-hosted installs have no billing: nothing below is read unless `PINWREN_MODE=cloud`. On Pinwren Cloud the
+plans (Free and Pro) are sold through [Dodo Payments](https://dodopayments.com). Billing stays off until
+`DODO_PAYMENTS_API_KEY` is set.
+
+| Variable                      | Purpose                                                                                         |
+| ----------------------------- | ----------------------------------------------------------------------------------------------- |
+| `DODO_PAYMENTS_API_KEY`       | Server-side API key. Billing is disabled while it is empty.                                     |
+| `DODO_PAYMENTS_ENVIRONMENT`   | `test_mode` (default) or `live_mode`; picks `test.dodopayments.com` or `live.dodopayments.com`. |
+| `DODO_PAYMENTS_WEBHOOK_KEY`   | Signing secret (`whsec_…`) of the webhook endpoint that points at `/api/billing/webhook`.       |
+| `DODO_PRO_MONTHLY_PRODUCT_ID` | Id of the Pro monthly subscription product you created in the Dodo dashboard.                   |
+| `DODO_PRO_ANNUAL_PRODUCT_ID`  | Id of the Pro annual subscription product.                                                      |
+
+An interval whose product id is empty is not offered, and asking for it answers `503 BILLING_NOT_CONFIGURED`
+naming the missing variable. Incoming billing events are checked against the signing secret above (five-minute
+replay window) and applied once per event id. A workspace is matched to its subscription by the
+`pinwren_org_id` metadata set at checkout.
+
 ## Reference
 
 <EnvTable />
@@ -139,7 +158,7 @@ passed to Pinwren itself.
 | `PINWREN_BIND`      | `127.0.0.1`      | Host address the port is bound to. `0.0.0.0` exposes it on every interface (not recommended without a proxy). |
 
 Besides the three required values, the compose file forwards `PINWREN_TRUST_PROXY`, `PINWREN_DISABLE_SIGNUP`,
-`PINWREN_ADMIN_EMAILS`, `PINWREN_OUTBOUND_ALLOWLIST`, `PINWREN_WORKERS`, `PINWREN_LICENSE_FILE` and the AI variables from
+`PINWREN_ADMIN_EMAILS`, `PINWREN_OUTBOUND_ALLOWLIST`, `PINWREN_WORKERS`, `PINWREN_LICENSE_FILE`, the AI variables and the `DODO_*` Cloud billing variables from
 `docker/.env`. It sets `PINWREN_TRUST_PROXY=1` by default, because it expects one reverse proxy in front. Set
 `PINWREN_TRUST_PROXY=0` if clients reach the container directly, and a higher number if there are more proxies
 — see [Client addresses](#client-addresses).

@@ -17,7 +17,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { Key } from "@/lib/i18n/en";
 import { useT } from "@/lib/i18n/provider";
-import { useProjectsQuery, useViewsQuery } from "@/lib/store/api";
+import { useEntitlementsQuery, useProjectsQuery, useViewsQuery } from "@/lib/store/api";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { paletteToggled } from "@/lib/store/slices/ui";
 import { useViewer } from "@/lib/viewer";
@@ -43,7 +43,8 @@ export function CommandPalette() {
   const { setTheme } = useTheme();
   const { isAdmin, role, instanceAdmin } = useViewer();
   // Settings pages with the same access filter as the settings rail (lib/settings-nav).
-  const settings = visibleSettingsPages({ role, instanceAdmin });
+  const cloud = useEntitlementsQuery(undefined).data?.edition === "cloud";
+  const settings = visibleSettingsPages({ role, instanceAdmin, cloud });
   const projects = useProjectsQuery(undefined, { skip: !open });
   const views = useViewsQuery(undefined, { skip: !open });
 

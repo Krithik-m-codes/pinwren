@@ -1,3 +1,4 @@
+import { assertReportQuota } from "../billing/service";
 import { withOrg } from "@pinwren/db";
 import { projectForPublicKey } from "../db/bootstrap";
 import { requestBoundary, withOrgResponse } from "../tenant-scope";
@@ -539,6 +540,8 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
           .where(and(eq(feedback.projectId, p.id), eq(feedback.clientId, input.clientId))),
       );
       if (existing) return c.json({ feedback: existing }, 200);
+      // Cloud plans cap reports per month (hard stop at 120%); a no-op without billing.
+      await assertReportQuota(p.orgId);
 
       // Decode and type-check every file before anything is written.
       const decoded: {
