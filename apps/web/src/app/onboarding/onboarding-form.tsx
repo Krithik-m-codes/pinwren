@@ -7,11 +7,13 @@ import { ProjectPresetPicker } from "@/components/project-preset-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import type { ProjectDetail } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { onboardingForm } from "@/lib/form-schemas";
 import { useT } from "@/lib/i18n/provider";
 import { errorMessage } from "@/lib/store/api";
 import { useCreateProjectWithPresetMutation } from "@/lib/store/api/onboarding";
+import { useRenameWorkspaceMutation } from "@/lib/store/api/people";
 
 /** A unique-enough slug for the new workspace (Better Auth needs one; people never see it). */
 const workspaceSlug = (name: string) =>
@@ -24,20 +26,32 @@ const slugify = (s: string) =>
     .replace(/^-|-$/g, "")
     .slice(0, 40);
 
-/** First run: name the workspace (organisation), then the first project and its site. */
-export function OnboardingForm() {
+/**
+ * First run: name the workspace (organisation), then the first project and its site. On Cloud the
+ * workspace already exists (made with the account), so `workspace` renames it instead, and `onCreated`
+ * continues the guided steps rather than leaving for the project page.
+ */
+export function OnboardingForm({
+  workspace,
+  onCreated,
+}: {
+  workspace?: { id: string; name: string };
+  onCreated?: (project: ProjectDetail) => void;
+}) {
   const t = useT();
   const [createProject] = useCreateProjectWithPresetMutation();
+  const [renameWorkspace] = useRenameWorkspaceMutation();
   const form = useZodForm(onboardingForm, {
-    defaultValues: { org: "", project: "", site: "", preset: "public-site" },
+    defaultValues: { org: workspace?.name ?? "", project: "", site: "", preset: "public-site" },
   });
   // A retry after the project step failed reuses the workspace made on the first try.
-  const [createdOrg, setCreatedOrg] = useState<string | null>(null);
+  const [createdOrg, setCreatedOrg] = useState<string | null>(workspace?.id ?? null);
   const { errors, isSubmitting } = form.formState;
 
   const submit = form.handleSubmit(async ({ org, project, site, preset }) => {
     try {
       let orgId = createdOrg;
+      if (workspace && org.trim() !== workspace.name) await renameWorkspace({ name: org.trim() }).unwrap();
       if (!orgId) {
         const { data, error } = await authClient.organization.create({
           name: org,
@@ -53,6 +67,10 @@ export function OnboardingForm() {
         allowedOrigins: site ? [site] : [],
         preset,
       }).unwrap();
+      if (onCreated) {
+        onCreated(created.project);
+        return;
+      }
       // A full load: the app's server components read the new active workspace from the session. The
       // Install tab is the next step: copy the snippet onto the site.
       window.location.assign(
