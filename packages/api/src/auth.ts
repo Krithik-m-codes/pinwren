@@ -1,4 +1,5 @@
 import { assertSeatQuota } from "./billing/service";
+import { cloudSignupRefusal, discardUser, provisionPersonalWorkspace, recordConsent } from "./cloud-signup";
 import { identityDatabase } from "@pinwren/db/identity";
 import { MAX_SESSION_DAYS, MIN_PASSWORD_LENGTH } from "@pinwren/core";
 import { schema, user as userTable, userPreference, withOrg } from "@pinwren/db";
@@ -52,6 +53,14 @@ const policyHooks = createAuthMiddleware(async (ctx) => {
   if (ctx.path === "/sign-up/email") {
     const email = (ctx.body as { email?: unknown } | undefined)?.email;
     if (typeof email !== "string" || !(await signupAllowed(email))) throw signupClosed();
+    if (env().PINWREN_MODE === "cloud") {
+      const refusal = await cloudSignupRefusal({
+        email,
+        termsAccepted: (ctx.body as { termsAccepted?: unknown }).termsAccepted,
+        ip: ctx.headers?.get(AUTH_IP_HEADER) ?? ctx.request?.headers.get(AUTH_IP_HEADER) ?? undefined,
+      });
+      if (refusal) throw new APIError(refusal.status, { code: refusal.code, message: refusal.message });
+    }
   }
   // Email links and passkeys are switched in Settings › Security; an email link also needs SMTP.
   if (isMethodPath(ctx.path)) {
@@ -137,6 +146,8 @@ function createAuth() {
       // Who may sign up is decided in `policyHooks` (first account, invitees, or open sign-up).
       disableSignUp: false,
       minPasswordLength: MIN_PASSWORD_LENGTH,
+      // Cloud: no session, and no workspace use, until the address is confirmed (design 2026-10-31).
+      requireEmailVerification: e.PINWREN_MODE === "cloud",
       // Queued like every email; without SMTP the job is skipped (and logged), and the dashboard tells
       // people to ask their administrator, who can copy a reset link from Users.
       async sendResetPassword({ user, url }) {
@@ -153,6 +164,7 @@ function createAuth() {
     // Verification is offered, never required: SMTP is optional, and an unverified address still signs in.
     emailVerification: {
       sendOnSignUp: true,
+      autoSignInAfterVerification: e.PINWREN_MODE === "cloud",
       expiresIn: 24 * 3600,
       async sendVerificationEmail({ user, url }) {
         if (!(await emailConfigured())) return;
@@ -347,6 +359,18 @@ function createAuth() {
             if (signupPolicyApplies(ctx?.path) && !(await signupAllowed(newUser.email))) {
               throw signupClosed();
             }
+            // Cloud accounts come from the sign-up form only: Google, GitHub and email links can't carry the
+            // Terms and Privacy consent.
+            if (
+              e.PINWREN_MODE === "cloud" &&
+              signupPolicyApplies(ctx?.path) &&
+              ctx?.path !== "/sign-up/email"
+            ) {
+              throw new APIError("FORBIDDEN", {
+                code: "CLOUD_SIGNUP_PASSWORD_ONLY",
+                message: "Create your account with the sign-up form, then use any sign-in method.",
+              });
+            }
             // Google / GitHub hand over a picture on their own hosts, which the dashboard's CSP (img-src
             // 'self') won't load and which would leak who views it to them; people upload one in Profile.
             if (newUser.image && !newUser.image.startsWith("/")) return { data: { ...newUser, image: null } };
@@ -354,7 +378,22 @@ function createAuth() {
           },
           // BugPin: the first account on a fresh instance administers it (services/setup.ts). Runs after
           // the insert commits; a failure never fails the sign-up (the next start retries).
-          async after() {
+          async after(created, ctx) {
+            if (e.PINWREN_MODE === "cloud") {
+              // The account and its Free personal workspace stand or fall together.
+              try {
+                await provisionPersonalWorkspace(created.id, created.name);
+                if (ctx?.path === "/sign-up/email") await recordConsent(created.id);
+              } catch (err) {
+                console.error("[pinwren] could not create the workspace for a new account", err);
+                await discardUser(created.id).catch(() => undefined);
+                throw new APIError("INTERNAL_SERVER_ERROR", {
+                  code: "WORKSPACE_PROVISION_FAILED",
+                  message: "We couldn't finish creating your account. Please try again.",
+                });
+              }
+              return;
+            }
             try {
               await promoteFirstAccount();
             } catch (err) {
@@ -367,7 +406,18 @@ function createAuth() {
         create: {
           async before(session) {
             const days = await sessionLifetimeDays();
-            return { data: { ...session, expiresAt: new Date(Date.now() + days * 24 * 3600 * 1000) } };
+            const expiresAt = new Date(Date.now() + days * 24 * 3600 * 1000);
+            if (e.PINWREN_MODE !== "cloud") return { data: { ...session, expiresAt } };
+            // Cloud: every session starts in a workspace (an account the user hook missed is repaired here).
+            const [account] = await identityDatabase()
+              .select({ name: userTable.name })
+              .from(userTable)
+              .where(eq(userTable.id, session.userId));
+            const activeOrganizationId = await provisionPersonalWorkspace(
+              session.userId,
+              account?.name ?? "",
+            );
+            return { data: { ...session, expiresAt, activeOrganizationId } };
           },
         },
       },
