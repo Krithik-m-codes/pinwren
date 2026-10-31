@@ -1,0 +1,61 @@
+# Pinwren Cloud on Fly.io (app) + Supabase (Postgres, Storage). Full runbook: docs/self-hosting/fly-supabase.md
+#
+# Replace `pinwren-cloud` with your Fly app name. Nothing in this file is a secret; credentials go in
+# `fly secrets set` (names listed in the runbook).
+#
+# There is deliberately NO [deploy] release_command. Fly release machines receive every app secret, so
+# the migration URL would be visible to the app. The runtime image also contains no migration tooling.
+# Migrations and provisioning run offline from a trusted shell or CI job: scripts/cloud-migrate.sh.
+app = "pinwren-cloud"
+# Choose the region closest to your Supabase project (the database round trip dominates latency).
+# bom = Mumbai, pairs with Supabase ap-south-1. Others: sin, fra, iad.
+primary_region = "bom"
+
+[build]
+  dockerfile = "docker/Dockerfile"
+  # Official builds: set [build.args] PINWREN_RELEASE = "1" and bake in the licence public key
+  # (docs/release/licence-keys.md). Left at the default (0) for a first deploy.
+
+[env]
+  PINWREN_MODE = "cloud"
+  PINWREN_URL = "https://app.pinwren.xride-labs.in"
+  # Fly's proxy adds one X-Forwarded-For hop.
+  PINWREN_TRUST_PROXY = "1"
+  PINWREN_ENFORCE_HTTPS = "true"
+  # "all" serves HTTP and runs jobs (digest, retention, webhooks) in the same machine.
+  PINWREN_ROLE = "all"
+  # cluster.cjs forks this many Node processes; match the machine's vCPU count.
+  PINWREN_WORKERS = "2"
+  # Per process, per pool. 2 workers x runtime+service pools must fit the Supabase pooler limit.
+  DATABASE_POOL_MAX = "5"
+  # Uploads go to Supabase Storage through its S3 endpoint; the machine disk stays empty.
+  STORAGE_DRIVER = "s3"
+  S3_FORCE_PATH_STYLE = "true"
+  # S3_ENDPOINT, S3_BUCKET, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY: set as secrets.
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # Background jobs and SSE need the machine up: never stop it on idle.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  # One machine until WP-21 closes the multi-instance work (Redis realtime / rate limits).
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+  # 200 only after the Cloud startup guard passed; a failed guard answers 500 (see runbook).
+  [[http_service.checks]]
+    method = "GET"
+    path = "/api/health"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "40s"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "1gb"
+  cpus = 2

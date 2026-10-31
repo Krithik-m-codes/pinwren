@@ -1,0 +1,191 @@
+# Deploy Pinwren Cloud on Fly.io with Supabase
+
+<!-- Mirrors apps/www/content/docs/self-hosting/fly-supabase.mdx (the website page); keep them in step. -->
+
+Run Pinwren in Cloud mode (`PINWREN_MODE=cloud`): the app on Fly.io, Postgres and file storage on Supabase. Cloud mode enforces row-level
+security per workspace, so the database needs three separate roles and an offline provisioning step. Read
+[Cloud tenant isolation](../security/cloud-tenant-isolation.md) first. Cloud sign-up is not ready for customers yet; this
+page gets the infrastructure running.
+
+Files: [`fly.toml`](../../fly.toml), [`scripts/cloud-migrate.sh`](../../scripts/cloud-migrate.sh),
+[`scripts/post-deploy-check.mjs`](../../scripts/post-deploy-check.mjs). Replace `pinwren-cloud` and `<ref>` (the
+Supabase project reference) everywhere.
+
+## How the pieces fit
+
+| Role                       | Used by                                 | Connection                              |
+| -------------------------- | --------------------------------------- | --------------------------------------- |
+| Migration (`postgres`)     | `cloud-migrate.sh`, from your shell/CI  | Direct, `db.<ref>.supabase.co:5432`     |
+| `pinwren_runtime` (tenant) | The app: `DATABASE_URL`                 | Session pooler, `pinwren_runtime.<ref>` |
+| `pinwren_service`          | The app: `PINWREN_SERVICE_DATABASE_URL` | Session pooler, `pinwren_service.<ref>` |
+
+Why the migration URL never reaches the app: Fly's `release_command` runs in a temporary machine that receives all app
+secrets, and the runtime image has no migration tooling (it ships only compiled output and the SQL files). So
+`fly.toml` has **no** `release_command`. Migration and provisioning run from a trusted shell or CI job that holds the
+migration URL; `fly secrets set` is never given it. Deploy order is always: migrate and provision, then `fly deploy`.
+
+### Connection modes (checked against the Supabase docs)
+
+- **Direct** (`postgres://postgres:<pw>@db.<ref>.supabase.co:5432/postgres`): IPv6 only unless you buy the IPv4 add-on.
+  Plain role names. Use it for migrations and provisioning.
+- **Session pooler** (`<role>.<ref>@<pooler-host>:5432`): IPv4, supports prepared statements. Use it for the app.
+- **Transaction pooler** (port 6543): do **not** use. The app's `postgres.js` client uses prepared statements, which
+  the transaction pooler does not support. (Tenant isolation itself is pooler-safe: it sets the organisation with
+  `set_config(..., true)` inside one transaction on one connection.)
+- Provisioning derives role names from the URL user name, so it needs direct URLs (`pinwren_runtime`, not
+  `pinwren_runtime.<ref>`). All three provisioning URLs must name the same host, so all three are direct.
+- The runtime and service URLs the app uses must share one endpoint with each other: use the same pooler host for both.
+- Copy the exact pooler host from Supabase **Connect**; it cannot be derived from the region.
+
+## 1. Create the Supabase project
+
+1. New project in the region nearest your Fly region (`bom` in `fly.toml` pairs with Mumbai). Save the database password.
+2. **Project Settings > Data API**: disable the Data API (PostgREST). Pinwren does not use it, and Supabase grants its
+   `anon`/`authenticated`/`service_role` roles access to new tables by default.
+3. **Storage > Buckets**: create a **private** bucket, e.g. `pinwren-uploads`. **Storage > S3 connection**: note the
+   endpoint (`https://<ref>.storage.supabase.co/storage/v1/s3`) and region, and create an access key pair. S3 keys
+   bypass storage RLS and reach every bucket, so keep them in Fly secrets only.
+
+## 2. Create the roles (SQL editor)
+
+Supabase's `postgres` role is not a superuser, but it can create roles, which is all that is needed. Run as `postgres`,
+using generated passwords (for example `openssl rand -hex 24`, which is URL-safe):
+
+```sql
+-- Stop Supabase's default grants from exposing Pinwren's tables to its API roles.
+alter default privileges for role postgres in schema public revoke all on tables from anon, authenticated, service_role;
+alter default privileges for role postgres in schema public revoke all on sequences from anon, authenticated, service_role;
+alter default privileges for role postgres in schema public revoke all on functions from anon, authenticated, service_role;
+
+create role pinwren_runtime LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION password '<runtime-password>';
+create role pinwren_service LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION password '<service-password>';
+```
+
+Check afterwards (every flag must be `false` on both rows; neither role may be a member of another role):
+
+```sql
+select rolname, rolsuper, rolbypassrls, rolcreatedb, rolcreaterole, rolreplication
+from pg_roles where rolname in ('pinwren_runtime','pinwren_service');
+```
+
+Provisioning (step 4) re-validates all of this and fails closed. Run the migrations only after the
+`alter default privileges` statements; if you ran them first, also run
+`revoke all on all tables in schema public from anon, authenticated, service_role;` and re-run provisioning.
+
+## 3. Build the connection strings
+
+Keep these in your password manager or CI secret store, not in the app:
+
+```bash
+export PINWREN_MIGRATION_DATABASE_URL='postgres://postgres:<pw>@db.<ref>.supabase.co:5432/postgres?sslmode=require'
+export PINWREN_RUNTIME_DIRECT_URL='postgres://pinwren_runtime:<runtime-password>@db.<ref>.supabase.co:5432/postgres?sslmode=require'
+export PINWREN_SERVICE_DIRECT_URL='postgres://pinwren_service:<service-password>@db.<ref>.supabase.co:5432/postgres?sslmode=require'
+```
+
+If your shell has no IPv6, either enable the Supabase IPv4 add-on or run the script from a CI runner that has IPv6.
+
+## 4. Migrate and provision (offline)
+
+From a checkout of this repository on the commit you will deploy:
+
+```bash
+pnpm install --frozen-lockfile
+scripts/cloud-migrate.sh
+```
+
+This runs `pnpm --filter @pinwren/db migrate` with the migration role, then `pnpm --filter @pinwren/db provision:cloud`,
+which revokes broad grants, grants the two roles their exact tables and columns, enables and forces RLS, and validates
+the catalogs in one transaction (a failure rolls back). It is idempotent. **Repeat it before every `fly deploy` that
+ships a new migration, and after any upgrade that adds projections** (see the isolation doc).
+
+## 5. Create the Fly app and set secrets
+
+```bash
+fly apps create pinwren-cloud            # then set app = "..." in fly.toml if you chose another name
+```
+
+Build the pooler URLs (session mode, port 5432, user `<role>.<ref>`, host copied from Supabase **Connect**):
+
+```bash
+fly secrets set --app pinwren-cloud \
+  DATABASE_URL='postgres://pinwren_runtime.<ref>:<runtime-password>@<pooler-host>:5432/postgres' \
+  PINWREN_SERVICE_DATABASE_URL='postgres://pinwren_service.<ref>:<service-password>@<pooler-host>:5432/postgres' \
+  PINWREN_SECRET="$(openssl rand -base64 48)" \
+  S3_ENDPOINT='https://<ref>.storage.supabase.co/storage/v1/s3' \
+  S3_BUCKET='pinwren-uploads' \
+  S3_REGION='<region from Supabase S3 settings>' \
+  S3_ACCESS_KEY_ID='<access key id>' \
+  S3_SECRET_ACCESS_KEY='<secret>'
+```
+
+Secret names (values never in git): `DATABASE_URL`, `PINWREN_SERVICE_DATABASE_URL`, `PINWREN_SECRET`, `S3_ENDPOINT`,
+`S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`. Optional: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
+`SMTP_PASSWORD`, `EMAIL_FROM` (or configure email in the dashboard), `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`,
+`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`, `PINWREN_ADMIN_EMAILS`, `AI_*`.
+
+**Never set** `PINWREN_MIGRATION_DATABASE_URL`, `PINWREN_RUNTIME_DIRECT_URL` or `PINWREN_SERVICE_DIRECT_URL` as Fly
+secrets. Verify with `fly secrets list --app pinwren-cloud`.
+
+Non-secret settings (`PINWREN_MODE`, `PINWREN_URL`, `PINWREN_TRUST_PROXY`, storage driver, workers, pool size) are in
+the `[env]` block of `fly.toml`.
+
+## 6. Domain and TLS
+
+```bash
+fly certs add app.pinwren.xride-labs.in --app pinwren-cloud
+fly ips list --app pinwren-cloud
+```
+
+At the DNS host for `xride-labs.in` add `A`/`AAAA` records for `app.pinwren` with the IPs from `fly ips list` (or a
+`CNAME` to `pinwren-cloud.fly.dev`, plus the `_acme-challenge` record shown by `fly certs show`). Keep the record
+DNS-only; behind a Cloudflare proxy raise `PINWREN_TRUST_PROXY` to 2. Wait until
+`fly certs show app.pinwren.xride-labs.in` reports the certificate as issued. `PINWREN_URL` in `fly.toml` must match.
+
+## 7. Deploy and verify
+
+```bash
+fly deploy --app pinwren-cloud
+node scripts/post-deploy-check.mjs https://app.pinwren.xride-labs.in
+```
+
+The check requires `/api/health` to answer 200. In Cloud mode the app validates role attributes, grants, RLS and
+policies before serving; while that guard fails, `/api/health` answers 500 and `fly logs` shows the reason. It also
+checks the HTTP-to-HTTPS redirect, that the dashboard responds, and that HSTS is sent. The first account created on a
+fresh instance becomes the instance admin: create it yourself immediately, or set `PINWREN_ADMIN_EMAILS` first.
+
+Sizing: one `shared-cpu-2x` / 1 GB machine with `PINWREN_WORKERS=2` (one Node process per core, via `docker/cluster.cjs`).
+Jobs run in the same processes (`PINWREN_ROLE=all`), so the machine never auto-stops. Stay on one machine until the
+multi-instance work in the isolation doc (Redis-backed realtime and rate limits) is finished; scale up
+(`fly scale vm shared-cpu-4x --vm-memory 2048`, raise `PINWREN_WORKERS` to match) rather than out.
+
+## Sign-ups and billing (coming)
+
+- `PINWREN_CLOUD_SIGNUPS`: planned with the Cloud sign-up PR (branch `feat/cloud-signup`). It does not exist in `main`
+  yet; until it ships, sign-up stays closed in Cloud mode. Add it to `[env]` in `fly.toml` when that PR merges.
+- Dodo Payments (billing PR, branch `feat/wp22-billing`): secrets `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_WEBHOOK_KEY`,
+  `DODO_PRO_MONTHLY_PRODUCT_ID`, `DODO_PRO_ANNUAL_PRODUCT_ID`; non-secret `DODO_PAYMENTS_ENVIRONMENT` and optionally
+  `DODO_PAYMENTS_BASE_URL`. Confirm the names against that PR's env schema when it merges.
+
+## Runbook
+
+**Deploy a new version.** Check out the release commit, run `scripts/cloud-migrate.sh`, then `fly deploy`, then
+`post-deploy-check.mjs`. Fly replaces machines rolling and keeps the old one if the new one fails its health check.
+
+**App rollback.** `fly releases --app pinwren-cloud`, then `fly deploy --image <previous image ref>`. Migrations are
+forward-only: roll the app back only to a version compatible with the current schema. Cloud mode is persistent in the
+database (RLS stays on); never remove policies to get around a startup error.
+
+**Startup guard fails (health 500, restarts).** `fly logs` names the failed check. Typical causes: migrations or
+provisioning not re-run after an upgrade (run `cloud-migrate.sh`), a role gained `BYPASSRLS` or a privileged membership,
+or the runtime and service URLs name different hosts. Fix the cause, re-provision, redeploy.
+
+**Rotate a role password.** In the SQL editor `alter role pinwren_runtime password '<new>';`, then
+`fly secrets set DATABASE_URL=...` (restarts the app). Same for `pinwren_service`. Rotate the migration role in
+Supabase settings and update your CI or shell only.
+
+**Database restore.** Use Supabase backups (daily backups on paid plans; point-in-time recovery is an add-on). After a
+restore, re-run `scripts/cloud-migrate.sh` before starting the app.
+
+**Maintenance stop.** `fly scale count 0 --app pinwren-cloud` stops serving; `fly scale count 1` resumes.
+
+**Uploads.** Stored in the Supabase bucket, not on the machine. Back the bucket up separately if you need copies elsewhere.
