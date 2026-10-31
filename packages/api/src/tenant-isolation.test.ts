@@ -121,6 +121,8 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
       },
       saved_view: { id: id(), org_id: org, owner_id: userId, name: org },
       email_suppression: { org_id: org, email: `${org}@test.invalid` },
+      billing_subscription: { org_id: org, plan: "pro", status: "active", interval: "monthly" },
+      billing_event: { org_id: org, webhook_id: id(), type: "subscription.active" },
     };
     for (const [table, row] of Object.entries(rows)) await admin`insert into ${admin(table)} ${admin(row)}`;
     fixture[org] = rows;

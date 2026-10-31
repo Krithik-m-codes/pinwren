@@ -67,6 +67,7 @@ type Helpers = {
 };
 
 const origin = "https://customer.test";
+const WEBHOOK_KEY = `whsec_${Buffer.from("fixture-dodo-webhook-key-0123456789").toString("base64")}`;
 const dataUrlBody = (clientId = randomUUID()) => ({
   clientId,
   kind: "bug",
@@ -158,6 +159,64 @@ const webhookCase = (provider: "github" | "gitlab" | "linear" | "jira"): Spec =>
     expect(await db()`select status from feedback where id=${ids[`item_${provider}_A`] ?? ""}`).toMatchObject(
       [provider === "jira" ? { status: "open" } : { status: "resolved" }],
     );
+    expect(await snapshot()).toBe(before);
+  },
+});
+
+/**
+ * Dodo billing webhook: the capability is the signing key. A forged or unsigned delivery naming
+ * workspace B changes nothing; a correctly signed one for A changes only A, once.
+ */
+const billingWebhookCase = (): Spec => ({
+  status: [200, 401],
+  run: async (ids, { request, db, snapshot }) => {
+    const { createHmac } = await import("node:crypto");
+    const before = await snapshot();
+    const send = (org: string, id: string, key = WEBHOOK_KEY, type = "subscription.active") => {
+      const raw = JSON.stringify({
+        type,
+        timestamp: new Date().toISOString(),
+        data: {
+          subscription_id: `sub_${org}`,
+          status: "active",
+          product_id: "prod_monthly_fixture",
+          customer: { customer_id: `cus_${org}` },
+          metadata: { pinwren_org_id: org },
+        },
+      });
+      const ts = String(Math.floor(Date.now() / 1000));
+      const sig = createHmac("sha256", Buffer.from(key.slice(6), "base64"))
+        .update(`${id}.${ts}.${raw}`)
+        .digest("base64");
+      return request({
+        method: "POST",
+        path: "/api/billing/webhook",
+        headers: { "webhook-id": id, "webhook-timestamp": ts, "webhook-signature": `v1,${sig}` },
+        body: JSON.parse(raw) as unknown,
+      });
+    };
+    const other = `whsec_${Buffer.from("not-the-endpoint-key-000000000000").toString("base64")}`;
+    expect((await send(ids.orgB ?? "", "msg_forged", other)).status).toBe(401);
+    expect((await request({ method: "POST", path: "/api/billing/webhook", body: {} })).status).toBe(400);
+    expect(await snapshot()).toBe(before);
+    const first = await send(ids.orgA ?? "", "msg_a_1");
+    expect(first.status).toBe(200);
+    expect(await first.json()).toMatchObject({ result: "applied" });
+    expect(
+      await db()`select plan, status from billing_subscription where org_id=${ids.orgA ?? ""}`,
+    ).toMatchObject([{ plan: "pro", status: "active" }]);
+    // A redelivery of the same webhook-id is acknowledged and applied once.
+    expect(
+      await (await send(ids.orgA ?? "", "msg_a_1", WEBHOOK_KEY, "subscription.cancelled")).json(),
+    ).toMatchObject({
+      result: "duplicate",
+    });
+    expect(await db()`select status from billing_subscription where org_id=${ids.orgA ?? ""}`).toMatchObject([
+      { status: "active" },
+    ]);
+    expect(await db()`select count(*)::int as n from billing_event where org_id=${ids.orgA ?? ""}`).toEqual([
+      { n: 1 },
+    ]);
     expect(await snapshot()).toBe(before);
   },
 });
@@ -306,6 +365,7 @@ const cases: Record<string, Spec> = {
       body: { body: "foreign guest reply" },
     }),
   },
+  "POST /api/billing/webhook": billingWebhookCase(),
   "POST /api/integrations/github/webhook": webhookCase("github"),
   "POST /api/integrations/gitlab/webhook": webhookCase("gitlab"),
   "POST /api/integrations/jira/webhook": webhookCase("jira"),
@@ -407,6 +467,8 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)(
       vi.stubEnv("PINWREN_SERVICE_DATABASE_URL", fixture.serviceUrl);
       vi.stubEnv("PINWREN_URL", "http://localhost:3100");
       vi.stubEnv("PINWREN_SECRET", randomUUID() + randomUUID());
+      vi.stubEnv("DODO_PAYMENTS_WEBHOOK_KEY", WEBHOOK_KEY);
+      vi.stubEnv("DODO_PRO_MONTHLY_PRODUCT_ID", "prod_monthly_fixture");
       vi.stubEnv("SMTP_HOST", undefined);
       vi.stubEnv("EMAIL_FROM", undefined);
       const { sha256Hex, encryptSecret } = await import("./crypto");

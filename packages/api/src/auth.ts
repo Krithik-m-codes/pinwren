@@ -1,3 +1,4 @@
+import { assertSeatQuota } from "./billing/service";
 import { identityDatabase } from "@pinwren/db/identity";
 import { MAX_SESSION_DAYS, MIN_PASSWORD_LENGTH } from "@pinwren/core";
 import { schema, user as userTable, userPreference, withOrg } from "@pinwren/db";
@@ -14,6 +15,7 @@ import { eq, sql } from "drizzle-orm";
 import { resolveSmtp } from "./email/config";
 import { renderEmail } from "./email/render";
 import { env } from "./env";
+import { ApiError } from "./errors";
 import { enqueue, QUEUES } from "./jobs/boss";
 import { consume } from "./rate-limit";
 import { forgetInstanceAdmin, promoteFirstAccount, signupAllowed } from "./services/setup";
@@ -85,6 +87,17 @@ const policyHooks = createAuthMiddleware(async (ctx) => {
         code: "INVITES_RATE_LIMITED",
         message: "This organisation has sent too many invitations this hour.",
       });
+    }
+    // Cloud plans cap team seats; a no-op without billing.
+    if (orgId) {
+      try {
+        await withOrg(orgId, (db) => assertSeatQuota(db, orgId));
+      } catch (err) {
+        if (err instanceof ApiError) {
+          throw new APIError("PAYMENT_REQUIRED", { code: err.code, message: err.message });
+        }
+        throw err;
+      }
     }
   }
 });

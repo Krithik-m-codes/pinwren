@@ -9,6 +9,7 @@ import { env } from "./env";
 import { ApiError, problem } from "./errors";
 import { csrfGuard } from "./guards";
 import { clientIp, INTERNAL_REQUEST } from "./net";
+import { billing, billingWebhook } from "./routes/billing";
 import { dashboard } from "./routes/dashboard";
 import { inbound } from "./routes/inbound";
 import { projectData } from "./routes/project-data";
@@ -129,6 +130,8 @@ export const app = new Hono()
   .route("/api/v1", v1)
   // Logos and tracker webhooks: no session (verified by random id / signature).
   .route("/api", inbound)
+  // Dodo Payments events: no session, verified by their Standard Webhooks signature.
+  .route("/api", billingWebhook)
   .route("/api", unsubscribe)
   .route("/api", teamUnsubscribe)
   .route("/api", guestPortal)
@@ -137,6 +140,8 @@ export const app = new Hono()
   // (`use` on /api/*) run for them too.
   .route("/api", members)
   .route("/api", workspace)
+  // Settings � Billing (Cloud; workspace admins).
+  .route("/api", billing)
   // Settings › Security › Sign-in methods (instance admins); after `dashboard` for its session guard.
   .route("/api/admin", signInSettings)
   // Signed page links + re-pin (wave-5 §3.3); after `dashboard`, whose session middleware covers /api/*.

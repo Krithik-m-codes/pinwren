@@ -139,6 +139,11 @@
     "databaseLifetime": "external",
     "check": "identity authorization: GET /api/avatars/:userId"
   },
+  "GET /api/billing": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/billing"
+  },
   "GET /api/brand-assets/:id": {
     "boundary": "capability",
     "databaseLifetime": "external",
@@ -603,6 +608,21 @@
     "boundary": "identity",
     "databaseLifetime": "finite",
     "check": "identity authorization: POST /api/auth/*"
+  },
+  "POST /api/billing/checkout": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/billing/checkout"
+  },
+  "POST /api/billing/portal": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/billing/portal"
+  },
+  "POST /api/billing/webhook": {
+    "boundary": "capability",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/billing/webhook"
   },
   "POST /api/branding/assets": {
     "boundary": "tenant",

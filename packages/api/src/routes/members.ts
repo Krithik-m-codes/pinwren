@@ -1,3 +1,4 @@
+import { assertSeatQuota } from "../billing/service";
 import { appRoleOf, memberCreate, memberUpdate, ORG_ROLE_FOR } from "@pinwren/core";
 import { getDb, invitation, member, user } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
@@ -94,6 +95,7 @@ export const members = new Hono<{ Variables: SessionVars }>()
   .post("/members", requirePermission("users.manage"), zValidator("json", memberCreate), async (c) => {
     const body = c.req.valid("json");
     const email = body.email.trim().toLowerCase();
+    await assertSeatQuota(getDb(), c.var.orgId);
     const ctx = await getAuth().$context;
     if (await ctx.internalAdapter.findUserByEmail(email)) {
       throw new ApiError(409, "EMAIL_TAKEN", "An account with that email already exists. Invite it instead.");
