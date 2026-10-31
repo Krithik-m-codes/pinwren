@@ -906,3 +906,45 @@ export const reviewLink = pgTable(
     tenantReference("review_link_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
   ],
 );
+
+/**
+ * Cloud billing state, one row per organisation (WP-22). Written by the Dodo webhook and the checkout
+ * flow; the plan in force is derived from it at read time (`effectivePlan` in @pinwren/core).
+ */
+export const billingSubscription = pgTable(
+  "billing_subscription",
+  {
+    orgId: text("org_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    plan: text("plan").notNull().default("free"),
+    interval: text("interval"),
+    status: text("status").notNull().default("none"),
+    dodoCustomerId: text("dodo_customer_id"),
+    dodoSubscriptionId: text("dodo_subscription_id"),
+    productId: text("product_id"),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+    /** Start of the current failed-renewal spell; the 14-day grace counts from here. */
+    pastDueSince: timestamp("past_due_since", { withTimezone: true }),
+    /** Provider timestamp of the newest event applied, so late redeliveries can't roll state back. */
+    lastEventAt: timestamp("last_event_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [uniqueIndex("billing_subscription_dodo_sub_uq").on(t.dodoSubscriptionId)],
+);
+
+/** Processed Dodo webhook ids (Standard Webhooks `webhook-id`): a delivery is applied once. */
+export const billingEvent = pgTable(
+  "billing_event",
+  {
+    orgId: orgId(),
+    webhookId: text("webhook_id").notNull(),
+    type: text("type").notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.orgId, t.webhookId] })],
+);
