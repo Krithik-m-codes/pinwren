@@ -110,7 +110,13 @@ export async function queueDelivery(
     throw new Error("delivery insert failed");
   }
   // First attempts go ahead of retries, so endpoints that keep failing can't delay everyone else's events.
-  await enqueue(QUEUES.webhook, { deliveryId: d.id, orgId: endpoint.orgId }, { priority: 1 });
+  // Only after the delivery row is committed: the worker looks it up on another connection.
+  const job = { deliveryId: d.id, orgId: endpoint.orgId };
+  afterOrgCommit(() => {
+    enqueue(QUEUES.webhook, job, { priority: 1 }).catch((err: unknown) =>
+      console.warn("[pinwren] webhook enqueue failed", err),
+    );
+  });
   return d.id;
 }
 
