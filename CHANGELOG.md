@@ -8,6 +8,26 @@ From the first release on, release-please adds a section per version from the Co
 `main`; the widget's own changes are also listed in [`packages/widget/CHANGELOG.md`](packages/widget/CHANGELOG.md)
 once it is published.
 
+## [0.3.0](https://github.com/Krithik-m-codes/pinwren/compare/v0.2.0...v0.3.0) (2026-10-31)
+
+
+### Features
+
+* add cloud billing with Dodo Payments in test mode ([#28](https://github.com/Krithik-m-codes/pinwren/issues/28)) ([7e013ea](https://github.com/Krithik-m-codes/pinwren/commit/7e013ea5a4945c4b4d03013d1d23c0037e0beafb))
+* add launcher theme and favicon branding ([#21](https://github.com/Krithik-m-codes/pinwren/issues/21)) ([9979e69](https://github.com/Krithik-m-codes/pinwren/commit/9979e69afdd7c5a55a5dcfd023b10fdd0e6ca0ec))
+* enforce cloud tenant isolation ([#27](https://github.com/Krithik-m-codes/pinwren/issues/27)) ([793a472](https://github.com/Krithik-m-codes/pinwren/commit/793a4728c5e35bbb6fca450b65dfe2251201cfb5))
+* **guest:** add capability-based feedback portal ([#19](https://github.com/Krithik-m-codes/pinwren/issues/19)) ([4291864](https://github.com/Krithik-m-codes/pinwren/commit/4291864ef208ef4dd7a443464d91fcec6e6e81c4))
+* **web:** dashboard translation system, language preference and picker ([13a448f](https://github.com/Krithik-m-codes/pinwren/commit/13a448fb0c9e03ae32b84452dcb2b82c86cec933))
+* **web:** translate the dashboard into ten more languages ([530a09d](https://github.com/Krithik-m-codes/pinwren/commit/530a09d1c3a44fdd00b7a1c18208f4cd24f3deb3))
+* **www:** add the Product Hunt badge to the site footer ([a76b992](https://github.com/Krithik-m-codes/pinwren/commit/a76b992d077f398f9ec5a9d39e40c86c70356953))
+* **www:** add the Tool Index badge to the site footer ([0908d06](https://github.com/Krithik-m-codes/pinwren/commit/0908d0654ef8864b18f410df5d515609c3f55689))
+
+
+### Bug Fixes
+
+* **ci:** isolate the release feed and fresh-install assertions ([5f5bb7b](https://github.com/Krithik-m-codes/pinwren/commit/5f5bb7b2c96edd2f2ed921dbd48b52bc3cb9ba43))
+* harden release readiness and repair onboarding ([f6c091e](https://github.com/Krithik-m-codes/pinwren/commit/f6c091e232d5624eb440ef6bcee5d31d38e8088b)), closes [#16](https://github.com/Krithik-m-codes/pinwren/issues/16)
+
 ## [0.2.0](https://github.com/Krithik-m-codes/pinwren/compare/v0.1.0...v0.2.0) (2026-10-26)
 
 

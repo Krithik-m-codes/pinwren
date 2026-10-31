@@ -1,6 +1,6 @@
 {
   "name": "@pinwren/widget",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Pinwren feedback widget: Figma-style pinned comments and annotated bug reports for any website",
   "keywords": [
     "feedback",
