@@ -132,9 +132,9 @@ plans (Free and Pro) are sold through [Dodo Payments](https://dodopayments.com).
 | `DODO_PRO_ANNUAL_PRODUCT_ID`  | Id of the Pro annual subscription product.                                                      |
 
 An interval whose product id is empty is not offered, and asking for it answers `503 BILLING_NOT_CONFIGURED`
-naming the missing variable. Webhook deliveries are verified with the Standard Webhooks signature
-(`webhook-id`, `webhook-timestamp`, `webhook-signature`, five-minute window) and applied once per
-`webhook-id`. A workspace is matched to its subscription by the `pinwren_org_id` metadata set at checkout.
+naming the missing variable. Incoming billing events are checked against the signing secret above (five-minute
+replay window) and applied once per event id. A workspace is matched to its subscription by the
+`pinwren_org_id` metadata set at checkout.
 
 ## Reference
 
