@@ -136,6 +136,24 @@ naming the missing variable. Webhook deliveries are verified with the Standard W
 (`webhook-id`, `webhook-timestamp`, `webhook-signature`, five-minute window) and applied once per
 `webhook-id`. A workspace is matched to its subscription by the `pinwren_org_id` metadata set at checkout.
 
+## Cloud sign-up
+
+Only read when `PINWREN_MODE=cloud`. Self-hosted sign-up is still decided by `PINWREN_DISABLE_SIGNUP`.
+Cloud sign-up is email and password with a confirmation link, so SMTP must be configured.
+
+| Variable                            | Default                                       | Meaning                                                                                                                             |
+| ----------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `PINWREN_CLOUD_SIGNUPS`             | `closed`                                      | `open` lets anyone create an account; `closed` pauses it (the kill switch). Invited addresses can still sign up while it is closed. |
+| `PINWREN_CLOUD_SIGNUPS_PER_IP_HOUR` | `5`                                           | New accounts one client address may create per hour. Needs a correct `PINWREN_TRUST_PROXY` behind a proxy.                          |
+| `PINWREN_CLOUD_SIGNUPS_PER_HOUR`    | `100`                                         | New accounts the whole instance accepts per hour.                                                                                   |
+| `PINWREN_TERMS_URL`                 | `https://pinwren.xride-labs.in/legal/terms`   | Where the "Terms of Service" link in the sign-up form points.                                                                       |
+| `PINWREN_PRIVACY_URL`               | `https://pinwren.xride-labs.in/legal/privacy` | Where the "Privacy Policy" link points.                                                                                             |
+
+Each new account gets a personal workspace on the Free plan and, after it confirms its email address, a guided
+first run: name the workspace, create the first project, copy the widget snippet and invite teammates (within the
+plan's seats). Disposable-mailbox domains are refused. Not included yet: CAPTCHA, social sign-up in Cloud, and
+cleanup of accounts that never confirm.
+
 ## Reference
 
 <EnvTable />
