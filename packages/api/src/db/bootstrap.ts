@@ -1,4 +1,11 @@
-import { brandAsset, feedbackAsset, issueIntegration, project } from "@pinwren/db";
+import {
+  brandAsset,
+  feedbackAsset,
+  issueIntegration,
+  issueLink,
+  project,
+  webhookDelivery,
+} from "@pinwren/db";
 import { identityDatabase } from "@pinwren/db/identity";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
@@ -76,4 +83,35 @@ export async function integrationSignatureCandidates(
         sql`lower(${issueIntegration.repo}) = lower(${repo})`,
       ),
     );
+}
+
+/** Resolve only the tenant owner for a queue-held delivery capability. */
+export async function webhookDeliveryOwner(id: string) {
+  if (!uuid.test(id)) return undefined;
+  const [row] = await identityDatabase()
+    .select({ id: webhookDelivery.id, orgId: webhookDelivery.orgId })
+    .from(webhookDelivery)
+    .where(eq(webhookDelivery.id, id))
+    .limit(1);
+  return row;
+}
+
+export async function issueIntegrationOwner(id: string) {
+  if (!uuid.test(id)) return undefined;
+  const [row] = await identityDatabase()
+    .select({ id: issueIntegration.id, orgId: issueIntegration.orgId, projectId: issueIntegration.projectId })
+    .from(issueIntegration)
+    .where(eq(issueIntegration.id, id))
+    .limit(1);
+  return row;
+}
+
+export async function issueLinkOwner(id: string) {
+  if (!uuid.test(id)) return undefined;
+  const [row] = await identityDatabase()
+    .select({ id: issueLink.id, orgId: issueLink.orgId })
+    .from(issueLink)
+    .where(eq(issueLink.id, id))
+    .limit(1);
+  return row;
 }

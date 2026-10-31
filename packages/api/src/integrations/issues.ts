@@ -10,6 +10,7 @@ import { enqueue, QUEUES } from "../jobs/boss";
 import { emailBrand } from "../services/branding";
 import { type FeedbackContext, feedbackLink, loadFeedbackContext } from "../services/feedback-payload";
 import { hasFeature } from "../license";
+import { issueIntegrationOwner, issueLinkOwner } from "../db/bootstrap";
 import {
   adfText,
   createIssue,
@@ -29,8 +30,8 @@ type Integration = typeof issueIntegration.$inferSelect;
 type Link = typeof issueLink.$inferSelect;
 
 export type IssueJob =
-  | { type: "create"; feedbackId: string; integrationId: string }
-  | { type: "state"; linkId: string; state: "open" | "closed" };
+  | { type: "create"; feedbackId: string; integrationId: string; orgId?: string }
+  | { type: "state"; linkId: string; state: "open" | "closed"; orgId?: string };
 
 export { PROVIDER_NAMES };
 
@@ -294,7 +295,12 @@ export async function createIssueFor(
     // Already closed in Pinwren (e.g. sent after resolving): close the new issue too.
     if (row && isClosedStatus(row.status)) {
       afterOrgCommit(() =>
-        enqueue(QUEUES.issues, { type: "state", linkId: link.id, state: "closed" } satisfies IssueJob),
+        enqueue(QUEUES.issues, {
+          type: "state",
+          linkId: link.id,
+          state: "closed",
+          orgId: i.orgId,
+        } satisfies IssueJob),
       );
     }
     return link;
@@ -318,6 +324,7 @@ export async function autoCreateIssues(ctx: FeedbackContext): Promise<void> {
         type: "create",
         feedbackId: ctx.payload.id,
         integrationId: r.id,
+        orgId: ctx.orgId,
       } satisfies IssueJob);
     }
   }
@@ -327,13 +334,18 @@ export async function autoCreateIssues(ctx: FeedbackContext): Promise<void> {
 export async function syncIssueState(feedbackId: string, status: string): Promise<void> {
   const want = isClosedStatus(status as FeedbackStatus) ? "closed" : "open";
   const links = await getDb()
-    .select({ id: issueLink.id, state: issueLink.state })
+    .select({ id: issueLink.id, state: issueLink.state, orgId: issueLink.orgId })
     .from(issueLink)
     .innerJoin(issueIntegration, eq(issueIntegration.id, issueLink.integrationId))
     .where(and(eq(issueLink.feedbackId, feedbackId), eq(issueIntegration.active, true)));
   for (const l of links) {
     if (l.state !== want) {
-      await enqueue(QUEUES.issues, { type: "state", linkId: l.id, state: want } satisfies IssueJob);
+      await enqueue(QUEUES.issues, {
+        type: "state",
+        linkId: l.id,
+        state: want,
+        orgId: l.orgId,
+      } satisfies IssueJob);
     }
   }
 }
@@ -341,25 +353,32 @@ export async function syncIssueState(feedbackId: string, status: string): Promis
 /** `issues.sync` handler. Throws on tracker errors so pg-boss retries with backoff. */
 export async function runIssueJob(job: IssueJob): Promise<void> {
   if (job.type === "create") {
-    const i = await integrationFor(job.integrationId);
+    const owner = await issueIntegrationOwner(job.integrationId);
+    if (!owner || (job.orgId !== undefined && job.orgId !== owner.orgId)) return;
+    const i = await withOrg(owner.orgId, () => integrationFor(job.integrationId));
     if (!i?.active || !(await providerLicensed(i.provider))) return;
-    await createIssueFor(job.feedbackId, job.integrationId);
+    await createIssueFor(job.feedbackId, job.integrationId, owner.orgId);
     return;
   }
-  const db = getDb();
-  const [row] = await db
-    .select({ l: issueLink, i: issueIntegration })
-    .from(issueLink)
-    .innerJoin(issueIntegration, eq(issueIntegration.id, issueLink.integrationId))
-    .where(eq(issueLink.id, job.linkId));
+  const owner = await issueLinkOwner(job.linkId);
+  if (!owner || (job.orgId !== undefined && job.orgId !== owner.orgId)) return;
+  const [row] = await withOrg(owner.orgId, (db) =>
+    db
+      .select({ l: issueLink, i: issueIntegration })
+      .from(issueLink)
+      .innerJoin(issueIntegration, eq(issueIntegration.id, issueLink.integrationId))
+      .where(eq(issueLink.id, job.linkId)),
+  );
   if (!row?.i.active || row.l.state === job.state || !(await providerLicensed(row.i.provider))) return;
   try {
     await setIssueState(trackerConfig(row.i), row.l.number, job.state);
   } catch (err) {
-    await recordError(row.i, err);
+    await withOrg(owner.orgId, () => recordError(row.i, err));
     throw err;
   }
-  await db.update(issueLink).set({ state: job.state }).where(eq(issueLink.id, row.l.id));
+  await withOrg(owner.orgId, (db) =>
+    db.update(issueLink).set({ state: job.state }).where(eq(issueLink.id, row.l.id)),
+  );
 }
 
 /**

@@ -1,5 +1,5 @@
 import { suggestSeverity, summarizeReport, synthesizeReproSteps, verifyDuplicate } from "@pinwren/ai";
-import { diagnostics, feedback, feedbackAi, getDb, page, project } from "@pinwren/db";
+import { diagnostics, feedback, feedbackAi, page, project, withOrg } from "@pinwren/db";
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import { publishDomainEvent } from "../realtime/publish";
 import { getAiClientForOrg } from "../services/ai";
@@ -58,23 +58,29 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
   error?: string;
 }> {
   // 1. Check if AI is enabled for this project
-  const [p] = await getDb()
-    .select({ aiConfig: project.aiConfig, widgetConfig: project.widgetConfig })
-    .from(project)
-    .where(and(eq(project.id, job.projectId), eq(project.orgId, job.orgId)));
+  const [p] = await withOrg(job.orgId, (db) =>
+    db
+      .select({ aiConfig: project.aiConfig, widgetConfig: project.widgetConfig })
+      .from(project)
+      .where(and(eq(project.id, job.projectId), eq(project.orgId, job.orgId))),
+  );
 
-  if (!p?.aiConfig.enabled) {
-    await getDb()
-      .insert(feedbackAi)
-      .values({
-        feedbackId: job.feedbackId,
-        orgId: job.orgId,
-        status: "skipped",
-      })
-      .onConflictDoUpdate({
-        target: feedbackAi.feedbackId,
-        set: { status: "skipped" },
-      });
+  if (!p) return { status: "skipped", reason: "Project not found" };
+
+  if (!p.aiConfig.enabled) {
+    await withOrg(job.orgId, (db) =>
+      db
+        .insert(feedbackAi)
+        .values({
+          feedbackId: job.feedbackId,
+          orgId: job.orgId,
+          status: "skipped",
+        })
+        .onConflictDoUpdate({
+          target: feedbackAi.feedbackId,
+          set: { status: "skipped" },
+        }),
+    );
     return { status: "skipped", reason: "AI disabled for project" };
   }
 
@@ -83,17 +89,19 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
   const isPrivacyMode = process.env.PINWREN_EU_PRIVACY === "true" || widgetConfig.privacyMode === true;
 
   if (isPrivacyMode) {
-    await getDb()
-      .insert(feedbackAi)
-      .values({
-        feedbackId: job.feedbackId,
-        orgId: job.orgId,
-        status: "skipped",
-      })
-      .onConflictDoUpdate({
-        target: feedbackAi.feedbackId,
-        set: { status: "skipped" },
-      });
+    await withOrg(job.orgId, (db) =>
+      db
+        .insert(feedbackAi)
+        .values({
+          feedbackId: job.feedbackId,
+          orgId: job.orgId,
+          status: "skipped",
+        })
+        .onConflictDoUpdate({
+          target: feedbackAi.feedbackId,
+          set: { status: "skipped" },
+        }),
+    );
     return { status: "skipped", reason: "EU privacy mode enabled" };
   }
 
@@ -103,46 +111,58 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
     client = await getAiClientForOrg(job.orgId);
   } catch (err) {
     const error = (err as Error).message;
-    await getDb()
-      .insert(feedbackAi)
-      .values({
-        feedbackId: job.feedbackId,
-        orgId: job.orgId,
-        status: "failed",
-        error,
-      })
-      .onConflictDoUpdate({
-        target: feedbackAi.feedbackId,
-        set: { status: "failed", error },
-      });
+    await withOrg(job.orgId, (db) =>
+      db
+        .insert(feedbackAi)
+        .values({
+          feedbackId: job.feedbackId,
+          orgId: job.orgId,
+          status: "failed",
+          error,
+        })
+        .onConflictDoUpdate({
+          target: feedbackAi.feedbackId,
+          set: { status: "failed", error },
+        }),
+    );
     return { status: "failed", error };
   }
 
   // 4. Load feedback item and technical diagnostics
-  const [item] = await getDb()
-    .select({
-      id: feedback.id,
-      title: feedback.title,
-      body: feedback.body,
-      anchor: feedback.anchor,
-      pageUrl: page.url,
-    })
-    .from(feedback)
-    .leftJoin(page, eq(page.id, feedback.pageId))
-    .where(and(eq(feedback.id, job.feedbackId), eq(feedback.orgId, job.orgId)));
+  const [item] = await withOrg(job.orgId, (db) =>
+    db
+      .select({
+        id: feedback.id,
+        title: feedback.title,
+        body: feedback.body,
+        anchor: feedback.anchor,
+        pageUrl: page.url,
+      })
+      .from(feedback)
+      .leftJoin(page, eq(page.id, feedback.pageId))
+      .where(
+        and(
+          eq(feedback.id, job.feedbackId),
+          eq(feedback.orgId, job.orgId),
+          eq(feedback.projectId, job.projectId),
+        ),
+      ),
+  );
 
   if (!item) {
     return { status: "skipped", reason: "Feedback item not found" };
   }
 
-  const [diag] = await getDb().select().from(diagnostics).where(eq(diagnostics.feedbackId, job.feedbackId));
+  const [diag] = await withOrg(job.orgId, (db) =>
+    db.select().from(diagnostics).where(eq(diagnostics.feedbackId, job.feedbackId)),
+  );
 
   const consoleLogs = consoleErrorLines(diag?.console);
   const networkLogs = failedRequests(diag?.network);
 
   try {
     // 5. Execute enabled AI tasks
-    let summary;
+    let summary: Awaited<ReturnType<typeof summarizeReport>> | undefined;
     if (p.aiConfig.autoSummary) {
       summary = await summarizeReport(client.provider, {
         title: item.title,
@@ -152,7 +172,7 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
       });
     }
 
-    let triage;
+    let triage: Awaited<ReturnType<typeof suggestSeverity>> | undefined;
     if (p.aiConfig.autoSeverity) {
       triage = await suggestSeverity(client.provider, {
         title: item.title,
@@ -163,27 +183,29 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
       });
     }
 
-    let duplicate;
+    let duplicate: Awaited<ReturnType<typeof verifyDuplicate>> | undefined;
     let duplicateId: string | null = null;
     if (p.aiConfig.detectDuplicates) {
       // Find candidate open items in the same project
-      const candidates = await getDb()
-        .select({
-          id: feedback.id,
-          title: feedback.title,
-          body: feedback.body,
-        })
-        .from(feedback)
-        .where(
-          and(
-            eq(feedback.projectId, job.projectId),
-            ne(feedback.id, job.feedbackId),
-            isNull(feedback.deletedAt),
-            ne(feedback.status, "duplicate"),
-          ),
-        )
-        .orderBy(desc(feedback.createdAt))
-        .limit(10);
+      const candidates = await withOrg(job.orgId, (db) =>
+        db
+          .select({
+            id: feedback.id,
+            title: feedback.title,
+            body: feedback.body,
+          })
+          .from(feedback)
+          .where(
+            and(
+              eq(feedback.projectId, job.projectId),
+              ne(feedback.id, job.feedbackId),
+              isNull(feedback.deletedAt),
+              ne(feedback.status, "duplicate"),
+            ),
+          )
+          .orderBy(desc(feedback.createdAt))
+          .limit(10),
+      );
 
       duplicate = await verifyDuplicate(client.provider, {
         target: { title: item.title, body: item.body, url: item.pageUrl },
@@ -194,7 +216,7 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
       if (duplicate.isDuplicate && candidates.some((c) => c.id === candidateId)) duplicateId = candidateId;
     }
 
-    let repro;
+    let repro: Awaited<ReturnType<typeof synthesizeReproSteps>> | undefined;
     if (p.aiConfig.generateRepro) {
       repro = await synthesizeReproSteps(client.provider, {
         title: item.title,
@@ -206,25 +228,12 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
     }
 
     // 6. Record enrichment results
-    await getDb()
-      .insert(feedbackAi)
-      .values({
-        feedbackId: job.feedbackId,
-        orgId: job.orgId,
-        suggestedTitle: summary?.suggestedTitle,
-        summary: summary?.summary,
-        suggestedPriority: triage?.priority,
-        suggestedKind: triage?.kind,
-        duplicateCandidateId: duplicateId,
-        duplicateConfidence: duplicate?.confidence,
-        duplicateReason: duplicate?.reason,
-        reproductionSteps: repro?.reproductionSteps ?? [],
-        status: "completed",
-        model: client.model,
-      })
-      .onConflictDoUpdate({
-        target: feedbackAi.feedbackId,
-        set: {
+    await withOrg(job.orgId, (db) =>
+      db
+        .insert(feedbackAi)
+        .values({
+          feedbackId: job.feedbackId,
+          orgId: job.orgId,
           suggestedTitle: summary?.suggestedTitle,
           summary: summary?.summary,
           suggestedPriority: triage?.priority,
@@ -235,10 +244,25 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
           reproductionSteps: repro?.reproductionSteps ?? [],
           status: "completed",
           model: client.model,
-          error: null,
-          updatedAt: new Date(),
-        },
-      });
+        })
+        .onConflictDoUpdate({
+          target: feedbackAi.feedbackId,
+          set: {
+            suggestedTitle: summary?.suggestedTitle,
+            summary: summary?.summary,
+            suggestedPriority: triage?.priority,
+            suggestedKind: triage?.kind,
+            duplicateCandidateId: duplicateId,
+            duplicateConfidence: duplicate?.confidence,
+            duplicateReason: duplicate?.reason,
+            reproductionSteps: repro?.reproductionSteps ?? [],
+            status: "completed",
+            model: client.model,
+            error: null,
+            updatedAt: new Date(),
+          },
+        }),
+    );
 
     // 7. Emit domain update via SSE
     publishDomainEvent({
@@ -252,18 +276,20 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
     return { status: "completed" };
   } catch (err) {
     const error = (err as Error).message;
-    await getDb()
-      .insert(feedbackAi)
-      .values({
-        feedbackId: job.feedbackId,
-        orgId: job.orgId,
-        status: "failed",
-        error,
-      })
-      .onConflictDoUpdate({
-        target: feedbackAi.feedbackId,
-        set: { status: "failed", error },
-      });
+    await withOrg(job.orgId, (db) =>
+      db
+        .insert(feedbackAi)
+        .values({
+          feedbackId: job.feedbackId,
+          orgId: job.orgId,
+          status: "failed",
+          error,
+        })
+        .onConflictDoUpdate({
+          target: feedbackAi.feedbackId,
+          set: { status: "failed", error },
+        }),
+    );
     return { status: "failed", error };
   }
 }

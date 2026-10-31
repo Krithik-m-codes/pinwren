@@ -47,12 +47,16 @@ export async function provisionCloudDatabase(
               await tx`select 1 from pg_policies where schemaname='public' and tablename=${entry.table} and policyname=${policy.name}`;
             if (existing.length) continue;
             if (policy.command === "ALL") {
-              await tx`create policy ${tx(policy.name)} on public.${tx(entry.table)} for all to ${tx(options.serviceRole)} using (true) with check (true)`;
+              if (entry.systemNull) {
+                await tx`create policy ${tx(policy.name)} on public.${tx(entry.table)} for all to ${tx(options.serviceRole)} using (org_id is null) with check (org_id is null)`;
+              } else {
+                await tx`create policy ${tx(policy.name)} on public.${tx(entry.table)} for all to ${tx(options.serviceRole)} using (true) with check (true)`;
+              }
             } else {
               await tx`create policy ${tx(policy.name)} on public.${tx(entry.table)} for select to ${tx(options.serviceRole)} using (true)`;
             }
           }
-          if (entry.ownership === "identity") {
+          if (entry.ownership === "identity" || entry.systemNull) {
             await tx`grant select,insert,update,delete on public.${tx(entry.table)} to ${tx(options.serviceRole)}`;
           } else if (entry.bootstrapColumns) {
             await tx`grant select (${tx([...entry.bootstrapColumns])}) on public.${tx(entry.table)} to ${tx(options.serviceRole)}`;

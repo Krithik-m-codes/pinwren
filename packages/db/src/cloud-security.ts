@@ -110,8 +110,16 @@ export async function validateCloudCatalog(
     if (kind === "runtime" && !entry.runtimeColumns && !table.complete)
       throw new Error(`Cloud runtime CRUD grant privileges are missing for ${entry.table}`);
     if (table.truncates) throw new Error(`Cloud ${kind} has unsafe TRUNCATE privileges on ${entry.table}`);
-    if (kind === "service" && entry.ownership !== "identity" && !entry.bootstrapColumns && table.content)
+    if (
+      kind === "service" &&
+      entry.ownership !== "identity" &&
+      !entry.bootstrapColumns &&
+      !entry.systemNull &&
+      table.content
+    )
       throw new Error(`Cloud service role can access tenant table ${entry.table} directly`);
+    if (kind === "service" && entry.systemNull && !table.complete)
+      throw new Error(`Cloud service CRUD grant privileges are missing for ${entry.table}`);
     const projection =
       kind === "runtime"
         ? entry.runtimeColumns

@@ -5,6 +5,7 @@ import { decryptSecret } from "../crypto";
 import { enqueue, enqueueAfter, QUEUES } from "../jobs/boss";
 import { type OutboundFetch, outboundErrorText, safeFetch } from "../outbound/safe-fetch";
 import { notifyWebhookDisabled } from "./disabled";
+import { webhookDeliveryOwner } from "../db/bootstrap";
 import { buildRequest, type WebhookPayload } from "./format";
 import { webhookTargetUrl } from "./url";
 
@@ -109,7 +110,7 @@ export async function queueDelivery(
     throw new Error("delivery insert failed");
   }
   // First attempts go ahead of retries, so endpoints that keep failing can't delay everyone else's events.
-  await enqueue(QUEUES.webhook, { deliveryId: d.id }, { priority: 1 });
+  await enqueue(QUEUES.webhook, { deliveryId: d.id, orgId: endpoint.orgId }, { priority: 1 });
   return d.id;
 }
 
@@ -127,7 +128,9 @@ export async function runDelivery(
       .from(webhookDelivery)
       .innerJoin(webhookEndpoint, eq(webhookEndpoint.id, webhookDelivery.endpointId))
       .where(eq(webhookDelivery.id, deliveryId));
-  const [row] = opts.orgId ? await withOrg(opts.orgId, read) : await read();
+  const owner = await webhookDeliveryOwner(deliveryId);
+  if (!owner || (opts.orgId !== undefined && opts.orgId !== owner.orgId)) return null;
+  const [row] = await withOrg(owner.orgId, read);
   if (!row) return null;
   const { d, e } = row;
   if (d.status !== "pending") return null; // already attempted (job redelivered after a crash)
@@ -201,7 +204,8 @@ export async function runDelivery(
           status: "pending",
         })
         .returning({ id: webhookDelivery.id });
-      if (next) afterOrgCommit(() => enqueueAfter(QUEUES.webhook, { deliveryId: next.id }, delay));
+      if (next)
+        afterOrgCommit(() => enqueueAfter(QUEUES.webhook, { deliveryId: next.id, orgId: d.orgId }, delay));
     }
     return updated ? { ...updated, ...result } : null;
   });

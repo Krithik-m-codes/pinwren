@@ -1,4 +1,4 @@
-import { comment, getDb, user, webhookEndpoint } from "@pinwren/db";
+import { comment, getDb, user, webhookEndpoint, withOrg } from "@pinwren/db";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { emailImageUrl, teamUnsubscribeUrl } from "../email/links";
 import { renderEmail, reporterEmail } from "../email/render";
@@ -398,25 +398,27 @@ function withoutAuthorId<T extends { authorId: unknown }>(c: T): Omit<T, "author
 
 /** `events.dispatch` handler. */
 export async function dispatchEvent(e: DomainEvent): Promise<void> {
-  // Loads items in the trash too: `feedback.deleted` is about one.
-  const ctx = await loadFeedbackContext(e.feedbackId);
-  if (ctx?.orgId !== e.orgId) return; // purged since
-  const commentInfo = e.commentId ? await loadCommentPayload(e.commentId) : null;
-  if (e.type === "comment.created" && !commentInfo) return;
-  // Integrations first: a broken mail setup must not hold back webhooks or issue sync. Issue sync
-  // only queues jobs, which retry on their own.
-  await webhooks(e, ctx, commentInfo);
-  if (e.type === "feedback.created") await autoCreateIssues(ctx);
-  if (e.type === "feedback.status_changed" && e.actor.kind !== "integration") {
-    await syncIssueState(e.feedbackId, newStatus(e, ctx));
-  }
-  await notifications(e, ctx, commentInfo);
-  // Last, so enrichment can never hold back the bell or the emails; once per item if this event is retried.
-  if (e.type === "feedback.created") {
-    await enqueue(
-      QUEUES.aiEnrich,
-      { feedbackId: e.feedbackId, orgId: e.orgId, projectId: ctx.payload.projectId },
-      { singletonKey: `ai:${e.feedbackId}`, singletonSeconds: 3600 },
-    );
-  }
+  return withOrg(e.orgId, async () => {
+    // Loads items in the trash too: `feedback.deleted` is about one.
+    const ctx = await loadFeedbackContext(e.feedbackId);
+    if (ctx?.orgId !== e.orgId) return; // purged since
+    const commentInfo = e.commentId ? await loadCommentPayload(e.commentId) : null;
+    if (e.type === "comment.created" && commentInfo?.feedbackId !== e.feedbackId) return;
+    // Integrations first: a broken mail setup must not hold back webhooks or issue sync. Issue sync
+    // only queues jobs, which retry on their own.
+    await webhooks(e, ctx, commentInfo);
+    if (e.type === "feedback.created") await autoCreateIssues(ctx);
+    if (e.type === "feedback.status_changed" && e.actor.kind !== "integration") {
+      await syncIssueState(e.feedbackId, newStatus(e, ctx));
+    }
+    await notifications(e, ctx, commentInfo);
+    // Last, so enrichment can never hold back the bell or the emails; once per item if this event is retried.
+    if (e.type === "feedback.created") {
+      await enqueue(
+        QUEUES.aiEnrich,
+        { feedbackId: e.feedbackId, orgId: e.orgId, projectId: ctx.payload.projectId },
+        { singletonKey: `ai:${e.feedbackId}`, singletonSeconds: 3600 },
+      );
+    }
+  });
 }

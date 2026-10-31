@@ -43,5 +43,13 @@ export function expectedTenantPolicies(entry: TenantTable, serviceRole: string):
       using: "true",
       check: null,
     });
+  if (entry.systemNull)
+    policies.push({
+      name: "pinwren_system_null_service",
+      command: "ALL",
+      role: serviceRole,
+      using: "(org_id IS NULL)",
+      check: "(org_id IS NULL)",
+    });
   return policies;
 }

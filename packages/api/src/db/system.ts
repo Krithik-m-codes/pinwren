@@ -1,4 +1,14 @@
-import { getDb, setting, license } from "@pinwren/db";
+import {
+  authRateLimit,
+  getDb,
+  license,
+  member,
+  organization,
+  rateLimit,
+  setting,
+  user,
+  userPreference,
+} from "@pinwren/db";
 import { identityDatabase } from "@pinwren/db/identity";
 import { eq, desc, sql } from "drizzle-orm";
 import { env } from "../env";
@@ -44,4 +54,54 @@ export async function saveInstanceLicense(record: typeof license.$inferInsert) {
 
 export async function removeInstanceLicenses() {
   await systemDatabase().delete(license);
+}
+
+export async function organizationIds(): Promise<string[]> {
+  const rows = await systemDatabase().select({ id: organization.id }).from(organization);
+  return rows.map((row) => row.id);
+}
+
+export async function pruneSystemRateLimits(): Promise<void> {
+  await systemDatabase()
+    .delete(rateLimit)
+    .where(sql`${rateLimit.resetAt} < now() - interval '1 hour'`);
+  await systemDatabase()
+    .delete(authRateLimit)
+    .where(sql`${authRateLimit.lastRequest} < extract(epoch from now() - interval '1 day') * 1000`);
+}
+
+export async function digestRecipients(orgId: string) {
+  return systemDatabase()
+    .select({
+      userId: userPreference.userId,
+      freq: userPreference.emailDigest,
+      last: userPreference.lastDigestAt,
+      email: user.email,
+    })
+    .from(member)
+    .innerJoin(userPreference, eq(userPreference.userId, member.userId))
+    .innerJoin(user, eq(user.id, member.userId))
+    .where(
+      sql`${member.organizationId} = ${orgId} and ${userPreference.emailDigest} <> 'off' and ${userPreference.emailPaused} = false`,
+    );
+}
+
+export async function markDigestSent(userId: string, at: Date): Promise<void> {
+  await systemDatabase()
+    .update(userPreference)
+    .set({ lastDigestAt: at })
+    .where(eq(userPreference.userId, userId));
+}
+
+export async function webhookAdminRecipients(orgId: string) {
+  return systemDatabase()
+    .select({
+      userId: user.id,
+      email: user.email,
+      paused: sql<boolean>`coalesce(${userPreference.emailPaused}, false)`,
+    })
+    .from(member)
+    .innerJoin(user, eq(user.id, member.userId))
+    .leftJoin(userPreference, eq(userPreference.userId, member.userId))
+    .where(sql`${member.organizationId} = ${orgId} and ${member.role} ~ '(^|,)\\s*(owner|admin)\\s*(,|$)'`);
 }

@@ -1,5 +1,6 @@
 import type { EmailDeliveryStatus } from "@pinwren/core";
-import { emailDelivery, getDb } from "@pinwren/db";
+import { emailDelivery, getDb, withOrg } from "@pinwren/db";
+import { identityDatabase } from "@pinwren/db/identity";
 import { and, count, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { enqueue, QUEUES } from "../jobs/boss";
 import { resolveSmtp } from "./config";
@@ -68,16 +69,15 @@ async function record(
 ): Promise<void> {
   const sentAt = status === "sent" ? new Date() : null;
   try {
-    if (m.deliveryId) {
-      await getDb()
-        .update(emailDelivery)
-        .set({ status, error, sentAt, attempts: sql`${emailDelivery.attempts} + ${attempts}` })
-        .where(eq(emailDelivery.id, m.deliveryId));
-      return;
-    }
-    await getDb()
-      .insert(emailDelivery)
-      .values({
+    const persist = async (db: ReturnType<typeof getDb>) => {
+      if (m.deliveryId) {
+        await db
+          .update(emailDelivery)
+          .set({ status, error, sentAt, attempts: sql`${emailDelivery.attempts} + ${attempts}` })
+          .where(eq(emailDelivery.id, m.deliveryId));
+        return;
+      }
+      await db.insert(emailDelivery).values({
         orgId: m.orgId ?? m.suppressionOrgId ?? null,
         toAddress: m.to,
         templateKey: m.templateKey ?? "unknown",
@@ -88,6 +88,10 @@ async function record(
         payload: payloadOf(m),
         sentAt,
       });
+    };
+    const orgId = m.orgId ?? m.suppressionOrgId;
+    if (orgId) await withOrg(orgId, persist);
+    else await persist(identityDatabase());
   } catch (err) {
     // The log is for people; a write failure must not resend (or lose) the email itself.
     console.warn("[pinwren] could not record an email delivery", err);

@@ -51,11 +51,11 @@ export async function startJobs(): Promise<void> {
       QUEUES.digest,
       each(() => runDigest()),
     );
-    await boss.work<{ deliveryId: string }>(
+    await boss.work<{ deliveryId: string; orgId?: string }>(
       QUEUES.webhook,
       // Several at once: a receiver that times out holds its slot for up to the request timeout.
       { batchSize: 5, pollingIntervalSeconds: 1, localConcurrency: 4 },
-      each((d) => runDelivery(d.deliveryId)),
+      each((d) => runDelivery(d.deliveryId, { retry: true, ...(d.orgId ? { orgId: d.orgId } : {}) })),
     );
     await boss.work(QUEUES.retention, each(applyRetention));
     await boss.work(QUEUES.cleanup, each(cleanupTrash));

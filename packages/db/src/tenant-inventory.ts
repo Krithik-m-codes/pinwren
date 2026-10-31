@@ -6,6 +6,7 @@ export type TenantTable = {
   profileScope?: boolean;
   runtimeColumns?: readonly string[];
   bootstrapColumns?: readonly string[];
+  systemNull?: boolean;
 };
 
 export const PROFILE_PARTICIPANTS = [
@@ -54,9 +55,14 @@ export const tenantInventory: readonly TenantTable[] = [
   { table: "label", ownership: "direct", parents: ["project"] },
   { table: "feedback_label", ownership: "parent", parents: ["feedback", "label"] },
   // Nullable org_id is protected as direct ownership; NULL rows are system-only.
-  { table: "email_delivery", ownership: "direct", parents: [] },
+  { table: "email_delivery", ownership: "direct", parents: [], systemNull: true },
   { table: "webhook_endpoint", ownership: "direct", parents: ["project"] },
-  { table: "webhook_delivery", ownership: "direct", parents: ["webhook_endpoint"] },
+  {
+    table: "webhook_delivery",
+    ownership: "direct",
+    parents: ["webhook_endpoint"],
+    bootstrapColumns: ["id", "org_id"],
+  },
   {
     table: "api_token",
     ownership: "direct",
@@ -72,7 +78,12 @@ export const tenantInventory: readonly TenantTable[] = [
     parents: ["project"],
     bootstrapColumns: ["id", "org_id", "project_id", "provider", "repo", "webhook_secret", "active"],
   },
-  { table: "issue_link", ownership: "direct", parents: ["feedback", "issue_integration"] },
+  {
+    table: "issue_link",
+    ownership: "direct",
+    parents: ["feedback", "issue_integration"],
+    bootstrapColumns: ["id", "org_id"],
+  },
   { table: "saved_view", ownership: "direct", parents: [] },
   { table: "email_suppression", ownership: "direct", parents: [] },
   { table: "license", ownership: "system", parents: [] },
