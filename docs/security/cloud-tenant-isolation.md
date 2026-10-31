@@ -197,4 +197,53 @@ The focused runner includes real cookies and API tokens, current-membership/sess
 delegation, account preferences/deletion, invitation rendering, finite export batches, SSE reconnects,
 and post-commit jobs, broadcasts and file removal. Network/storage transport fixtures assert that no
 tenant transaction remains open during external operations. Database-only cases are skipped in ordinary
-selfhost unit runs and exercised by the integration runner. Worker integration, final route-wide evidence and branch review remain required before Cloud is ready.
+selfhost unit runs and exercised by the integration runner.
+
+### Route-wide acceptance evidence (Task 8)
+
+Every entry of `packages/api/src/tenant-route-inventory.json` (173 routes) has one executable case, and the
+inventory and the case registries are compared in both directions, so an added, renamed or reclassified
+route without a case fails. Both suites run against real PostgreSQL with the restricted runtime role, in a
+fixture holding two workspaces (A and B) with a project, report, comment, label, round, review link, saved view,
+webhook endpoint and delivery, tracker integration, asset, notification, template, brand asset, email delivery
+and API token each.
+
+- `cloud-routes-db.test.ts` covers the 117 `tenant`, 10 `identity`, 17 `system` and 5 `public` routes.
+  Signed in (cookie or API token) to workspace A, each id-bearing tenant route names workspace B's resource and must
+  answer 404 or 403; routes with no id (lists, creates, singleton settings) run as A and must return nothing of B's.
+  Every case also hashes all of workspace B's rows (direct tables, parent-owned tables, workspace, members,
+  invitations, member accounts and preferences) before and after and requires them unchanged. System routes
+  require a 403 for a workspace owner who is not an instance administrator; identity routes touch only the
+  signed-in account; every session-only route answers 401 without credentials.
+- `cloud-routes-public-db.test.ts` covers the 24 `capability` routes. The caller holds a valid capability for
+  workspace A (project key, reporter token, page link, review link, signed claim, integration secret) and names
+  workspace B's resource; the refusal, the absence of B content and B's unchanged rows are asserted. Inbound
+  GitHub, GitLab, Linear and Jira webhooks sharing a repository or team key across both workspaces change only the
+  workspace whose secret signed the request.
+- Both registries were mutation-checked: pointing a case at workspace A's own resource makes it fail.
+
+The one real isolation inconsistency found: `GET /api/projects/:id/integrations` answered 200 with an empty
+list for another workspace's project id instead of 404 (row security hid the rows, so no data leaked). It now
+verifies the project and answers 404, like every sibling route. The Better Auth organization endpoints clear the
+caller's own active workspace after refusing a foreign workspace id; this is vendor behavior with no cross-tenant
+effect and is restored by the test.
+
+Documented exceptions (not generic foreign-id cases): public brand-asset ids and signed email-image tokens are
+capabilities that deliberately serve their owner's image to anyone holding them; their cases assert malformed,
+unknown and expired ids answer 404 and that the streaming read holds no transaction (`cloud-public-db.test.ts`).
+`/api/v1/*` and `/mcp` skip the unauthenticated 401 sweep because the failed-token rate limit is shared per
+address; token authentication, scope and membership are covered in `cloud-api-db.test.ts`.
+
+Verified on PostgreSQL 16.15: `node scripts/tenant-isolation.mjs` passes 14 files / 368 tests (151 + 25 new).
+
+## Remaining WP-21 work (explicitly incomplete)
+
+- Cloud sign-up is **not enabled** and must not be until the items below are done; `PINWREN_DISABLE_SIGNUP`
+  semantics and first-account promotion remain closed in Cloud mode.
+- Branch review: one independent whole-branch review against the spec has not yet been obtained.
+- Required protected-branch CI (PostgreSQL 16 and 17 matrix, existing builds and browser journeys) has not been
+  observed green for this head; local PostgreSQL 17 and the dashboard Playwright journeys were not run.
+- Redis-backed realtime/presence and rate-limit isolation across instances, and multi-instance behavior.
+- Operator procedures not yet exercised against a production-shaped environment: credential rotation,
+  migration/rollback rehearsal, backup/restore of a Cloud database.
+- Billing, usage limits, audit foundation, custom roles/SSO and legacy-data migration (WP-22/24/25) are separate.
