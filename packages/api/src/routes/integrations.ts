@@ -90,7 +90,13 @@ async function ownIntegration(orgId: string, id: string): Promise<Integration> {
  */
 export const integrations = new Hono<{ Variables: SessionVars }>()
   .get("/projects/:id/integrations", requireOrgAdmin, async (c) => {
-    const rows = await getDb()
+    const db = getDb();
+    const [p] = await db
+      .select({ id: project.id })
+      .from(project)
+      .where(and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId)));
+    if (!p) throw notFound("Project");
+    const rows = await db
       .select()
       .from(issueIntegration)
       .where(and(eq(issueIntegration.projectId, c.req.param("id")), eq(issueIntegration.orgId, c.var.orgId)))
