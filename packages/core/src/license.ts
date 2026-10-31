@@ -63,7 +63,7 @@ export const licenseUpload = z.object({
 
 /** `GET /api/me/entitlements` (and `GET /api/admin/license` for instance admins, with `source`). */
 export const entitlementsResponse = z.object({
-  edition: z.enum(["community", "enterprise"]),
+  edition: z.enum(["community", "enterprise", "cloud"]),
   status: z.enum(LICENSE_STATUSES),
   /** Features that apply now (also after grace, read-only). */
   features: z.array(z.enum(LICENSE_FEATURES)),
@@ -82,5 +82,7 @@ export const entitlementsResponse = z.object({
   /** Why an installed licence is not in force (status "invalid"). */
   error: z.string().nullable(),
   seats: z.object({ limit: z.number().int().nullable(), used: z.number().int() }),
+  /** Cloud only: the billing plan in force (WP-22). Absent on self-host. */
+  plan: z.enum(["free", "pro"]).optional(),
 });
 export type Entitlements = z.infer<typeof entitlementsResponse>;

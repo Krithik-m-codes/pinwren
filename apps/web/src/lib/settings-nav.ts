@@ -1,5 +1,6 @@
 import {
   Award,
+  CreditCard,
   Bell,
   Building2,
   KeyRound,
@@ -22,7 +23,7 @@ import { tEn } from "@/lib/i18n/english";
  * (`instance`, self-host settings such as security and the licence), or either (`email`: SMTP for the
  * instance admin, the email templates for workspace Admins).
  */
-export type SettingsAccess = "org" | "instance" | "email";
+export type SettingsAccess = "org" | "instance" | "email" | "cloud-org";
 
 export type SettingsPage = {
   href: Route;
@@ -104,6 +105,13 @@ const PAGES: readonly Omit<SettingsPage, "label">[] = [
     keywords: ["sessions", "https", "updates"],
   },
   {
+    href: "/settings/billing",
+    labelKey: "billing.navLabel",
+    icon: CreditCard,
+    access: "cloud-org",
+    keywords: ["plan", "subscription", "invoice", "payment", "upgrade", "usage", "limits"],
+  },
+  {
     href: "/settings/license",
     labelKey: "other1.settingsLicence",
     icon: Award,
@@ -114,7 +122,12 @@ const PAGES: readonly Omit<SettingsPage, "label">[] = [
 
 export const SETTINGS_PAGES: readonly SettingsPage[] = PAGES.map((p) => ({ ...p, label: tEn(p.labelKey) }));
 
-export type SettingsViewer = { role: string | null | undefined; instanceAdmin: boolean };
+export type SettingsViewer = {
+  role: string | null | undefined;
+  instanceAdmin: boolean;
+  /** Pinwren Cloud (billing exists only there). */
+  cloud?: boolean;
+};
 
 /**
  * Hide what the user can't change (blueprint 06 §3.7: no "you can't" screens in the nav). The API refuses
@@ -125,6 +138,7 @@ export function canSeeSettingsPage(page: Pick<SettingsPage, "access">, viewer: S
   if (page.access === "org") return orgAdmin;
   if (page.access === "instance") return viewer.instanceAdmin;
   if (page.access === "email") return orgAdmin || viewer.instanceAdmin;
+  if (page.access === "cloud-org") return orgAdmin && viewer.cloud === true;
   return true;
 }
 

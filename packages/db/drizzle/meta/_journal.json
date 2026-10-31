@@ -78,6 +78,13 @@
       "when": 1793295396760,
       "tag": "0010_tenant_identity_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793433301906,
+      "tag": "0011_billing",
+      "breakpoints": true
     }
   ]
 }

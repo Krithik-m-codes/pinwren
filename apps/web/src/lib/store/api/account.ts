@@ -1,4 +1,4 @@
-import type { Entitlements } from "@pinwren/core";
+import type { BillingInfo, BillingInterval, Entitlements } from "@pinwren/core";
 import type {
   ApiToken,
   ApiTokenScope,
@@ -44,6 +44,17 @@ export const accountApi = baseApi.injectEndpoints({
     entitlements: build.query<Entitlements, undefined>({
       query: () => "/me/entitlements",
       providesTags: ["Entitlements"],
+    }),
+    /** Settings � Billing (Cloud, workspace admins). */
+    billing: build.query<BillingInfo, undefined>({
+      query: () => "/billing",
+      providesTags: ["Billing"],
+    }),
+    startCheckout: build.mutation<{ url: string }, BillingInterval>({
+      query: (interval) => ({ url: "/billing/checkout", method: "POST", body: { interval } }),
+    }),
+    openBillingPortal: build.mutation<{ url: string }, undefined>({
+      query: () => ({ url: "/billing/portal", method: "POST", body: {} }),
     }),
     branding: build.query<{ branding: OrgBranding }, undefined>({
       query: () => "/branding",

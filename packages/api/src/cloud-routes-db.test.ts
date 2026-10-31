@@ -193,6 +193,7 @@ const cases: Record<string, Spec> = {
   "GET /api/feedback/:id": foreign(),
   "GET /api/feedback/:id/reproduction": foreign(),
   "GET /api/feedback/export": scoped({ path: (ids) => `/api/feedback/export?projectId=${project(ids)}` }),
+  "GET /api/billing": scoped(),
   "GET /api/integrations/:id/webhook-secret": foreign(),
   "GET /api/invitations": scoped(),
   "GET /api/me": scoped(),
@@ -267,6 +268,10 @@ const cases: Record<string, Spec> = {
   "POST /api/feedback/:id/ai/apply": foreign({ body: () => ({ applyTitle: true }) }),
   "POST /api/feedback/:id/ai/translate": foreign({ body: () => ({ targetLocale: "fr" }) }),
   "POST /api/feedback/:id/comments": foreign({ body: () => ({ body: "foreign reply" }) }),
+  // No product ids are configured in this suite, so checkout answers its clear 503; the portal has no
+  // billing account to open yet (409). Neither may touch or reveal another workspace.
+  "POST /api/billing/checkout": scoped({ status: [503], body: () => ({ interval: "monthly" }) }),
+  "POST /api/billing/portal": scoped({ status: [409] }),
   "POST /api/feedback/:id/issues": foreign({ body: (ids) => ({ integrationId: ids.integrationB }) }),
   "POST /api/feedback/:id/page-link": foreign({ body: () => ({}) }),
   "POST /api/feedback/:id/restore": foreign(),

@@ -68,6 +68,7 @@ export const baseQuery: BaseQuery = async (args, api, extraOptions: object) => {
 export const TAG_TYPES = [
   "Me",
   "Entitlements",
+  "Billing",
   "Branding",
   "Project",
   "Feedback",
