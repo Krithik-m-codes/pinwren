@@ -1,3 +1,4 @@
+import { afterOrgCommit } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import type { SessionVars } from "../context";
@@ -22,7 +23,7 @@ export const projectData = new Hono<{ Variables: SessionVars }>()
   .post("/projects/:id/export", requirePermission("projects.manage"), async (c) => {
     const projectId = c.req.param("id");
     const view = await requestExport(c.var.orgId, projectId, c.var.userId);
-    await enqueue(QUEUES.projectExport, { orgId: c.var.orgId, projectId });
+    afterOrgCommit(() => enqueue(QUEUES.projectExport, { orgId: c.var.orgId, projectId }));
     return c.json({ export: view }, 202);
   })
   .get("/projects/:id/export/download", requirePermission("projects.manage"), async (c) =>

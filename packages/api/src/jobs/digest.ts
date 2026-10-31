@@ -1,6 +1,7 @@
 import { type EmailDigestFrequency, kindNoun } from "@pinwren/core";
-import { feedback, getDb, notification, notificationPreference, user, userPreference } from "@pinwren/db";
-import { and, desc, eq, gt, isNull, ne, or } from "drizzle-orm";
+import { feedback, notification, notificationPreference, withOrg } from "@pinwren/db";
+import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
+import { digestRecipients, markDigestSent, organizationIds } from "../db/system";
 import { renderEmail } from "../email/render";
 import { env } from "../env";
 import { enqueue, QUEUES } from "./boss";
@@ -70,70 +71,58 @@ export function digestSummary(rows: Row[]): string {
 
 /** `notify.digest` handler (hourly). */
 export async function runDigest(now = new Date()): Promise<void> {
-  const db = getDb();
-  const people = await db
-    .select({
-      userId: userPreference.userId,
-      freq: userPreference.emailDigest,
-      last: userPreference.lastDigestAt,
-      email: user.email,
-    })
-    .from(userPreference)
-    .innerJoin(user, eq(user.id, userPreference.userId))
-    .where(and(ne(userPreference.emailDigest, "off"), eq(userPreference.emailPaused, false)));
   const base = env().PINWREN_URL.replace(/\/$/, "");
-
-  for (const p of people) {
-    if (!digestDue(p.freq, p.last, now)) continue;
-    try {
-      const since = new Date(Math.max(p.last?.getTime() ?? 0, now.getTime() - MAX_LOOKBACK_MS));
-      const [rows, muted] = await Promise.all([
-        db
-          .select({ orgId: notification.orgId, type: notification.type, data: notification.data })
-          .from(notification)
-          .leftJoin(feedback, eq(feedback.id, notification.feedbackId))
-          .where(
-            and(
-              eq(notification.userId, p.userId),
-              isNull(notification.readAt),
-              gt(notification.createdAt, since),
-              // Items in the trash drop out, except the notice that they were deleted.
-              or(isNull(feedback.deletedAt), eq(notification.type, "feedback.deleted")),
-            ),
-          )
-          .orderBy(desc(notification.createdAt))
-          .limit(MAX_ROWS),
-        // Projects where this person switched email off: no digest lines for them either.
-        db
-          .select({ projectId: notificationPreference.projectId })
-          .from(notificationPreference)
-          .where(and(eq(notificationPreference.userId, p.userId), eq(notificationPreference.email, false))),
-      ]);
-      const off = new Set(muted.map((m) => m.projectId));
-      const byOrg = new Map<string, Row[]>();
-      for (const r of rows) {
-        const projectId = typeof r.data.projectId === "string" ? r.data.projectId : null;
-        if (projectId && off.has(projectId)) continue;
-        byOrg.set(r.orgId, [...(byOrg.get(r.orgId) ?? []), r]);
+  for (const orgId of await organizationIds()) {
+    for (const p of await digestRecipients(orgId)) {
+      if (!digestDue(p.freq, p.last, now)) continue;
+      try {
+        const since = new Date(Math.max(p.last?.getTime() ?? 0, now.getTime() - MAX_LOOKBACK_MS));
+        const prepared = await withOrg(orgId, async (db) => {
+          const [rows, muted] = await Promise.all([
+            db
+              .select({ type: notification.type, data: notification.data })
+              .from(notification)
+              .leftJoin(feedback, eq(feedback.id, notification.feedbackId))
+              .where(
+                and(
+                  eq(notification.userId, p.userId),
+                  isNull(notification.readAt),
+                  gt(notification.createdAt, since),
+                  or(isNull(feedback.deletedAt), eq(notification.type, "feedback.deleted")),
+                ),
+              )
+              .orderBy(desc(notification.createdAt))
+              .limit(MAX_ROWS),
+            db
+              .select({ projectId: notificationPreference.projectId })
+              .from(notificationPreference)
+              .where(
+                and(eq(notificationPreference.userId, p.userId), eq(notificationPreference.email, false)),
+              ),
+          ]);
+          const off = new Set(muted.map((m) => m.projectId));
+          const list = rows.filter((row) => {
+            const projectId = typeof row.data.projectId === "string" ? row.data.projectId : null;
+            return !projectId || !off.has(projectId);
+          });
+          if (!list.length) return null;
+          return renderEmail(
+            orgId,
+            "digest",
+            {
+              period: p.freq,
+              count: String(list.length),
+              summary: digestSummary(list),
+              link: `${base}/notifications?org=${encodeURIComponent(orgId)}`,
+            },
+            teamRenderOptions(),
+          );
+        });
+        if (prepared) await enqueue(QUEUES.email, { to: p.email, ...prepared });
+        await markDigestSent(p.userId, now);
+      } catch (err) {
+        console.error(`[pinwren] digest failed for user ${p.userId} in org ${orgId}`, err);
       }
-      for (const [orgId, list] of byOrg) {
-        const rendered = await renderEmail(
-          orgId,
-          "digest",
-          {
-            period: p.freq,
-            count: String(list.length),
-            summary: digestSummary(list),
-            link: `${base}/notifications?org=${encodeURIComponent(orgId)}`,
-          },
-          teamRenderOptions(),
-        );
-        await enqueue(QUEUES.email, { to: p.email, ...rendered });
-      }
-      await db.update(userPreference).set({ lastDigestAt: now }).where(eq(userPreference.userId, p.userId));
-    } catch (err) {
-      // One person's broken digest must not hold back everyone else's.
-      console.error(`[pinwren] digest failed for user ${p.userId}`, err);
     }
   }
 }

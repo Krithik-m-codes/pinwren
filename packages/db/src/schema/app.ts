@@ -20,6 +20,7 @@ import {
   type AnyPgColumn,
   boolean,
   customType,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -61,6 +62,21 @@ const orgId = () =>
   text("org_id")
     .notNull()
     .references(() => organization.id, { onDelete: "cascade" });
+
+/** Keep tenant parent consistency even if application code omits its organization predicate. */
+function tenantReference(
+  name: string,
+  column: AnyPgColumn,
+  organizationColumn: AnyPgColumn,
+  parent: AnyPgColumn,
+  parentOrganization: AnyPgColumn,
+) {
+  return foreignKey({
+    name,
+    columns: [column, organizationColumn],
+    foreignColumns: [parent, parentOrganization],
+  });
+}
 
 export const project = pgTable(
   "project",
@@ -126,7 +142,10 @@ export const project = pgTable(
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps,
   },
-  (t) => [uniqueIndex("project_org_slug_uq").on(t.orgId, t.slug)],
+  (t) => [
+    uniqueIndex("project_org_slug_uq").on(t.orgId, t.slug),
+    uniqueIndex("project_id_org_uq").on(t.id, t.orgId),
+  ],
 );
 
 export const page = pgTable(
@@ -142,7 +161,11 @@ export const page = pgTable(
     title: text("title"),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("page_project_url_uq").on(t.projectId, t.url)],
+  (t) => [
+    uniqueIndex("page_project_url_uq").on(t.projectId, t.url),
+    uniqueIndex("page_id_org_uq").on(t.id, t.orgId),
+    tenantReference("page_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
+  ],
 );
 
 export type ReporterGuest = {
@@ -171,7 +194,11 @@ export const reviewRound = pgTable(
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     ...timestamps,
   },
-  (t) => [index("review_round_project_status_idx").on(t.projectId, t.status)],
+  (t) => [
+    index("review_round_project_status_idx").on(t.projectId, t.status),
+    uniqueIndex("review_round_id_org_uq").on(t.id, t.orgId),
+    tenantReference("review_round_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
+  ],
 );
 
 export const feedback = pgTable(
@@ -231,6 +258,21 @@ export const feedback = pgTable(
     index("feedback_search_idx").using("gin", t.search),
     index("feedback_duplicate_of_idx").on(t.duplicateOfId),
     index("feedback_review_link_idx").on(t.reviewLinkId),
+    index("feedback_org_reporter_idx")
+      .on(t.orgId, t.reporterId)
+      .where(sql`${t.reporterId} is not null`),
+    uniqueIndex("feedback_id_org_uq").on(t.id, t.orgId),
+    tenantReference("feedback_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
+    tenantReference("feedback_page_tenant_fk", t.pageId, t.orgId, page.id, page.orgId),
+    tenantReference("feedback_round_tenant_fk", t.roundId, t.orgId, reviewRound.id, reviewRound.orgId),
+    tenantReference("feedback_duplicate_tenant_fk", t.duplicateOfId, t.orgId, t.id, t.orgId),
+    tenantReference(
+      "feedback_review_link_tenant_fk",
+      t.reviewLinkId,
+      t.orgId,
+      reviewLink.id,
+      reviewLink.orgId,
+    ),
   ],
 );
 
@@ -275,7 +317,17 @@ export const feedbackAi = pgTable(
     error: text("error"),
     ...timestamps,
   },
-  (t) => [index("feedback_ai_org_idx").on(t.orgId)],
+  (t) => [
+    index("feedback_ai_org_idx").on(t.orgId),
+    tenantReference("feedback_ai_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
+    tenantReference(
+      "feedback_ai_duplicate_tenant_fk",
+      t.duplicateCandidateId,
+      t.orgId,
+      feedback.id,
+      feedback.orgId,
+    ),
+  ],
 );
 
 export const feedbackTranslation = pgTable(
@@ -315,7 +367,10 @@ export const feedbackAsset = pgTable(
     capture: jsonb("capture").$type<CaptureGeometry>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("asset_feedback_idx").on(t.feedbackId)],
+  (t) => [
+    index("asset_feedback_idx").on(t.feedbackId),
+    tenantReference("asset_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
+  ],
 );
 
 export const comment = pgTable(
@@ -338,7 +393,13 @@ export const comment = pgTable(
     editedAt: timestamp("edited_at", { withTimezone: true }),
     ...timestamps,
   },
-  (t) => [index("comment_feedback_idx").on(t.feedbackId, t.createdAt)],
+  (t) => [
+    index("comment_feedback_idx").on(t.feedbackId, t.createdAt),
+    index("comment_org_author_idx")
+      .on(t.orgId, t.authorId)
+      .where(sql`${t.authorId} is not null`),
+    tenantReference("comment_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
+  ],
 );
 
 export const activity = pgTable(
@@ -355,7 +416,13 @@ export const activity = pgTable(
     data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("activity_feedback_idx").on(t.feedbackId, t.createdAt)],
+  (t) => [
+    index("activity_feedback_idx").on(t.feedbackId, t.createdAt),
+    index("activity_org_actor_idx")
+      .on(t.orgId, t.actorId)
+      .where(sql`${t.actorId} is not null`),
+    tenantReference("activity_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
+  ],
 );
 
 /** Fixed-window rate-limit counters (Postgres-only, blueprint 02 — no Redis in self-host). */
@@ -401,7 +468,16 @@ export const notificationPreference = pgTable(
     email: boolean("email").notNull().default(true),
     ...timestamps,
   },
-  (t) => [uniqueIndex("notification_pref_user_project_uq").on(t.userId, t.projectId)],
+  (t) => [
+    uniqueIndex("notification_pref_user_project_uq").on(t.userId, t.projectId),
+    tenantReference(
+      "notification_preference_project_tenant_fk",
+      t.projectId,
+      t.orgId,
+      project.id,
+      project.orgId,
+    ),
+  ],
 );
 
 /** In-app notification inbox. */
@@ -424,6 +500,7 @@ export const notification = pgTable(
   (t) => [
     index("notification_user_created_idx").on(t.userId, t.createdAt),
     uniqueIndex("notification_user_event_type_uq").on(t.userId, t.eventId, t.type),
+    tenantReference("notification_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
   ],
 );
 
@@ -475,7 +552,11 @@ export const label = pgTable(
     color: text("color").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("label_project_name_uq").on(t.projectId, sql`lower(${t.name})`)],
+  (t) => [
+    uniqueIndex("label_project_name_uq").on(t.projectId, sql`lower(${t.name})`),
+    uniqueIndex("label_id_org_uq").on(t.id, t.orgId),
+    tenantReference("label_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
+  ],
 );
 
 export const feedbackLabel = pgTable(
@@ -553,7 +634,11 @@ export const webhookEndpoint = pgTable(
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     ...timestamps,
   },
-  (t) => [index("webhook_endpoint_org_idx").on(t.orgId)],
+  (t) => [
+    index("webhook_endpoint_org_idx").on(t.orgId),
+    uniqueIndex("webhook_endpoint_id_org_uq").on(t.id, t.orgId),
+    tenantReference("webhook_endpoint_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
+  ],
 );
 
 /** One row per delivery attempt; attempts of one event share `eventId`. Pruned after 30 days. */
@@ -586,6 +671,13 @@ export const webhookDelivery = pgTable(
   (t) => [
     index("webhook_delivery_endpoint_idx").on(t.endpointId, t.createdAt),
     index("webhook_delivery_created_idx").on(t.createdAt),
+    tenantReference(
+      "webhook_delivery_endpoint_tenant_fk",
+      t.endpointId,
+      t.orgId,
+      webhookEndpoint.id,
+      webhookEndpoint.orgId,
+    ),
     uniqueIndex("webhook_delivery_endpoint_event_uq")
       .on(t.endpointId, t.domainEventId)
       .where(sql`domain_event_id is not null`),
@@ -701,6 +793,8 @@ export const issueIntegration = pgTable(
   (t) => [
     uniqueIndex("issue_integration_project_provider_uq").on(t.projectId, t.provider),
     index("issue_integration_repo_idx").on(t.provider, t.repo),
+    uniqueIndex("issue_integration_id_org_uq").on(t.id, t.orgId),
+    tenantReference("issue_integration_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
   ],
 );
 
@@ -728,6 +822,14 @@ export const issueLink = pgTable(
   (t) => [
     uniqueIndex("issue_link_feedback_integration_uq").on(t.feedbackId, t.integrationId),
     index("issue_link_integration_number_idx").on(t.integrationId, t.number),
+    tenantReference("issue_link_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
+    tenantReference(
+      "issue_link_integration_tenant_fk",
+      t.integrationId,
+      t.orgId,
+      issueIntegration.id,
+      issueIntegration.orgId,
+    ),
   ],
 );
 
@@ -798,5 +900,9 @@ export const reviewLink = pgTable(
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
-  (t) => [index("review_link_project_idx").on(t.projectId)],
+  (t) => [
+    index("review_link_project_idx").on(t.projectId),
+    uniqueIndex("review_link_id_org_uq").on(t.id, t.orgId),
+    tenantReference("review_link_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
+  ],
 );

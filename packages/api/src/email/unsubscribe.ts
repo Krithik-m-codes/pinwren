@@ -1,5 +1,5 @@
 import { createHmac, hkdfSync } from "node:crypto";
-import { emailSuppression, getDb } from "@pinwren/db";
+import { emailSuppression, withOrg } from "@pinwren/db";
 import { and, eq } from "drizzle-orm";
 import { safeEqualStr } from "../crypto";
 import { env } from "../env";
@@ -41,18 +41,22 @@ export const unsubscribeUrl = (orgId: string, email: string) =>
   `${env().PINWREN_URL.replace(/\/$/, "")}/api/unsubscribe?token=${encodeURIComponent(unsubscribeToken(orgId, email))}`;
 
 export async function isSuppressed(orgId: string, email: string): Promise<boolean> {
-  const [row] = await getDb()
-    .select({ email: emailSuppression.email })
-    .from(emailSuppression)
-    .where(and(eq(emailSuppression.orgId, orgId), eq(emailSuppression.email, norm(email))));
+  const [row] = await withOrg(orgId, (db) =>
+    db
+      .select({ email: emailSuppression.email })
+      .from(emailSuppression)
+      .where(and(eq(emailSuppression.orgId, orgId), eq(emailSuppression.email, norm(email)))),
+  );
   return !!row;
 }
 
 export async function suppress(orgId: string, email: string, reason = "unsubscribe"): Promise<void> {
-  await getDb()
-    .insert(emailSuppression)
-    .values({ orgId, email: norm(email), reason })
-    .onConflictDoNothing();
+  await withOrg(orgId, (db) =>
+    db
+      .insert(emailSuppression)
+      .values({ orgId, email: norm(email), reason })
+      .onConflictDoNothing(),
+  );
 }
 
 /** RFC 2369 / RFC 8058 headers for one-click unsubscribe from mail clients. */

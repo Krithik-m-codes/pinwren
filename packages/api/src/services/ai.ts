@@ -1,3 +1,4 @@
+import { withOrg } from "@pinwren/db";
 import { createAiClient, translateText, type AiClient, type AiFetch } from "@pinwren/ai";
 import { type AiProviderConfig, type AiProviderType, type ProjectAiConfig } from "@pinwren/core";
 import { feedback, feedbackAi, feedbackTranslation, getDb, orgSetting, project } from "@pinwren/db";
@@ -36,10 +37,12 @@ export function defaultModelForProvider(provider: AiProviderType): string {
 }
 
 export async function getOrgAiSettings(orgId: string): Promise<PublicOrgAiSettings> {
-  const [row] = await getDb()
-    .select({ value: orgSetting.value })
-    .from(orgSetting)
-    .where(and(eq(orgSetting.orgId, orgId), eq(orgSetting.key, "ai")));
+  const [row] = await withOrg(orgId, (db) =>
+    db
+      .select({ value: orgSetting.value })
+      .from(orgSetting)
+      .where(and(eq(orgSetting.orgId, orgId), eq(orgSetting.key, "ai"))),
+  );
 
   const stored = (row?.value as StoredOrgAiSettings | undefined) ?? undefined;
   const envProvider = (process.env.AI_PROVIDER as AiProviderType | undefined) || "anthropic";
@@ -111,10 +114,12 @@ export async function updateOrgAiSettings(
 }
 
 export async function getAiClientForOrg(orgId: string): Promise<AiClient> {
-  const [row] = await getDb()
-    .select({ value: orgSetting.value })
-    .from(orgSetting)
-    .where(and(eq(orgSetting.orgId, orgId), eq(orgSetting.key, "ai")));
+  const [row] = await withOrg(orgId, (db) =>
+    db
+      .select({ value: orgSetting.value })
+      .from(orgSetting)
+      .where(and(eq(orgSetting.orgId, orgId), eq(orgSetting.key, "ai"))),
+  );
 
   const stored = row?.value as StoredOrgAiSettings | undefined;
   const provider = stored?.provider || (process.env.AI_PROVIDER as AiProviderType | undefined) || "anthropic";
@@ -164,10 +169,12 @@ export async function testAiConnection(
     baseUrl?: string | undefined;
   },
 ): Promise<{ ok: boolean; latencyMs?: number; error?: string }> {
-  const [row] = await getDb()
-    .select({ value: orgSetting.value })
-    .from(orgSetting)
-    .where(and(eq(orgSetting.orgId, orgId), eq(orgSetting.key, "ai")));
+  const [row] = await withOrg(orgId, (db) =>
+    db
+      .select({ value: orgSetting.value })
+      .from(orgSetting)
+      .where(and(eq(orgSetting.orgId, orgId), eq(orgSetting.key, "ai"))),
+  );
   const stored = row?.value as StoredOrgAiSettings | undefined;
   const storedProvider = stored?.provider ?? process.env.AI_PROVIDER ?? "anthropic";
   // "Test" right after saving sends no key: use the saved one while the provider is unchanged.
@@ -246,20 +253,26 @@ export async function translateFeedbackReport(
   targetLocale: string,
 ): Promise<{ targetLocale: string; title: string | null; body: string }> {
   // The org check comes first: the translation cache is keyed by feedback id alone.
-  const [item] = await getDb()
-    .select({ id: feedback.id, title: feedback.title, body: feedback.body })
-    .from(feedback)
-    .where(and(eq(feedback.id, feedbackId), eq(feedback.orgId, orgId)));
+  const { item, cached } = await withOrg(orgId, async (db) => {
+    const [item] = await db
+      .select({ id: feedback.id, title: feedback.title, body: feedback.body })
+      .from(feedback)
+      .where(and(eq(feedback.id, feedbackId), eq(feedback.orgId, orgId)));
 
-  if (!item) throw notFound("Feedback");
+    if (!item) throw notFound("Feedback");
 
-  const [cached] = await getDb()
-    .select()
-    .from(feedbackTranslation)
-    .where(
-      and(eq(feedbackTranslation.feedbackId, feedbackId), eq(feedbackTranslation.targetLocale, targetLocale)),
-    );
+    const [cached] = await db
+      .select()
+      .from(feedbackTranslation)
+      .where(
+        and(
+          eq(feedbackTranslation.feedbackId, feedbackId),
+          eq(feedbackTranslation.targetLocale, targetLocale),
+        ),
+      );
 
+    return { item, cached };
+  });
   if (cached) {
     return {
       targetLocale: cached.targetLocale,
@@ -268,7 +281,7 @@ export async function translateFeedbackReport(
     };
   }
 
-  const client = await getAiClientForOrg(orgId);
+  const client = await withOrg(orgId, () => getAiClientForOrg(orgId));
 
   const translatedBody = await translateText(client.provider, {
     text: item.body,
@@ -285,21 +298,23 @@ export async function translateFeedbackReport(
     });
   }
 
-  await getDb()
-    .insert(feedbackTranslation)
-    .values({
-      feedbackId,
-      targetLocale,
-      title: translatedTitle,
-      body: translatedBody,
-    })
-    .onConflictDoUpdate({
-      target: [feedbackTranslation.feedbackId, feedbackTranslation.targetLocale],
-      set: {
+  await withOrg(orgId, (db) =>
+    db
+      .insert(feedbackTranslation)
+      .values({
+        feedbackId,
+        targetLocale,
         title: translatedTitle,
         body: translatedBody,
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: [feedbackTranslation.feedbackId, feedbackTranslation.targetLocale],
+        set: {
+          title: translatedTitle,
+          body: translatedBody,
+        },
+      }),
+  );
 
   return {
     targetLocale,

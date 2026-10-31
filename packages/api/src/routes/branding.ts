@@ -6,7 +6,7 @@ import {
   emailTemplateUpdate,
   orgBrandingUpdate,
 } from "@pinwren/core";
-import { emailTemplate, getDb, user } from "@pinwren/db";
+import { emailTemplate, getDb, user, withOrg } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
@@ -140,7 +140,9 @@ export const branding = new Hono<{ Variables: SessionVars }>()
    */
   .post("/email-templates/:key/test", requireOrgAdmin, zValidator("json", emailTemplateTest), async (c) => {
     const { to: given, ...draft } = c.req.valid("json");
-    const [u] = await getDb().select({ email: user.email }).from(user).where(eq(user.id, c.var.userId));
+    const [u] = await withOrg(c.var.orgId, (db) =>
+      db.select({ email: user.email }).from(user).where(eq(user.id, c.var.userId)),
+    );
     const to = u?.email;
     if (!to) throw new ApiError(400, "NO_RECIPIENT", "No recipient address");
     if (given && given.trim().toLowerCase() !== to.toLowerCase()) {
@@ -152,7 +154,9 @@ export const branding = new Hono<{ Variables: SessionVars }>()
     ) {
       throw new ApiError(429, "RATE_LIMITED", "Too many test emails — try again later");
     }
-    const rendered = await preview(c.var.orgId, templateKey(c.req.param("key")), draft);
+    const rendered = await withOrg(c.var.orgId, () =>
+      preview(c.var.orgId, templateKey(c.req.param("key")), draft),
+    );
     try {
       const result = await sendEmail({ to, ...rendered, subject: `[Test] ${rendered.subject}` });
       return c.json(result.sent ? { sent: true, to } : { sent: false, skipped: true, reason: result.reason });

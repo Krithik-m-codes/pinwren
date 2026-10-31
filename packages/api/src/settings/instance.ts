@@ -1,5 +1,6 @@
-import { getDb, project, setting } from "@pinwren/db";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { readInstanceSetting, saveInstanceSetting } from "../db/system";
+import { getDb, project } from "@pinwren/db";
+import { and, isNull, sql } from "drizzle-orm";
 import { env } from "../env";
 import { type OutboundFetch, outboundErrorText, safeFetch } from "../outbound/safe-fetch";
 
@@ -36,15 +37,12 @@ export type UpdateState = {
 };
 
 async function readSetting<T>(key: string): Promise<T> {
-  const [row] = await getDb().select().from(setting).where(eq(setting.key, key));
+  const row = await readInstanceSetting(key);
   return (row?.value ?? {}) as T;
 }
 
 async function writeSetting(key: string, value: Record<string, unknown>, userId: string | null) {
-  await getDb()
-    .insert(setting)
-    .values({ key, value, updatedBy: userId })
-    .onConflictDoUpdate({ target: setting.key, set: { value, updatedBy: userId, updatedAt: new Date() } });
+  await saveInstanceSetting({ key, value, updatedBy: userId });
 }
 
 export async function countPrivacyModeProjects(): Promise<number> {

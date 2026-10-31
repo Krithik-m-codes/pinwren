@@ -1,3 +1,6 @@
+import { identityDatabase } from "@pinwren/db/identity";
+import { withOrg, afterOrgCommit } from "@pinwren/db";
+import { env } from "../env";
 import { brandAsset, feedbackAsset, getDb, member, orgSetting, organization } from "@pinwren/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { storage } from "../storage";
@@ -16,35 +19,38 @@ export const isAdminRole = (role: string) =>
  * a crash in between leaves an orphan file, never a row pointing at nothing.
  */
 export async function deleteWorkspace(orgId: string): Promise<boolean> {
-  const db = getDb();
-  const [assets, logos, exports] = await Promise.all([
-    db.select({ key: feedbackAsset.storageKey }).from(feedbackAsset).where(eq(feedbackAsset.orgId, orgId)),
-    db.select({ key: brandAsset.storageKey }).from(brandAsset).where(eq(brandAsset.orgId, orgId)),
-    // Project exports keep their file's key in the export state (org_setting).
-    db
-      .select({ key: sql<string | null>`${orgSetting.value}->>'storageKey'` })
-      .from(orgSetting)
-      .where(and(eq(orgSetting.orgId, orgId), sql`${orgSetting.value} ? 'storageKey'`)),
-  ]);
-  const deleted = await db
-    .delete(organization)
-    .where(eq(organization.id, orgId))
-    .returning({ id: organization.id });
-  if (!deleted.length) return false;
-  for (const { key } of [...assets, ...logos, ...exports]) {
-    if (!key) continue;
-    await storage()
-      .remove(key)
-      .catch((err: unknown) => console.warn(`[pinwren] could not remove file ${key}`, err));
-  }
-  return true;
+  return withOrg(orgId, async (db) => {
+    const [assets, logos, exports] = await Promise.all([
+      db.select({ key: feedbackAsset.storageKey }).from(feedbackAsset).where(eq(feedbackAsset.orgId, orgId)),
+      db.select({ key: brandAsset.storageKey }).from(brandAsset).where(eq(brandAsset.orgId, orgId)),
+      // Project exports keep their file's key in the export state (org_setting).
+      db
+        .select({ key: sql<string | null>`${orgSetting.value}->>'storageKey'` })
+        .from(orgSetting)
+        .where(and(eq(orgSetting.orgId, orgId), sql`${orgSetting.value} ? 'storageKey'`)),
+    ]);
+    const deleted = await db
+      .delete(organization)
+      .where(eq(organization.id, orgId))
+      .returning({ id: organization.id });
+    if (!deleted.length) return false;
+    afterOrgCommit(async () => {
+      for (const { key } of [...assets, ...logos, ...exports]) {
+        if (!key) continue;
+        await storage()
+          .remove(key)
+          .catch((err: unknown) => console.warn(`[pinwren] could not remove file ${key}`, err));
+      }
+    });
+    return true;
+  });
 }
 
 export type OwnedWorkspace = { orgId: string; name: string; owners: number; members: number };
 
 /** The workspaces `userId` owns, with how many owners and members each has. */
 export async function ownedWorkspaces(userId: string): Promise<OwnedWorkspace[]> {
-  const db = getDb();
+  const db = env().PINWREN_MODE === "cloud" ? identityDatabase() : getDb();
   const mine = await db
     .select({ orgId: member.organizationId, name: organization.name, role: member.role })
     .from(member)

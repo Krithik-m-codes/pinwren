@@ -1,10 +1,11 @@
+import { preferencesFor, updateAccountPreferences } from "../db/accounts";
 import {
   EMAIL_DIGEST_FREQUENCIES,
   notificationPreferenceInput,
   notificationsRead,
   userPreferenceUpdate,
 } from "@pinwren/core";
-import { feedback, getDb, notification, notificationPreference, project, userPreference } from "@pinwren/db";
+import { feedback, getDb, notification, notificationPreference, project } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, count, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { Hono } from "hono";
@@ -209,14 +210,7 @@ export const notifications = new Hono<{ Variables: SessionVars }>()
   })
 
   .get("/me/preferences", async (c) => {
-    const [row] = await getDb()
-      .select({
-        emailDigest: userPreference.emailDigest,
-        emailPaused: userPreference.emailPaused,
-        locale: userPreference.locale,
-      })
-      .from(userPreference)
-      .where(eq(userPreference.userId, c.var.userId));
+    const row = await preferencesFor(c.var.userId);
     return c.json({
       preferences: {
         emailDigest: row?.emailDigest ?? EMAIL_DIGEST_FREQUENCIES[0],
@@ -228,19 +222,7 @@ export const notifications = new Hono<{ Variables: SessionVars }>()
 
   .patch("/me/preferences", zValidator("json", userPreferenceUpdate), async (c) => {
     const patch = c.req.valid("json");
-    const set = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
-    const [row] = await getDb()
-      .insert(userPreference)
-      .values({ userId: c.var.userId, ...set })
-      .onConflictDoUpdate({
-        target: userPreference.userId,
-        set: { ...set, updatedAt: new Date() },
-      })
-      .returning({
-        emailDigest: userPreference.emailDigest,
-        emailPaused: userPreference.emailPaused,
-        locale: userPreference.locale,
-      });
+    const row = await updateAccountPreferences(c.var.userId, patch);
     if (!row) throw new Error("preference upsert failed");
     return c.json({ preferences: row });
   })

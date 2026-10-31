@@ -7,6 +7,7 @@ import {
   installPeerStamp,
   runStartupFixes,
   startJobs,
+  assertCloudDatabaseSecurity,
 } from "@pinwren/api";
 import { runMigrations } from "@pinwren/db/migrate";
 
@@ -16,7 +17,12 @@ import { runMigrations } from "@pinwren/db/migrate";
 installPeerStamp(http);
 
 // Validate configuration and bring the schema up to date before the first request.
-if (process.env.PINWREN_SKIP_MIGRATIONS !== "true") {
+const configuration = env();
+if (configuration.PINWREN_MODE === "cloud") {
+  // Cloud migrations and provisioning run separately with credentials absent from this process.
+  // This guard is awaited even when PINWREN_SKIP_MIGRATIONS is set.
+  await assertCloudDatabaseSecurity();
+} else if (process.env.PINWREN_SKIP_MIGRATIONS !== "true") {
   const { DATABASE_URL } = env();
   // apps/web in development; the Docker image sets PINWREN_MIGRATIONS_DIR.
   const dir = process.env.PINWREN_MIGRATIONS_DIR ?? resolve(process.cwd(), "../../packages/db/drizzle");

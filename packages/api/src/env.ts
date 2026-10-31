@@ -13,6 +13,8 @@ const optionalString = z
 
 const schema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  PINWREN_MODE: z.enum(["selfhost", "cloud"]).default("selfhost"),
+  PINWREN_SERVICE_DATABASE_URL: optionalString,
   PINWREN_URL: z.url("PINWREN_URL must be the public URL, e.g. https://feedback.example.com"),
   PINWREN_SECRET: z.string().min(32, "PINWREN_SECRET must be at least 32 characters"),
   PINWREN_DATA_DIR: z.string().default("./data"),
@@ -132,6 +134,9 @@ export function env(): Env {
     throw new Error(`Invalid Pinwren configuration:\n${lines.join("\n")}`);
   }
   const e = parsed.data;
+  if (e.PINWREN_MODE === "cloud" && !e.PINWREN_SERVICE_DATABASE_URL) {
+    throw new Error("Invalid Pinwren configuration: Cloud requires PINWREN_SERVICE_DATABASE_URL");
+  }
   if (e.STORAGE_DRIVER === "s3") {
     const required = ["S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] as const;
     const missing = required.filter((k) => !e[k]);

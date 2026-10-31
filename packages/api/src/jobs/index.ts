@@ -11,6 +11,7 @@ import { dispatchEvent } from "./dispatch";
 import { runDigest } from "./digest";
 import { applyRetention, cleanupTrash } from "./maintenance";
 import { type AiEnrichJob, runAiEnrichmentJob } from "./ai";
+import { ensureCloudDatabaseSecurity } from "../cloud-startup";
 
 export { enqueue, getBoss, QUEUES } from "./boss";
 
@@ -20,7 +21,9 @@ const g = globalThis as unknown as { __pinwrenWorkers?: Promise<void> | undefine
  * Start the job workers in this process (called from the Next.js Node instrumentation hook).
  * Safe to call more than once. `PINWREN_ROLE=web` processes only enqueue.
  */
-export function startJobs(): Promise<void> {
+export async function startJobs(): Promise<void> {
+  // Security failures must propagate instead of entering the queue's catch-and-continue handler.
+  await ensureCloudDatabaseSecurity();
   g.__pinwrenWorkers ??= (async () => {
     if (env().PINWREN_ROLE === "web") return;
     const boss = await getBoss();
@@ -48,11 +51,11 @@ export function startJobs(): Promise<void> {
       QUEUES.digest,
       each(() => runDigest()),
     );
-    await boss.work<{ deliveryId: string }>(
+    await boss.work<{ deliveryId: string; orgId?: string }>(
       QUEUES.webhook,
       // Several at once: a receiver that times out holds its slot for up to the request timeout.
       { batchSize: 5, pollingIntervalSeconds: 1, localConcurrency: 4 },
-      each((d) => runDelivery(d.deliveryId)),
+      each((d) => runDelivery(d.deliveryId, { retry: true, ...(d.orgId ? { orgId: d.orgId } : {}) })),
     );
     await boss.work(QUEUES.retention, each(applyRetention));
     await boss.work(QUEUES.cleanup, each(cleanupTrash));

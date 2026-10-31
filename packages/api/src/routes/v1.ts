@@ -6,7 +6,9 @@ import {
   reviewRoundUpdate,
   roleCan,
 } from "@pinwren/core";
-import { apiToken, feedback, getDb, member, project, user } from "@pinwren/db";
+import { apiToken, feedback, getDb, project, user, withOrg } from "@pinwren/db";
+import { membershipFor, tokenForVerification } from "../db/identity";
+import { tenantRequestScope } from "../tenant-scope";
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
@@ -46,7 +48,7 @@ const requireToken = createMiddleware<{ Variables: TokenVars }>(async (c, next) 
   // The /mcp endpoint's own calls: it applied this guard with the real caller's address already.
   if (isInternalRequest(c.req.raw.headers)) {
     await checkToken(c);
-    await next();
+    await tenantRequestScope(c, next);
     return;
   }
   const failKey = `tokfail:${clientIp(c)}`;
@@ -60,7 +62,7 @@ const requireToken = createMiddleware<{ Variables: TokenVars }>(async (c, next) 
       await consume(failKey, MAX_TOKEN_FAILURES, TOKEN_FAILURE_WINDOW_S);
     throw err;
   }
-  await next();
+  await tenantRequestScope(c, next);
 });
 
 async function checkToken(c: Context<{ Variables: TokenVars }>) {
@@ -70,11 +72,7 @@ async function checkToken(c: Context<{ Variables: TokenVars }>) {
   if (!secret || !secret.startsWith(TOKEN_PREFIX) || secret.length < 40 || secret.length > 100)
     throw invalidToken();
 
-  const db = getDb();
-  const [t] = await db
-    .select()
-    .from(apiToken)
-    .where(eq(apiToken.prefix, secret.slice(0, TOKEN_LOOKUP_LENGTH)));
+  const t = await tokenForVerification(secret.slice(0, TOKEN_LOOKUP_LENGTH));
   if (!t) throw invalidToken();
   if (t.expiresAt && t.expiresAt.getTime() <= Date.now()) throw invalidToken();
 
@@ -87,14 +85,13 @@ async function checkToken(c: Context<{ Variables: TokenVars }>) {
   }
 
   // A token never outlives its owner's membership, and never has more rights than its owner's role.
-  const [m] = await db
-    .select({ id: member.id, role: member.role })
-    .from(member)
-    .where(and(eq(member.organizationId, t.orgId), eq(member.userId, t.userId)));
+  const m = await membershipFor(t.orgId, t.userId);
   if (!m) throw invalidToken();
 
   if (!t.lastUsedAt || Date.now() - t.lastUsedAt.getTime() > LAST_USED_INTERVAL_MS) {
-    await db.update(apiToken).set({ lastUsedAt: new Date() }).where(eq(apiToken.id, t.id));
+    await withOrg(t.orgId, (db) =>
+      db.update(apiToken).set({ lastUsedAt: new Date() }).where(eq(apiToken.id, t.id)),
+    );
   }
   c.set("orgId", t.orgId);
   c.set("userId", t.userId);

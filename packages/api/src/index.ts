@@ -4,6 +4,7 @@ import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
 import { getAuth } from "./auth";
+import { ensureCloudDatabaseSecurity } from "./cloud-startup";
 import { env } from "./env";
 import { ApiError, problem } from "./errors";
 import { csrfGuard } from "./guards";
@@ -26,10 +27,16 @@ import { guestPortal } from "./routes/guest";
 import { workspace } from "./routes/workspace";
 
 export { getAuth } from "./auth";
+export { firstOrganizationFor } from "./db/identity";
 export { env } from "./env";
 export { startJobs, stopJobs } from "./jobs";
 export { installPeerStamp } from "./net";
-export { checkReleaseKeys, ensureInstanceAdmin, runStartupFixes } from "./startup";
+export {
+  checkReleaseKeys,
+  ensureInstanceAdmin,
+  runStartupFixes,
+  assertCloudDatabaseSecurity,
+} from "./startup";
 
 /** Dashboard JSON and token API bodies; the widget (screenshots, replays) has its own, larger caps. */
 const API_MAX_BODY = 2 * 1024 * 1024;
@@ -66,6 +73,7 @@ export const app = new Hono()
   // it runs on its own).
   .use("*", async (c, next) => {
     const e = env();
+    if (e.PINWREN_MODE === "cloud") await ensureCloudDatabaseSecurity();
     const d = httpsDecision(c.req.raw, {
       enforce: e.PINWREN_ENFORCE_HTTPS,
       trustProxy: e.PINWREN_TRUST_PROXY > 0,

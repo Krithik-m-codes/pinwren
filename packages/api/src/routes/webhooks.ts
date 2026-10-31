@@ -1,3 +1,4 @@
+import { withOrg } from "@pinwren/db";
 import { webhookCreate, webhookUpdate } from "@pinwren/core";
 import { getDb, project, webhookDelivery, webhookEndpoint } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
@@ -113,19 +114,21 @@ async function assertProject(orgId: string, projectId: string | null | undefined
 }
 
 async function deliverNow(e: Endpoint, payload: WebhookPayload) {
-  const [d] = await getDb()
-    .insert(webhookDelivery)
-    .values({
-      orgId: e.orgId,
-      endpointId: e.id,
-      eventId: payload.id,
-      event: payload.event,
-      payload: payload,
-      status: "pending",
-    })
-    .returning({ id: webhookDelivery.id });
+  const [d] = await withOrg(e.orgId, (db) =>
+    db
+      .insert(webhookDelivery)
+      .values({
+        orgId: e.orgId,
+        endpointId: e.id,
+        eventId: payload.id,
+        event: payload.event,
+        payload: payload,
+        status: "pending",
+      })
+      .returning({ id: webhookDelivery.id }),
+  );
   if (!d) throw new Error("delivery insert failed");
-  const result = await runDelivery(d.id, { retry: false });
+  const result = await runDelivery(d.id, { retry: false, orgId: e.orgId });
   if (!result) throw new ApiError(409, "WEBHOOK_DISABLED", "This webhook is disabled");
   return deliveryOut(result);
 }
@@ -239,7 +242,7 @@ export const webhooks = new Hono<{ Variables: SessionVars }>()
 
   /** Send a `ping` event now and return the recorded attempt. */
   .post("/webhooks/:id/test", requireOrgAdmin, async (c) => {
-    const e = await ownEndpoint(c.var.orgId, c.req.param("id"));
+    const e = await withOrg(c.var.orgId, () => ownEndpoint(c.var.orgId, c.req.param("id")));
     return c.json({ delivery: await deliverNow(e, pingPayload()) });
   })
 
@@ -257,12 +260,15 @@ export const webhooks = new Hono<{ Variables: SessionVars }>()
 
   /** Re-send a recorded delivery's payload now (same event id, so receivers can de-duplicate). */
   .post("/webhook-deliveries/:id/redeliver", requireOrgAdmin, async (c) => {
-    const [d] = await getDb()
-      .select()
-      .from(webhookDelivery)
-      .where(and(eq(webhookDelivery.id, c.req.param("id")), eq(webhookDelivery.orgId, c.var.orgId)));
-    if (!d) throw notFound("Delivery");
-    const e = await ownEndpoint(c.var.orgId, d.endpointId);
-    if (!e.active) throw new ApiError(409, "WEBHOOK_DISABLED", "Enable the webhook before redelivering");
+    const { d, e } = await withOrg(c.var.orgId, async (db) => {
+      const [d] = await db
+        .select()
+        .from(webhookDelivery)
+        .where(and(eq(webhookDelivery.id, c.req.param("id")), eq(webhookDelivery.orgId, c.var.orgId)));
+      if (!d) throw notFound("Delivery");
+      const e = await ownEndpoint(c.var.orgId, d.endpointId);
+      if (!e.active) throw new ApiError(409, "WEBHOOK_DISABLED", "Enable the webhook before redelivering");
+      return { d, e };
+    });
     return c.json({ delivery: await deliverNow(e, d.payload as unknown as WebhookPayload) });
   });

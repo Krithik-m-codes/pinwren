@@ -1,3 +1,4 @@
+import { withOrg } from "@pinwren/db";
 import { randomUUID } from "node:crypto";
 import {
   activity,
@@ -136,8 +137,10 @@ export async function requestExport(
 
 /** The finished archive, for `GET /api/projects/:id/export/download`. */
 export async function exportDownload(orgId: string, projectId: string): Promise<Response> {
-  const p = await assertProject(orgId, projectId);
-  const s = await readState(orgId, projectId);
+  const { p, s } = await withOrg(orgId, async () => ({
+    p: await assertProject(orgId, projectId),
+    s: await readState(orgId, projectId),
+  }));
   if (s?.status !== "ready" || !s.storageKey || !exportView(projectId, s)) throw notFound("Export");
   const file = await storage().get(s.storageKey);
   if (!file) throw notFound("Export file");
@@ -172,27 +175,29 @@ const json = (v: unknown) => new TextEncoder().encode(`${JSON.stringify(v, null,
 
 /** The `project.export` job. Never throws: a failure is recorded on the export for the dashboard. */
 export async function runProjectExport({ orgId, projectId }: ProjectExportJob): Promise<void> {
-  const state = await readState(orgId, projectId);
+  const state = await withOrg(orgId, () => readState(orgId, projectId));
   if (!state || state.status === "ready") return;
-  await writeState(orgId, projectId, { ...state, status: "running" });
+  await withOrg(orgId, () => writeState(orgId, projectId, { ...state, status: "running" }));
   const previousKey = state.storageKey;
   try {
     const result = await buildProjectArchive(orgId, projectId);
     const key = `${projectId}/${randomUUID()}.zip`;
     await storage().put(key, result.zip, "application/zip");
     const now = new Date();
-    await writeState(orgId, projectId, {
-      ...state,
-      status: "ready",
-      finishedAt: now.toISOString(),
-      expiresAt: new Date(now.getTime() + EXPORT_TTL_DAYS * 86_400_000).toISOString(),
-      storageKey: key,
-      bytes: result.zip.length,
-      items: result.items,
-      assets: result.assets,
-      skippedAssets: result.skipped,
-      error: null,
-    });
+    await withOrg(orgId, () =>
+      writeState(orgId, projectId, {
+        ...state,
+        status: "ready",
+        finishedAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + EXPORT_TTL_DAYS * 86_400_000).toISOString(),
+        storageKey: key,
+        bytes: result.zip.length,
+        items: result.items,
+        assets: result.assets,
+        skippedAssets: result.skipped,
+        error: null,
+      }),
+    );
     if (previousKey && previousKey !== key) {
       await storage()
         .remove(previousKey)
@@ -200,12 +205,14 @@ export async function runProjectExport({ orgId, projectId }: ProjectExportJob): 
     }
   } catch (err) {
     console.error(`[pinwren] project export ${projectId} failed`, err);
-    await writeState(orgId, projectId, {
-      ...state,
-      status: "failed",
-      finishedAt: new Date().toISOString(),
-      error: err instanceof Error ? err.message.slice(0, 300) : "Export failed",
-    });
+    await withOrg(orgId, () =>
+      writeState(orgId, projectId, {
+        ...state,
+        status: "failed",
+        finishedAt: new Date().toISOString(),
+        error: err instanceof Error ? err.message.slice(0, 300) : "Export failed",
+      }),
+    );
   }
 }
 
@@ -214,8 +221,10 @@ export async function buildProjectArchive(
   orgId: string,
   projectId: string,
 ): Promise<{ zip: Uint8Array; items: number; assets: number; skipped: number }> {
-  const db = getDb();
-  const p = await assertProject(orgId, projectId);
+  const { p, labels } = await withOrg(orgId, async (db) => ({
+    p: await assertProject(orgId, projectId),
+    labels: await db.select().from(label).where(eq(label.projectId, projectId)),
+  }));
   const { actionSecret: _a, identitySecret: _i, rejectedOrigins: _r, ...projectData } = p;
 
   const items: Record<string, unknown>[] = [];
@@ -223,31 +232,35 @@ export async function buildProjectArchive(
   let assetBytes = 0;
   let assets = 0;
   let skipped = 0;
-  const labels = await db.select().from(label).where(eq(label.projectId, projectId));
   const labelName = new Map(labels.map((l) => [l.id, l.name]));
 
   let after = 0;
   for (;;) {
-    const rows = await db
-      .select({ f: feedback, pageUrl: page.url })
-      .from(feedback)
-      .leftJoin(page, eq(page.id, feedback.pageId))
-      .where(and(eq(feedback.projectId, projectId), isNull(feedback.deletedAt), gt(feedback.number, after)))
-      .orderBy(asc(feedback.number))
-      .limit(PAGE);
+    const batch = await withOrg(orgId, async (db) => {
+      const rows = await db
+        .select({ f: feedback, pageUrl: page.url })
+        .from(feedback)
+        .leftJoin(page, eq(page.id, feedback.pageId))
+        .where(and(eq(feedback.projectId, projectId), isNull(feedback.deletedAt), gt(feedback.number, after)))
+        .orderBy(asc(feedback.number))
+        .limit(PAGE);
+      const ids = rows.map((r) => r.f.id);
+      if (!ids.length) return { rows, comments: [], events: [], files: [], tags: [] };
+      const [comments, events, files, tags] = await Promise.all([
+        db
+          .select({ c: comment, authorName: user.name, authorEmail: user.email })
+          .from(comment)
+          .leftJoin(user, eq(user.id, comment.authorId))
+          .where(inArray(comment.feedbackId, ids))
+          .orderBy(asc(comment.createdAt)),
+        db.select().from(activity).where(inArray(activity.feedbackId, ids)).orderBy(asc(activity.createdAt)),
+        db.select().from(feedbackAsset).where(inArray(feedbackAsset.feedbackId, ids)),
+        db.select().from(feedbackLabel).where(inArray(feedbackLabel.feedbackId, ids)),
+      ]);
+      return { rows, comments, events, files, tags };
+    });
+    const { rows, comments, events, files, tags } = batch;
     if (!rows.length) break;
-    const ids = rows.map((r) => r.f.id);
-    const [comments, events, files, tags] = await Promise.all([
-      db
-        .select({ c: comment, authorName: user.name, authorEmail: user.email })
-        .from(comment)
-        .leftJoin(user, eq(user.id, comment.authorId))
-        .where(inArray(comment.feedbackId, ids))
-        .orderBy(asc(comment.createdAt)),
-      db.select().from(activity).where(inArray(activity.feedbackId, ids)).orderBy(asc(activity.createdAt)),
-      db.select().from(feedbackAsset).where(inArray(feedbackAsset.feedbackId, ids)),
-      db.select().from(feedbackLabel).where(inArray(feedbackLabel.feedbackId, ids)),
-    ]);
     for (const { f, pageUrl } of rows) {
       const { search: _s, reporterTokenHash: _t, ...data } = f;
       const own = files.filter((a) => a.feedbackId === f.id);

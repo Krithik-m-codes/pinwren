@@ -57,6 +57,27 @@
       "when": 1793013900216,
       "tag": "0007_needy_next_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793259712290,
+      "tag": "0008_daffy_william_stryker",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793260129825,
+      "tag": "0009_tenant_label_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793295396760,
+      "tag": "0010_tenant_identity_scope",
+      "breakpoints": true
     }
   ]
 }

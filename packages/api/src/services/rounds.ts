@@ -4,7 +4,7 @@ import {
   type ReviewRoundUpdate,
   type FeedbackStatus,
 } from "@pinwren/core";
-import { feedback, getDb, page, project, reviewRound } from "@pinwren/db";
+import { feedback, getDb, page, project, reviewRound, withOrg } from "@pinwren/db";
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { feedbackLink } from "./feedback-payload";
 import { ApiError, notFound } from "../errors";
@@ -175,9 +175,12 @@ export async function exportRound(
   id: string,
   format: "csv" | "pdf",
 ): Promise<{ body: Uint8Array<ArrayBuffer> | string; contentType: string; filename: string }> {
-  const round = await getRound(orgId, id);
-  const p = await projectOf(orgId, round.projectId);
-  const items = await roundItems(orgId, id);
+  const { round, p, items } = await withOrg(orgId, async () => {
+    const round = await getRound(orgId, id);
+    const p = await projectOf(orgId, round.projectId);
+    const items = await roundItems(orgId, id);
+    return { round, p, items };
+  });
   const filename = `${fileSlug(p.name)}-${fileSlug(round.name)}.${format}`;
   if (format === "csv") {
     return {

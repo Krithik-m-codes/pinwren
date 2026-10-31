@@ -1,3 +1,4 @@
+import { identityDatabase } from "@pinwren/db/identity";
 import { getDb, invitation, member, setting, user } from "@pinwren/db";
 import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import { env } from "../env";
@@ -16,7 +17,7 @@ const LOCK = sql`select pg_advisory_xact_lock(hashtext('pinwren.setup'))`;
 type StoredAdmins = { userIds?: string[] };
 
 async function read<T>(key: string): Promise<T> {
-  const [row] = await getDb().select().from(setting).where(eq(setting.key, key));
+  const [row] = await setupDatabase().select().from(setting).where(eq(setting.key, key));
   return (row?.value ?? {}) as T;
 }
 
@@ -34,7 +35,7 @@ export async function claimedAdminIds(): Promise<string[]> {
 export async function isInstanceAdmin(userId: string): Promise<boolean> {
   const emails = listedEmails();
   if (emails.length) {
-    const [u] = await getDb().select({ email: user.email }).from(user).where(eq(user.id, userId));
+    const [u] = await setupDatabase().select({ email: user.email }).from(user).where(eq(user.id, userId));
     if (u && emails.includes(u.email.toLowerCase())) return true;
   }
   return (await claimedAdminIds()).includes(userId);
@@ -42,12 +43,13 @@ export async function isInstanceAdmin(userId: string): Promise<boolean> {
 
 /** True while nobody can administer the instance: no PINWREN_ADMIN_EMAILS and nobody named. */
 export async function setupNeeded(): Promise<boolean> {
+  if (env().PINWREN_MODE === "cloud") return false;
   if (listedEmails().length) return false;
   return (await claimedAdminIds()).length === 0;
 }
 
 export async function hasAnyUser(): Promise<boolean> {
-  const [anyone] = await getDb().select({ id: user.id }).from(user).limit(1);
+  const [anyone] = await setupDatabase().select({ id: user.id }).from(user).limit(1);
   return !!anyone;
 }
 
@@ -71,9 +73,10 @@ export function pickFirstAdmin(o: {
  * older account wins, and the other finds the list taken. Returns the promoted user id, or null.
  */
 export async function promoteFirstAccount(): Promise<string | null> {
+  if (env().PINWREN_MODE === "cloud") return null;
   const listed = listedEmails().length > 0;
   if (listed) return null;
-  return getDb().transaction(async (tx) => {
+  return setupDatabase().transaction(async (tx) => {
     await tx.execute(LOCK);
     const [row] = await tx.select().from(setting).where(eq(setting.key, ADMINS_KEY));
     const claimed = (row?.value as StoredAdmins | undefined)?.userIds ?? [];
@@ -113,7 +116,7 @@ export function removalVerdict(o: {
 export async function listedAdminUsers(): Promise<{ id: string; name: string; email: string }[]> {
   const emails = listedEmails();
   if (!emails.length) return [];
-  return getDb()
+  return setupDatabase()
     .select({ id: user.id, name: user.name, email: user.email })
     .from(user)
     .where(inArray(sql`lower(${user.email})`, emails));
@@ -121,7 +124,7 @@ export async function listedAdminUsers(): Promise<{ id: string; name: string; em
 
 /** Name another account an instance administrator. */
 export async function addInstanceAdmin(userId: string, by: string): Promise<AdminChange> {
-  return getDb().transaction(async (tx) => {
+  return setupDatabase().transaction(async (tx) => {
     await tx.execute(LOCK);
     const [u] = await tx.select({ id: user.id }).from(user).where(eq(user.id, userId));
     if (!u) return "unknown_user";
@@ -140,7 +143,7 @@ export async function addInstanceAdmin(userId: string, by: string): Promise<Admi
 /** Remove an administrator named in the dashboard. Never leaves the instance without one. */
 export async function removeInstanceAdmin(userId: string, by: string): Promise<AdminChange> {
   const listedUserIds = (await listedAdminUsers()).map((u) => u.id);
-  return getDb().transaction(async (tx) => {
+  return setupDatabase().transaction(async (tx) => {
     await tx.execute(LOCK);
     const [row] = await tx.select().from(setting).where(eq(setting.key, ADMINS_KEY));
     const claimed = (row?.value as StoredAdmins | undefined)?.userIds ?? [];
@@ -163,7 +166,7 @@ export async function removeInstanceAdmin(userId: string, by: string): Promise<A
  * the oldest remaining account takes over, as on a fresh instance.
  */
 export async function forgetInstanceAdmin(userId: string): Promise<void> {
-  await getDb().transaction(async (tx) => {
+  await setupDatabase().transaction(async (tx) => {
     await tx.execute(LOCK);
     const [row] = await tx.select().from(setting).where(eq(setting.key, ADMINS_KEY));
     const claimed = (row?.value as StoredAdmins | undefined)?.userIds ?? [];
@@ -192,6 +195,7 @@ export function decideSignup(o: {
 
 /** Whether someone without an invitation could create an account now (the "Create an account" link). */
 export async function signupOpen(): Promise<boolean> {
+  if (env().PINWREN_MODE === "cloud") return false;
   const disableSignup = env().PINWREN_DISABLE_SIGNUP;
   if (decideSignup({ disableSignup, hasUsers: true, invited: false })) return true;
   return decideSignup({ disableSignup, hasUsers: await hasAnyUser(), invited: false });
@@ -199,7 +203,7 @@ export async function signupOpen(): Promise<boolean> {
 
 export async function signupAllowed(email: string): Promise<boolean> {
   if (await signupOpen()) return true;
-  const [invited] = await getDb()
+  const [invited] = await setupDatabase()
     .select({ id: invitation.id })
     .from(invitation)
     .where(
@@ -216,7 +220,7 @@ export async function signupAllowed(email: string): Promise<boolean> {
 /** Whether two accounts share a workspace (who may see whose avatar). */
 export async function shareWorkspace(a: string, b: string): Promise<boolean> {
   if (a === b) return true;
-  const [row] = await getDb()
+  const [row] = await setupDatabase()
     .select({ id: member.id })
     .from(member)
     .where(
@@ -228,3 +232,5 @@ export async function shareWorkspace(a: string, b: string): Promise<boolean> {
     .limit(1);
   return !!row;
 }
+
+const setupDatabase = () => (env().PINWREN_MODE === "cloud" ? identityDatabase() : getDb());

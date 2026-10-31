@@ -18,12 +18,15 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
-    "./migrate": "./src/migrate.ts"
+    "./migrate": "./src/migrate.ts",
+    "./cloud-security": "./src/cloud-security.ts",
+    "./identity": "./src/identity.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "generate": "drizzle-kit generate",
-    "migrate": "tsx src/migrate-cli.ts"
+    "migrate": "tsx src/migrate-cli.ts",
+    "provision:cloud": "tsx src/provision-cloud-cli.ts"
   },
   "dependencies": {
     "@pinwren/core": "workspace:*",

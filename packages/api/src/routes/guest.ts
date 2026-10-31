@@ -1,3 +1,6 @@
+import { projectForPublicKey } from "../db/bootstrap";
+import { withOrgResponse } from "../tenant-scope";
+import { env } from "../env";
 import {
   GUEST_PAGE_TOKENS_HEADER,
   guestReplyCreate,
@@ -77,19 +80,26 @@ export const guestPortal = new Hono<{ Variables: Vars }>()
     ) {
       throw new ApiError(429, "RATE_LIMITED", "Too many requests. Try again in a minute.");
     }
-    const [p] = await getDb()
-      .select()
-      .from(project)
-      .where(and(eq(project.publicKey, key), isNull(project.archivedAt)));
-    if (!p) throw notFound("Project");
-    const ownership = or(
-      claims.hashes.length ? inArray(feedback.reporterTokenHash, claims.hashes) : undefined,
-      claims.ids.length ? inArray(feedback.id, claims.ids) : undefined,
-    );
-    if (!ownership) throw notFound("Feedback");
-    c.set("project", p);
-    c.set("ownership", ownership);
-    await next();
+    const run = async () => {
+      const [p] = await getDb()
+        .select()
+        .from(project)
+        .where(and(eq(project.publicKey, key), isNull(project.archivedAt)));
+      if (!p) throw notFound("Project");
+      const ownership = or(
+        claims.hashes.length ? inArray(feedback.reporterTokenHash, claims.hashes) : undefined,
+        claims.ids.length ? inArray(feedback.id, claims.ids) : undefined,
+      );
+      if (!ownership) throw notFound("Feedback");
+      c.set("project", p);
+      c.set("ownership", ownership);
+      await next();
+    };
+    if (env().PINWREN_MODE === "cloud") {
+      const boot = await projectForPublicKey(key);
+      if (!boot) throw notFound("Project");
+      await withOrgResponse(boot.orgId, c, run);
+    } else await run();
   })
   .get("/guest/:key/feedback", async (c) => {
     const p = c.var.project;

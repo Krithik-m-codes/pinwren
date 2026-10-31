@@ -1,5 +1,4 @@
-import { getDb, setting } from "@pinwren/db";
-import { eq } from "drizzle-orm";
+import { readInstanceSetting, saveInstanceSetting } from "../db/system";
 import { z } from "zod";
 import { resolveSmtp } from "../email/config";
 import { type Env, env } from "../env";
@@ -138,7 +137,7 @@ const storedSignIn = z
   .catch({});
 
 async function readStored(): Promise<StoredSignIn> {
-  const [row] = await getDb().select().from(setting).where(eq(setting.key, SIGN_IN_SETTING_KEY));
+  const row = await readInstanceSetting(SIGN_IN_SETTING_KEY);
   return storedSignIn.parse(row?.value ?? {});
 }
 
@@ -172,11 +171,5 @@ export async function updateSignInSettings(
   const next: StoredSignIn = { ...(await readStored()) };
   if (patch.magicLink !== undefined) next.magicLink = patch.magicLink;
   if (patch.passkeys !== undefined) next.passkeys = patch.passkeys;
-  await getDb()
-    .insert(setting)
-    .values({ key: SIGN_IN_SETTING_KEY, value: next, updatedBy: userId })
-    .onConflictDoUpdate({
-      target: setting.key,
-      set: { value: next, updatedBy: userId, updatedAt: new Date() },
-    });
+  await saveInstanceSetting({ key: SIGN_IN_SETTING_KEY, value: next, updatedBy: userId });
 }

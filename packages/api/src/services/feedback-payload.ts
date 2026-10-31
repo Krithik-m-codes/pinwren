@@ -112,7 +112,7 @@ export async function loadFeedbackContext(feedbackId: string): Promise<FeedbackC
 
 export async function loadCommentPayload(
   commentId: string,
-): Promise<(CommentPayload & { authorId: string | null }) | null> {
+): Promise<(CommentPayload & { authorId: string | null; feedbackId: string }) | null> {
   const [row] = await getDb()
     .select({ c: comment, authorName: user.name })
     .from(comment)
@@ -128,6 +128,7 @@ export async function loadCommentPayload(
     team: c.authorId !== null,
     createdAt: c.createdAt.toISOString(),
     authorId: c.authorId,
+    feedbackId: c.feedbackId,
   };
 }
 

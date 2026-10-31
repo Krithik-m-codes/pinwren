@@ -1,4 +1,4 @@
-import { activity, comment, emailDelivery, feedback, getDb, orgSetting } from "@pinwren/db";
+import { activity, comment, emailDelivery, feedback, getDb, orgSetting, withOrg } from "@pinwren/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { sha256Hex } from "../crypto";
@@ -38,6 +38,14 @@ export function appendErasure(log: readonly ErasureRecord[], entry: ErasureRecor
 }
 
 export async function eraseReporter(
+  orgId: string,
+  userId: string,
+  input: PrivacyErase,
+): Promise<EraseResult> {
+  return withOrg(orgId, () => eraseReporterInScope(orgId, userId, input));
+}
+
+async function eraseReporterInScope(
   orgId: string,
   userId: string,
   input: PrivacyErase,

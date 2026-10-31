@@ -34,7 +34,7 @@ issues it found. Full code review and protected-branch CI are still outstanding.
 ## Following tranches
 
 - Finish remaining launcher theming and organisation favicon parity.
-- WP-21: tenant isolation and cross-tenant tests before exposing Cloud sign-up.
+- WP-21: tenant isolation and cross-tenant tests before exposing Cloud sign-up. **Status:** Tasks 1-8 coverage is implemented on `feat/wp21-tenant-isolation` (PR #27, draft): database policies, request/public/worker scoping and route-wide real-PostgreSQL acceptance for all 173 inventory routes (368 isolation tests passing locally). **Still incomplete:** independent whole-branch review, required CI green on PostgreSQL 16/17, Redis/multi-instance isolation, operator rehearsal, and enabling Cloud sign-up (kept disabled). See `docs/security/cloud-tenant-isolation.md`.
 - WP-22: billing, usage limits and dunning, using test-mode fixtures until live-account setup exists.
 - WP-24/25: audit foundation, custom roles, SSO/SCIM, custom domains and legal hold.
 - WP-27/28/29: remaining duplicate clustering, backup/restore automation, Helm/read replicas, capacity

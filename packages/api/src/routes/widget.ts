@@ -1,3 +1,6 @@
+import { withOrg } from "@pinwren/db";
+import { projectForPublicKey } from "../db/bootstrap";
+import { requestBoundary, withOrgResponse } from "../tenant-scope";
 import {
   anchorBundle,
   ATTACHMENT_CONTENT_TYPES,
@@ -326,19 +329,55 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
     const key = c.req.header("x-pinwren-key") ?? c.req.query("key");
     const origin = c.req.header("origin");
     if (!key) throw new ApiError(401, "MISSING_PROJECT_KEY", "x-pinwren-key header is required");
-    const [p] = await getDb()
-      .select()
-      .from(project)
-      .where(and(eq(project.publicKey, key), isNull(project.archivedAt)));
-    if (!p) throw new ApiError(401, "INVALID_PROJECT_KEY", "Unknown project key");
-    if (!origin || !isOriginAllowed(origin, p.allowedOrigins)) {
-      // Remembered for the Install tab ("Blocked a request from … — Allow"); throttled, never fails the request.
-      if (origin) await recordRejectedOrigin(p, origin);
-      throw new ApiError(403, "ORIGIN_NOT_ALLOWED", "This site is not on the project's allowed origins");
+    if (env().PINWREN_MODE !== "cloud") {
+      const [p] = await getDb()
+        .select()
+        .from(project)
+        .where(and(eq(project.publicKey, key), isNull(project.archivedAt)));
+      if (!p) throw new ApiError(401, "INVALID_PROJECT_KEY", "Unknown project key");
+      if (!origin || !isOriginAllowed(origin, p.allowedOrigins)) {
+        // Remembered for the Install tab ("Blocked a request from … — Allow"); throttled, never fails the request.
+        if (origin) await recordRejectedOrigin(p, origin);
+        throw new ApiError(403, "ORIGIN_NOT_ALLOWED", "This site is not on the project's allowed origins");
+      }
+      c.set("project", p);
+      c.set("origin", origin);
+      await next();
+    } else {
+      const boot = await projectForPublicKey(key);
+      if (!boot) throw new ApiError(401, "INVALID_PROJECT_KEY", "Unknown project key");
+      if (!origin || !isOriginAllowed(origin, boot.allowedOrigins)) {
+        if (origin)
+          await withOrg(boot.orgId, async (db) => {
+            const [p] = await db
+              .select({ id: project.id, rejectedOrigins: project.rejectedOrigins })
+              .from(project)
+              .where(and(eq(project.id, boot.id), eq(project.publicKey, key), isNull(project.archivedAt)));
+            if (p) await recordRejectedOrigin(p, origin);
+          });
+        throw new ApiError(403, "ORIGIN_NOT_ALLOWED", "This site is not on the project's allowed origins");
+      }
+      const prepare = async () => {
+        const [p] = await getDb()
+          .select()
+          .from(project)
+          .where(and(eq(project.id, boot.id), eq(project.publicKey, key), isNull(project.archivedAt)));
+        if (!p) throw new ApiError(401, "INVALID_PROJECT_KEY", "Unknown project key");
+        if (!isOriginAllowed(origin, p.allowedOrigins))
+          throw new ApiError(403, "ORIGIN_NOT_ALLOWED", "This site is not on the project's allowed origins");
+        c.set("project", p);
+        c.set("origin", origin);
+      };
+      if (requestBoundary(c)?.databaseLifetime === "finite") {
+        await withOrgResponse(boot.orgId, c, async () => {
+          await prepare();
+          await next();
+        });
+      } else {
+        await withOrg(boot.orgId, prepare);
+        await next();
+      }
     }
-    c.set("project", p);
-    c.set("origin", origin);
-    await next();
     for (const [k, v] of Object.entries(corsHeaders(origin))) c.res.headers.set(k, v);
   })
 
@@ -491,13 +530,14 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
         throw new ApiError(403, "READ_ONLY", "This project is not accepting feedback from the page");
       }
 
-      const db = getDb();
       // Idempotency: the widget retries with the same clientId after a network failure. The replay
       // never carries the reporter token — it was handed out once, with the 201.
-      const [existing] = await db
-        .select({ id: feedback.id, number: feedback.number })
-        .from(feedback)
-        .where(and(eq(feedback.projectId, p.id), eq(feedback.clientId, input.clientId)));
+      const [existing] = await withOrg(p.orgId, (db) =>
+        db
+          .select({ id: feedback.id, number: feedback.number })
+          .from(feedback)
+          .where(and(eq(feedback.projectId, p.id), eq(feedback.clientId, input.clientId))),
+      );
       if (existing) return c.json({ feedback: existing }, 200);
 
       // Decode and type-check every file before anything is written.
@@ -574,38 +614,12 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
         );
       }
       const pageUrl = pageKey(p, input.page.url);
-      // A guest who came through a review link (wave-5 §3.5): the report records the link as its source.
-      // A revoked or expired link doesn't refuse the report; it just isn't attributed.
-      const via = await findReviewLink(p.id, c.req.header(REVIEW_TOKEN_HEADER));
-
       // Signed identity (wave-4 contract §4). The signature itself is never stored.
       let reporter: ReporterGuest | null = null;
       if (input.reporter) {
         const { signature, ...who } = input.reporter;
         reporter = { ...who, verified: verifyIdentity(p.identitySecret, who.externalId, signature) };
       }
-
-      // Resolve the page outside the transaction and without touching an existing row: an upsert
-      // that updates the row locks it, and every report on a busy page would queue behind it.
-      const [inserted] = await db
-        .insert(page)
-        .values({
-          orgId: p.orgId,
-          projectId: p.id,
-          url: pageUrl,
-          urlPattern: input.page.urlPattern,
-          title: input.page.title,
-        })
-        .onConflictDoNothing({ target: [page.projectId, page.url] })
-        .returning({ id: page.id });
-      const pageId =
-        inserted?.id ??
-        (
-          await db
-            .select({ id: page.id })
-            .from(page)
-            .where(and(eq(page.projectId, p.id), eq(page.url, pageUrl)))
-        )[0]?.id;
 
       // Write files before the insert, so the per-project counter row is locked only for a few
       // inserts, never for disk or network I/O.
@@ -644,10 +658,9 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       // Proof of authorship for resolve/reopen from the page: random, returned once, stored hashed.
       const reporterToken = randomToken(32);
 
-      // One statement allocates the per-project number and writes the report with its diagnostics,
-      // file records and activity entry. The counter row is locked only for the length of this
-      // statement; with separate round trips a busy event loop held it long enough for reports to
-      // queue behind each other (k6 load test: ~30 connections waiting on that one row; ADR 0013).
+      // Keep the counter/report/asset/activity writes together (ADR 0013). Diagnostics follow in
+      // the same finite transaction so their parent-derived RLS policy can see the feedback row.
+      // All uploads finish before the counter row is locked.
       const json = (v: unknown) => (v === undefined || v === null ? null : JSON.stringify(v));
       const diag = input.diagnostics;
       const assetRows = assets.map((a) => ({
@@ -662,7 +675,51 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       }));
       let created: { id: string; number: number } | undefined;
       try {
-        const rows = await db.execute<{ id: string; number: number }>(sql`
+        created = await withOrg(p.orgId, async (db) => {
+          // Revalidate the project capability after uploads and before creating any database rows.
+          const [current] = await db
+            .select({
+              id: project.id,
+              allowedOrigins: project.allowedOrigins,
+              widgetConfig: project.widgetConfig,
+            })
+            .from(project)
+            .where(and(eq(project.id, p.id), eq(project.publicKey, p.publicKey), isNull(project.archivedAt)));
+          if (!current) throw new ApiError(401, "INVALID_PROJECT_KEY", "Unknown project key");
+          if (!isOriginAllowed(c.var.origin, current.allowedOrigins))
+            throw new ApiError(
+              403,
+              "ORIGIN_NOT_ALLOWED",
+              "This site is not on the project's allowed origins",
+            );
+          if (parseWidgetConfig(current.widgetConfig).readOnly)
+            throw new ApiError(403, "READ_ONLY", "This project is not accepting feedback from the page");
+          // A guest who came through a review link (wave-5 §3.5): the report records the link as its source.
+          // A revoked or expired link doesn't refuse the report; it just isn't attributed.
+          const via = await findReviewLink(p.id, c.req.header(REVIEW_TOKEN_HEADER));
+
+          // Resolve the page in the final database unit, after uploads, without updating an existing row.
+          const [inserted] = await db
+            .insert(page)
+            .values({
+              orgId: p.orgId,
+              projectId: p.id,
+              url: pageUrl,
+              urlPattern: input.page.urlPattern,
+              title: input.page.title,
+            })
+            .onConflictDoNothing({ target: [page.projectId, page.url] })
+            .returning({ id: page.id });
+          const pageId =
+            inserted?.id ??
+            (
+              await db
+                .select({ id: page.id })
+                .from(page)
+                .where(and(eq(page.projectId, p.id), eq(page.url, pageUrl)))
+            )[0]?.id;
+
+          const rows = await db.execute<{ id: string; number: number }>(sql`
         with counter as (
           update ${project} set feedback_counter = feedback_counter + 1
           where id = ${p.id}
@@ -687,10 +744,6 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
              ${via?.id ?? null}::uuid
           from counter
           returning id, number
-        ), d as (
-          insert into ${diagnostics} (feedback_id, console, network)
-          select f.id, ${json(diag?.console)}::jsonb, ${json(diag?.network)}::jsonb
-          from f where ${diag !== undefined}
         ), a as (
           insert into ${feedbackAsset}
             (org_id, feedback_id, kind, storage_key, content_type, bytes, name, meta, annotations, capture)
@@ -706,16 +759,33 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
         )
         select id, number from f
       `);
-        created = rows[0];
-        if (!created) throw new Error("insert failed");
+          const result = rows[0];
+          if (!result) throw new Error("insert failed");
+          // A parent-derived RLS check cannot see a parent inserted in the same CTE snapshot.
+          // A second command in this transaction sees the new feedback and remains atomic with it.
+          if (diag !== undefined)
+            await db.insert(diagnostics).values({
+              feedbackId: result.id,
+              console: diag.console ?? null,
+              network: diag.network ?? null,
+            });
+          return result;
+        });
       } catch (err) {
         await removeAll();
         // Two retries of the same report racing each other: the unique (project, clientId) index
         // lets exactly one win; answer the other with the stored record.
-        const [dup] = await db
-          .select({ id: feedback.id, number: feedback.number })
-          .from(feedback)
-          .where(and(eq(feedback.projectId, p.id), eq(feedback.clientId, input.clientId)));
+        const [dup] = await withOrg(p.orgId, async (db) => {
+          const [current] = await db
+            .select({ id: project.id })
+            .from(project)
+            .where(and(eq(project.id, p.id), eq(project.publicKey, p.publicKey), isNull(project.archivedAt)));
+          if (!current) throw err;
+          return db
+            .select({ id: feedback.id, number: feedback.number })
+            .from(feedback)
+            .where(and(eq(feedback.projectId, p.id), eq(feedback.clientId, input.clientId)));
+        });
         if (dup) return c.json({ feedback: dup }, 200);
         throw err;
       }

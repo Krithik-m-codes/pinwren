@@ -14,48 +14,52 @@ const mockProjectState = vi.hoisted(() => ({
 
 vi.mock("@pinwren/db", async (importOriginal) => {
   const actual = await importOriginal<typeof Db>();
-  return {
-    ...actual,
-    getDb: vi.fn(() => ({
-      select: vi.fn(() => ({
-        from: vi.fn((table) => ({
-          where: vi.fn(() => {
-            if (table === actual.project) {
-              return [
-                {
-                  aiConfig: {
-                    enabled: mockProjectState.enabled,
-                    autoSummary: true,
-                    autoSeverity: true,
-                    detectDuplicates: false,
-                    generateRepro: false,
-                    allowReplayInAi: false,
-                  },
-                  widgetConfig: {},
-                },
-              ];
-            }
-            return [];
-          }),
-          leftJoin: vi.fn(() => ({
-            where: vi.fn(() => [
+  const database = () => ({
+    select: vi.fn(() => ({
+      from: vi.fn((table) => ({
+        where: vi.fn(() => {
+          if (table === actual.project) {
+            return [
               {
-                id: "00000000-0000-0000-0000-000000000001",
-                title: "Login issue",
-                body: "Cannot login with password",
-                anchor: null,
-                pageUrl: "https://example.com/login",
+                aiConfig: {
+                  enabled: mockProjectState.enabled,
+                  autoSummary: true,
+                  autoSeverity: true,
+                  detectDuplicates: false,
+                  generateRepro: false,
+                  allowReplayInAi: false,
+                },
+                widgetConfig: {},
               },
-            ]),
-          })),
-        })),
-      })),
-      insert: vi.fn(() => ({
-        values: vi.fn(() => ({
-          onConflictDoUpdate: vi.fn().mockResolvedValue([]),
+            ];
+          }
+          return [];
+        }),
+        leftJoin: vi.fn(() => ({
+          where: vi.fn(() => [
+            {
+              id: "00000000-0000-0000-0000-000000000001",
+              title: "Login issue",
+              body: "Cannot login with password",
+              anchor: null,
+              pageUrl: "https://example.com/login",
+            },
+          ]),
         })),
       })),
     })),
+    insert: vi.fn(() => ({
+      values: vi.fn(() => ({
+        onConflictDoUpdate: vi.fn().mockResolvedValue([]),
+      })),
+    })),
+  });
+  return {
+    ...actual,
+    getDb: vi.fn(database),
+    withOrg: vi.fn((_orgId: string, fn: (db: ReturnType<typeof database>) => unknown) =>
+      Promise.resolve(fn(database())),
+    ),
   };
 });
 

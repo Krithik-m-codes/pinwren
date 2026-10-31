@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { type Entitlements, LICENSE_FEATURES, type LicenseFeature, type LicensePayload } from "@pinwren/core";
-import { getDb, license, user } from "@pinwren/db";
-import { count, desc } from "drizzle-orm";
+import { currentOrgId, getDb, member, user } from "@pinwren/db";
+import { count, eq } from "drizzle-orm";
+import { latestInstanceLicense, saveInstanceLicense, removeInstanceLicenses } from "../db/system";
 import { env } from "../env";
 import { ApiError } from "../errors";
 import { trustedKeys } from "./keys";
@@ -20,6 +21,12 @@ const g = globalThis as unknown as {
 };
 
 async function seatsUsed(): Promise<number> {
+  if (env().PINWREN_MODE === "cloud") {
+    const orgId = currentOrgId();
+    if (!orgId) throw new Error("Cloud entitlements require a verified organization");
+    const [row] = await getDb().select({ n: count() }).from(member).where(eq(member.organizationId, orgId));
+    return row?.n ?? 0;
+  }
   const [row] = await getDb().select({ n: count() }).from(user);
   return row?.n ?? 0;
 }
@@ -34,11 +41,7 @@ async function currentRaw(): Promise<{ raw: string; source: LicenseSource } | nu
       return { raw: "", source: "file" };
     }
   }
-  const [row] = await getDb()
-    .select({ raw: license.raw })
-    .from(license)
-    .orderBy(desc(license.installedAt))
-    .limit(1);
+  const row = await latestInstanceLicense();
   return row ? { raw: row.raw, source: "upload" } : null;
 }
 
@@ -88,6 +91,12 @@ export function entitlementsFor(
 
 /** Resolved entitlements, cached per process for a minute (uploads clear the cache). */
 export function resolveEntitlements(): Promise<Resolved> {
+  if (env().PINWREN_MODE === "cloud") {
+    // A process-wide resolved value includes seat counts and must never cross tenant boundaries.
+    return Promise.all([currentRaw(), seatsUsed()]).then(([current, used]) =>
+      entitlementsFor(current?.raw ?? null, current?.source ?? null, used),
+    );
+  }
   const hit = g.__pinwrenLicense;
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.value;
   const value = (async () => {
@@ -138,7 +147,7 @@ export async function installLicense(raw: string, userId: string): Promise<Resol
   if (checked.status === "invalid" || !checked.payload) {
     throw new ApiError(400, "INVALID_LICENSE", checked.error ?? "Invalid licence");
   }
-  await getDb().insert(license).values({ raw: raw.trim(), payload: checked.payload, installedBy: userId });
+  await saveInstanceLicense({ raw: raw.trim(), payload: checked.payload, installedBy: userId });
   invalidateLicenseCache();
   return resolveEntitlements();
 }
@@ -147,7 +156,7 @@ export async function removeLicense(): Promise<Resolved> {
   if (env().PINWREN_LICENSE_FILE) {
     throw new ApiError(409, "LICENSE_LOCKED", "The licence is set by PINWREN_LICENSE_FILE on the server");
   }
-  await getDb().delete(license);
+  await removeInstanceLicenses();
   invalidateLicenseCache();
   return resolveEntitlements();
 }
