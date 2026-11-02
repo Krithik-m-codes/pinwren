@@ -8,6 +8,13 @@ From the first release on, release-please adds a section per version from the Co
 `main`; the widget's own changes are also listed in [`packages/widget/CHANGELOG.md`](packages/widget/CHANGELOG.md)
 once it is published.
 
+## [0.4.0](https://github.com/Krithik-m-codes/pinwren/compare/v0.3.0...v0.4.0) (2026-11-02)
+
+
+### Features
+
+* v2 dashboards, widget markers and screenshots, edition badge, global features ([#39](https://github.com/Krithik-m-codes/pinwren/issues/39)) ([e0d1892](https://github.com/Krithik-m-codes/pinwren/commit/e0d1892b872afa443ef45e9a736ce9d0f2c5fcec))
+
 ## [0.3.0](https://github.com/Krithik-m-codes/pinwren/compare/v0.2.0...v0.3.0) (2026-11-02)
 
 
