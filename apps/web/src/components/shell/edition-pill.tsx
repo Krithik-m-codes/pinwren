@@ -2,6 +2,7 @@
 
 import { useT } from "@/lib/i18n/provider";
 import { useEntitlementsQuery, useMeQuery } from "@/lib/store/api";
+import { useMounted } from "@/lib/use-synced-state";
 
 /** Catalogue key per edition. The edition itself comes from the server (mode and licence), never from here. */
 const EDITION_KEY = {
@@ -15,9 +16,11 @@ const EDITION_KEY = {
  */
 export function EditionPill() {
   const t = useT();
+  // The store may already hold the edition on the client while the server HTML has none: render after mount.
+  const mounted = useMounted();
   const edition = useEntitlementsQuery(undefined).data?.edition;
   const updateWaiting = !!useMeQuery(undefined).data?.update;
-  if (edition !== "community" && edition !== "enterprise") return null;
+  if (!mounted || (edition !== "community" && edition !== "enterprise")) return null;
   return (
     <span
       className="relative inline-flex shrink-0 items-center rounded-full border border-border bg-muted px-1.5 py-px text-[0.625rem] leading-4 font-medium text-muted-foreground"
