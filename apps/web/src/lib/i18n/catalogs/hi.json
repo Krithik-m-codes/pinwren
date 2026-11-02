@@ -2614,5 +2614,15 @@
   "landing.description": "Where Pinwren opens when you visit the site. Saved on this device.",
   "landing.inbox": "Inbox",
   "landing.dashboard": "Dashboard",
-  "landing.myWork": "My work"
+  "landing.myWork": "My work",
+  "gallery.open": "{name} का पूर्वावलोकन",
+  "gallery.zoomIn": "ज़ूम इन",
+  "gallery.zoomOut": "ज़ूम आउट",
+  "gallery.fit": "विंडो में फ़िट करें",
+  "gallery.actual": "वास्तविक आकार",
+  "gallery.prev": "पिछली छवि",
+  "gallery.next": "अगली छवि",
+  "gallery.position": "{n} में से {i}",
+  "gallery.failed": "यह फ़ाइल लोड नहीं हो सकी",
+  "gallery.openNew": "नए टैब में खोलें"
 }

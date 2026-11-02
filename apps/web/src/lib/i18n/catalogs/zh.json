@@ -2614,5 +2614,15 @@
   "landing.description": "Where Pinwren opens when you visit the site. Saved on this device.",
   "landing.inbox": "Inbox",
   "landing.dashboard": "Dashboard",
-  "landing.myWork": "My work"
+  "landing.myWork": "My work",
+  "gallery.open": "预览 {name}",
+  "gallery.zoomIn": "放大",
+  "gallery.zoomOut": "缩小",
+  "gallery.fit": "适应窗口",
+  "gallery.actual": "实际大小",
+  "gallery.prev": "上一张图片",
+  "gallery.next": "下一张图片",
+  "gallery.position": "第 {i} 张，共 {n} 张",
+  "gallery.failed": "无法加载此文件",
+  "gallery.openNew": "在新标签页中打开"
 }

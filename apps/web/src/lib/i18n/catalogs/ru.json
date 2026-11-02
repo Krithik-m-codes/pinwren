@@ -2678,5 +2678,15 @@
   "landing.description": "Where Pinwren opens when you visit the site. Saved on this device.",
   "landing.inbox": "Inbox",
   "landing.dashboard": "Dashboard",
-  "landing.myWork": "My work"
+  "landing.myWork": "My work",
+  "gallery.open": "Просмотр {name}",
+  "gallery.zoomIn": "Увеличить",
+  "gallery.zoomOut": "Уменьшить",
+  "gallery.fit": "По размеру окна",
+  "gallery.actual": "Реальный размер",
+  "gallery.prev": "Предыдущее изображение",
+  "gallery.next": "Следующее изображение",
+  "gallery.position": "{i} из {n}",
+  "gallery.failed": "Не удалось загрузить этот файл",
+  "gallery.openNew": "Открыть в новой вкладке"
 }

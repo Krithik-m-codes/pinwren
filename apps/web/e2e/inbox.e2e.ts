@@ -102,7 +102,7 @@ test.describe("inbox", () => {
     await page.goto(`/inbox?project=${projectId}&status=all&item=${items.bug.id}`);
     const attachments = detail.getByRole("region", { name: "Attachments" });
     await expect(attachments.getByText("receipt.pdf")).toBeVisible();
-    const href = await attachments.getByRole("link", { name: /receipt\.pdf/ }).getAttribute("href");
+    const href = await attachments.getByRole("link", { name: "Download: receipt.pdf" }).getAttribute("href");
     expect(href).toMatch(/^\/api\/assets\/[0-9a-f-]+$/);
     const res = await page.request.get(href ?? "");
     expect(res.status()).toBe(200);

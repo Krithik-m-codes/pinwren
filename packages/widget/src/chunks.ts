@@ -8,6 +8,7 @@
 //   widget-capture.<hash>.js   SnapDOM (screenshot engine)
 //   widget-replay.<hash>.js    rrweb recorder (session replay)
 //   widget-flows.<hash>.js     composer attachments, re-pin mode (wave 5)
+//   widget-shots.<hash>.js     "Add screenshot" menu, attachment thumbnails + lightbox, annotate dialog
 //   widget-i18n-<code>.<hash>.js
 //
 // File names are content-hashed so CDNs can cache them forever; build.mjs inlines the name map into
@@ -19,16 +20,10 @@
 
 declare const __PINWREN_MANIFEST__: Record<string, string> | undefined;
 
-export type ChunkName = "capture" | "editor" | "report" | "panel" | "replay" | "flows";
+export type ChunkName = "capture" | "editor" | "report" | "panel" | "replay" | "flows" | "shots";
 
-const GLOBALS: Record<ChunkName, string> = {
-  capture: "__pinwrenCapture",
-  editor: "__pinwrenEditor",
-  report: "__pinwrenReport",
-  panel: "__pinwrenPanel",
-  replay: "__pinwrenReplay",
-  flows: "__pinwrenFlows",
-};
+/** The window global a chunk registers itself on: `__pinwren` + the capitalised name. */
+const globalOf = (name: ChunkName) => `__pinwren${name.charAt(0).toUpperCase()}${name.slice(1)}`;
 
 const MANIFEST: Record<string, string> = typeof __PINWREN_MANIFEST__ === "object" ? __PINWREN_MANIFEST__ : {};
 
@@ -58,7 +53,7 @@ const pending = new Map<ChunkName, Promise<unknown>>();
 
 export function loadChunk<T>(base: string, name: ChunkName): Promise<T> {
   const w = window as unknown as Record<string, unknown>;
-  const ready = w[GLOBALS[name]];
+  const ready = w[globalOf(name)];
   if (ready) return Promise.resolve(ready as T);
   let p = pending.get(name);
   if (!p) {
@@ -67,7 +62,7 @@ export function loadChunk<T>(base: string, name: ChunkName): Promise<T> {
       const s = script(src);
       s.onload = () => {
         s.remove();
-        const m = w[GLOBALS[name]];
+        const m = w[globalOf(name)];
         if (m) resolve(m);
         else reject(new Error(`${src} did not register`));
       };

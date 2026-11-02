@@ -2614,5 +2614,15 @@
   "landing.description": "Where Pinwren opens when you visit the site. Saved on this device.",
   "landing.inbox": "Inbox",
   "landing.dashboard": "Dashboard",
-  "landing.myWork": "My work"
+  "landing.myWork": "My work",
+  "gallery.open": "Visualizar {name}",
+  "gallery.zoomIn": "Ampliar",
+  "gallery.zoomOut": "Reduzir",
+  "gallery.fit": "Ajustar à janela",
+  "gallery.actual": "Tamanho real",
+  "gallery.prev": "Imagem anterior",
+  "gallery.next": "Próxima imagem",
+  "gallery.position": "{i} de {n}",
+  "gallery.failed": "Não foi possível carregar este arquivo",
+  "gallery.openNew": "Abrir em uma nova aba"
 }
