@@ -422,7 +422,7 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
                             alt=""
                             className="aspect-[16/10] w-full object-cover object-top"
                           />
-                          <span className="block bg-muted px-1.5 py-0.5 text-left font-mono text-[10px] text-muted-foreground">
+                          <span className="block bg-muted px-1.5 py-0.5 text-left font-mono text-xs text-muted-foreground">
                             #{c.row.number}
                           </span>
                         </button>
@@ -482,7 +482,7 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
                   >
                     <span
                       className={cn(
-                        "grid h-5 min-w-5 shrink-0 place-items-center rounded-full rounded-bl-none px-1 text-[10px] font-semibold text-white tabular-nums",
+                        "grid h-5 min-w-5 shrink-0 place-items-center rounded-full rounded-bl-none px-1 text-xs font-semibold text-white tabular-nums",
                         isClosedStatus(status) ? "bg-emerald-600" : "bg-blue-600",
                       )}
                     >
@@ -524,7 +524,7 @@ function PageReview({ group, projectId }: { group: PageGroup; projectId: string 
             {selected && (
               <>
                 <FeedbackDetailPanel key={selected} id={selected} onClose={() => open(null)} />
-                <div className="flex flex-wrap gap-2 px-5 pb-5">
+                <div className="flex flex-wrap gap-2 px-4 pb-4">
                   <ButtonLink href={`/inbox?status=all&item=${selected}`} size="sm" variant="outline">
                     {t("projects1.openInInbox")}
                   </ButtonLink>

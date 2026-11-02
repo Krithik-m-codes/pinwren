@@ -202,7 +202,7 @@ function BoardCard({
         )}
         <p className="line-clamp-2 pr-6 text-sm leading-snug font-medium">{item.title || item.body}</p>
         {item.pageUrl && (
-          <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{pathOf(item.pageUrl)}</p>
+          <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{pathOf(item.pageUrl)}</p>
         )}
         {(item.labels.length > 0 || item.dueAt) && (
           <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">

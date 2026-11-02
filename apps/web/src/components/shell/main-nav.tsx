@@ -35,7 +35,7 @@ export function NavLinks({ pathname = null }: { pathname?: string | null }) {
         >
           <Search />
           <span>{t("nav.search")}</span>
-          <kbd className="ml-auto rounded border bg-muted px-1 font-mono text-[10px]">⌘K</kbd>
+          <kbd className="ml-auto rounded border bg-muted px-1 font-mono text-xs">⌘K</kbd>
         </SidebarMenuButton>
       </SidebarMenuItem>
       {NAV.map(({ href, label, icon: Icon }) => (

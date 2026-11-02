@@ -4,7 +4,7 @@ export function Kbd({ children, className }: { children: React.ReactNode; classN
   return (
     <kbd
       className={cn(
-        "inline-grid h-5 min-w-5 place-items-center rounded border bg-muted px-1 font-mono text-[11px] text-muted-foreground",
+        "inline-grid h-5 min-w-5 place-items-center rounded border bg-muted px-1 font-mono text-xs text-muted-foreground",
         className,
       )}
     >

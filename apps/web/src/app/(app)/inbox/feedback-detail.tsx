@@ -157,7 +157,7 @@ export function FeedbackDetailPanel({
 
   if (detail.isLoading) {
     return (
-      <div className="space-y-4 p-5" aria-busy>
+      <div className="space-y-4 p-4" aria-busy>
         <Skeleton className="h-5 w-40" />
         <Skeleton className="h-7 w-3/4" />
         <div className="flex gap-2">
@@ -469,7 +469,7 @@ function DetailBody({
         </div>
       )}
 
-      <div className="space-y-6 px-4 py-5 sm:px-5">
+      <div className="space-y-6 px-4 py-4">
         <div>
           <TitleField
             key={f.title ?? ""}

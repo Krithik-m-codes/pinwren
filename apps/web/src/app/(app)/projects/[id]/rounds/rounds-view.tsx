@@ -104,7 +104,7 @@ export function RoundsView({ projectId }: { projectId: string }) {
           </Button>
         )}
       </PageHeader>
-      <div className="mx-auto w-full max-w-5xl p-4 pb-16">
+      <div className="mx-auto w-full max-w-5xl p-4 pb-12">
         {rounds.isLoading && (
           <div className="grid gap-3 sm:grid-cols-2">
             <Skeleton className="h-40 rounded-xl" />

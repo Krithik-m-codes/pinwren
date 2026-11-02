@@ -201,7 +201,7 @@ export function ReplayViewer({
               />
             ))}
           </div>
-          <p className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+          <p className="flex flex-wrap gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <span className="size-2 rounded-full bg-destructive" /> {t("inbox1.replayLegendErrors")}
             </span>

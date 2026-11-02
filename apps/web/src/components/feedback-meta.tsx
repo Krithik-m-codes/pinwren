@@ -59,7 +59,7 @@ export function PriorityIcon({ priority, className }: { priority: Priority; clas
         role="img"
         aria-label={t(meta.labelKey)}
         className={cn(
-          "grid size-4 place-items-center rounded-[4px] bg-red-500 text-[10px] font-bold text-white",
+          "grid size-4 place-items-center rounded-[4px] bg-red-500 text-xs font-bold text-white",
           className,
         )}
       >

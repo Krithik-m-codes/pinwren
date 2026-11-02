@@ -51,7 +51,7 @@ export function NotificationsBell() {
       >
         <Bell />
         {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-blue-600 px-1 text-[10px] leading-none font-semibold text-white tabular-nums">
+          <span className="absolute -top-0.5 -right-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-blue-600 px-1 text-xs leading-none font-semibold text-white tabular-nums">
             {unread > 99 ? "99+" : unread}
           </span>
         )}
@@ -87,7 +87,7 @@ export function NotificationsBell() {
             </div>
           )}
           {query.isSuccess && items.length === 0 && (
-            <div className="px-6 py-10 text-center">
+            <div className="px-4 py-8 text-center">
               <Bell className="mx-auto mb-2 size-5 text-muted-foreground" />
               <p className="text-sm font-medium">{t("components2.allCaughtUp")}</p>
               <p className="mt-1 text-xs text-muted-foreground">{t("components2.allCaughtUpHint")}</p>
@@ -118,7 +118,7 @@ export function NotificationsBell() {
                     <span className="block truncate text-sm">{notificationSubject(n, t)}</span>
                   </span>
                   <span className="flex shrink-0 flex-col items-end gap-1.5">
-                    <span className="text-[11px] text-muted-foreground">{timeAgo(n.createdAt)}</span>
+                    <span className="text-xs text-muted-foreground">{timeAgo(n.createdAt)}</span>
                     {!n.readAt && (
                       <span className="size-1.5 rounded-full bg-blue-600">
                         <span className="sr-only">{t("components2.unread")}</span>
