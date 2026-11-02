@@ -17,6 +17,22 @@ export function elementAt(host: Element, x: number, y: number): Element | null {
   return null;
 }
 
+export type PickMode = "element" | "region";
+/** The last mode used, kept for the page's lifetime so a second comment starts where the first left off. */
+let lastMode: PickMode = "element";
+
+/** The ancestors of `el` from the page's top level down to `el` itself, at most `max` of them (breadcrumb). */
+export function crumbPath(el: Element, max = 5): Element[] {
+  const path: Element[] = [];
+  for (
+    let n: Element | null = el;
+    n && n !== document.body && n !== document.documentElement;
+    n = n.parentElement
+  )
+    path.unshift(n);
+  return path.slice(-max);
+}
+
 const DRAG = 5; // px before a press becomes a region drag
 const LONG_PRESS = 450;
 
@@ -25,6 +41,9 @@ export class Picker {
   private outline = h("div", { class: "outline" }, h("span", {}));
   private draft = h("div", { class: "area draft" });
   private hint: HTMLElement;
+  private crumbs = h("div", { class: "crumbs" });
+  private modeBtns: Record<PickMode, HTMLButtonElement> | null = null;
+  mode: PickMode = lastMode;
   private cur: Element | null = null;
   private last: { x: number; y: number; shift: boolean } | null = null;
   private down: {
@@ -50,6 +69,7 @@ export class Picker {
     this.hint = h(
       "div",
       { class: "hint", role: "status" },
+      !elementOnly && this.modeToggle(),
       elementOnly ? t("hintElement") : touch ? t("hintTouch") : t("hintMouse"),
       !touch && h("kbd", {}, "Shift"),
       !touch && t("parent"),
@@ -64,7 +84,8 @@ export class Picker {
     s.addEventListener("pointerup", this.onUp);
     s.addEventListener("pointercancel", this.reset);
     s.addEventListener("contextmenu", (e) => e.preventDefault());
-    root.append(this.shield, this.outline, this.draft, this.hint);
+    this.crumbs.hidden = true;
+    root.append(this.shield, this.outline, this.draft, this.hint, this.crumbs);
     document.addEventListener("keydown", this.onKey, true);
     document.addEventListener("keyup", this.onKey, true);
   }
@@ -73,12 +94,13 @@ export class Picker {
     clearTimeout(this.timer);
     document.removeEventListener("keydown", this.onKey, true);
     document.removeEventListener("keyup", this.onKey, true);
-    for (const el of [this.shield, this.outline, this.draft, this.hint]) el.remove();
+    for (const el of [this.shield, this.outline, this.draft, this.hint, this.crumbs]) el.remove();
   }
 
   /** Re-measure after scroll/resize so the outline stays on its element. */
   refresh() {
-    if (this.cur) this.show(this.cur);
+    if (this.cur?.isConnected) this.show(this.cur);
+    else if (this.cur) this.show(null);
   }
 
   private at(x: number, y: number): Element | null {
@@ -93,6 +115,7 @@ export class Picker {
   private show(el: Element | null) {
     this.cur = el;
     this.outline.hidden = !el;
+    this.paintCrumbs(el);
     if (!el) return;
     const r = el.getBoundingClientRect();
     Object.assign(this.outline.style, {
@@ -103,6 +126,33 @@ export class Picker {
     });
     (this.outline.firstElementChild as HTMLElement).textContent =
       `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ""}`;
+  }
+
+  /** The path to the hovered element: a click walks up to a parent, the last one picks. */
+  private paintCrumbs(el: Element | null) {
+    this.crumbs.hidden = !el || this.mode === "region";
+    this.crumbs.replaceChildren();
+    if (!el) return;
+    const path = crumbPath(el);
+    for (const [i, n] of path.entries()) {
+      const last = i === path.length - 1;
+      const b = h("button", {
+        type: "button",
+        class: `crumb${last ? " cur" : ""}`,
+        ...(last ? { "aria-current": "true" } : {}),
+        onclick: () => {
+          if (last) this.pickEl(n);
+          else this.show(n);
+        },
+      });
+      b.append(n.tagName.toLowerCase());
+      this.crumbs.append(b);
+    }
+  }
+
+  private pickEl(el: Element) {
+    const r = el.getBoundingClientRect();
+    this.done({ el, x: r.left + r.width / 2, y: r.top + r.height / 2 });
   }
 
   private hover(x: number, y: number, shift: boolean) {
@@ -157,6 +207,7 @@ export class Picker {
     if (!this.dragging && dist > DRAG && !this.elementOnly) {
       this.dragging = true;
       this.draft.hidden = false;
+      this.setMode("region"); // dragging in element mode is a region too: the toggle follows
     }
     if (this.dragging) {
       const b = boxFrom(d.x, d.y, e.clientX, e.clientY);
@@ -186,9 +237,37 @@ export class Picker {
       if (under) this.done({ el: regionAnchor(under, region), x: region.left, y: region.top, region });
       return;
     }
+    // Region mode wants a drag; a stray click is not a comment.
+    if (this.mode === "region" && !this.elementOnly) return;
     const el = this.withShift(this.at(e.clientX, e.clientY), e.shiftKey);
     if (el) this.done({ el, x: e.clientX, y: e.clientY });
   };
+
+  private modeToggle(): HTMLElement {
+    const mk = (m: PickMode, text: string) => {
+      const b = h("button", {
+        type: "button",
+        class: "mode",
+        role: "radio",
+        "aria-checked": String(this.mode === m),
+        onclick: () => this.setMode(m),
+      });
+      b.append(text);
+      return b;
+    };
+    const el = h("div", { class: "modes", role: "radiogroup", "aria-label": t("pickMode") });
+    this.modeBtns = { element: mk("element", t("modeElement")), region: mk("region", t("modeRegion")) };
+    el.append(this.modeBtns.element, this.modeBtns.region);
+    return el;
+  }
+
+  setMode(m: PickMode) {
+    if (this.elementOnly || m === this.mode) return;
+    this.mode = lastMode = m;
+    for (const k of ["element", "region"] as const)
+      this.modeBtns?.[k].setAttribute("aria-checked", String(k === m));
+    if (m === "region") this.show(null);
+  }
 
   private reset = () => {
     clearTimeout(this.timer);
@@ -203,6 +282,24 @@ export class Picker {
       return;
     }
     if (e.type !== "keydown") return;
+    if (
+      !this.elementOnly &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey &&
+      !(e.target as Element).closest("input,textarea,select,[contenteditable]")
+    ) {
+      if (e.key === "e" || e.key === "E") {
+        e.preventDefault();
+        this.setMode("element");
+        return;
+      }
+      if (e.key === "r" || e.key === "R") {
+        e.preventDefault();
+        this.setMode("region");
+        return;
+      }
+    }
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
@@ -229,10 +326,14 @@ export class Picker {
         this.show(document.querySelector("main, [role=main]") ?? document.body.firstElementChild);
       return;
     }
-    if (e.key === "Enter" && c) {
+    if (
+      e.key === "Enter" &&
+      c &&
+      !(e.composedPath()[0] instanceof HTMLButtonElement) &&
+      this.mode === "element"
+    ) {
       e.preventDefault();
-      const r = c.getBoundingClientRect();
-      this.done({ el: c, x: r.left + r.width / 2, y: r.top + r.height / 2 });
+      this.pickEl(c);
     }
   };
 }
