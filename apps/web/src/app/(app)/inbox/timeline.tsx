@@ -725,7 +725,7 @@ export function CommentComposer({
             </Tabs>
           )}
         />
-        <span className="ml-auto hidden text-[11px] text-muted-foreground sm:inline">
+        <span className="ml-auto hidden text-xs text-muted-foreground sm:inline">
           {t("inbox2.ctrlEnterToSend")}
         </span>
         <Button type="submit" size="sm" disabled={!body.trim() || isSubmitting}>

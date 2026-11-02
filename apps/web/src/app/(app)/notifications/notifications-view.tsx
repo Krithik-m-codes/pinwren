@@ -59,7 +59,7 @@ export function NotificationsView() {
   return (
     <>
       <PageHeader title={t("other1.notifications")} />
-      <div className="mx-auto w-full max-w-3xl space-y-4 p-4 pb-16">
+      <div className="mx-auto w-full max-w-3xl space-y-4 p-4 pb-12">
         <div className="flex flex-wrap items-center gap-2">
           <Segmented
             label={t("other1.show")}

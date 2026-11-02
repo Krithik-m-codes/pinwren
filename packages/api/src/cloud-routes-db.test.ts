@@ -294,6 +294,7 @@ const cases: Record<string, Spec> = {
     body: () => ({ name: "Scoped Project", slug: `scoped-${randomUUID().slice(0, 8)}` }),
   }),
   "POST /api/projects/:id/action-secret/rotate": foreign(),
+  "POST /api/projects/:id/check-install": foreign(),
   "POST /api/projects/:id/export": foreign({ body: () => ({}) }),
   "POST /api/projects/:id/identity-secret/rotate": foreign(),
   "POST /api/projects/:id/integrations": foreign({

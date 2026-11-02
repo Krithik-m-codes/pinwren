@@ -46,7 +46,7 @@ export function LabelsTab({ project }: { project: ProjectDetail }) {
         </CardTitle>
         <CardDescription>
           {t("projects1.labelsDescriptionBefore")}{" "}
-          <kbd className="rounded border px-1 font-mono text-[11px]">l</kbd>
+          <kbd className="rounded border px-1 font-mono text-xs">l</kbd>
           {t("projects1.labelsDescriptionAfter")}
         </CardDescription>
       </CardHeader>

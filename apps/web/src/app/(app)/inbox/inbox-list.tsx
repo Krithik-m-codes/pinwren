@@ -592,7 +592,7 @@ export function PresenceStack({ users, className }: { users: PresenceUser[]; cla
           <UserAvatar key={u.id} name={u.name} image={u.image} className="size-5 ring-2 ring-background" />
         ))}
         {users.length > 3 && (
-          <span className="grid size-5 place-items-center rounded-full bg-muted text-[10px] ring-2 ring-background">
+          <span className="grid size-5 place-items-center rounded-full bg-muted text-xs ring-2 ring-background">
             +{users.length - 3}
           </span>
         )}

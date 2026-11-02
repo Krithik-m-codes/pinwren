@@ -31,6 +31,7 @@ import { env } from "../env";
 import { audienceOf, forbidViewerWrites, requirePermission } from "../permissions";
 import { ensureActionSecret, rotateActionSecret, runPanelAction } from "../services/actions";
 import { assetResponse } from "../services/assets";
+import { checkInstall } from "../services/install-check";
 import { ensureIdentitySecret, rotateIdentitySecret } from "../services/identity";
 import { presetValues, projectCreateWithPreset, pruneRejected } from "../services/project-setup";
 import { emit } from "../events";
@@ -304,6 +305,21 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       .returning();
     if (!p) throw notFound("Project");
     return c.json({ project: projectOut(p, c.var.role) });
+  })
+
+  /** Fetches the project's allowed sites and looks for its widget tag (SSRF-safe; org admins only). */
+  .post("/projects/:id/check-install", requireOrgAdmin, async (c) => {
+    const [p] = await getDb()
+      .select({
+        publicKey: project.publicKey,
+        allowedOrigins: project.allowedOrigins,
+        lastSeenAt: project.lastSeenAt,
+        rejectedOrigins: project.rejectedOrigins,
+      })
+      .from(project)
+      .where(and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId)));
+    if (!p) throw notFound("Project");
+    return c.json({ check: await checkInstall(p) });
   })
 
   /** The secret that signs webhook panel actions (created on first read). Org admins only. */

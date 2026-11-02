@@ -77,14 +77,14 @@ export function LabelChips({
       {shown.map((l) => (
         <span
           key={l.id}
-          className="inline-flex max-w-28 items-center gap-1 rounded-full border px-1.5 py-px text-[11px] leading-4 text-foreground/80"
+          className="inline-flex max-w-28 items-center gap-1 rounded-full border px-1.5 py-px text-xs leading-4 text-foreground/80"
         >
           <LabelDot color={l.color} className="size-1.5" />
           <span className="truncate">{l.name}</span>
         </span>
       ))}
       {labels.length > max && (
-        <span className="text-[11px] text-muted-foreground tabular-nums">+{labels.length - max}</span>
+        <span className="text-xs text-muted-foreground tabular-nums">+{labels.length - max}</span>
       )}
     </span>
   );

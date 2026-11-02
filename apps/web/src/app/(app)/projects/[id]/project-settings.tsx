@@ -86,7 +86,7 @@ export function ProjectSettings({ id }: { id: string }) {
           <Inbox /> <span className="hidden sm:inline">{t("projects2.openInbox")}</span>
         </ButtonLink>
       </PageHeader>
-      <div className="mx-auto w-full max-w-5xl p-4 pb-16">
+      <div className="mx-auto w-full max-w-5xl p-4 pb-12">
         {!canWrite && (
           <p
             className="mb-4 flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-sm text-muted-foreground"

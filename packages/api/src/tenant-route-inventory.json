@@ -759,6 +759,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: POST /api/projects/:id/action-secret/rotate"
   },
+  "POST /api/projects/:id/check-install": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/projects/:id/check-install"
+  },
   "POST /api/projects/:id/export": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
