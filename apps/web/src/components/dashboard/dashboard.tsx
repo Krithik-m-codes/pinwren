@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -142,17 +143,19 @@ export function Dashboard({
               }
             />
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>{t("dash.range")}</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={String(layout.days)}
-                onValueChange={(v) => edit(setRange(layout, Number(v) as Range))}
-              >
-                {RANGES.map((d) => (
-                  <DropdownMenuRadioItem key={d} value={String(d)}>
-                    {t(`dash.range${d}` as "dash.range7")}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>{t("dash.range")}</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={String(layout.days)}
+                  onValueChange={(v) => edit(setRange(layout, Number(v) as Range))}
+                >
+                  {RANGES.map((d) => (
+                    <DropdownMenuRadioItem key={d} value={String(d)}>
+                      {t(`dash.range${d}` as "dash.range7")}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
           {editing ? (
@@ -314,31 +317,35 @@ function WidgetControls({
           }
         />
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>{t("dash.width")}</DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={String(slot.w)}
-            onValueChange={(v) => onResize({ w: Number(v) as Slot["w"] })}
-          >
-            {def.spans.map((w) => (
-              <DropdownMenuRadioItem key={w} value={String(w)}>
-                {t(WIDTH_NAMES[w])}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>{t("dash.width")}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={String(slot.w)}
+              onValueChange={(v) => onResize({ w: Number(v) as Slot["w"] })}
+            >
+              {def.spans.map((w) => (
+                <DropdownMenuRadioItem key={w} value={String(w)}>
+                  {t(WIDTH_NAMES[w])}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuGroup>
           {def.kind !== "kpi" && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuLabel>{t("dash.height")}</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={String(slot.h)}
-                onValueChange={(v) => onResize({ h: Number(v) as Slot["h"] })}
-              >
-                {HEIGHTS.map((h) => (
-                  <DropdownMenuRadioItem key={h} value={String(h)}>
-                    {t(`dash.h${h}` as "dash.h1")}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>{t("dash.height")}</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={String(slot.h)}
+                  onValueChange={(v) => onResize({ h: Number(v) as Slot["h"] })}
+                >
+                  {HEIGHTS.map((h) => (
+                    <DropdownMenuRadioItem key={h} value={String(h)}>
+                      {t(`dash.h${h}` as "dash.h1")}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuGroup>
             </>
           )}
         </DropdownMenuContent>
