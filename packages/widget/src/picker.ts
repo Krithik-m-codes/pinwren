@@ -207,7 +207,8 @@ export class Picker {
     if (!this.dragging && dist > DRAG && !this.elementOnly) {
       this.dragging = true;
       this.draft.hidden = false;
-      this.setMode("region"); // dragging in element mode is a region too: the toggle follows
+      // A drag is a region in either mode, but it must not flip the (remembered) mode: the next plain click
+      // would then do nothing.
     }
     if (this.dragging) {
       const b = boxFrom(d.x, d.y, e.clientX, e.clientY);
