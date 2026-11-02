@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import {
   captureConfig,
   commentCreate,
+  dashboardStatsQuery,
   commentUpdate,
   feedbackListQuery,
   feedbackUpdate,
@@ -44,6 +45,7 @@ import {
   trashFeedback,
   updateFeedback,
 } from "../services/feedback";
+import { dashboardStats } from "../services/stats";
 import { reproductionContext } from "../services/reproduction";
 import { getSecuritySettings } from "../settings/instance";
 import { resolveSmtp } from "../email/config";
@@ -169,6 +171,11 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
   .get("/me/entitlements", async (c) => c.json(publicEntitlements(await resolveEntitlements())))
 
   // Members and invitations: routes/members.ts (wave 5).
+
+  // --- Dashboard numbers ---------------------------------------------------------------------------
+  .get("/stats", zValidator("query", dashboardStatsQuery), async (c) =>
+    c.json(await dashboardStats(c.var.orgId, c.var.userId, c.req.valid("query"))),
+  )
 
   // --- Projects ------------------------------------------------------------------------------------
   .get("/projects", async (c) => {

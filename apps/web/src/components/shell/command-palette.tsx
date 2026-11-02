@@ -1,6 +1,16 @@
 "use client";
 
-import { Bookmark, FolderKanban, FolderPlus, Inbox, Monitor, Moon, Sun } from "lucide-react";
+import {
+  Bookmark,
+  FolderKanban,
+  FolderPlus,
+  Inbox,
+  LayoutDashboard,
+  Monitor,
+  Moon,
+  SlidersHorizontal,
+  Sun,
+} from "lucide-react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -25,6 +35,12 @@ import { visibleSettingsPages } from "@/lib/settings-nav";
 import { viewHref } from "./sidebar-lists";
 
 const PAGES: { href: Route; label: Key; icon: typeof Inbox; keywords?: string[] }[] = [
+  {
+    href: "/dashboard",
+    label: "nav.dashboard",
+    icon: LayoutDashboard,
+    keywords: ["home", "overview", "stats"],
+  },
   { href: "/inbox", label: "components2.inbox", icon: Inbox, keywords: ["feedback", "triage"] },
   {
     href: "/projects",
@@ -136,6 +152,13 @@ export function CommandPalette() {
                   <FolderPlus /> {t("components2.newProject")}
                 </CommandItem>
               )}
+              <CommandItem
+                value={t("dash.customiseCommand")}
+                keywords={["widgets", "layout", "edit"]}
+                onSelect={() => run(() => router.push("/dashboard?edit=1"))}
+              >
+                <SlidersHorizontal /> {t("dash.customiseCommand")}
+              </CommandItem>
               <CommandItem value={t("components2.lightTheme")} onSelect={() => run(() => setTheme("light"))}>
                 <Sun /> {t("components2.lightTheme")}
               </CommandItem>

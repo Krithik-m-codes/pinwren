@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ButtonLink } from "@/components/button-link";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { STATUS_META } from "@/components/feedback-meta";
+import { Dashboard } from "@/components/dashboard/dashboard";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -361,6 +362,10 @@ export function InboxView() {
       </PageHeader>
 
       <SetupChecklist />
+
+      {!trash && (
+        <Dashboard scope="inbox" {...(projectId ? { projectId } : {})} className="border-b px-3 py-2" />
+      )}
 
       <InboxToolbar
         filters={filters}

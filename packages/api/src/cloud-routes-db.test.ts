@@ -203,6 +203,7 @@ const cases: Record<string, Spec> = {
   "GET /api/notifications": scoped(),
   "GET /api/privacy/erasures": scoped(),
   "GET /api/projects": scoped(),
+  "GET /api/stats": scoped(),
   "GET /api/projects/:id": foreign(),
   "GET /api/projects/:id/action-secret": foreign(),
   "GET /api/projects/:id/ai": foreign(),

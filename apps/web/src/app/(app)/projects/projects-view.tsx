@@ -4,6 +4,7 @@ import { FolderPlus, Globe } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RelativeTime } from "@/components/feedback-meta";
+import { Dashboard } from "@/components/dashboard/dashboard";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,9 @@ export function ProjectsView() {
           </Button>
         )}
       </PageHeader>
+      <div className="px-4 pt-3">
+        <Dashboard scope="projects" />
+      </div>
       <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
         {projects.isLoading && [0, 1, 2].map((i) => <Skeleton key={i} className="h-36" />)}
         {projects.data?.projects.map((p) => (
