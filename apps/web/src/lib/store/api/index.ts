@@ -33,6 +33,7 @@ export const {
   useCreateProjectMutation,
   useUpdateProjectMutation,
   useRotateProjectKeyMutation,
+  useCheckInstallMutation,
   useLazyActionSecretQuery,
   useRotateActionSecretMutation,
   useLazyIdentitySecretQuery,

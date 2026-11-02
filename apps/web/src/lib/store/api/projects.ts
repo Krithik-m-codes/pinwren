@@ -24,6 +24,22 @@ export type ProjectPatch = Partial<
   archived?: boolean;
 };
 
+/** `POST /projects/:id/check-install` (mirrors `InstallCheck` in packages/api). */
+export type InstallCheckResult = {
+  checkedAt: string;
+  noSites: boolean;
+  lastSeenAt: string | null;
+  refusedOrigins: string[];
+  sites: {
+    site: string;
+    url: string;
+    verdict: "found" | "script_missing" | "key_mismatch" | "unreachable";
+    reason?: "timeout" | "dns_error" | "blocked_address" | "tls_error" | "too_large" | "status" | "failed";
+    status?: number;
+    foundKeys?: string[];
+  }[];
+};
+
 export type TrackerCreate = {
   provider: IssueProvider;
   token: string;
@@ -123,6 +139,9 @@ export const projectsApi = accountApi.injectEndpoints({
         void dispatch(projectsApi.util.upsertQueryData("project", id, data));
       },
       invalidatesTags: [{ type: "Project", id: LIST }],
+    }),
+    checkInstall: build.mutation<{ check: InstallCheckResult }, string>({
+      query: (id) => ({ url: `/projects/${id}/check-install`, method: "POST" }),
     }),
     /** Webhook-action signing secret; a query that is only run on demand (`useLazy…`). */
     actionSecret: build.query<{ secret: string }, string>({

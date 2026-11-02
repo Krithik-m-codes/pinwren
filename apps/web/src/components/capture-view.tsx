@@ -116,7 +116,7 @@ export function CaptureView({
               >
                 <span
                   className={cn(
-                    "absolute -top-2.5 -left-2.5 grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] font-semibold tabular-nums shadow ring-2 ring-background",
+                    "absolute -top-2.5 -left-2.5 grid h-5 min-w-5 place-items-center rounded-full px-1 text-xs font-semibold tabular-nums shadow ring-2 ring-background",
                     tone,
                   )}
                 >
@@ -137,7 +137,7 @@ export function CaptureView({
               aria-hidden={decorative || undefined}
               data-marker={m.id}
               className={cn(
-                "absolute grid h-6 min-w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full rounded-bl-none px-1 text-[11px] font-semibold tabular-nums shadow-md ring-2 ring-background transition-transform hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                "absolute grid h-6 min-w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full rounded-bl-none px-1 text-xs font-semibold tabular-nums shadow-md ring-2 ring-background transition-transform hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                 tone,
                 m.active && "scale-110",
               )}

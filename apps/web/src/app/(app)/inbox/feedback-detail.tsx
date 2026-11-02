@@ -8,9 +8,7 @@ import {
   Check,
   Copy,
   Crosshair,
-  Download,
   ExternalLink,
-  FileText,
   Film,
   ImageIcon,
   Languages,
@@ -64,12 +62,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AttachmentGallery } from "@/components/attachment-gallery";
 import { UserAvatar } from "@/components/user-avatar";
 import {
   type Asset,
   assetUrl,
   type FeedbackDetail,
-  formatBytes,
   type ItemLabel,
   type PresenceUser,
   screenshotOf,
@@ -77,6 +75,7 @@ import {
 import { captureOf, isRegion, placeOn } from "@/lib/geometry";
 import { useI18n, useT } from "@/lib/i18n/provider";
 import { itemLink } from "@/lib/links";
+import { useRecentItems } from "@/lib/recent";
 import {
   errorMessage,
   useDeleteFeedbackMutation,
@@ -150,6 +149,14 @@ export function FeedbackDetailPanel({
     };
   }, [id, dispatch]);
 
+  // Remember it for the command palette's "Recent" list.
+  const { record } = useRecentItems(userId);
+  const { id: openedId, number, title, body, projectName } = detail.data?.feedback ?? {};
+  useEffect(() => {
+    if (openedId && number !== undefined && body !== undefined && projectName !== undefined)
+      record({ id: openedId, number, title: title ?? body.slice(0, 80), project: projectName });
+  }, [openedId, number, title, body, projectName, record]);
+
   // Opening an item reads its notifications. Best effort: the bell keeps them unread if this fails.
   useEffect(() => {
     void markRead(id);
@@ -157,7 +164,7 @@ export function FeedbackDetailPanel({
 
   if (detail.isLoading) {
     return (
-      <div className="space-y-4 p-5" aria-busy>
+      <div className="space-y-4 p-4" aria-busy>
         <Skeleton className="h-5 w-40" />
         <Skeleton className="h-7 w-3/4" />
         <div className="flex gap-2">
@@ -469,7 +476,7 @@ function DetailBody({
         </div>
       )}
 
-      <div className="space-y-6 px-4 py-5 sm:px-5">
+      <div className="space-y-6 px-4 py-4">
         <div>
           <TitleField
             key={f.title ?? ""}
@@ -1002,46 +1009,15 @@ function Attachments({ assets }: { assets: Asset[] }) {
         <Paperclip className="size-3.5" /> {t("inbox1.attachments")}
         <span className="font-normal text-muted-foreground tabular-nums">{assets.length}</span>
       </h3>
-      <ul className="grid gap-2 sm:grid-cols-2">
-        {assets.map((a) => {
-          const image = a.contentType.startsWith("image/");
-          return (
-            <li key={a.id}>
-              <a
-                href={assetUrl(a.id)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group flex items-center gap-3 rounded-lg border p-2 transition-colors hover:bg-muted/60"
-              >
-                {image ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- session-authenticated asset; next/image would fetch it without the cookie
-                  <img
-                    src={assetUrl(a.id)}
-                    alt=""
-                    className="size-10 shrink-0 rounded-md border object-cover"
-                  />
-                ) : (
-                  <span className="grid size-10 shrink-0 place-items-center rounded-md bg-muted">
-                    <FileText className="size-4 text-muted-foreground" />
-                  </span>
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">
-                    {a.name ?? t("inbox1.attachment")}
-                  </span>
-                  <span className="block text-xs text-muted-foreground">
-                    {a.contentType.split("/")[1]?.toUpperCase()} · {formatBytes(a.bytes)}
-                  </span>
-                </span>
-                <Download
-                  aria-label={t("inbox1.download")}
-                  className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground"
-                />
-              </a>
-            </li>
-          );
-        })}
-      </ul>
+      <AttachmentGallery
+        items={assets.map((a) => ({
+          id: a.id,
+          name: a.name ?? t("inbox1.attachment"),
+          contentType: a.contentType,
+          bytes: a.bytes,
+          src: assetUrl(a.id),
+        }))}
+      />
     </section>
   );
 }

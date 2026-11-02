@@ -543,3 +543,72 @@ test("SPA navigation reloads pins for the new URL", async ({ page }) => {
     .poll(() => mock.requests.filter((r) => r.path.startsWith("/feedback?")).at(-1)?.path ?? "")
     .toContain(encodeURIComponent("http://localhost:5180/shop"));
 });
+
+test("clicking an item in the sidebar scrolls to and outlines its element, not just a card", async ({
+  page,
+}) => {
+  await mockApi(page, {
+    items: [
+      seed({
+        number: 1,
+        body: "Guji price looks off",
+        anchor: anchorFor("guji", "article", "Ethiopia Guji", { xPct: 90, yPct: 10 }),
+      }),
+    ],
+  });
+  await ready(page);
+  await launcher(page).click();
+  await page.getByRole("menuitem", { name: /Show sidebar/ }).click();
+  await page.locator("pinwren-root .panel .fcard .fmain").first().click();
+  const ring = page.locator("pinwren-root .ring.flash");
+  await expect(ring).toBeVisible();
+  const r = await box(ring);
+  const g = await box(page.getByTestId("guji"));
+  // The outline wraps the anchored element (4px padding), wherever it scrolled to.
+  near(r.x, g.x - 4, 3);
+  near(r.width, g.width + 8, 3);
+  await expect(page.getByRole("dialog", { name: "Other #1" })).toBeVisible();
+});
+
+test("a marker appears once its element renders late (lazy content / SPA)", async ({ page }) => {
+  await mockApi(page, {
+    items: [
+      seed({
+        number: 1,
+        body: "Late banner",
+        anchor: anchorFor("late-banner", "section", "Arrives later", { xPct: 50, yPct: 50 }),
+      }),
+    ],
+  });
+  await ready(page);
+  await expect(pins(page)).toHaveCount(0);
+  await page.evaluate(() => {
+    const s = document.createElement("section");
+    s.dataset.testid = "late-banner";
+    s.textContent = "Arrives later";
+    s.style.cssText = "height:60px;background:#eee";
+    document.body.prepend(s);
+  });
+  await expect(pins(page)).toHaveCount(1);
+});
+
+test("comment mode: Element / Region toggle, breadcrumb and Esc", async ({ page }) => {
+  await mockApi(page);
+  await ready(page);
+  await page.keyboard.press("c");
+  const hint = page.locator("pinwren-root .hint");
+  await expect(hint.getByRole("radio", { name: "Element" })).toHaveAttribute("aria-checked", "true");
+  const b = await box(page.getByTestId("nyeri"));
+  await page.mouse.move(b.x + 20, b.y + 20);
+  await expect(page.locator("pinwren-root .crumbs .crumb.cur")).toBeVisible();
+  await hint.getByRole("radio", { name: "Region" }).click();
+  await expect(hint.getByRole("radio", { name: "Region" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator("pinwren-root .crumbs")).toBeHidden();
+  await page.keyboard.press("e");
+  await page.mouse.move(b.x + 22, b.y + 22);
+  // Click a parent crumb to widen the selection, then the current crumb picks it.
+  await page.locator("pinwren-root .crumbs .crumb").first().click();
+  await page.locator("pinwren-root .crumbs .crumb.cur").click();
+  await expect(composer(page)).toBeVisible();
+  await page.keyboard.press("Escape");
+});

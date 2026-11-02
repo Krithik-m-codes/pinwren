@@ -430,6 +430,10 @@ export type MeResponse = {
   /** Someone without an invitation could create an account now. */
   signupOpen: boolean;
   update: { latest: string | null; url: string | null } | null;
+  /** Update and support prompts are allowed (self-host and PINWREN_NUDGES not off). */
+  nudges: boolean;
+  /** The running Pinwren version. */
+  version: string;
 };
 
 /** `GET /api/setup`: public first-run state for the sign-in screens. */

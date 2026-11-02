@@ -3,6 +3,7 @@
 import { Archive, Eye, FileStack, Inbox, Target } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ButtonLink } from "@/components/button-link";
+import { Dashboard } from "@/components/dashboard/dashboard";
 import { PageHeader } from "@/components/page-header";
 import { ErrorState } from "@/components/states";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -86,7 +87,8 @@ export function ProjectSettings({ id }: { id: string }) {
           <Inbox /> <span className="hidden sm:inline">{t("projects2.openInbox")}</span>
         </ButtonLink>
       </PageHeader>
-      <div className="mx-auto w-full max-w-5xl p-4 pb-16">
+      <div className="mx-auto w-full max-w-5xl p-4 pb-12">
+        <Dashboard scope="project" projectId={p.id} className="mb-4" />
         {!canWrite && (
           <p
             className="mb-4 flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-sm text-muted-foreground"

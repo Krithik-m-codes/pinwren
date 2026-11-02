@@ -9,6 +9,9 @@ export const MAX_FILES = 3;
 export const MAX_BYTES = 5 * 1024 * 1024;
 export const FILE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"];
 
+export const fmtSize = (n: number) =>
+  n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1)} MB`;
+
 export type Attachment = { name: string; contentType: string; dataUrl: string; size: number };
 
 type FileLike = { name: string; type: string; size: number };

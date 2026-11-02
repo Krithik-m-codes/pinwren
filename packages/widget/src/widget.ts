@@ -129,7 +129,11 @@ export class PinwrenWidget {
   }
   private card: Card | null = null;
   private preview: { el: HTMLElement; ring: HTMLElement; p: Placed } | null = null;
+  /** The pulsing outline after a sidebar pick or deep link; follows its element until it times out. */
+  private flash: { ring: HTMLElement; p: Placed; timer: number } | null = null;
   private previewTimer = 0;
+  private rehomeTimer = 0;
+  private rehomeRuns = 0;
   private panel: Panel | null = null;
   /** Bumped by every panel open/close request, so a slow chunk load can't reopen a panel closed meanwhile. */
   private panelWant = 0;
@@ -323,7 +327,10 @@ export class PinwrenWidget {
         lastUrl = location.href;
         this.closeCard();
         void this.loadPins();
-      } else reposition();
+      } else {
+        reposition();
+        this.rehomeSoon();
+      }
     });
     observer.observe(document.body, {
       childList: true,
@@ -359,6 +366,8 @@ export class PinwrenWidget {
     this.closePanel();
     this.hideSelOffer();
     clearTimeout(this.previewTimer);
+    clearTimeout(this.rehomeTimer);
+    this.clearFlash();
     for (const fn of this.cleanup) fn();
     this.cleanup = [];
     cancelAnimationFrame(this.raf);
@@ -550,7 +559,7 @@ export class PinwrenWidget {
       },
       closed: () => this.idle(),
       actions: () => {
-        const listed = this.publicRead || this.rows().length > 0;
+        const listed = this.canList || this.rows().length > 0;
         return {
           markers: listed ? { shown: this.showPins, toggle: () => this.toggleMarkers() } : null,
           annotate: this.canComment ? () => this.open("comment") : null,
@@ -592,7 +601,7 @@ export class PinwrenWidget {
   private prefetch() {
     if (this.prefetched || !this.ready) return;
     this.prefetched = true;
-    if (this.publicRead) preload(this.assets, "panel");
+    if (this.canList) preload(this.assets, "panel");
     if (this.canBug) preload(this.assets, "report");
   }
 
@@ -616,7 +625,7 @@ export class PinwrenWidget {
     let items: Pin[] = [];
     // Hidden by the visibility mode: no requests until the widget shows (applyVisibility lists them then).
     this.skipped = !this.gateOpen;
-    if (this.publicRead && !this.skipped) {
+    if (this.canList && !this.skipped) {
       try {
         items = (await this.api.pins(cleanPageUrl(location.href), withClosed, this.urlPattern)).items;
       } catch {
@@ -635,10 +644,50 @@ export class PinwrenWidget {
     // Page-level comments still on their way (optimistic or queued) stay listed too.
     this.orphans = this.orphans.filter((o) => o.id.startsWith("tmp:"));
     this.hidePreview();
+    this.rehomeRuns = 0;
     for (const pin of items) this.place(pin);
     this.schedule();
     this.updateCount();
     this.renderList();
+    this.rehomeSoon();
+  }
+
+  /**
+   * Pins whose element wasn't on the page yet (lazy sections, hydration, route transitions) or was replaced by
+   * a re-render are looked up again as the DOM settles, so markers appear without a reload. Throttled, and
+   * given up after a while on pages where the element never comes back.
+   */
+  private rehomeSoon() {
+    if (this.rehomeTimer || this.rehomeRuns >= 60) return;
+    this.rehomeTimer = window.setTimeout(() => {
+      this.rehomeTimer = 0;
+      this.rehomeRuns++;
+      this.rehome();
+    }, 400);
+  }
+
+  private rehome() {
+    if (this.destroyed) return;
+    let changed = false;
+    for (const p of this.placed) {
+      if (p.el.isConnected || !p.pin.anchor || p.pin.id.startsWith("tmp:")) continue;
+      const found = resolveAnchor(p.pin.anchor);
+      if (!found) continue;
+      p.el = found.element;
+      p.moved = found.confidence < 0.8;
+      changed = true;
+    }
+    for (const o of this.orphans.filter((x) => x.anchor && !x.id.startsWith("tmp:"))) {
+      if (!o.anchor || !resolveAnchor(o.anchor)) continue;
+      this.orphans = this.orphans.filter((x) => x !== o);
+      this.place(o);
+      changed = true;
+    }
+    if (changed) {
+      this.schedule();
+      this.updateCount();
+      this.renderList();
+    } else this.rehomeSoon();
   }
 
   private place(pin: Pin): Placed | null {
@@ -785,6 +834,7 @@ export class PinwrenWidget {
         this.placeRing();
       } else this.hidePreview();
     }
+    this.placeFlash();
     this.picker?.refresh();
   }
 
@@ -894,11 +944,8 @@ export class PinwrenWidget {
     }
     if (p) {
       const target = p;
-      target.el.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "center" });
-      setTimeout(() => {
-        target.marker.classList.add("pulse");
-        void this.openThread(target.pin, target);
-      }, 450);
+      this.highlight(target);
+      setTimeout(() => void this.openThread(target.pin, target), 450);
     } else if (o) {
       await this.openPanel();
       void this.openThread(o, null);
@@ -1421,19 +1468,50 @@ export class PinwrenWidget {
     this.idle();
   }
 
-  /** A sidebar card was picked: bring its marker into view, flash it and open the thread. */
+  /** A sidebar card was picked: bring its anchor into view, outline and pulse it, and open the thread. */
   private flashItem(row: PanelRow) {
     const p = this.placed.find((x) => x.pin.id === row.pin.id);
     if (!p) {
       void this.openThread(row.pin, null);
       return;
     }
+    this.highlight(p);
+    setTimeout(() => void this.openThread(p.pin, p), reduced() ? 0 : 350);
+  }
+
+  /** Scroll the pin's element into view and draw a pulsing outline around its element, region or quote. */
+  private highlight(p: Placed) {
     p.el.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "center" });
+    this.clearFlash();
+    const ring = h("div", {
+      class: "ring flash",
+      style: `--c:${kindOf(p.pin.kind).color}`,
+      "aria-hidden": "true",
+    });
+    this.root.prepend(ring);
+    this.flash = { ring, p, timer: window.setTimeout(() => this.clearFlash(), 3200) };
     p.marker.classList.remove("pulse");
     p.marker.getBoundingClientRect(); // a reflow restarts the animation
     p.marker.classList.add("pulse");
     setTimeout(() => p.marker.classList.remove("pulse"), 3200);
-    setTimeout(() => void this.openThread(p.pin, p), reduced() ? 0 : 350);
+    this.placeFlash();
+  }
+
+  private clearFlash() {
+    if (!this.flash) return;
+    clearTimeout(this.flash.timer);
+    this.flash.ring.remove();
+    this.flash = null;
+  }
+
+  private placeFlash() {
+    const f = this.flash;
+    if (!f) return;
+    const { p } = f;
+    const q = p.quote && union(textRects(p.quote.range));
+    const r = q ?? (p.el.isConnected ? ((p.area && this.boxOf(p)) ?? p.el.getBoundingClientRect()) : null);
+    f.ring.hidden = !r || r.width + r.height === 0 || !this.visible(p);
+    if (r) box(f.ring, { left: r.left - 4, top: r.top - 4, width: r.width + 8, height: r.height + 8 });
   }
 
   private renderList() {
@@ -1550,6 +1628,11 @@ export class PinwrenWidget {
   // --- Visibility mode, private pins, signed links, re-pin (wave-5 §2, §3.3) ---------------------------
 
   /** Whether the visibility mode lets the widget show (`forceShow` overrides every rule). */
+  /** Whether the server lists this project's pins to this visitor: public projects, or a valid review link. */
+  private get canList(): boolean {
+    return this.publicRead || this.reviewGuest;
+  }
+
   private get gateOpen(): boolean {
     if (this.opts.forceShow === true) return true;
     return allowedByMode(this.cfg.visibility, {
@@ -1601,7 +1684,7 @@ export class PinwrenWidget {
     const here = cleanPageUrl(location.href);
     // A linked item belongs to the page it was opened on; after SPA navigation it stays behind.
     const out = [...this.linked.values()].filter((p) => !p.pageUrl || samePath(p.pageUrl, here));
-    if (!this.publicRead) {
+    if (!this.canList) {
       const tokens = store.mine(this.opts.projectKey).flatMap((m) => (m.token ? [m.token] : []));
       if (tokens.length) {
         try {

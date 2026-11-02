@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import {
   captureConfig,
   commentCreate,
+  dashboardStatsQuery,
   commentUpdate,
   feedbackListQuery,
   feedbackUpdate,
@@ -31,6 +32,7 @@ import { env } from "../env";
 import { audienceOf, forbidViewerWrites, requirePermission } from "../permissions";
 import { ensureActionSecret, rotateActionSecret, runPanelAction } from "../services/actions";
 import { assetResponse } from "../services/assets";
+import { checkInstall } from "../services/install-check";
 import { ensureIdentitySecret, rotateIdentitySecret } from "../services/identity";
 import { presetValues, projectCreateWithPreset, pruneRejected } from "../services/project-setup";
 import { emit } from "../events";
@@ -44,6 +46,7 @@ import {
   trashFeedback,
   updateFeedback,
 } from "../services/feedback";
+import { dashboardStats } from "../services/stats";
 import { reproductionContext } from "../services/reproduction";
 import { getSecuritySettings } from "../settings/instance";
 import { resolveSmtp } from "../email/config";
@@ -150,7 +153,10 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       resolveSmtp(),
       signupOpen(),
     ]);
-    const update = instanceAdmin ? (await getSecuritySettings()).update : null;
+    // Soft prompts (update strip, support card) are a self-host courtesy: never in Cloud, and operators can
+    // switch them all off with PINWREN_NUDGES=false.
+    const nudges = env().PINWREN_MODE === "selfhost" && env().PINWREN_NUDGES;
+    const update = instanceAdmin && nudges ? (await getSecuritySettings()).update : null;
     return c.json({
       user: u,
       orgId: c.var.orgId,
@@ -162,6 +168,10 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       emailConfigured: smtp !== null,
       signupOpen: open,
       update: update?.available ? { latest: update.latest, url: update.url } : null,
+      /** Whether the dashboard may show update and support prompts at all (PINWREN_NUDGES, self-host only). */
+      nudges,
+      /** The running version, for "you are on x, y is out". */
+      version: env().PINWREN_VERSION,
     });
   })
 
@@ -169,6 +179,11 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
   .get("/me/entitlements", async (c) => c.json(publicEntitlements(await resolveEntitlements())))
 
   // Members and invitations: routes/members.ts (wave 5).
+
+  // --- Dashboard numbers ---------------------------------------------------------------------------
+  .get("/stats", zValidator("query", dashboardStatsQuery), async (c) =>
+    c.json(await dashboardStats(c.var.orgId, c.var.userId, c.req.valid("query"))),
+  )
 
   // --- Projects ------------------------------------------------------------------------------------
   .get("/projects", async (c) => {
@@ -304,6 +319,21 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       .returning();
     if (!p) throw notFound("Project");
     return c.json({ project: projectOut(p, c.var.role) });
+  })
+
+  /** Fetches the project's allowed sites and looks for its widget tag (SSRF-safe; org admins only). */
+  .post("/projects/:id/check-install", requireOrgAdmin, async (c) => {
+    const [p] = await getDb()
+      .select({
+        publicKey: project.publicKey,
+        allowedOrigins: project.allowedOrigins,
+        lastSeenAt: project.lastSeenAt,
+        rejectedOrigins: project.rejectedOrigins,
+      })
+      .from(project)
+      .where(and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId)));
+    if (!p) throw notFound("Project");
+    return c.json({ check: await checkInstall(p) });
   })
 
   /** The secret that signs webhook panel actions (created on first read). Org admins only. */

@@ -19,7 +19,7 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col items-center justify-center gap-2 px-6 py-14 text-center", className)}>
+    <div className={cn("flex flex-col items-center justify-center gap-2 px-6 py-10 text-center", className)}>
       <span className="mb-1 grid size-10 place-items-center rounded-full bg-muted">
         <Icon className="size-4.5 text-muted-foreground" />
       </span>
@@ -43,7 +43,7 @@ export function ErrorState({
   return (
     <div
       role="alert"
-      className={cn("flex flex-col items-center justify-center gap-2 px-6 py-14 text-center", className)}
+      className={cn("flex flex-col items-center justify-center gap-2 px-6 py-10 text-center", className)}
     >
       <span className="mb-1 grid size-10 place-items-center rounded-full bg-destructive/10">
         <AlertCircle className="size-4.5 text-destructive" />

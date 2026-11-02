@@ -1,7 +1,18 @@
 "use client";
 
 import { originMatches } from "@pinwren/core";
-import { Ban, Info, Plus, Send, Terminal, TriangleAlert, X } from "lucide-react";
+import {
+  Ban,
+  CircleAlert,
+  CircleCheck,
+  Info,
+  Plus,
+  RefreshCw,
+  Send,
+  Terminal,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 import { useWatch } from "react-hook-form";
 import { ButtonLink } from "@/components/button-link";
@@ -26,7 +37,12 @@ import {
   installSnippets,
   patternForOrigin,
 } from "@/lib/install";
-import { useLazyIdentitySecretQuery, useRotateIdentitySecretMutation } from "@/lib/store/api";
+import {
+  useCheckInstallMutation,
+  useLazyIdentitySecretQuery,
+  useRotateIdentitySecretMutation,
+} from "@/lib/store/api";
+import type { InstallCheckResult } from "@/lib/store/api/projects";
 import { useT } from "@/lib/i18n/provider";
 import { useOrigin } from "@/lib/use-synced-state";
 import { useViewer } from "@/lib/viewer";
@@ -167,6 +183,7 @@ function VerifyCard({ project }: { project: ProjectDetail }) {
             <li>{t("projects2.checkReach", { url: project.publicUrl })}</li>
           </ul>
         )}
+        <LiveCheck project={project} />
         <div className="grid gap-1.5">
           <p className="flex items-center gap-1.5 text-sm font-medium">
             <Terminal className="size-4 text-muted-foreground" /> {t("projects2.verifyFromTerminal")}
@@ -182,6 +199,122 @@ function VerifyCard({ project }: { project: ProjectDetail }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/** Server-side look at the allowed sites: is the tag there, with this key, and has the widget loaded? */
+function LiveCheck({ project }: { project: ProjectDetail }) {
+  const t = useT();
+  const { isAdmin } = useViewer();
+  const [run, { data, isLoading, isError }] = useCheckInstallMutation();
+  const check = data?.check;
+  return (
+    <div className="grid gap-2" data-testid="live-check">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!isAdmin || isLoading}
+          onClick={() => void run(project.id)}
+          data-testid="check-install"
+        >
+          <RefreshCw className={isLoading ? "animate-spin" : undefined} />
+          {isLoading ? t("projects2.checkNowRunning") : t("projects2.checkNow")}
+        </Button>
+        <span className="text-sm text-muted-foreground">{t("projects2.checkNowIntro")}</span>
+      </div>
+      <div aria-live="polite" className="grid gap-2">
+        {isError && (
+          <p role="alert" className="text-sm text-destructive">
+            {t("projects2.checkNowFailed")}
+          </p>
+        )}
+        {check && <CheckResults check={check} projectKey={project.publicKey} />}
+      </div>
+    </div>
+  );
+}
+
+function CheckResults({ check, projectKey }: { check: InstallCheckResult; projectKey: string }) {
+  const t = useT();
+  return (
+    <ul className="grid gap-2 text-sm" data-testid="check-results">
+      {check.noSites && <Note tone="warn">{t("projects2.checkNowNoSites")}</Note>}
+      {check.sites.map((s) => {
+        const ok = s.verdict === "found";
+        const title =
+          s.verdict === "found"
+            ? t("projects2.checkFound", { site: s.site })
+            : s.verdict === "script_missing"
+              ? t("projects2.checkMissing", { site: s.site })
+              : s.verdict === "key_mismatch"
+                ? t("projects2.checkMismatch", { site: s.site })
+                : t("projects2.checkUnreachable", { site: s.site });
+        const hint =
+          s.verdict === "found"
+            ? t("projects2.checkFoundHint")
+            : s.verdict === "script_missing"
+              ? t("projects2.checkMissingHint")
+              : s.verdict === "key_mismatch"
+                ? t("projects2.checkMismatchHint", { keys: (s.foundKeys ?? []).join(", "), key: projectKey })
+                : t(REASON_KEYS[s.reason ?? "failed"], { status: s.status ?? "" });
+        return (
+          <Note key={s.site} tone={ok ? "ok" : "warn"} verdict={s.verdict}>
+            <span className="font-medium">{title}</span>
+            <span className="block text-muted-foreground">{hint}</span>
+          </Note>
+        );
+      })}
+      {check.refusedOrigins.length > 0 && (
+        <Note tone="warn" verdict="origin_not_allowed">
+          {t("projects2.checkOriginRefused", { origins: check.refusedOrigins.join(", ") })}
+        </Note>
+      )}
+      <li className="text-xs text-muted-foreground">
+        {check.lastSeenAt ? (
+          <>
+            {t("projects2.checkLoadedRecently")} <RelativeTime iso={check.lastSeenAt} />
+          </>
+        ) : (
+          t("projects2.checkNeverLoaded")
+        )}
+      </li>
+    </ul>
+  );
+}
+
+const REASON_KEYS = {
+  timeout: "projects2.checkReason.timeout",
+  dns_error: "projects2.checkReason.dns_error",
+  blocked_address: "projects2.checkReason.blocked_address",
+  tls_error: "projects2.checkReason.tls_error",
+  too_large: "projects2.checkReason.too_large",
+  status: "projects2.checkReason.status",
+  failed: "projects2.checkReason.failed",
+} as const;
+
+function Note({
+  tone,
+  verdict,
+  children,
+}: {
+  tone: "ok" | "warn";
+  verdict?: string;
+  children: React.ReactNode;
+}) {
+  const Icon = tone === "ok" ? CircleCheck : CircleAlert;
+  return (
+    <li
+      data-verdict={verdict}
+      className={`flex items-start gap-2 rounded-lg border px-3 py-2 ${
+        tone === "ok"
+          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200"
+          : "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200"
+      }`}
+    >
+      <Icon className="mt-0.5 size-4 shrink-0" />
+      <span className="min-w-0">{children}</span>
+    </li>
   );
 }
 

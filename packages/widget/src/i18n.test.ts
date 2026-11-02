@@ -4,6 +4,7 @@ import de from "./locales/de";
 import { en as enCore } from "./locales/en";
 import { enPanel } from "./locales/en-panel";
 import { enReport } from "./locales/en-report";
+import { enShots } from "./locales/en-shots";
 import es from "./locales/es";
 import fr from "./locales/fr";
 import hi from "./locales/hi";
@@ -15,7 +16,7 @@ import ru from "./locales/ru";
 import zh from "./locales/zh";
 
 // The full English catalogue: the core's strings plus each lazy chunk's.
-const en = { ...enCore, ...enPanel, ...enReport };
+const en = { ...enCore, ...enPanel, ...enReport, ...enShots };
 const CATALOGS: Record<string, Catalog> = { de, es, fr, hi, it: it_, ja, nl, "pt-BR": ptBR, ru, zh };
 
 describe("pickLocale", () => {

@@ -29,7 +29,7 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
           </span>
         }
       />
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 pb-16 md:flex-row md:gap-8">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 pb-12 md:flex-row md:gap-6">
         <nav
           aria-label={t("settings2.settings")}
           className="-mx-4 shrink-0 overflow-x-auto px-4 md:mx-0 md:w-48 md:px-0"
@@ -50,7 +50,7 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
                     <Icon className="size-4" />
                     {t(labelKey)}
                     {access === "instance" && (
-                      <span className="ml-auto hidden text-[10px] tracking-wide text-muted-foreground uppercase md:inline">
+                      <span className="ml-auto hidden text-xs tracking-wide text-muted-foreground uppercase md:inline">
                         {t("settings2.adminBadge")}
                       </span>
                     )}
