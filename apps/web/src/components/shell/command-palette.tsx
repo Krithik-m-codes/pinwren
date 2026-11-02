@@ -2,10 +2,14 @@
 
 import {
   Bookmark,
+  CircleDot,
+  Clock,
+  Command as CommandIcon,
   FolderKanban,
   FolderPlus,
   Inbox,
   LayoutDashboard,
+  Link2,
   Monitor,
   Moon,
   SlidersHorizontal,
@@ -14,7 +18,8 @@ import {
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
   Command,
   CommandEmpty,
@@ -27,9 +32,15 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { Key } from "@/lib/i18n/en";
 import { useT } from "@/lib/i18n/provider";
-import { useEntitlementsQuery, useProjectsQuery, useViewsQuery } from "@/lib/store/api";
+import { useRecentItems } from "@/lib/recent";
+import {
+  useEntitlementsQuery,
+  useListFeedbackInfiniteQuery,
+  useProjectsQuery,
+  useViewsQuery,
+} from "@/lib/store/api";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { paletteToggled } from "@/lib/store/slices/ui";
+import { paletteToggled, shortcutsToggled } from "@/lib/store/slices/ui";
 import { useViewer } from "@/lib/viewer";
 import { visibleSettingsPages } from "@/lib/settings-nav";
 import { viewHref } from "./sidebar-lists";
@@ -50,14 +61,38 @@ const PAGES: { href: Route; label: Key; icon: typeof Inbox; keywords?: string[] 
   },
 ];
 
-/** ⌘K / Ctrl+K: jump to any screen, project or saved view, and run a few app-wide actions (blueprint 06 §5). */
+const SEARCH_MIN = 2;
+const SEARCH_DELAY_MS = 250;
+
+/** The text, after it has stopped changing for `ms` (so typing doesn't fire a request per key). */
+function useDebounced(value: string, ms: number) {
+  const [out, setOut] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setOut(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return out;
+}
+
+/**
+ * ⌘K / Ctrl+K: jump to any screen, project or saved view, find feedback by its text, reopen what you
+ * looked at recently, and run a few app-wide actions (blueprint 06 §5, ADR 0025).
+ */
 export function CommandPalette() {
   const t = useT();
   const open = useAppSelector((s) => s.ui.paletteOpen);
   const dispatch = useAppDispatch();
   const router = useRouter();
   const { setTheme } = useTheme();
-  const { isAdmin, role, instanceAdmin } = useViewer();
+  const { isAdmin, role, instanceAdmin, userId } = useViewer();
+  const [query, setQuery] = useState("");
+  const typed = query.trim();
+  const settled = useDebounced(typed, SEARCH_DELAY_MS);
+  const searching = open && settled.length >= SEARCH_MIN;
+  const found = useListFeedbackInfiniteQuery({ status: "all", q: settled, limit: 6 }, { skip: !searching });
+  const hits = searching ? (found.data?.pages[0]?.items ?? []) : [];
+  const waiting = typed.length >= SEARCH_MIN && (typed !== settled || found.isFetching);
+  const recent = useRecentItems(userId).items;
   // Settings pages with the same access filter as the settings rail (lib/settings-nav).
   const cloud = useEntitlementsQuery(undefined).data?.edition === "cloud";
   const settings = visibleSettingsPages({ role, instanceAdmin, cloud });
@@ -79,9 +114,16 @@ export function CommandPalette() {
     dispatch(paletteToggled(false));
     fn();
   };
+  const openItem = (id: string) => run(() => router.push(`/inbox?status=all&item=${id}`));
 
   return (
-    <Dialog open={open} onOpenChange={(o) => dispatch(paletteToggled(o))}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) setQuery("");
+        dispatch(paletteToggled(o));
+      }}
+    >
       <DialogContent
         className="top-1/3 translate-y-0 overflow-hidden p-0 sm:max-w-lg"
         showCloseButton={false}
@@ -89,9 +131,54 @@ export function CommandPalette() {
         <DialogTitle className="sr-only">{t("components2.commandPalette")}</DialogTitle>
         <DialogDescription className="sr-only">{t("components2.commandPaletteHint")}</DialogDescription>
         <Command>
-          <CommandInput placeholder={t("components2.goToPlaceholder")} />
+          <CommandInput
+            placeholder={t("components2.goToPlaceholder")}
+            value={query}
+            onValueChange={setQuery}
+          />
           <CommandList>
-            <CommandEmpty>{t("components2.noResults")}</CommandEmpty>
+            <CommandEmpty>{waiting ? t("palette.searching") : t("components2.noResults")}</CommandEmpty>
+            {/* Search hits carry the typed text in their value so the palette's own filter keeps them. */}
+            {hits.length > 0 && (
+              <CommandGroup heading={t("palette.feedback")}>
+                {hits.map((f) => (
+                  <CommandItem key={f.id} value={`${typed} feedback ${f.id}`} onSelect={() => openItem(f.id)}>
+                    <CircleDot />
+                    <span className="min-w-0 flex-1 truncate">{f.title ?? f.body}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      #{f.number} · {f.projectName}
+                    </span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {searching && (
+              <CommandGroup>
+                <CommandItem
+                  value={`${typed} search all`}
+                  onSelect={() => run(() => router.push(`/inbox?status=all&q=${encodeURIComponent(typed)}`))}
+                >
+                  <Inbox /> {t("palette.searchAll", { q: typed })}
+                </CommandItem>
+              </CommandGroup>
+            )}
+            {!typed && recent.length > 0 && (
+              <CommandGroup heading={t("palette.recent")}>
+                {recent.map((r) => (
+                  <CommandItem
+                    key={r.id}
+                    value={`recent ${r.number} ${r.title}`}
+                    onSelect={() => openItem(r.id)}
+                  >
+                    <Clock />
+                    <span className="min-w-0 flex-1 truncate">{r.title}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      #{r.number} · {r.project}
+                    </span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
             <CommandGroup heading={t("components2.goTo")}>
               {PAGES.map((p) => (
                 <CommandItem
@@ -158,6 +245,27 @@ export function CommandPalette() {
                 onSelect={() => run(() => router.push("/dashboard?edit=1"))}
               >
                 <SlidersHorizontal /> {t("dash.customiseCommand")}
+              </CommandItem>
+              <CommandItem
+                value={t("shortcuts.command")}
+                keywords={["keys", "help", "hotkeys"]}
+                onSelect={() => run(() => dispatch(shortcutsToggled(true)))}
+              >
+                <CommandIcon /> {t("shortcuts.command")}
+              </CommandItem>
+              <CommandItem
+                value={t("shortcuts.copyLink")}
+                keywords={["share", "url"]}
+                onSelect={() =>
+                  run(() => {
+                    void navigator.clipboard
+                      .writeText(window.location.href)
+                      .then(() => toast.success(t("shortcuts.linkCopied")))
+                      .catch(() => undefined);
+                  })
+                }
+              >
+                <Link2 /> {t("shortcuts.copyLink")}
               </CommandItem>
               <CommandItem value={t("components2.lightTheme")} onSelect={() => run(() => setTheme("light"))}>
                 <Sun /> {t("components2.lightTheme")}

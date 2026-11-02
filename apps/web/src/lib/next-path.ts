@@ -2,7 +2,7 @@
  * Where to go after signing in (`?next=`): only a path on this site, never another origin. The proxy
  * adds it when it sends a signed-out visitor to /sign-in; sign-up and invitations pass it along.
  */
-export function safeNext(raw: string | null | undefined, fallback = "/inbox"): string {
+export function safeNext(raw: string | null | undefined, fallback = "/"): string {
   if (!raw || raw.length > 2000) return fallback;
   // A same-origin relative path: one leading slash, no protocol-relative `//host` or `/\host`.
   if (!raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return fallback;
