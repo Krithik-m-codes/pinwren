@@ -1,6 +1,7 @@
 "use client";
 
 import { BellOff, CheckCheck, Loader2, Settings2 } from "lucide-react";
+import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ButtonLink } from "@/components/button-link";
@@ -140,7 +141,7 @@ export function NotificationsView() {
                     )}
                     onClick={() => {
                       if (!n.readAt) void markRead({ ids: [n.id] });
-                      router.push(notificationHref(n));
+                      router.push(notificationHref(n) as Route);
                     }}
                   >
                     <NotificationIcon
