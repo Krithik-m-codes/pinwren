@@ -4,6 +4,7 @@
     "index",
     "getting-started",
     "deploy",
+    "fly-supabase",
     "environment",
     "reverse-proxy",
     "storage",
