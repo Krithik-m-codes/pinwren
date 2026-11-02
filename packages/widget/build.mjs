@@ -22,13 +22,22 @@ const pkgDir = fileURLToPath(new URL(".", import.meta.url));
 const dist = join(pkgDir, "dist");
 const outdirs = [dist, join(pkgDir, "..", "..", "apps", "web", "public")];
 const LOCALES = ["es", "fr", "de", "pt-BR", "it", "ja", "hi", "nl", "zh", "ru"];
-const CHUNKS = ["panel", "report", "editor", "capture", "replay", "flows"];
+const CHUNKS = ["panel", "report", "editor", "capture", "replay", "flows", "shots"];
 const src = join(pkgDir, "src");
 const pkg = JSON.parse(await readFile(join(pkgDir, "package.json"), "utf8"));
 
 // Hard gzip budgets in KiB, also checked in wave4.e2e.ts. ADR 0022 records the existing 92 KiB capture
 // exception: SnapDOM alone exceeds the original 75 KiB target; it is downloaded only on capture.
-const BUDGET = { widget: 35, panel: 15, report: 15, editor: 30, capture: 92, replay: 60, flows: 10 };
+const BUDGET = {
+  widget: 35,
+  panel: 15,
+  report: 15,
+  editor: 30,
+  capture: 92,
+  replay: 60,
+  flows: 10,
+  shots: 12,
+};
 
 // Chunks share the core's modules through `window.__pinwrenLib` (src/lib.ts) instead of bundling copies:
 // an import of one of these from a chunk becomes a read of the object the core put there.

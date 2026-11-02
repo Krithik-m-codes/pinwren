@@ -1,0 +1,26 @@
+// English for "Add screenshot" and the attachment preview (widget-shots.js): shipped inside that chunk and
+// registered with i18n.addEnglish() when it loads. Same rules as en.ts.
+export const enShots = {
+  shotAdd: "Add screenshot",
+  shotArea: "Selected area",
+  shotTab: "This tab (browser capture)",
+  shotAreaHint: "Drag to select an area · Esc to cancel",
+  shotDenied: "Screen capture was cancelled or blocked. Allow it in your browser, or pick another option.",
+  shotFailed: "Couldn't take the screenshot. Try another option.",
+  shotAttached: "Screenshot attached",
+  shotAttach: "Attach",
+  annotateTitle: "Annotate screenshot",
+  annotateSave: "Save",
+  annotateFile: "Annotate {name}",
+  retakeFile: "Retake {name}",
+  previewOpen: "Preview {name}",
+  previewClose: "Close preview",
+  zoomIn: "Zoom in",
+  zoomOut: "Zoom out",
+  zoomFit: "Fit to window",
+  zoomFull: "Actual size",
+  imgPrev: "Previous image",
+  imgNext: "Next image",
+  imgPos: "{i} of {n}",
+  imgFailed: "This image couldn't be shown",
+};
