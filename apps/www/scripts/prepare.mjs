@@ -79,7 +79,7 @@ const GROUPS = [
     ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"],
   ],
   ["Issue trackers", ["GITHUB_API_URL", "GITLAB_URL"]],
-  ["Updates", ["PINWREN_UPDATE_CHECK", "PINWREN_UPDATE_REPO", "PINWREN_VERSION"]],
+  ["Updates", ["PINWREN_UPDATE_CHECK", "PINWREN_NUDGES", "PINWREN_UPDATE_REPO", "PINWREN_VERSION"]],
   ["Enterprise licence", ["PINWREN_LICENSE_FILE", "PINWREN_INSTANCE_ID"]],
 ];
 
@@ -137,6 +137,8 @@ const DESCRIPTIONS = {
   GITLAB_URL: "GitLab base URL. Each integration can override it (self-managed GitLab).",
   PINWREN_UPDATE_CHECK:
     "Daily check for a newer release, shown to instance admins. Setting it locks the switch in Settings › Security; it is off on its own while any project uses privacy mode.",
+  PINWREN_NUDGES:
+    'Show instance admins the "update available" strip and, now and then, a dismissible star/sponsor card. `false` hides all of them. Never shown on Pinwren Cloud.',
   PINWREN_UPDATE_REPO: "GitHub repository whose latest release is compared with `PINWREN_VERSION`.",
   PINWREN_VERSION: "The running version (set by the release); used by the update check.",
   PINWREN_LICENSE_FILE:

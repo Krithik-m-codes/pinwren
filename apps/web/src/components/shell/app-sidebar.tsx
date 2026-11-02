@@ -16,6 +16,7 @@ import { getOrgBranding, getWorkspaceName } from "@/lib/server/org-data";
 import { requireViewer } from "@/lib/server/session";
 import { HydrateQueries } from "@/lib/store/hydrate";
 import type { Project, SavedView } from "@/lib/api";
+import { EditionPill } from "./edition-pill";
 import { MainNav, NavLinks } from "./main-nav";
 import { SidebarLists } from "./sidebar-lists";
 import { UserMenu } from "./user-menu";
@@ -92,9 +93,12 @@ async function SidebarBrand() {
     <WorkspaceSwitcher orgId={viewer.me.orgId}>
       <BrandMark logoUrl={branding.logoUrl} />
       <div className="min-w-0 text-left">
-        <p className="truncate text-sm font-semibold" data-testid="product-name">
-          {branding.productName ?? "Pinwren"}
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p className="truncate text-sm font-semibold" data-testid="product-name">
+            {branding.productName ?? "Pinwren"}
+          </p>
+          <EditionPill />
+        </div>
         <p className="truncate text-xs text-muted-foreground" data-testid="workspace-name">
           {workspace ?? "…"}
         </p>

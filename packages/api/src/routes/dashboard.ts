@@ -153,7 +153,10 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       resolveSmtp(),
       signupOpen(),
     ]);
-    const update = instanceAdmin ? (await getSecuritySettings()).update : null;
+    // Soft prompts (update strip, support card) are a self-host courtesy: never in Cloud, and operators can
+    // switch them all off with PINWREN_NUDGES=false.
+    const nudges = env().PINWREN_MODE === "selfhost" && env().PINWREN_NUDGES;
+    const update = instanceAdmin && nudges ? (await getSecuritySettings()).update : null;
     return c.json({
       user: u,
       orgId: c.var.orgId,
@@ -165,6 +168,10 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       emailConfigured: smtp !== null,
       signupOpen: open,
       update: update?.available ? { latest: update.latest, url: update.url } : null,
+      /** Whether the dashboard may show update and support prompts at all (PINWREN_NUDGES, self-host only). */
+      nudges,
+      /** The running version, for "you are on x, y is out". */
+      version: env().PINWREN_VERSION,
     });
   })
 

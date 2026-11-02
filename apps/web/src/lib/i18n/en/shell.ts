@@ -21,4 +21,17 @@ export const shell = {
   "user.themeDark": "Dark",
   "user.themeSystem": "System",
   "user.signOut": "Sign out",
+
+  "edition.community": "Community Edition",
+  "edition.enterprise": "Enterprise Edition",
+  "edition.updateWaiting": "An update is available",
+  "edition.updateStrip": "Pinwren {latest} is out (you are on {current}).",
+  "edition.updateHow": "To update, pull the new image and restart:",
+  "edition.releaseNotes": "Release notes",
+  "edition.dismiss": "Dismiss",
+  "edition.supportText":
+    "Enjoying Pinwren? It is free and open source. A star on GitHub or a sponsorship helps keep it going.",
+  "edition.star": "Star on GitHub",
+  "edition.sponsor": "Sponsor",
+  "edition.dontAskAgain": "Don't ask again",
 } as const satisfies Record<string, string>;

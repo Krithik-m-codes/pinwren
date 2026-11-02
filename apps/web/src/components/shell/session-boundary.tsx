@@ -15,6 +15,7 @@ import { CommandPalette } from "./command-palette";
 import { GlobalShortcuts } from "./global-shortcuts";
 import { BillingBanner } from "./billing-banner";
 import { LicenseBanner } from "./license-banner";
+import { SupportNudge, UpdateStrip } from "./nudge-strips";
 import { RealtimeConnection } from "./realtime-connection";
 import { WorkspaceFromLink } from "./workspace-from-link";
 
@@ -56,8 +57,10 @@ export async function SessionBoundary({ children }: { children: React.ReactNode 
         <RealtimeConnection />
         <WorkspaceFromLink orgId={me.orgId} />
         <LicenseBanner />
+        <UpdateStrip />
         <BillingBanner />
         <EmailSetupBanner />
+        <SupportNudge />
         <CommandPalette />
         <GlobalShortcuts />
         {children}
