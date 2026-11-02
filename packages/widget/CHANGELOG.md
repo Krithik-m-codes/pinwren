@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/Krithik-m-codes/pinwren/compare/widget-v0.4.0...widget-v0.5.0) (2026-11-02)
+
+
+### Features
+
+* v2 dashboards, widget markers and screenshots, edition badge, global features ([#39](https://github.com/Krithik-m-codes/pinwren/issues/39)) ([e0d1892](https://github.com/Krithik-m-codes/pinwren/commit/e0d1892b872afa443ef45e9a736ce9d0f2c5fcec))
+
 ## [0.4.0](https://github.com/Krithik-m-codes/pinwren/compare/widget-v0.3.0...widget-v0.4.0) (2026-11-02)
 
 
