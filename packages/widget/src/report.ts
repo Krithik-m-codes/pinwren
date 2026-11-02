@@ -1,5 +1,12 @@
 import type { Created } from "./api";
-import { type Attachment, MAX_FILES, readFile, sanitizeAttachments, validateFiles } from "./attachments";
+import {
+  type Attachment,
+  fmtSize,
+  MAX_FILES,
+  readFile,
+  sanitizeAttachments,
+  validateFiles,
+} from "./attachments";
 import type { CaptureMode, CaptureModule } from "./capture";
 import { loadChunk } from "./chunks";
 import {
@@ -24,6 +31,8 @@ import { enReport } from "./locales/en-report";
 import { Picker } from "./picker";
 import { isRetryable } from "./queue";
 import { REPORT_CSS } from "./report-styles";
+import type { ShotMode } from "./shot-math";
+import type { ShotsModule } from "./shots";
 import { COLORS, type Shape, type Size, sanitizeShapes, type Tool } from "./shapes";
 import type { Identity } from "./store";
 import { ago } from "./ui";
@@ -89,6 +98,7 @@ const drafts = idbKV<Draft>("drafts");
 
 const loadModule = (assets: string) => loadChunk<CaptureModule>(assets, "capture");
 const loadEditor = (assets: string) => loadChunk<EditorModule>(assets, "editor");
+const loadShots = (assets: string) => loadChunk<ShotsModule>(assets, "shots");
 
 const timeout = <T>(p: Promise<T>, ms: number) =>
   Promise.race([
@@ -114,7 +124,9 @@ function toCanvas(dataUrl: string): Promise<HTMLCanvasElement> {
 /** Draft storage is best effort (private browsing, full quota): a failure must never block the report. */
 /** No mediaDevices on insecure (http://) pages, and no getDisplayMedia on mobile browsers. */
 function canShareScreen(): boolean {
-  return "mediaDevices" in navigator && "getDisplayMedia" in navigator.mediaDevices;
+  // `navigator.mediaDevices` exists but is undefined on insecure pages, so test the value, not the key.
+  const devices = navigator.mediaDevices as MediaDevices | undefined;
+  return !!devices && "getDisplayMedia" in devices;
 }
 
 function ignoreDraftError() {
@@ -154,9 +166,6 @@ function geometryOf(mode: Mode): NonNullable<FeedbackPayload["capture"]> {
   return { vw, vh, scrollY: Math.max(0, Math.round(scrollY)), mode };
 }
 
-const fmtSize = (n: number) =>
-  n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1)} MB`;
-
 export class BugReport {
   private modal: HTMLElement | null = null;
   private stage = h("div", { class: "canvas-wrap" });
@@ -182,6 +191,13 @@ export class BugReport {
   private attachments: Attachment[] = [];
   private mod: CaptureModule | null = null;
   private Ed: EditorModule["Editor"] | null = null;
+  /** The "Add screenshot" / preview chunk; null if it didn't load (attachments then show as a plain list). */
+  private S: ShotsModule | null = null;
+  private thumbs: ReturnType<ShotsModule["grid"]> | null = null;
+  private shotBtn: ReturnType<ShotsModule["shotMenu"]> | null = null;
+  /** How each attachment made with "Add screenshot" was taken, so it can be retaken the same way. */
+  private shotModes = new WeakMap<Attachment, ShotMode>();
+  private shooting = false;
   /** Whether the reporter keeps the session replay in this report (they can leave it out). */
   private withReplay = true;
   /** The reporter switched on "Reduce capture quality": this report's screenshot is sent small. */
@@ -215,6 +231,7 @@ export class BugReport {
     this.ctx.root.style.visibility = "hidden"; // the launcher must not flash into the first frame
     // The editor isn't needed until the screenshot is there: it downloads while SnapDOM works.
     const editor = this.loadEd();
+    const shots = this.loadShots();
     try {
       this.mod = await loadModule(this.ctx.assets);
       const at = geometryOf("visible");
@@ -223,7 +240,7 @@ export class BugReport {
         CAPTURE_TIMEOUT,
       );
       this.geometry = at;
-      await editor;
+      await Promise.all([editor, shots]);
       this.state = "ready";
     } catch (err) {
       console.warn("[pinwren] screenshot failed:", err);
@@ -238,6 +255,19 @@ export class BugReport {
   private async loadEd() {
     try {
       this.Ed = (await loadEditor(this.ctx.assets)).Editor;
+    } catch (err) {
+      console.warn("[pinwren]", err);
+    }
+  }
+
+  /** `closed` read through a call: it changes across the awaits of a capture, which a narrowed field can't show. */
+  private isClosed() {
+    return this.closed;
+  }
+
+  private async loadShots() {
+    try {
+      this.S = await loadShots(this.ctx.assets);
     } catch (err) {
       console.warn("[pinwren]", err);
     }
@@ -292,9 +322,10 @@ export class BugReport {
     this.severity = d.severity;
     this.attachments = d.attachments;
     const editor = this.loadEd();
+    const shots = this.loadShots();
     try {
       this.mod = await loadModule(this.ctx.assets);
-      await editor;
+      await Promise.all([editor, shots]);
       if (d.screenshot) {
         this.base = await toCanvas(d.screenshot);
         this.baseUrl = d.screenshot;
@@ -358,6 +389,24 @@ export class BugReport {
       picker,
     );
 
+    const S = this.S;
+    if (S) {
+      const modes: ShotMode[] = ["visible", "full", "area", "element"];
+      if (canShareScreen()) modes.push("tab");
+      this.shotBtn = S.shotMenu(ctx.root, modes, (m) => void this.shoot(m));
+      this.shotBtn.setDisabled(!this.mod);
+      this.thumbs = S.grid(ctx.root, {
+        remove: (a) => this.removeFile(a),
+        annotate: this.Ed ? (a) => void this.annotateFile(a) : undefined,
+        retake: {
+          can: (a) => this.shotModes.has(a),
+          run: (a) => void this.shoot(this.shotModes.get(a) ?? "visible", a),
+        },
+      });
+      this.files.append(this.thumbs.el);
+      this.cleanup.push(() => S.closeAll());
+    }
+
     send.addEventListener("click", () => {
       const body = this.body.value.trim();
       if (!body) {
@@ -418,7 +467,14 @@ export class BugReport {
                   ...this.sevButtons,
                 ),
               ),
-              h("div", { class: "field" }, h("span", { class: "label" }, t("attachments")), drop, this.files),
+              h(
+                "div",
+                { class: "field" },
+                h("span", { class: "label" }, t("attachments")),
+                this.shotBtn?.el,
+                drop,
+                this.files,
+              ),
               ...ident.els,
               consent.el,
               h("div", { class: "field" }, h("span", { class: "label" }, t("willSend")), this.summary),
@@ -797,40 +853,149 @@ export class BugReport {
     this.saveSoon();
   }
 
+  private removeFile(a: Attachment) {
+    this.attachments = this.attachments.filter((x) => x !== a);
+    this.renderFiles();
+    this.saveSoon();
+  }
+
   private renderFiles() {
-    this.files.replaceChildren(
-      ...this.attachments.map((a, i) =>
-        h(
-          "div",
-          { class: "file" },
-          a.contentType.startsWith("image/")
-            ? h("img", { src: a.dataUrl, alt: "" })
-            : h("span", { class: "fi" }, icon(I.file)),
+    const full = this.attachments.length >= MAX_FILES;
+    this.shotBtn?.setDisabled(!this.mod || this.shooting || full);
+    if (this.thumbs) this.thumbs.render(this.attachments);
+    else
+      // The preview chunk didn't load: names and a remove button still work.
+      this.files.replaceChildren(
+        ...this.attachments.map((a) =>
           h(
-            "span",
-            { class: "grow" },
-            h("span", { class: "fname" }, a.name),
-            h("small", {}, fmtSize(a.size)),
-          ),
-          h(
-            "button",
-            {
-              type: "button",
-              class: "ib",
-              "aria-label": t("removeFile", { name: a.name }),
-              onclick: () => {
-                this.attachments.splice(i, 1);
-                this.renderFiles();
-                this.saveSoon();
+            "div",
+            { class: "file" },
+            h(
+              "span",
+              { class: "grow" },
+              h("span", { class: "fname" }, a.name),
+              h("small", {}, fmtSize(a.size)),
+            ),
+            h(
+              "button",
+              {
+                type: "button",
+                class: "ib",
+                "aria-label": t("removeFile", { name: a.name }),
+                onclick: () => this.removeFile(a),
               },
-            },
-            icon(I.close),
+              icon(I.close),
+            ),
           ),
         ),
-      ),
-    );
+      );
     this.files.hidden = !this.attachments.length;
     this.renderSummary();
+  }
+
+  /**
+   * Add a screenshot as an attachment (visible area, full page, a dragged area, one element, or the browser's
+   * own tab capture), then offer to mark it up. `replace` swaps an earlier shot in place (retake).
+   * "tab" must reach getDisplayMedia straight from the click (user activation), so nothing awaits before it.
+   */
+  private async shoot(mode: ShotMode, replace?: Attachment) {
+    const { S, mod, modal } = this;
+    if (!S || !mod || !modal || this.shooting) return;
+    if (!replace && this.attachments.length >= MAX_FILES) {
+      this.error.textContent = t("tooManyFiles", { n: MAX_FILES });
+      return;
+    }
+    this.shooting = true;
+    this.error.textContent = "";
+    this.renderFiles();
+    const root = this.ctx.root;
+    const masks = this.ctx.capture.maskSelectors;
+    try {
+      let canvas: HTMLCanvasElement;
+      if (mode === "tab") {
+        canvas = await mod.screenShare(
+          () => {
+            root.style.visibility = "hidden";
+          },
+          () => {
+            root.style.visibility = "";
+          },
+          masks,
+        );
+      } else {
+        let box: Awaited<ReturnType<ShotsModule["pickArea"]>> = null;
+        let el: Element | undefined;
+        if (mode === "area" || mode === "element") {
+          modal.hidden = true; // out of the way for the pick; DOM capture leaves the widget out of the picture anyway
+          try {
+            if (mode === "area") box = await S.pickArea(root);
+            else el = (await this.pickElement()) ?? undefined;
+          } finally {
+            modal.hidden = false;
+          }
+          if (!box && !el) return;
+        }
+        const shot = await timeout(
+          mod.capture(mode === "area" ? "visible" : mode, masks, el, this.quality),
+          CAPTURE_TIMEOUT * 2,
+        );
+        canvas = box ? S.cropCanvas(shot, box, innerWidth, innerHeight) : shot;
+      }
+      if (this.isClosed()) return;
+      // Straight into the annotation editor when there is one; Cancel there drops the shot.
+      let out: HTMLCanvasElement | null = canvas;
+      if (this.Ed) {
+        const r = await S.annotate(root, this.Ed, canvas, t("shotAttach"));
+        out = r ? r.canvas : null;
+      }
+      if (!out || this.isClosed()) return;
+      const a = S.toAttachment(out, mode);
+      if (!a) {
+        this.error.textContent = t("fileTooBig", { name: S.shotName(mode) });
+        return;
+      }
+      const at = replace ? this.attachments.indexOf(replace) : -1;
+      if (at >= 0) this.attachments[at] = a;
+      else if (this.attachments.length < MAX_FILES) this.attachments.push(a);
+      this.shotModes.set(a, mode);
+      this.ctx.toast(t("shotAttached"));
+    } catch (err) {
+      console.warn("[pinwren] screenshot attachment failed:", err);
+      if (!this.closed)
+        this.error.textContent =
+          err instanceof DOMException && err.name === "NotAllowedError" ? t("shotDenied") : t("shotFailed");
+    } finally {
+      this.shooting = false;
+      if (!this.closed) {
+        this.renderFiles();
+        this.saveSoon();
+      }
+    }
+  }
+
+  /** Mark up an attached image in the annotation editor; the original stays if the dialog is cancelled. */
+  private async annotateFile(a: Attachment) {
+    const { S, Ed } = this;
+    if (!S || !Ed) return;
+    try {
+      const r = await S.annotate(this.ctx.root, Ed, a.dataUrl);
+      if (!r?.changed || this.closed) return;
+      const next = S.canvasToAttachment(r.canvas, `${a.name.replace(/\.\w+$/, "")}.png`);
+      if (!next) {
+        this.error.textContent = t("fileTooBig", { name: a.name });
+        return;
+      }
+      const i = this.attachments.indexOf(a);
+      if (i < 0) return;
+      this.attachments[i] = next;
+      const mode = this.shotModes.get(a);
+      if (mode) this.shotModes.set(next, mode);
+      this.renderFiles();
+      this.saveSoon();
+    } catch (err) {
+      console.warn("[pinwren]", err);
+      this.error.textContent = t("genericError");
+    }
   }
 
   private renderSummary() {

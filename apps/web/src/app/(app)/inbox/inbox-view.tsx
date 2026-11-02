@@ -7,14 +7,13 @@ import { toast } from "sonner";
 import { ButtonLink } from "@/components/button-link";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { STATUS_META } from "@/components/feedback-meta";
+import { Dashboard } from "@/components/dashboard/dashboard";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { FeedbackRow } from "@/lib/api";
-import type { Key } from "@/lib/i18n/en";
 import { useI18n } from "@/lib/i18n/provider";
 import { filtersFromParams, layoutFromParams, listArgs, trashFromParams } from "@/lib/inbox-filters";
 import { undoChanges } from "@/lib/inbox-undo";
@@ -50,28 +49,7 @@ import { BoardView } from "./board-view";
 import { FeedbackDetailPanel } from "./feedback-detail";
 import { type Feed, InboxList } from "./inbox-list";
 import { InboxToolbar } from "./inbox-toolbar";
-import { Kbd } from "./kbd";
 import { SetupChecklist } from "@/components/setup-checklist";
-
-const KEYS: [string, Key][] = [
-  ["⌘K", "inbox2.keyCommandPalette"],
-  ["j / k", "inbox2.keyNextPrevious"],
-  ["Enter", "inbox2.keyOpen"],
-  ["Esc", "inbox2.keyEscape"],
-  ["x", "inbox2.keySelect"],
-  ["e", "inbox2.keyResolve"],
-  ["s", "inbox2.keyStatusMenu"],
-  ["p", "inbox2.keyPriorityMenu"],
-  ["a", "inbox2.keyAssignMenu"],
-  ["l", "inbox2.keyLabelsMenu"],
-  ["r", "inbox2.keyRename"],
-  ["c", "inbox2.comment"],
-  ["u", "inbox2.keyUndo"],
-  ["/", "inbox2.keySearch"],
-  ["g m", "inbox2.keyMyWork"],
-  ["m", "inbox2.keyMoveCard"],
-  ["?", "inbox2.keyHelp"],
-];
 
 const isTyping = (t: EventTarget | null) =>
   t instanceof HTMLElement &&
@@ -114,7 +92,6 @@ export function InboxView() {
   const [purge, purging] = usePurgeFeedbackMutation();
   const selection = useAppSelector((s) => s.inbox.selection);
   const lastChange = useAppSelector((s) => s.inbox.lastChange);
-  const help = useAppSelector((s) => s.ui.shortcutsOpen);
   const [bulkDelete, setBulkDelete] = useState(false);
   const [bulkPurge, setBulkPurge] = useState(false);
 
@@ -362,6 +339,10 @@ export function InboxView() {
 
       <SetupChecklist />
 
+      {!trash && (
+        <Dashboard scope="inbox" {...(projectId ? { projectId } : {})} className="border-b px-3 py-2" />
+      )}
+
       <InboxToolbar
         filters={filters}
         layout={layout}
@@ -470,35 +451,6 @@ export function InboxView() {
             .catch((e: unknown) => toast.error(errorMessage(e)));
         }}
       />
-
-      <Dialog open={help} onOpenChange={(o) => dispatch(shortcutsToggled(o))}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("inbox2.keyboardShortcuts")}</DialogTitle>
-            <DialogDescription>{t("inbox2.shortcutsDescription")}</DialogDescription>
-          </DialogHeader>
-          <dl className="grid grid-cols-[6rem_1fr] gap-x-4 gap-y-2 text-sm">
-            {KEYS.map(([k, label]) => (
-              <div key={k} className="contents">
-                <dt>
-                  {k.split(" / ").map((part, i) => (
-                    <span key={part}>
-                      {i > 0 && <span className="text-muted-foreground"> / </span>}
-                      {part.split(" ").map((p, j) => (
-                        <span key={p}>
-                          {j > 0 && " "}
-                          <Kbd>{p}</Kbd>
-                        </span>
-                      ))}
-                    </span>
-                  ))}
-                </dt>
-                <dd className="text-muted-foreground">{t(label)}</dd>
-              </div>
-            ))}
-          </dl>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

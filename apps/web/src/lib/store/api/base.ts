@@ -91,6 +91,7 @@ export const TAG_TYPES = [
   "AiSettings",
   "ProjectAi",
   "Guest",
+  "Stats",
 ] as const;
 export type TagType = (typeof TAG_TYPES)[number];
 

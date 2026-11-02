@@ -20,12 +20,12 @@ describe("safeNext", () => {
       null,
       undefined,
     ]) {
-      expect(safeNext(bad)).toBe("/inbox");
+      expect(safeNext(bad)).toBe("/");
     }
   });
 
   it("never loops back to an auth page", () => {
-    expect(safeNext("/sign-in?next=/inbox")).toBe("/inbox");
+    expect(safeNext("/sign-in?next=/inbox")).toBe("/");
     expect(safeNext("/reset-password?token=x", "/x")).toBe("/x");
   });
 

@@ -344,6 +344,11 @@
     "databaseLifetime": "finite",
     "check": "public authorization: GET /api/sign-in-methods"
   },
+  "GET /api/stats": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/stats"
+  },
   "GET /api/stream": {
     "boundary": "tenant",
     "databaseLifetime": "stream",
@@ -758,6 +763,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: POST /api/projects/:id/action-secret/rotate"
+  },
+  "POST /api/projects/:id/check-install": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/projects/:id/check-install"
   },
   "POST /api/projects/:id/export": {
     "boundary": "tenant",

@@ -4,7 +4,9 @@ import { FolderPlus, Globe } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RelativeTime } from "@/components/feedback-meta";
+import { Dashboard } from "@/components/dashboard/dashboard";
 import { PageHeader } from "@/components/page-header";
+import { ErrorState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,10 +50,17 @@ export function ProjectsView() {
           </Button>
         )}
       </PageHeader>
+      <div className="px-4 pt-3">
+        <Dashboard scope="projects" />
+      </div>
       <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
         {projects.isLoading && [0, 1, 2].map((i) => <Skeleton key={i} className="h-36" />)}
         {projects.data?.projects.map((p) => (
-          <Link key={p.id} href={`/projects/${p.id}`} className="group">
+          <Link
+            key={p.id}
+            href={`/projects/${p.id}`}
+            className="group min-w-0 rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
             <Card className="h-full transition-colors group-hover:border-foreground/20">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -66,9 +75,11 @@ export function ProjectsView() {
                     </Badge>
                   )}
                 </CardTitle>
-                <CardDescription className="flex items-center gap-1.5 truncate">
+                <CardDescription className="flex min-w-0 items-center gap-1.5">
                   <Globe className="size-3.5 shrink-0" />
-                  {p.allowedOrigins.join(", ") || t("projects2.noAllowedSites")}
+                  <span className="truncate">
+                    {p.allowedOrigins.join(", ") || t("projects2.noAllowedSites")}
+                  </span>
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex items-center justify-between text-sm text-muted-foreground">
@@ -84,9 +95,14 @@ export function ProjectsView() {
             </Card>
           </Link>
         ))}
+        {projects.isError && (
+          <Card className="sm:col-span-2 xl:col-span-3">
+            <ErrorState error={projects.error} retry={() => void projects.refetch()} />
+          </Card>
+        )}
         {projects.data?.projects.length === 0 && (
           <Card className="sm:col-span-2 xl:col-span-3">
-            <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
               <FolderPlus className="size-6 text-muted-foreground" />
               <p className="font-medium">{t("projects2.createFirstProject")}</p>
               <p className="max-w-sm text-sm text-muted-foreground">{t("projects2.projectIsOneWebsite")}</p>

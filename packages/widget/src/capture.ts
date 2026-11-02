@@ -71,13 +71,20 @@ async function screenShare(
   masks: string[] = [],
 ): Promise<HTMLCanvasElement> {
   // No mediaDevices on insecure (http://) pages, and no getDisplayMedia on mobile browsers.
-  if (!("mediaDevices" in navigator) || !("getDisplayMedia" in navigator.mediaDevices))
+  const devices = navigator.mediaDevices as MediaDevices | undefined;
+  if (!devices || !("getDisplayMedia" in devices))
     throw new Error("Screen sharing isn't supported in this browser");
-  const stream = await navigator.mediaDevices.getDisplayMedia({
-    video: { displaySurface: "browser" },
+  const stream = await devices.getDisplayMedia({
+    // Ask for the tab at device resolution, not the default scaled-down size (crisp text on HiDPI screens).
+    video: {
+      displaySurface: "browser",
+      width: { ideal: Math.round(innerWidth * (devicePixelRatio || 1)) },
+      height: { ideal: Math.round(innerHeight * (devicePixelRatio || 1)) },
+    },
     audio: false,
     preferCurrentTab: true,
     selfBrowserSurface: "include",
+    surfaceSwitching: "exclude",
   } as DisplayMediaStreamOptions);
   try {
     hide();

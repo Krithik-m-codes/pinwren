@@ -198,6 +198,8 @@ async function privateAccess(
   feedbackId: string,
 ): Promise<boolean> {
   if (verifyPageLinkToken(header(PAGE_LINK_TOKEN_HEADER))?.feedbackId === feedbackId) return true;
+  // A review-link guest reads the threads of the pins the link shows them.
+  if (await findReviewLink(p.id, header(REVIEW_TOKEN_HEADER))) return true;
   const token = header(REPORTER_TOKEN_HEADER);
   if (!token) return false;
   const [f] = await getDb()
@@ -412,7 +414,11 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
 
   .get("/feedback", async (c) => {
     const p = c.var.project;
-    if (!p.publicRead) return c.json({ items: [] });
+    // A guest on a valid review link sees the pins even when the project keeps them private: reviewing
+    // the page is what the link is for (a private project would otherwise show reviewers no markers).
+    if (!p.publicRead && !(await findReviewLink(p.id, c.req.header(REVIEW_TOKEN_HEADER)))) {
+      return c.json({ items: [] });
+    }
     const url = c.req.query("url");
     const urlPattern = c.req.query("urlPattern");
     const where = [eq(feedback.projectId, p.id), isNull(feedback.deletedAt)];

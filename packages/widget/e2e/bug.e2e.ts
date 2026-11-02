@@ -272,7 +272,7 @@ test("attachments: browse, paste, drop, validation, remove", async ({ page }) =>
   await ready(page);
   await openReport(page);
   const dlg = report(page);
-  const files = dlg.locator(".file");
+  const files = dlg.locator(".sh-card");
 
   const chooser = page.waitForEvent("filechooser", { timeout: 5000 });
   await dlg.getByRole("button", { name: "browse" }).click();
@@ -390,7 +390,7 @@ test("draft survives a reload and resumes with text, annotations and attachments
   await dlg
     .locator("input[type=file]")
     .setInputFiles({ name: "log.png", mimeType: "image/png", buffer: PNG });
-  await expect(dlg.locator(".file")).toHaveCount(1);
+  await expect(dlg.locator(".sh-card")).toHaveCount(1);
   await page.waitForTimeout(700); // drafts save 400 ms after the last change
   await page.reload();
   await expect(page.locator("pinwren-root .launcher")).toBeVisible();
@@ -409,7 +409,7 @@ test("draft survives a reload and resumes with text, annotations and attachments
   await expect(dlg.getByLabel("Describe the bug")).toHaveValue("The cart badge never updates");
   await expect(dlg.getByRole("radio", { name: "High" })).toHaveAttribute("aria-checked", "true");
   await expect.poll(() => shapes(page)).toBe("1");
-  await expect(dlg.locator(".file")).toHaveCount(1);
+  await expect(dlg.locator(".sh-card")).toHaveCount(1);
 
   // Esc keeps the draft; Start over discards it.
   await page.keyboard.press("Escape");

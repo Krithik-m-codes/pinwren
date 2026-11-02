@@ -65,3 +65,4 @@ export const layers = svg('<path d="m12 3 9 5-9 5-9-5Z"/><path d="m3 13 9 5 9-5"
 export const chevron = svg('<path d="m6 9 6 6 6-6"/>');
 export const sort = svg('<path d="M3 6h10M3 12h7M3 18h4M17 4v16M14 17l3 3 3-3"/>');
 export const user = svg('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>');
+export const plus = svg('<path d="M12 5v14M5 12h14"/>');

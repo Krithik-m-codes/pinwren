@@ -184,6 +184,10 @@ function refreshListsFor(l: Listener, fields: readonly string[]) {
 
 /** One stream event → RTK Query cache updates and real-time state. */
 export function applyStreamEvent(l: Listener, event: string, data: unknown) {
+  // Dashboard numbers (GET /api/stats) follow every change to an item; only mounted dashboards refetch.
+  if (event.startsWith("feedback.") || event === "comment.created") {
+    l.dispatch(api.util.invalidateTags(["Stats"]));
+  }
   switch (event) {
     case "feedback.created": {
       const p = streamFeedbackCreated.safeParse(data);

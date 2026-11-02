@@ -33,6 +33,7 @@ import { useChangeEmailWithPasswordMutation, useSaveProfileMutation } from "@/li
 import { useMounted } from "@/lib/use-synced-state";
 import { useViewer } from "@/lib/viewer";
 import { DeleteAccountCard, PasswordCard, SessionsCard, TwoFactorCard } from "./account-security";
+import { LandingRow } from "./landing-row";
 import { LanguageRow } from "./language-row";
 import { ConnectedAccountsCard, PasskeysCard } from "./sign-in-methods";
 
@@ -71,6 +72,7 @@ export function ProfileSettings() {
         <CardContent>
           <SettingGroup>
             <LanguageRow />
+            <LandingRow />
             <SettingRow label={t("settings3.theme")} description={t("settings3.themeDescription")}>
               {mounted ? (
                 <Segmented

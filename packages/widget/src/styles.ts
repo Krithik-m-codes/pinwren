@@ -106,6 +106,15 @@ textarea { min-height: 76px; field-sizing: content; max-height: 220px; }
   padding: 8px 14px; border-radius: 999px; background: var(--fg); color: var(--bg); font-size: 13px; pointer-events: none;
   box-shadow: var(--shadow); display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 8px; align-items: center; animation: pop .14s ease-out; }
 .hint kbd { background: rgba(127,127,127,.3); color: inherit; box-shadow: none; }
+.hint .modes { display: inline-flex; padding: 2px; border-radius: 999px; background: rgba(127,127,127,.28); pointer-events: auto; }
+.hint .mode { padding: 2px 10px; border-radius: 999px; font-size: 12px; }
+.hint .mode[aria-checked="true"] { background: var(--bg); color: var(--fg); }
+.crumbs { position: fixed; z-index: 2147483602; left: 50%; bottom: 16px; translate: -50% 0; max-width: calc(100vw - 24px);
+  display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--fg); box-shadow: var(--shadow); overflow: hidden; }
+.crumb { padding: 2px 9px; border-radius: 999px; color: var(--bg); font: 11px/17px ui-monospace, monospace;
+  white-space: nowrap; }
+.crumb + .crumb::before { content: "›"; margin-right: 9px; opacity: .6; }
+.crumb.cur { background: var(--accent); color: var(--accent-fg); }
 .outline { position: fixed; z-index: 2147483591; pointer-events: none; border: 1.5px solid var(--accent);
   background: color-mix(in srgb, var(--accent) 7%, transparent); border-radius: 4px; transition: all .06s ease-out; }
 .outline span { position: absolute; left: -1.5px; top: -21px; padding: 1px 6px; border-radius: 4px; background: var(--accent);
@@ -140,6 +149,10 @@ textarea { min-height: 76px; field-sizing: content; max-height: 220px; }
 /* The hover outline around a marker's element or region */
 .ring { position: fixed; z-index: 2147483593; pointer-events: none; border-radius: 8px; border: 2px solid var(--c, var(--accent));
   background: color-mix(in srgb, var(--c, var(--accent)) 6%, transparent); animation: fade .12s ease-out; }
+
+/* Sidebar click / deep link: a stronger outline that pulses around the anchored element or region */
+.ring.flash { border-width: 3px; background: color-mix(in srgb, var(--c, var(--accent)) 14%, transparent);
+  animation: pulse 1s ease-out 3; }
 
 /* Cards */
 .card { position: fixed; z-index: 2147483603; width: 340px; max-width: calc(100vw - 24px); background: var(--bg);

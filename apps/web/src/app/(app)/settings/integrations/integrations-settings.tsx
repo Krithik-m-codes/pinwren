@@ -303,7 +303,7 @@ function EventPicker({ value, onChange }: { value: WebhookEvent[]; onChange: (v:
             onCheckedChange={(on) => onChange(on ? [...value, e] : value.filter((x) => x !== e))}
           />
           <label htmlFor={`event-${e}`}>{t(EVENT_LABELS[e])}</label>
-          <code className="ml-auto font-mono text-[11px] text-muted-foreground">{e}</code>
+          <code className="ml-auto font-mono text-xs text-muted-foreground">{e}</code>
         </div>
       ))}
     </fieldset>
@@ -603,7 +603,7 @@ function WebhookDetail({
 
   if (hook.isLoading) {
     return (
-      <div className="space-y-3 p-5">
+      <div className="space-y-3 p-4">
         <Skeleton className="h-6 w-1/2" />
         <Skeleton className="h-32" />
         <Skeleton className="h-48" />
@@ -615,7 +615,7 @@ function WebhookDetail({
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
-      <SheetHeader className="border-b p-5 pr-12">
+      <SheetHeader className="border-b p-4 pr-12">
         <SheetTitle className="flex items-center gap-2">
           {w.name || t(KIND_LABELS[w.kind])}
           <Badge variant="secondary" className="font-normal">
@@ -627,7 +627,7 @@ function WebhookDetail({
           {w.chatId && t("settings1.arrowChat", { id: w.chatId })}
         </SheetDescription>
       </SheetHeader>
-      <div className="grid gap-6 p-5">
+      <div className="grid gap-6 p-4">
         {w.failingSince && (
           <p className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-700 dark:text-red-400">
             <TriangleAlert className="mt-0.5 size-4 shrink-0" />
@@ -929,7 +929,7 @@ function DeliveryRow({
         </Button>
       </div>
       {open && (
-        <div className="space-y-1.5 border-t bg-muted/30 px-3 py-2 font-mono text-[11px]">
+        <div className="space-y-1.5 border-t bg-muted/30 px-3 py-2 font-mono text-xs">
           <p className="text-muted-foreground">{t("settings1.deliveryId", { id: d.eventId })}</p>
           {d.error && <p className="text-destructive">{d.error}</p>}
           {d.nextRetryAt && (

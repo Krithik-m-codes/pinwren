@@ -44,6 +44,33 @@ export const projects2 = {
   "projects2.checkDomain":
     "• The site's domain is under Allowed sites below. Refused sites show up there too.",
   "projects2.checkInstallation": "Check the installation",
+  "projects2.checkNow": "Check installation",
+  "projects2.checkNowRunning": "Checking your site…",
+  "projects2.checkNowFailed": "Couldn't run the check. Try again.",
+  "projects2.checkNowIntro": "Pinwren fetches your allowed sites and looks for the widget's script tag.",
+  "projects2.checkNowNoSites": "No allowed site to check. Add your site under Allowed sites below first.",
+  "projects2.checkFound": "Widget found on {site}",
+  "projects2.checkFoundHint": "The script tag is on the page with this project's key.",
+  "projects2.checkMissing": "Script tag not found on {site}",
+  "projects2.checkMissingHint":
+    "Paste the snippet above into the page's head (or your tag manager), publish, and check again. Pages rendered only in the browser can't be read from here; open the site and look for the widget instead.",
+  "projects2.checkMismatch": "Another project's key is on {site}",
+  "projects2.checkMismatchHint":
+    "The page uses {keys} but this project's key is {key}. Replace data-project with the key above.",
+  "projects2.checkUnreachable": "Couldn't reach {site}",
+  "projects2.checkReason.timeout": "The site took too long to answer.",
+  "projects2.checkReason.dns_error": "The host name doesn't resolve.",
+  "projects2.checkReason.blocked_address":
+    "The address is private or reserved, so the server won't contact it. Use the terminal check below instead.",
+  "projects2.checkReason.tls_error": "The site's TLS certificate isn't valid.",
+  "projects2.checkReason.too_large": "The page is too large to read.",
+  "projects2.checkReason.status": "The site answered with an error status ({status}).",
+  "projects2.checkReason.failed": "The connection failed.",
+  "projects2.checkOriginRefused":
+    "The widget was refused from {origins}. Allow it under Allowed sites if it should work there.",
+  "projects2.checkNeverLoaded":
+    "The widget hasn't loaded from any site yet. Open your site once with the snippet installed.",
+  "projects2.checkLoadedRecently": "The widget last loaded",
   "projects2.checkReach": "• Your site can reach {url} (not a localhost address, for a live site).",
   "projects2.checkSnippet": "• The snippet is on the page you opened (view the page source to check).",
   "projects2.checksServer": "Checks the server,",
