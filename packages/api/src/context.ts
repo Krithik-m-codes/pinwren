@@ -2,6 +2,7 @@ import { membershipFor } from "./db/identity";
 import { tenantRequestScope } from "./tenant-scope";
 import { createMiddleware } from "hono/factory";
 import { getAuth } from "./auth";
+import { env } from "./env";
 import { ApiError, unauthorized } from "./errors";
 import { isInstanceAdmin } from "./services/setup";
 
@@ -18,6 +19,9 @@ export type SessionVars = {
 export const requireSession = createMiddleware<{ Variables: SessionVars }>(async (c, next) => {
   const session = await getAuth().api.getSession({ headers: c.req.raw.headers });
   if (!session) throw unauthorized();
+  if (env().PINWREN_MODE === "cloud" && !session.user.emailVerified) {
+    throw new ApiError(403, "EMAIL_NOT_VERIFIED", "Confirm your email address to use your workspace");
+  }
   const orgId = session.session.activeOrganizationId;
   if (!orgId) throw new ApiError(409, "NO_ACTIVE_ORG", "Create or select an organisation first");
   const m = await membershipFor(orgId, session.user.id);

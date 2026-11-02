@@ -5,8 +5,7 @@ import { Logo } from "@/components/logo";
 import { BrowserLocale } from "@/lib/i18n/browser-locale";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getSession } from "@/lib/server/session";
-import { OnboardingForm } from "./onboarding-form";
-import { PendingInvitations } from "./pending-invitations";
+import { OnboardingGate } from "./onboarding-gate";
 
 export const metadata: Metadata = { title: "Set up your workspace" };
 
@@ -31,10 +30,5 @@ export default function OnboardingPage() {
 async function SignedIn() {
   const session = await getSession();
   if (!session) redirect("/sign-in?next=%2Fonboarding");
-  return (
-    <>
-      <PendingInvitations />
-      <OnboardingForm />
-    </>
-  );
+  return <OnboardingGate />;
 }

@@ -1,6 +1,6 @@
 # Cloud tenant isolation
 
-Status: implementation in progress. Cloud signup is not ready for customers. The transaction context,
+Status: implementation in progress. Cloud signup is implemented but closed by default and not certified for customers. The transaction context,
 policy definitions, relationship constraints, Cloud provisioning and startup validation are implemented.
 Authenticated request integration includes identity repositories, finite tenant scopes, streams and mixed-I/O
 handlers. Public capability integration includes key/Origin, guest/review, signed asset/unsubscribe and inbound
@@ -236,10 +236,39 @@ address; token authentication, scope and membership are covered in `cloud-api-db
 
 Verified on PostgreSQL 16.15: `node scripts/tenant-isolation.mjs` passes 14 files / 368 tests (151 + 25 new).
 
+## Cloud sign-up
+
+Design: `docs/superpowers/specs/2026-10-31-cloud-signup-onboarding-design.md`. Acceptance evidence is
+`packages/api/src/cloud-signup-db.test.ts` (real PostgreSQL, runtime and service roles, in the isolation runner)
+and `cloud-signup.test.ts` (rules and counters).
+
+- **Kill switch.** `PINWREN_CLOUD_SIGNUPS=open|closed`, default `closed`. Closed refuses strangers with
+  `403 SIGNUP_CLOSED`; an address with a pending invitation can still sign up. It is an environment variable on
+  purpose: no tenant or database setting can flip it.
+- **Email and password only.** A first sign-in by Google, GitHub or email link for an unknown address is
+  refused (`CLOUD_SIGNUP_PASSWORD_ONLY`) because those paths cannot carry the consent checkbox.
+- **Consent.** `termsAccepted: true` is required (`TERMS_REQUIRED`); acceptance time and the legal URLs shown
+  are stored in the system `setting` row `consent.<userId>`.
+- **Abuse limits**, checked before any account exists: disposable-mailbox domains (`DISPOSABLE_EMAIL`), a
+  per-address cap `PINWREN_CLOUD_SIGNUPS_PER_IP_HOUR` (default 5) and an instance-wide cap
+  `PINWREN_CLOUD_SIGNUPS_PER_HOUR` (default 100), both `429 SIGNUP_RATE_LIMITED` with the same answer. The
+  counters live in the existing `rate_limit` system table; the per-address key is the trusted-proxy address, so
+  `PINWREN_TRUST_PROXY` must be set correctly behind a proxy or all visitors share one bucket.
+- **Verification before use.** `requireEmailVerification` is on in Cloud (no session until the emailed link is
+  followed) and `requireSession` also answers `403 EMAIL_NOT_VERIFIED` for an unverified account. SMTP must be
+  configured, or nobody can finish signing up.
+- **Personal workspace.** The organisation and its owner membership are inserted in one transaction on the
+  identity connection, on the Free plan (no `billing_subscription` row). The account itself is created by Better
+  Auth first; if the workspace insert fails the account is deleted and the sign-up errors, and any account that
+  slips through is repaired on its first session, which is also where the active organisation is set.
+- No new tables and no new routes: `GET /api/setup` (public, inventoried) gained the `cloud` field and the Cloud
+  `signupOpen` value.
+
 ## Remaining WP-21 work (explicitly incomplete)
 
-- Cloud sign-up is **not enabled** and must not be until the items below are done; `PINWREN_DISABLE_SIGNUP`
-  semantics and first-account promotion remain closed in Cloud mode.
+- Cloud sign-up is **built but ships closed** (`PINWREN_CLOUD_SIGNUPS` defaults to `closed`; see "Cloud
+  sign-up" below). Do not set it to `open` in production until the items below are done;
+  `PINWREN_DISABLE_SIGNUP` semantics and first-account promotion remain closed in Cloud mode.
 - Branch review: one independent whole-branch review against the spec has not yet been obtained.
 - Required protected-branch CI (PostgreSQL 16 and 17 matrix, existing builds and browser journeys) has not been
   observed green for this head; local PostgreSQL 17 and the dashboard Playwright journeys were not run.

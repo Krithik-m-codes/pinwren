@@ -440,6 +440,8 @@ export type SetupStatus = {
   emailConfigured: boolean;
   /** PINWREN_URL's origin. */
   appUrl: string;
+  /** Cloud only: the legal pages the sign-up checkbox links to. Null on a self-hosted server. */
+  cloud: { termsUrl: string; privacyUrl: string } | null;
 };
 
 /** First screenshot of an item (annotated preferred), for thumbnails. */

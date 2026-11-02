@@ -15,6 +15,18 @@ const schema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   PINWREN_MODE: z.enum(["selfhost", "cloud"]).default("selfhost"),
   PINWREN_SERVICE_DATABASE_URL: optionalString,
+  /**
+   * Cloud only: whether strangers may create accounts. `closed` (the default) pauses public sign-up, so
+   * a deployment never opens it by accident; invitations to existing workspaces still work.
+   */
+  PINWREN_CLOUD_SIGNUPS: z.enum(["open", "closed"]).default("closed"),
+  /** Cloud only: new accounts one client address may create per hour. */
+  PINWREN_CLOUD_SIGNUPS_PER_IP_HOUR: z.coerce.number().int().positive().default(5),
+  /** Cloud only: new accounts the whole instance accepts per hour (a flood brake). */
+  PINWREN_CLOUD_SIGNUPS_PER_HOUR: z.coerce.number().int().positive().default(100),
+  /** Cloud only: the legal pages the sign-up consent checkbox links to. */
+  PINWREN_TERMS_URL: z.url().default("https://pinwren.xride-labs.in/legal/terms"),
+  PINWREN_PRIVACY_URL: z.url().default("https://pinwren.xride-labs.in/legal/privacy"),
   PINWREN_URL: z.url("PINWREN_URL must be the public URL, e.g. https://feedback.example.com"),
   PINWREN_SECRET: z.string().min(32, "PINWREN_SECRET must be at least 32 characters"),
   PINWREN_DATA_DIR: z.string().default("./data"),
@@ -170,4 +182,9 @@ export function env(): Env {
   }
   cached = e;
   return cached;
+}
+
+/** Test hook: drop the cached environment so a suite can change variables between cases. */
+export function resetEnvForTests(): void {
+  cached = undefined;
 }

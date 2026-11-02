@@ -15,8 +15,11 @@ export const setup = new Hono()
   .get("/setup", async (c) => {
     const [anyone, open, smtp] = await Promise.all([hasAnyUser(), signupOpen(), resolveSmtp()]);
     c.header("cache-control", "no-store");
+    const cloud = env().PINWREN_MODE === "cloud";
     return c.json({
-      needed: !anyone,
+      // Cloud has no first-run administrator: its operators run the service, not a sign-up form.
+      needed: !cloud && !anyone,
+      cloud: cloud ? { termsUrl: env().PINWREN_TERMS_URL, privacyUrl: env().PINWREN_PRIVACY_URL } : null,
       signupOpen: open,
       emailConfigured: smtp !== null,
       appUrl: new URL(env().PINWREN_URL).origin,

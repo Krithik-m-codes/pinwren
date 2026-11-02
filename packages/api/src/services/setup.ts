@@ -1,6 +1,7 @@
 import { identityDatabase } from "@pinwren/db/identity";
 import { getDb, invitation, member, setting, user } from "@pinwren/db";
 import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { cloudSignupsOpen } from "../cloud-signup";
 import { env } from "../env";
 
 // Instance administrators (ADR 0021, amended for wave 5: the BugPin model). The first account created on a
@@ -195,7 +196,7 @@ export function decideSignup(o: {
 
 /** Whether someone without an invitation could create an account now (the "Create an account" link). */
 export async function signupOpen(): Promise<boolean> {
-  if (env().PINWREN_MODE === "cloud") return false;
+  if (env().PINWREN_MODE === "cloud") return cloudSignupsOpen();
   const disableSignup = env().PINWREN_DISABLE_SIGNUP;
   if (decideSignup({ disableSignup, hasUsers: true, invited: false })) return true;
   return decideSignup({ disableSignup, hasUsers: await hasAnyUser(), invited: false });
