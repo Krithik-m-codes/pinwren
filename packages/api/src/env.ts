@@ -79,6 +79,11 @@ const schema = z.object({
     .enum(["0", "1", "true", "false"])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === "1" || v === "true")),
+  /**
+   * Master switch for the dashboard's soft prompts: the "update available" strip and the occasional
+   * "star / sponsor" card. Off hides them for everyone (the Community Edition badge stays). Cloud never shows them.
+   */
+  PINWREN_NUDGES: bool("true"),
   /** GitHub repository whose latest release is compared with PINWREN_VERSION. */
   PINWREN_UPDATE_REPO: z
     .string()

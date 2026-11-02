@@ -90,4 +90,10 @@ Instance admins see **Update available** in the dashboard when a newer release e
 Security** or with `PINWREN_UPDATE_CHECK=false` (which also locks the switch); it is off on its own while any
 project uses privacy mode, and it makes no other outbound call.
 
+The sidebar badge next to the logo shows your edition (**Community Edition**), with a dot while an update is
+waiting. Instance admins also get a thin, dismissible strip with the release notes and the update command; it
+returns for the next release. Rarely (after two weeks of use, then at most monthly, with "Don't ask again") they
+see a card asking to star the GitHub repository or sponsor the project. Set `PINWREN_NUDGES=false` to hide the
+strip and the card for everyone; Pinwren Cloud never shows them. Dismissals are remembered per browser.
+
 You can also watch the repository's releases on GitHub (**Watch › Custom › Releases**).
