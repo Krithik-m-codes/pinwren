@@ -2583,5 +2583,15 @@
   "dash.act.deleted": "deleted",
   "dash.act.restored": "restored",
   "dash.act.other": "updated",
-  "dash.customiseCommand": "Customise dashboard"
+  "dash.customiseCommand": "Customise dashboard",
+  "gallery.open": "预览 {name}",
+  "gallery.zoomIn": "放大",
+  "gallery.zoomOut": "缩小",
+  "gallery.fit": "适应窗口",
+  "gallery.actual": "实际大小",
+  "gallery.prev": "上一张图片",
+  "gallery.next": "下一张图片",
+  "gallery.position": "第 {i} 张，共 {n} 张",
+  "gallery.failed": "无法加载此文件",
+  "gallery.openNew": "在新标签页中打开"
 }

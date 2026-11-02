@@ -2583,5 +2583,15 @@
   "dash.act.deleted": "deleted",
   "dash.act.restored": "restored",
   "dash.act.other": "updated",
-  "dash.customiseCommand": "Customise dashboard"
+  "dash.customiseCommand": "Customise dashboard",
+  "gallery.open": "{name} का पूर्वावलोकन",
+  "gallery.zoomIn": "ज़ूम इन",
+  "gallery.zoomOut": "ज़ूम आउट",
+  "gallery.fit": "विंडो में फ़िट करें",
+  "gallery.actual": "वास्तविक आकार",
+  "gallery.prev": "पिछली छवि",
+  "gallery.next": "अगली छवि",
+  "gallery.position": "{n} में से {i}",
+  "gallery.failed": "यह फ़ाइल लोड नहीं हो सकी",
+  "gallery.openNew": "नए टैब में खोलें"
 }

@@ -2583,5 +2583,15 @@
   "dash.act.deleted": "deleted",
   "dash.act.restored": "restored",
   "dash.act.other": "updated",
-  "dash.customiseCommand": "Customise dashboard"
+  "dash.customiseCommand": "Customise dashboard",
+  "gallery.open": "Vista previa de {name}",
+  "gallery.zoomIn": "Acercar",
+  "gallery.zoomOut": "Alejar",
+  "gallery.fit": "Ajustar a la ventana",
+  "gallery.actual": "Tamaño real",
+  "gallery.prev": "Imagen anterior",
+  "gallery.next": "Imagen siguiente",
+  "gallery.position": "{i} de {n}",
+  "gallery.failed": "No se pudo cargar este archivo",
+  "gallery.openNew": "Abrir en una pestaña nueva"
 }

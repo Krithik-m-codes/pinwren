@@ -12,6 +12,7 @@ import { meta } from "./en/meta";
 import { misc } from "./en/misc";
 import { shell } from "./en/shell";
 import { validation } from "./en/validation";
+import { gallery } from "./en/gallery";
 import { guest } from "./en/guest";
 import { billing } from "./en/billing";
 import { cloud } from "./en/cloud";
@@ -39,6 +40,7 @@ export const en = {
   ...misc,
   ...validation,
   ...guest,
+  ...gallery,
   ...billing,
   ...cloud,
   ...dashboard,

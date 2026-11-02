@@ -2583,5 +2583,15 @@
   "dash.act.deleted": "deleted",
   "dash.act.restored": "restored",
   "dash.act.other": "updated",
-  "dash.customiseCommand": "Customise dashboard"
+  "dash.customiseCommand": "Customise dashboard",
+  "gallery.open": "Vorschau von {name}",
+  "gallery.zoomIn": "Vergrößern",
+  "gallery.zoomOut": "Verkleinern",
+  "gallery.fit": "An Fenster anpassen",
+  "gallery.actual": "Originalgröße",
+  "gallery.prev": "Vorheriges Bild",
+  "gallery.next": "Nächstes Bild",
+  "gallery.position": "{i} von {n}",
+  "gallery.failed": "Diese Datei konnte nicht geladen werden",
+  "gallery.openNew": "In neuem Tab öffnen"
 }

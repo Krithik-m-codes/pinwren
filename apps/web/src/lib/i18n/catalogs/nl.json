@@ -2583,5 +2583,15 @@
   "dash.act.deleted": "deleted",
   "dash.act.restored": "restored",
   "dash.act.other": "updated",
-  "dash.customiseCommand": "Customise dashboard"
+  "dash.customiseCommand": "Customise dashboard",
+  "gallery.open": "Voorbeeld van {name}",
+  "gallery.zoomIn": "Inzoomen",
+  "gallery.zoomOut": "Uitzoomen",
+  "gallery.fit": "Aanpassen aan venster",
+  "gallery.actual": "Werkelijke grootte",
+  "gallery.prev": "Vorige afbeelding",
+  "gallery.next": "Volgende afbeelding",
+  "gallery.position": "{i} van {n}",
+  "gallery.failed": "Dit bestand kon niet worden geladen",
+  "gallery.openNew": "Openen in een nieuw tabblad"
 }

@@ -2583,5 +2583,15 @@
   "dash.act.deleted": "deleted",
   "dash.act.restored": "restored",
   "dash.act.other": "updated",
-  "dash.customiseCommand": "Customise dashboard"
+  "dash.customiseCommand": "Customise dashboard",
+  "gallery.open": "{name} をプレビュー",
+  "gallery.zoomIn": "拡大",
+  "gallery.zoomOut": "縮小",
+  "gallery.fit": "ウィンドウに合わせる",
+  "gallery.actual": "実寸",
+  "gallery.prev": "前の画像",
+  "gallery.next": "次の画像",
+  "gallery.position": "{i} / {n}",
+  "gallery.failed": "このファイルを読み込めませんでした",
+  "gallery.openNew": "新しいタブで開く"
 }

@@ -2647,5 +2647,15 @@
   "dash.act.deleted": "deleted",
   "dash.act.restored": "restored",
   "dash.act.other": "updated",
-  "dash.customiseCommand": "Customise dashboard"
+  "dash.customiseCommand": "Customise dashboard",
+  "gallery.open": "Просмотр {name}",
+  "gallery.zoomIn": "Увеличить",
+  "gallery.zoomOut": "Уменьшить",
+  "gallery.fit": "По размеру окна",
+  "gallery.actual": "Реальный размер",
+  "gallery.prev": "Предыдущее изображение",
+  "gallery.next": "Следующее изображение",
+  "gallery.position": "{i} из {n}",
+  "gallery.failed": "Не удалось загрузить этот файл",
+  "gallery.openNew": "Открыть в новой вкладке"
 }
