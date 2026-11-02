@@ -77,6 +77,7 @@ import {
 import { captureOf, isRegion, placeOn } from "@/lib/geometry";
 import { useI18n, useT } from "@/lib/i18n/provider";
 import { itemLink } from "@/lib/links";
+import { useRecentItems } from "@/lib/recent";
 import {
   errorMessage,
   useDeleteFeedbackMutation,
@@ -149,6 +150,14 @@ export function FeedbackDetailPanel({
       dispatch(presenceWatched(null));
     };
   }, [id, dispatch]);
+
+  // Remember it for the command palette's "Recent" list.
+  const { record } = useRecentItems(userId);
+  const { id: openedId, number, title, body, projectName } = detail.data?.feedback ?? {};
+  useEffect(() => {
+    if (openedId && number !== undefined && body !== undefined && projectName !== undefined)
+      record({ id: openedId, number, title: title ?? body.slice(0, 80), project: projectName });
+  }, [openedId, number, title, body, projectName, record]);
 
   // Opening an item reads its notifications. Best effort: the bell keeps them unread if this fails.
   useEffect(() => {
