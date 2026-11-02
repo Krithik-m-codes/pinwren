@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderKanban, Inbox, Search, Settings, UserRound } from "lucide-react";
+import { FolderKanban, Inbox, LayoutDashboard, Search, Settings, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
@@ -10,6 +10,7 @@ import { useAppDispatch } from "@/lib/store/hooks";
 import { paletteToggled } from "@/lib/store/slices/ui";
 
 const NAV = [
+  { href: "/dashboard", label: "nav.dashboard", icon: LayoutDashboard },
   { href: "/inbox", label: "nav.inbox", icon: Inbox },
   { href: "/projects", label: "nav.projects", icon: FolderKanban },
   { href: "/settings", label: "nav.settings", icon: Settings },

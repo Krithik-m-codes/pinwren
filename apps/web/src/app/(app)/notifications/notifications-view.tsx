@@ -1,12 +1,12 @@
 "use client";
 
 import { BellOff, CheckCheck, Loader2, Settings2 } from "lucide-react";
-import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ButtonLink } from "@/components/button-link";
 import { useTimeAgo } from "@/components/feedback-meta";
 import { NotificationIcon } from "@/components/notifications/notification-parts";
+import { Dashboard } from "@/components/dashboard/dashboard";
 import { PageHeader } from "@/components/page-header";
 import { Segmented } from "@/components/segmented";
 import { EmptyState, ErrorState } from "@/components/states";
@@ -60,6 +60,7 @@ export function NotificationsView() {
     <>
       <PageHeader title={t("other1.notifications")} />
       <div className="mx-auto w-full max-w-3xl space-y-4 p-4 pb-12">
+        <Dashboard scope="notifications" />
         <div className="flex flex-wrap items-center gap-2">
           <Segmented
             label={t("other1.show")}
@@ -139,7 +140,7 @@ export function NotificationsView() {
                     )}
                     onClick={() => {
                       if (!n.readAt) void markRead({ ids: [n.id] });
-                      router.push(notificationHref(n) as Route);
+                      router.push(notificationHref(n));
                     }}
                   >
                     <NotificationIcon
