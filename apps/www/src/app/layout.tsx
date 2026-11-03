@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { PinwrenWidget } from "@/components/pinwren-widget";
 import { Providers } from "@/components/providers";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
@@ -32,6 +34,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <body className="flex min-h-dvh flex-col">
         <Providers>{children}</Providers>
+        <Suspense fallback={null}>
+          <PinwrenWidget />
+        </Suspense>
       </body>
     </html>
   );
