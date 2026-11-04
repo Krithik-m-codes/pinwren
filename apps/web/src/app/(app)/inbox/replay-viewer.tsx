@@ -55,11 +55,14 @@ export function ReplayViewer({
   diagnostics,
   handle,
   onTime,
+  load,
 }: {
   asset: Asset;
   diagnostics: FeedbackDetail["diagnostics"];
   handle: React.RefObject<ReplayHandle | null>;
   onTime: (epochMs: number | null) => void;
+  /** Fetches the replay file; the dashboard's session route by default (share links bring their own). */
+  load?: (assetId: string) => Promise<Response>;
 }) {
   const t = useT();
   const tRef = useRef(t);
@@ -70,8 +73,10 @@ export function ReplayViewer({
   >({ kind: "loading" });
   const [offset, setOffset] = useState(0);
   const report = useRef(onTime);
+  const loader = useRef(load);
   useEffect(() => {
     report.current = onTime;
+    loader.current = load;
     tRef.current = t;
   });
 
@@ -92,7 +97,9 @@ export function ReplayViewer({
     const run = { cancelled: false };
     let instance: Player | null = null;
     (async () => {
-      const res = await fetch(assetUrl(asset.id), { credentials: "same-origin" });
+      const res = await (loader.current ?? ((id) => fetch(assetUrl(id), { credentials: "same-origin" })))(
+        asset.id,
+      );
       if (!res.ok) throw new Error(tRef.current("inbox1.replayLoadFailed", { status: res.status }));
       const events = await loadReplayEvents(res);
       if (events.length < 2) throw new Error(tRef.current("inbox1.replayNoFrames"));

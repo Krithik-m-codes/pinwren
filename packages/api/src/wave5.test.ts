@@ -36,6 +36,7 @@ describe("email templates (wave 5)", () => {
       "digest",
       "reporter_received",
       "webhook_disabled",
+      "round_signoff",
     ] as const) {
       expect(ORG_TEMPLATE_KEYS).toContain(k);
     }

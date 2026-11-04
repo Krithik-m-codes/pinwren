@@ -18,6 +18,7 @@ import { billing } from "./en/billing";
 import { cloud } from "./en/cloud";
 import { dashboard } from "./en/dashboard";
 import { global } from "./en/global";
+import { share } from "./en/share";
 
 // The dashboard's English strings: the source of every translation key. They are split by area (en/*.ts) so
 // that work on one area never touches another. Keys are `area.name`; plural forms are `<stem>_one` and
@@ -46,6 +47,7 @@ export const en = {
   ...cloud,
   ...dashboard,
   ...global,
+  ...share,
 } as const;
 
 export type Key = keyof typeof en;

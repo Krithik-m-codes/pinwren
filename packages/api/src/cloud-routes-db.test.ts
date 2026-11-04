@@ -90,6 +90,7 @@ const resourceOf: Record<string, string> = {
   integrations: "integrationB",
   labels: "labelB",
   "review-links": "reviewLinkB",
+  "share-links": "shareLinkB",
   rounds: "roundB",
   tokens: "tokenIdB",
   views: "viewB",
@@ -161,6 +162,7 @@ const cases: Record<string, Spec> = {
   "DELETE /api/members/:userId": foreign(),
   "DELETE /api/review-links/:id": foreign(),
   "DELETE /api/rounds/:id": foreign(),
+  "DELETE /api/share-links/:id": foreign(),
   "DELETE /api/tokens/:id": foreign(),
   "DELETE /api/views/:id": foreign(),
   "DELETE /api/webhooks/:id": foreign(),
@@ -214,6 +216,9 @@ const cases: Record<string, Spec> = {
   "GET /api/projects/:id/labels": foreign(),
   "GET /api/projects/:id/notifications": foreign(),
   "GET /api/projects/:id/review-links": foreign(),
+  "GET /api/feedback/:id/share-links": foreign(),
+  "GET /api/rounds/:id/share-links": foreign(),
+  "GET /api/rounds/:id/signoffs": foreign(),
   "GET /api/projects/:id/rounds": foreign(),
   "GET /api/rounds/:id": foreign(),
   "GET /api/rounds/:id/export": foreign(),
@@ -307,6 +312,7 @@ const cases: Record<string, Spec> = {
     body: () => ({ label: "foreign link", url: "https://customer.test/" }),
   }),
   "POST /api/projects/:id/rotate-key": foreign(),
+  "POST /api/share-links": foreign({ body: (ids) => ({ feedbackId: ids.feedbackB }) }),
   "POST /api/projects/:id/rounds": foreign({ body: () => ({ name: "foreign round" }) }),
   "POST /api/settings/ai/test": scoped({
     body: () => ({ provider: "anthropic", model: "fixture", apiKey: randomUUID() }),
@@ -660,6 +666,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
         label: randomUUID(),
         round: randomUUID(),
         reviewLink: randomUUID(),
+        shareLink: randomUUID(),
         view: randomUUID(),
         endpoint: randomUUID(),
         delivery: randomUUID(),
@@ -673,6 +680,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
       await db`insert into label (id,org_id,project_id,name,color) values (${row.label},${org ?? ""},${projectId},${mark},'#112233')`;
       await db`insert into review_round (id,org_id,project_id,name) values (${row.round},${org ?? ""},${projectId},${mark})`;
       await db`insert into review_link (id,org_id,project_id,label,token_hash) values (${row.reviewLink},${org ?? ""},${projectId},${mark},${randomUUID()})`;
+      await db`insert into share_link (id,org_id,project_id,feedback_id,label,token_hash,expires_at) values (${row.shareLink},${org ?? ""},${projectId},${feedbackId},${mark},${randomUUID()},now() + interval '1 day')`;
       await db`insert into saved_view (id,org_id,owner_id,name,shared) values (${row.view},${org ?? ""},${user ?? ""},${mark},true)`;
       await db`insert into webhook_endpoint (id,org_id,project_id,name,url) values (${row.endpoint},${org ?? ""},${projectId},${mark},'https://example.test/hook')`;
       const payload = {
@@ -702,6 +710,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
           labelB: row.label,
           roundB: row.round,
           reviewLinkB: row.reviewLink,
+          shareLinkB: row.shareLink,
           viewB: row.view,
           webhookB: row.endpoint,
           deliveryB: row.delivery,

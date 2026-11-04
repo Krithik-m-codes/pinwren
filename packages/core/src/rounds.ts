@@ -11,6 +11,8 @@ const dueAt = z.iso.datetime({ offset: true }).nullable();
 export const reviewRoundCreate = z.object({
   name: z.string().trim().min(1).max(120),
   dueAt: dueAt.optional(),
+  /** Closing needs the client's latest sign-off to be "approved". */
+  requireSignoff: z.boolean().optional(),
 });
 export type ReviewRoundCreate = z.infer<typeof reviewRoundCreate>;
 
@@ -18,6 +20,7 @@ export const reviewRoundUpdate = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   dueAt: dueAt.optional(),
   status: z.enum(REVIEW_ROUND_STATUSES).optional(),
+  requireSignoff: z.boolean().optional(),
 });
 export type ReviewRoundUpdate = z.infer<typeof reviewRoundUpdate>;
 

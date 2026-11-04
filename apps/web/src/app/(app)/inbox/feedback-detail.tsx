@@ -13,6 +13,7 @@ import {
   ImageIcon,
   Languages,
   Link2,
+  Share2,
   Loader2,
   MoreHorizontal,
   Paperclip,
@@ -30,6 +31,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AnnotationsToggle, CaptureView, type Marker } from "@/components/capture-view";
+import { ShareDialog } from "@/components/share-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { copyText } from "@/components/copy-button";
 import { DatePicker } from "@/components/date-picker";
@@ -221,6 +223,7 @@ function DetailBody({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmPurge, setConfirmPurge] = useState(false);
   const [dupOpen, setDupOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const replay = assets.find((a) => a.kind === "replay");
   const player = useRef<ReplayHandle | null>(null);
   const [replayAt, setReplayAt] = useState<number | null>(null);
@@ -334,6 +337,11 @@ function DetailBody({
             >
               {linking.isLoading ? <Loader2 className="animate-spin" /> : <ExternalLink />}
               <span className="hidden sm:inline">{t("inbox1.openOnPage")}</span>
+            </Button>
+          )}
+          {!inTrash && (
+            <Button variant="ghost" size="sm" onClick={() => setShareOpen(true)} data-testid="share-report">
+              <Share2 /> <span className="hidden sm:inline">{t("share.button")}</span>
             </Button>
           )}
           <DropdownMenu>
@@ -760,6 +768,12 @@ function DetailBody({
         </section>
       </div>
 
+      <ShareDialog
+        target={{ kind: "feedback", id }}
+        title={`#${f.number}`}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
