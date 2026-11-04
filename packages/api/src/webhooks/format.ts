@@ -49,6 +49,8 @@ export type WebhookPayload = {
     actor?: { kind: string; id: string | null };
     /** Panel action runs (`action.run`, F-016). */
     action?: { id: string; label: string };
+    /** Agent webhooks only: the hand-off brief (masked data; replay and screenshot are linked, not included). */
+    brief?: { markdown: string; hints: unknown; links: unknown };
   };
 };
 

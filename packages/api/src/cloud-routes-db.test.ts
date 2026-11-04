@@ -132,7 +132,7 @@ const cases: Record<string, Spec> = {
   "ALL /mcp": scoped({
     run: async ({ ids, send, snapshot }) => {
       const before = await snapshot();
-      for (const name of ["get_feedback", "get_reproduction_context"]) {
+      for (const name of ["get_feedback", "get_reproduction_context", "get_agent_brief", "get_repro_test"]) {
         const response = await send({
           method: "POST",
           path: "/mcp",
@@ -192,6 +192,8 @@ const cases: Record<string, Spec> = {
   "GET /api/feedback": scoped({ path: (ids) => `/api/feedback?projectId=${project(ids)}` }),
   "GET /api/feedback/:id": foreign(),
   "GET /api/feedback/:id/reproduction": foreign(),
+  "GET /api/feedback/:id/brief": foreign(),
+  "GET /api/feedback/:id/repro-test": foreign(),
   "GET /api/feedback/export": scoped({ path: (ids) => `/api/feedback/export?projectId=${project(ids)}` }),
   "GET /api/billing": scoped(),
   "GET /api/integrations/:id/webhook-secret": foreign(),
@@ -225,7 +227,12 @@ const cases: Record<string, Spec> = {
   "GET /api/v1/feedback": scoped({ path: (ids) => `/api/v1/feedback?projectId=${project(ids)}` }),
   "GET /api/v1/feedback/:id": foreign(),
   "GET /api/v1/feedback/:id/reproduction": foreign(),
+  "GET /api/v1/feedback/:id/brief": foreign(),
+  "GET /api/v1/feedback/:id/repro-test": foreign(),
   "GET /api/v1/projects": scoped(),
+  "GET /api/v1/projects/:id/labels": foreign(),
+  "GET /api/v1/stats": scoped(),
+  "GET /api/v1/views": scoped(),
   "GET /api/v1/projects/:id/rounds": foreign(),
   "GET /api/v1/rounds/:id": foreign(),
   "GET /api/v1/token": scoped(),

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  polishReproTest,
   suggestSeverity,
   summarizeReport,
   synthesizeReproSteps,
@@ -108,5 +109,14 @@ describe("AI tasks", () => {
 
     expect(res.reproductionSteps).toHaveLength(3);
     expect(res.reproductionSteps[0]).toBe("1. Open /checkout");
+  });
+
+  it("polishes a draft test and sends only the draft", async () => {
+    const draft = ["// DRAFT", "await page.goto('/')"].join("\n");
+    completeMock.mockResolvedValueOnce({ code: "// DRAFT import { test } from '@playwright/test';" });
+    const code = await polishReproTest(mockProvider, { code: draft });
+    expect(code).toContain("@playwright/test");
+    const prompt = String(completeMock.mock.calls.at(-1)?.[0]);
+    expect(prompt).toBe(["<draft_test>", draft, "</draft_test>"].join("\n"));
   });
 });

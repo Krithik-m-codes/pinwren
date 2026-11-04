@@ -1,6 +1,7 @@
 import {
   type ApiTokenScope,
   apiCommentCreate,
+  dashboardStatsQuery,
   feedbackListQuery,
   feedbackUpdate,
   reviewRoundUpdate,
@@ -21,8 +22,12 @@ import { consume, exhausted } from "../rate-limit";
 import { audienceOf, isReadOnlyRole, readOnlyError } from "../permissions";
 import { assetResponse } from "../services/assets";
 import { addTeamComment, getFeedbackDetail, listFeedback, updateFeedback } from "../services/feedback";
+import { agentBrief, reproTest } from "../services/handoff";
 import { reproductionContext } from "../services/reproduction";
 import { getRound, listRounds, updateRound } from "../services/rounds";
+import { dashboardStats } from "../services/stats";
+import { listProjectLabels } from "./labels";
+import { listViews } from "./rounds";
 import { TOKEN_LOOKUP_LENGTH, TOKEN_PREFIX } from "./tokens";
 
 type TokenVars = { orgId: string; userId: string; scopes: string[]; tokenId: string; role: string };
@@ -169,6 +174,12 @@ export const v1 = new Hono<{ Variables: TokenVars }>()
   .get("/feedback/:id/reproduction", scope("feedback:read"), async (c) =>
     c.json(await reproductionContext(c.var.orgId, c.req.param("id"))),
   )
+  .get("/feedback/:id/brief", scope("feedback:read"), async (c) =>
+    c.json(await agentBrief(c.var.orgId, c.req.param("id"))),
+  )
+  .get("/feedback/:id/repro-test", scope("feedback:read"), async (c) =>
+    c.json(await reproTest(c.var.orgId, c.req.param("id"))),
+  )
   .patch("/feedback/:id", scope("feedback:write"), zValidator("json", feedbackUpdate), async (c) => {
     const updated = await updateFeedback(
       c.var.orgId,
@@ -191,6 +202,16 @@ export const v1 = new Hono<{ Variables: TokenVars }>()
       );
       return c.json({ comment: created }, 201);
     },
+  )
+
+  .get("/stats", scope("feedback:read"), zValidator("query", dashboardStatsQuery), async (c) =>
+    c.json(await dashboardStats(c.var.orgId, c.var.userId, c.req.valid("query"))),
+  )
+  .get("/projects/:id/labels", scope("feedback:read"), async (c) =>
+    c.json({ labels: await listProjectLabels(c.var.orgId, c.req.param("id")) }),
+  )
+  .get("/views", scope("feedback:read"), async (c) =>
+    c.json({ views: await listViews(c.var.orgId, c.var.userId) }),
   )
 
   .get("/assets/:id", scope("feedback:read"), (c) => assetResponse(c.var.orgId, c.req.param("id")))

@@ -8,6 +8,7 @@ import { gunzipSync } from "node:zlib";
 export const GZIP_MAGIC = [0x1f, 0x8b] as const;
 const MAX_INFLATED = 64 * 1024 * 1024;
 const MAX_STEPS = 80;
+const MAX_TRACE = 400;
 
 export type ReplayStep = { at: number; kind: string; text: string };
 
@@ -25,7 +26,16 @@ type SNode = {
   childNodes?: unknown;
   textContent?: unknown;
 };
-type ElementInfo = { tag: string; attrs: Record<string, string>; text: string };
+export type ElementInfo = { tag: string; attrs: Record<string, string>; text: string };
+
+/** A replay step plus, for interactions, the element it acted on — what the repro-test generator scripts. */
+export type TraceStep = ReplayStep & {
+  action?:
+    | { type: "navigate"; href: string }
+    | { type: "click" | "dblclick" | "contextmenu" | "input"; target: ElementInfo | null }
+    | { type: "scroll"; y: number }
+    | { type: "viewport"; width: number; height: number };
+};
 
 const obj = (v: unknown): Record<string, unknown> =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -84,17 +94,24 @@ export function describeElement(el: ElementInfo | undefined): string {
  * capture anyway), scrolling and resizes. Consecutive repeats are folded into one step.
  */
 export function replaySteps(events: unknown[]): ReplayStep[] {
+  return replayTrace(events)
+    .slice(-MAX_STEPS)
+    .map(({ at, kind, text }) => ({ at, kind, text }));
+}
+
+/** {@link replaySteps} with the structured action behind each step. */
+export function replayTrace(events: unknown[]): TraceStep[] {
   const nodes = new Map<number, ElementInfo>();
-  const steps: ReplayStep[] = [];
+  const steps: TraceStep[] = [];
   let lastHref = "";
-  const push = (at: number, kind: string, text: string) => {
+  const push = (at: number, kind: string, text: string, action?: TraceStep["action"]) => {
     const prev = steps.at(-1);
     if (prev?.kind === kind && prev.text === text) return;
     if (prev && kind === "scroll" && prev.kind === "scroll") {
-      steps[steps.length - 1] = { at, kind, text };
+      steps[steps.length - 1] = { at, kind, text, ...(action ? { action } : {}) };
       return;
     }
-    steps.push({ at, kind, text });
+    steps.push({ at, kind, text, ...(action ? { action } : {}) });
   };
   for (const raw of events) {
     const e = obj(raw);
@@ -103,11 +120,15 @@ export function replaySteps(events: unknown[]): ReplayStep[] {
     if (e.type === EVENT.Meta) {
       const href = str(data.href, 500);
       if (href && href !== lastHref) {
-        push(at, "navigate", `${lastHref ? "Navigated to" : "Opened"} ${href}`);
+        push(at, "navigate", `${lastHref ? "Navigated to" : "Opened"} ${href}`, { type: "navigate", href });
         lastHref = href;
       }
       if (typeof data.width === "number" && typeof data.height === "number" && steps.length <= 1) {
-        push(at, "viewport", `Viewport ${data.width}×${data.height}`);
+        push(at, "viewport", `Viewport ${data.width}×${data.height}`, {
+          type: "viewport",
+          width: data.width,
+          height: data.height,
+        });
       }
     } else if (e.type === EVENT.FullSnapshot) {
       indexNodes(data.node, nodes);
@@ -121,22 +142,42 @@ export function replaySteps(events: unknown[]): ReplayStep[] {
           break;
         case SOURCE.MouseInteraction:
           if (data.type === MOUSE.Click || data.type === MOUSE.TouchEnd) {
-            push(at, "click", `Clicked ${describeElement(nodes.get(id))}`);
+            push(at, "click", `Clicked ${describeElement(nodes.get(id))}`, {
+              type: "click",
+              target: nodes.get(id) ?? null,
+            });
           } else if (data.type === MOUSE.DblClick) {
-            push(at, "click", `Double-clicked ${describeElement(nodes.get(id))}`);
+            push(at, "click", `Double-clicked ${describeElement(nodes.get(id))}`, {
+              type: "dblclick",
+              target: nodes.get(id) ?? null,
+            });
           } else if (data.type === MOUSE.ContextMenu) {
-            push(at, "click", `Right-clicked ${describeElement(nodes.get(id))}`);
+            push(at, "click", `Right-clicked ${describeElement(nodes.get(id))}`, {
+              type: "contextmenu",
+              target: nodes.get(id) ?? null,
+            });
           }
           break;
         case SOURCE.Input:
-          push(at, "input", `Typed into ${describeElement(nodes.get(id))}`);
+          push(at, "input", `Typed into ${describeElement(nodes.get(id))}`, {
+            type: "input",
+            target: nodes.get(id) ?? null,
+          });
           break;
         case SOURCE.Scroll:
-          if (typeof data.y === "number") push(at, "scroll", `Scrolled to y=${Math.round(data.y)}`);
+          if (typeof data.y === "number")
+            push(at, "scroll", `Scrolled to y=${Math.round(data.y)}`, {
+              type: "scroll",
+              y: Math.round(data.y),
+            });
           break;
         case SOURCE.ViewportResize:
           if (typeof data.width === "number" && typeof data.height === "number") {
-            push(at, "viewport", `Resized the window to ${data.width}×${data.height}`);
+            push(at, "viewport", `Resized the window to ${data.width}×${data.height}`, {
+              type: "viewport",
+              width: data.width,
+              height: data.height,
+            });
           }
           break;
         default:
@@ -147,5 +188,5 @@ export function replaySteps(events: unknown[]): ReplayStep[] {
       if (tag) push(at, "custom", `Event “${tag}”`);
     }
   }
-  return steps.slice(-MAX_STEPS);
+  return steps.slice(-MAX_TRACE);
 }

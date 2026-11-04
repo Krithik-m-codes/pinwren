@@ -107,6 +107,7 @@ describe("panel actions per audience", () => {
         url: "https://hooks.example/secret",
         icon: null,
         visibleTo: "team",
+        agent: false,
       },
       {
         id: "team",
@@ -115,6 +116,7 @@ describe("panel actions per audience", () => {
         url: "https://jira.example/{id}",
         icon: null,
         visibleTo: "team",
+        agent: false,
       },
       {
         id: "all",
@@ -123,6 +125,7 @@ describe("panel actions per audience", () => {
         url: "https://docs.example/",
         icon: null,
         visibleTo: "everyone",
+        agent: false,
       },
     ] as const;
     const list = [...actions];

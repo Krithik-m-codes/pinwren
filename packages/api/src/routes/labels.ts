@@ -57,20 +57,25 @@ async function labelOf(orgId: string, id: string) {
   return l;
 }
 
+/** A project's labels with the number of live items carrying each (shared by the dashboard and `/api/v1`). */
+export async function listProjectLabels(orgId: string, projectId: string) {
+  const p = await projectOf(orgId, projectId);
+  const rows = await getDb()
+    .select({ l: label, n: count(feedback.id) })
+    .from(label)
+    .leftJoin(feedbackLabel, eq(feedbackLabel.labelId, label.id))
+    .leftJoin(feedback, and(eq(feedback.id, feedbackLabel.feedbackId), isNull(feedback.deletedAt)))
+    .where(eq(label.projectId, p.id))
+    .groupBy(label.id)
+    .orderBy(asc(sql`lower(${label.name})`));
+  return rows.map((r) => labelOut(r.l, r.n));
+}
+
 export const labels = new Hono<{ Variables: SessionVars }>()
   /** `{ labels: { id, name, color, count }[] }`; `count` = live items carrying the label. */
-  .get("/projects/:id/labels", async (c) => {
-    const p = await projectOf(c.var.orgId, c.req.param("id"));
-    const rows = await getDb()
-      .select({ l: label, n: count(feedback.id) })
-      .from(label)
-      .leftJoin(feedbackLabel, eq(feedbackLabel.labelId, label.id))
-      .leftJoin(feedback, and(eq(feedback.id, feedbackLabel.feedbackId), isNull(feedback.deletedAt)))
-      .where(eq(label.projectId, p.id))
-      .groupBy(label.id)
-      .orderBy(asc(sql`lower(${label.name})`));
-    return c.json({ labels: rows.map((r) => labelOut(r.l, r.n)) });
-  })
+  .get("/projects/:id/labels", async (c) =>
+    c.json({ labels: await listProjectLabels(c.var.orgId, c.req.param("id")) }),
+  )
 
   .post(
     "/projects/:id/labels",
