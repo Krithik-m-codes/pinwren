@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Pinwren } from "@pinwren/sdk";
@@ -83,7 +84,7 @@ const detail = {
 };
 
 describe("Pinwren MCP server", () => {
-  it("exposes the seven tools with schemas", async () => {
+  it("exposes every tool with a schema", async () => {
     const { mcp } = await connect(() => json({}));
     const tools = (await mcp.listTools()).tools;
     expect(tools.map((t) => t.name).sort()).toEqual([...TOOL_NAMES].sort());
@@ -164,6 +165,116 @@ describe("Pinwren MCP server", () => {
     expect(text(bad)).toContain("READ_ONLY_ROLE (HTTP 403)");
     const invalid = await mcp.callTool({ name: "get_feedback", arguments: { id: "not-a-uuid" } });
     expect(invalid.isError).toBe(true);
+  });
+
+  it("serves the agent brief and the draft repro test with their caveats", async () => {
+    const id = "0192f0c4-4f6e-7c1a-8d55-9a3e2b1c4d5e";
+    const { mcp, calls, text } = await connect((url) =>
+      url.pathname.endsWith("/brief")
+        ? json({ markdown: "# Fix feedback #7: Broken\n", commands: {}, links: {}, hints: {} })
+        : json({
+            filename: "pinwren-7-broken.spec.ts",
+            language: "typescript",
+            code: 'import { test } from "@playwright/test";\n',
+            caveats: ["This is a draft"],
+          }),
+    );
+    expect(text(await mcp.callTool({ name: "get_agent_brief", arguments: { id } }))).toContain(
+      "# Fix feedback #7",
+    );
+    const t = text(await mcp.callTool({ name: "get_repro_test", arguments: { id } }));
+    expect(t).toContain("File: pinwren-7-broken.spec.ts");
+    expect(t).toContain("- This is a draft");
+    expect(t).toContain("```typescript");
+    expect(calls.map((c) => c.path)).toEqual([
+      `/api/v1/feedback/${id}/brief`,
+      `/api/v1/feedback/${id}/repro-test`,
+    ]);
+  });
+
+  it("reads labels, rounds, saved views and stats through the public API", async () => {
+    const id = "0192f0c4-4f6e-7c1a-8d55-9a3e2b1c4d5e";
+    const { mcp, calls, text } = await connect((url) => {
+      if (url.pathname.endsWith("/labels"))
+        return json({ labels: [{ id: "l1", name: "Regression", color: "#fff", count: 3 }] });
+      if (url.pathname.endsWith("/rounds")) return json({ rounds: [{ id: "r1", name: "R1" }] });
+      if (url.pathname.startsWith("/api/v1/rounds/")) return json({ round: { id: "r1", name: "R1" } });
+      if (url.pathname === "/api/v1/views")
+        return json({
+          views: [{ id: "v1", name: "Mine", shared: false, layout: "list", filters: { status: "open" } }],
+        });
+      return json({ days: 30, totals: { active: 4 } });
+    });
+    expect(
+      JSON.parse(text(await mcp.callTool({ name: "list_labels", arguments: { projectId: id } }))),
+    ).toEqual([{ id: "l1", name: "Regression", count: 3 }]);
+    expect(
+      JSON.parse(text(await mcp.callTool({ name: "list_rounds", arguments: { projectId: id } }))),
+    ).toEqual([{ id: "r1", name: "R1" }]);
+    expect(JSON.parse(text(await mcp.callTool({ name: "get_round", arguments: { id } })))).toEqual({
+      id: "r1",
+      name: "R1",
+    });
+    expect(
+      (JSON.parse(text(await mcp.callTool({ name: "list_saved_views", arguments: {} }))) as unknown[])[0],
+    ).toMatchObject({ filters: { status: "open" } });
+    expect(
+      JSON.parse(text(await mcp.callTool({ name: "get_stats", arguments: { days: 30 } }))),
+    ).toMatchObject({ days: 30 });
+    expect(calls.map((c) => c.path)).toEqual([
+      `/api/v1/projects/${id}/labels`,
+      `/api/v1/projects/${id}/rounds`,
+      `/api/v1/rounds/${id}`,
+      "/api/v1/views",
+      "/api/v1/stats?days=30",
+    ]);
+    const bad = await mcp.callTool({ name: "get_stats", arguments: { days: 5 } });
+    expect(bad.isError).toBe(true);
+  });
+
+  it("lists asset metadata and sends an image to a model only when asked", async () => {
+    const id = "0192f0c4-4f6e-7c1a-8d55-9a3e2b1c4d5e";
+    const png = new Uint8Array([137, 80, 78, 71]);
+    const { mcp, calls, text } = await connect((url) =>
+      url.pathname.startsWith("/api/v1/assets/")
+        ? new Response(png, { headers: { "content-type": "image/png" } })
+        : json(detail),
+    );
+    const list = JSON.parse(
+      text(await mcp.callTool({ name: "list_assets", arguments: { feedbackId: id } })),
+    ) as { url: string }[];
+    expect(list[0]?.url).toBe("https://fb.example/api/v1/assets/a1");
+    const refused = await mcp.callTool({ name: "get_asset", arguments: { id } });
+    expect(refused.isError).toBe(true);
+    expect(calls.filter((c) => c.path.startsWith("/api/v1/assets/"))).toHaveLength(0);
+    const shown = await mcp.callTool({ name: "get_asset", arguments: { id, includeImage: true } });
+    expect(shown.content).toEqual([
+      { type: "image", data: Buffer.from(png).toString("base64"), mimeType: "image/png" },
+    ]);
+  });
+
+  it("refuses non-images and oversize images", async () => {
+    const id = "0192f0c4-4f6e-7c1a-8d55-9a3e2b1c4d5e";
+    const { mcp, text } = await connect(
+      () => new Response(new Uint8Array(4), { headers: { "content-type": "application/gzip" } }),
+    );
+    const replay = await mcp.callTool({ name: "get_asset", arguments: { id, includeImage: true } });
+    expect(replay.isError).toBe(true);
+    expect(text(replay)).toContain("not a viewable image");
+    const big = await connect(
+      () => new Response(new Uint8Array(1_500_001), { headers: { "content-type": "image/png" } }),
+    );
+    const res = await big.mcp.callTool({ name: "get_asset", arguments: { id, includeImage: true } });
+    expect(res.isError).toBe(true);
+  });
+
+  it("documents every tool in the README and the docs site", () => {
+    const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+    const docs = readFileSync(new URL("../../../apps/www/content/docs/api/mcp.mdx", import.meta.url), "utf8");
+    for (const name of TOOL_NAMES) {
+      expect(readme, `README mentions ${name}`).toContain(name);
+      expect(docs, `mcp.mdx mentions ${name}`).toContain(name);
+    }
   });
 
   it("answers Streamable HTTP requests statelessly", async () => {

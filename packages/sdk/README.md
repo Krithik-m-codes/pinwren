@@ -34,6 +34,11 @@ await pinwren.feedback.resolve(detail.feedback.id, "Fixed in https://github.com/
 // What a developer (or an AI agent) needs to reproduce it, as Markdown
 const { markdown } = await pinwren.feedback.reproduction(detail.feedback.id);
 
+// Hand a report to a coding agent: a brief (masked data) and a draft Playwright test
+const brief = await pinwren.feedback.brief(detail.feedback.id);
+const draft = await pinwren.feedback.reproTest(detail.feedback.id); // read draft.caveats
+const stats = await pinwren.stats.get({ days: 30 });
+
 // Review rounds
 const rounds = await pinwren.rounds.list(detail.feedback.projectId);
 await pinwren.rounds.update(rounds[0]!.id, { status: "closed" });
