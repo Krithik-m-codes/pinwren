@@ -4,13 +4,16 @@
     "index",
     "configuration",
     "comments",
+    "picker-and-markers",
     "bug-reports",
+    "screenshots",
     "anchoring",
     "privacy",
     "i18n",
     "panel-actions",
     "api",
     "identity",
-    "visibility"
+    "visibility",
+    "guest-portal"
   ]
 }
