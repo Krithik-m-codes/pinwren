@@ -1,0 +1,39 @@
+---
+title: Guest portal
+description: Where reporters follow the status of what they sent and reply, without an account.
+---
+
+Reporters do not need an account to see what happened to their feedback. When a browser has sent at least one item
+to a project, the widget's sidebar footer shows **Open my feedback**. It opens the **guest portal** of your Pinwren
+server in a new tab: `https://<your-pinwren>/guest/<project key>`.
+
+## What a guest sees
+
+- Their recent items with number, status and kind, in a searchable list.
+- The conversation on each item: the original text and the **public replies** from your team.
+- A box to **reply**. The reply is attributed to the original reporter and is always public; it can never become an
+  internal note. It does not work on read-only or archived projects.
+
+Guests never see diagnostics, internal comments, teammates' email addresses, the activity timeline or any
+management control. If your organisation has [white-label branding](/docs/licensing), the portal uses it; otherwise
+it carries the Pinwren branding. Empty, expired, loading and error states are handled, and **Forget this browser's
+access** removes the saved access.
+
+## How access works
+
+The portal has no login. A person gets access through a **capability**:
+
+- the widget hands over the **reporter tokens** it kept for that browser (at most 50) in the URL fragment, after the
+  `#`, so they are never sent to a server in a request line or a log. The portal reads them, removes the fragment at
+  once and remembers access for that project in the browser;
+- a reporter email's link carries a signed, expiring page link that opens that one item.
+
+The server requires the project and the matching token or link for every request. Knowing a project key, a
+feedback id, someone's email address or having public read switched on never opens other reporters' items. Every
+response is private and not cached, and reads and writes have their own rate limits. The routes are
+`GET /api/guest/:key/feedback`, `GET /api/guest/:key/feedback/:id` and
+`POST /api/guest/:key/feedback/:id/comments`; the tokens travel in the `x-pinwren-reporter-tokens` and
+`x-pinwren-page-tokens` headers.
+
+Reporter emails depend on [email](/docs/integrations/email) being set up. See also [visibility](/docs/widget/visibility)
+for who gets the widget at all.
