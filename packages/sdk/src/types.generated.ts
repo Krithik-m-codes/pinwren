@@ -67,6 +67,7 @@ export type RoundUpdate = {
   name?: string | undefined;
   dueAt?: string | null | undefined;
   status?: "active" | "closed" | undefined;
+  requireSignoff?: boolean | undefined;
 };
 
 /** One row of a feedback list. */
@@ -492,6 +493,7 @@ export type Stats = {
     mine: number;
     urgent: number;
     avgResolutionHours: number | null;
+    slaBreached: number;
   };
   byStatus: {
     key: "open" | "in_progress" | "in_review" | "resolved" | "wont_fix" | "duplicate";
@@ -514,6 +516,56 @@ export type Stats = {
   series: {
     date: string;
     created: number;
+    resolved: number;
+  }[];
+  topPages: {
+    url: string;
+    count: number;
+    active: number;
+  }[];
+  browsers: {
+    key: string;
+    count: number;
+  }[];
+  operatingSystems: {
+    key: string;
+    count: number;
+  }[];
+  devices: {
+    key: "desktop" | "tablet" | "mobile" | "unknown";
+    count: number;
+  }[];
+  firstResponse: {
+    sample: number;
+    medianHours: number | null;
+    buckets: {
+      key: "1h" | "4h" | "24h" | "3d" | "7d" | "over7d";
+      count: number;
+    }[];
+  };
+  resolveTime: {
+    sample: number;
+    medianHours: number | null;
+    buckets: {
+      key: "1h" | "4h" | "24h" | "3d" | "7d" | "over7d";
+      count: number;
+    }[];
+  };
+  rounds: {
+    id: string;
+    name: string;
+    projectId: string;
+    projectName: string;
+    dueAt: string | null;
+    total: number;
+    closed: number;
+    requireSignoff: boolean;
+    signoff: "none" | "approved" | "changes_requested";
+  }[];
+  reporters: {
+    id: string;
+    name: string;
+    count: number;
     resolved: number;
   }[];
   recent: {

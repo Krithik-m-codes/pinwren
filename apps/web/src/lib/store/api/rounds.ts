@@ -31,6 +31,7 @@ export const roundsApi = feedbackApi.injectEndpoints({
             if (patch.name !== undefined) r.name = patch.name;
             if (patch.dueAt !== undefined) r.dueAt = patch.dueAt;
             if (patch.status !== undefined) r.status = patch.status;
+            if (patch.requireSignoff !== undefined) r.requireSignoff = patch.requireSignoff;
           }),
         );
         try {

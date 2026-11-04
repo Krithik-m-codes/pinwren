@@ -251,6 +251,11 @@ export type NotificationItem = {
     kind?: string;
     priority?: string;
     previousPriority?: string;
+    /** `round.signoff`: the round, the client's answer and who gave it. */
+    roundId?: string;
+    roundName?: string;
+    decision?: "approved" | "changes_requested";
+    reviewerName?: string;
     /** `webhook.disabled`: the webhook's name and last error. */
     webhookId?: string;
     name?: string;
@@ -483,6 +488,10 @@ export type ReviewRound = {
   dueAt: string | null;
   status: "active" | "closed";
   closedAt: string | null;
+  /** Closing needs the client latest sign-off to be approved. */
+  requireSignoff: boolean;
+  /** The newest client answer ("none" before anyone answered). */
+  signoff: "none" | "approved" | "changes_requested";
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;

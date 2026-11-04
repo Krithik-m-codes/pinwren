@@ -39,6 +39,7 @@ vi.mock("./storage", async (original) => ({
 }));
 
 type Ids = Record<string, string>;
+const shareHeaders = (token?: string) => ({ "x-pinwren-share-token": token ?? "" });
 type Request = {
   method: string;
   path: string;
@@ -356,6 +357,50 @@ const cases: Record<string, Spec> = {
       };
     },
   },
+  // Share links: workspace A's project key with workspace B's link token must find nothing.
+  "GET /api/share/:key": {
+    status: [404],
+    request: (ids) => ({
+      method: "GET",
+      path: `/api/share/${ids.keyA ?? ""}`,
+      headers: shareHeaders(ids.shareB),
+    }),
+  },
+  "POST /api/share/:key/unlock": {
+    status: [404],
+    request: (ids) => ({
+      method: "POST",
+      path: `/api/share/${ids.keyA ?? ""}/unlock`,
+      headers: shareHeaders(ids.shareB),
+      body: { password: "guess" },
+    }),
+  },
+  "GET /api/share/:key/assets/:id": {
+    status: [404],
+    request: (ids) => ({
+      method: "GET",
+      path: `/api/share/${ids.keyA ?? ""}/assets/${ids.assetB ?? ""}`,
+      headers: shareHeaders(ids.shareA),
+    }),
+  },
+  "POST /api/share/:key/comments": {
+    status: [404],
+    request: (ids) => ({
+      method: "POST",
+      path: `/api/share/${ids.keyA ?? ""}/comments`,
+      headers: shareHeaders(ids.shareB),
+      body: { body: "foreign comment", name: "Eve" },
+    }),
+  },
+  "POST /api/share/:key/signoff": {
+    status: [404],
+    request: (ids) => ({
+      method: "POST",
+      path: `/api/share/${ids.keyA ?? ""}/signoff`,
+      headers: shareHeaders(ids.shareB),
+      body: { decision: "approved", name: "Eve", email: "eve@test.invalid" },
+    }),
+  },
   "POST /api/guest/:key/feedback/:id/comments": {
     status: [404],
     request: (ids) => ({
@@ -485,12 +530,14 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)(
           key = `pk_${randomUUID()}`,
           reporter = randomUUID().replaceAll("-", ""),
           review = `pwr_${randomUUID()}`,
+          share = `pws_${randomUUID().replaceAll("-", "")}`,
           asset = randomUUID();
         await database`insert into organization (id,name,slug) values (${org ?? ""},${org ?? ""},${org ?? ""})`;
         await database`insert into project (id,org_id,name,slug,public_key,allowed_origins,public_read,identity_secret,action_secret,notify_emails,feedback_counter) values (${projectId},${org ?? ""},${org ?? ""},${org ?? ""},${key},${database.array([origin])},true,${randomUUID()},${randomUUID()},${database.array(["reporter@test.invalid"])},1)`;
         await database`insert into feedback (id,org_id,project_id,number,kind,body,client_id,reporter_token_hash,reporter_guest) values (${item},${org ?? ""},${projectId},1,'bug',${`public ${mark}`},${randomUUID()},${sha256Hex(reporter)},${database.json({ name: "Reporter", email: `private-${mark}@test.invalid` })})`;
         await database`insert into comment (org_id,feedback_id,body,visibility) values (${org ?? ""},${item},${`INTERNAL ${mark}`},'internal'),(${org ?? ""},${item},${`PUBLIC ${mark}`},'public')`;
         await database`insert into review_link (org_id,project_id,label,token_hash) values (${org ?? ""},${projectId},'fixture',${sha256Hex(review)})`;
+        await database`insert into share_link (org_id,project_id,feedback_id,label,token_hash,expires_at) values (${org ?? ""},${projectId},${item},'fixture',${sha256Hex(share)},now() + interval '1 day')`;
         await database`insert into feedback_asset (id,org_id,feedback_id,kind,storage_key,content_type,bytes) values (${asset},${org ?? ""},${item},'screenshot',${`${org ?? ""}/${asset}.png`},'image/png',1)`;
         Object.assign(ids, {
           [`project${side}`]: projectId,
@@ -498,6 +545,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)(
           [`key${side}`]: key,
           [`reporter${side}`]: reporter,
           [`review${side}`]: review,
+          [`share${side}`]: share,
           [`asset${side}`]: asset,
           [`link${side}`]: pageLinkToken(item).token,
         });

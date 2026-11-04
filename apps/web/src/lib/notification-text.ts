@@ -47,6 +47,10 @@ export function notificationText(n: Notice, t: TFn = tEn): string {
       return t("other1.notifReplied", { who: who ?? t("other1.aVisitor") });
     case "comment.mentioned":
       return t("other1.notifMentioned", { who: someone });
+    case "round.signoff":
+      return t(n.data.decision === "approved" ? "share.notifApproved" : "share.notifChanges", {
+        who: n.data.reviewerName?.trim() || someone,
+      });
     case "webhook.disabled":
       return t("other1.notifWebhookDisabled", { name: n.data.name ?? t("other1.unnamed") });
     default:
@@ -56,6 +60,7 @@ export function notificationText(n: Notice, t: TFn = tEn): string {
 
 /** The item line under it: "#42 Checkout broken", or the webhook's last error. */
 export function notificationSubject(n: Notice, t: TFn = tEn): string {
+  if (n.type === "round.signoff") return n.data.roundName ?? "";
   if (n.type === "webhook.disabled") return n.data.lastError || t("other1.deliveriesKeptFailing");
   const num = n.data.number !== undefined ? `#${n.data.number} ` : "";
   return `${num}${n.data.title || t("other1.untitledFeedback")}`;
@@ -69,6 +74,7 @@ export function notificationHref(
   if (n.type === "webhook.disabled") {
     return n.data.webhookId ? `/settings/integrations?webhook=${n.data.webhookId}` : "/settings/integrations";
   }
+  if (n.type === "round.signoff" && n.data.projectId) return `/projects/${n.data.projectId}/rounds`;
   if (!n.feedbackId) return "/notifications";
   const org = orgId ? `&org=${encodeURIComponent(orgId)}` : "";
   return `/inbox?status=all${org}&item=${n.feedbackId}`;
