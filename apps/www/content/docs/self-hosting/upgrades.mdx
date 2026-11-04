@@ -96,4 +96,18 @@ returns for the next release. Rarely (after two weeks of use, then at most month
 see a card asking to star the GitHub repository or sponsor the project. Set `PINWREN_NUDGES=false` to hide the
 strip and the card for everyone; Pinwren Cloud never shows them. Dismissals are remembered per browser.
 
+### What the badge, strip and card do
+
+| Piece                   | Who sees it                     | Behaviour                                                                                                                                                                                |
+| ----------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Edition badge**       | Everyone                        | **Community Edition** or **Enterprise Edition** next to the logo; Cloud shows none. A dot means an update is waiting.                                                                    |
+| **Update strip**        | Instance admins                 | "Pinwren X is out (you are on Y)", the update command and **Release notes**. **Dismiss** hides it for that release only.                                                                 |
+| **Sidebar update link** | Instance admins                 | Appears while an update is waiting.                                                                                                                                                      |
+| **Support card**        | Instance admins, Community only | A thin strip (never a modal) asking you to star or sponsor, after 14 days of use. Dismissing snoozes it 30 days; **Star on GitHub** or **Sponsor** 90 days; **Don't ask again** ends it. |
+
+Two switches control this. `PINWREN_UPDATE_CHECK=false` stops the daily release lookup (no strip, no badge dot); it
+sends no instance or user data, and offline or air-gapped installs just keep the last result. `PINWREN_NUDGES=false`
+hides the update strip, the sidebar link and the support card for everyone; the edition badge stays. In Pinwren
+Cloud nudges are always off. Dismissals live in the browser (`localStorage`), so another browser asks again.
+
 You can also watch the repository's releases on GitHub (**Watch › Custom › Releases**).

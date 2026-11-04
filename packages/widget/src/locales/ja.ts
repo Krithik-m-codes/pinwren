@@ -266,4 +266,7 @@ export default {
   imgNext: "次の画像",
   imgPos: "{i} / {n}",
   imgFailed: "この画像を表示できませんでした",
+  errPromptText: "問題が発生しました。レポートを送信しますか？",
+  errPromptSend: "レポートを送信",
+  errPromptDismiss: "閉じる",
 } satisfies Catalog;

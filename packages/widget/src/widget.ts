@@ -33,6 +33,7 @@ import { findQuote, pageSelection, textRects, toTextRange } from "./selection";
 import { trimTrailingSlashes } from "./slashes";
 import { type Identity, store } from "./store";
 import { STYLES } from "./styles";
+import type { ErrorInfo, ErrorsModule } from "./errors";
 import type { Mode, WidgetEvent } from "./types";
 import {
   ago,
@@ -243,7 +244,7 @@ export class PinwrenWidget {
     const forceShow = this.opts.forceShow === true;
     const visibility = loaded.widget.visibility;
     if (hiddenBy(visibility, { hostname: location.hostname, width: Infinity, forceShow }) === "environment") {
-      console.info("[pinwren] hidden on this production host (visibility: non-production only)");
+      console.info("[pinwren] hidden on this production host");
       this.destroy();
       return;
     }
@@ -342,6 +343,7 @@ export class PinwrenWidget {
 
     this.ready = true;
     this.startReplay();
+    this.startErrorPrompt();
     this.emit("ready");
     const q = new URLSearchParams(location.search);
     const deepLink = q.get("pinwren");
@@ -446,7 +448,7 @@ export class PinwrenWidget {
     try {
       this.opts.emit?.(event, data);
     } catch (err) {
-      console.warn("[pinwren] event handler failed", err);
+      console.warn("[pinwren] handler failed", err);
     }
   }
 
@@ -1550,7 +1552,25 @@ export class PinwrenWidget {
     void this.outbox.flush(true);
   }
 
-  private async startBugReport() {
+  /** Opt-in (`errorPrompt`): the lazy chunk offers a report when the page throws; not in privacy mode. */
+  private startErrorPrompt() {
+    if (!this.cfg.errorPrompt || this.cfg.privacyMode || !this.canBug) return;
+    void loadChunk<ErrorsModule>(this.assets, "errors").then(
+      (m) => {
+        if (!this.destroyed)
+          this.cleanup.push(
+            m.watch(
+              this.root,
+              () => this.suppressed || !!this.modalClose,
+              (e) => void this.startBugReport(e),
+            ),
+          );
+      },
+      () => undefined,
+    );
+  }
+
+  private async startBugReport(error?: ErrorInfo) {
     if (this.busy || this.modalClose || this.reportLoading) return;
     const opener = focused(this.root);
     this.closeCard();
@@ -1595,6 +1615,7 @@ export class PinwrenWidget {
       reviewGuest: this.reviewGuest,
       urlPattern: this.urlPattern,
       metadata: () => this.metadata,
+      fromError: error,
       replay,
       submit: (p) => this.api.submitOnce(p),
       queue: async (id, p) => {

@@ -1,0 +1,68 @@
+---
+title: Dashboards
+description: The home dashboard and the overview strips on the inbox, projects and notifications, how to customise them, and the stats endpoint behind them.
+---
+
+Pinwren has a **Dashboard** (first entry in the sidebar, `/dashboard`) and a collapsible **Overview** strip at the
+top of the inbox, the projects list, a project and notifications. They show the same widgets: numbers, charts and
+lists computed from your workspace's feedback.
+
+## What is on them
+
+| Group       | Widgets                                                                                                                               |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Numbers** | Open items, New reports (with the change against the previous range), Resolved, Unassigned, Overdue, My work, Urgent, Time to resolve |
+| **Charts**  | Reported vs resolved per day, By status, Open by type, Open by priority, Open by project                                              |
+| **Lists**   | Recent activity, Projects (open and total per project), Needs attention (overdue, urgent and unowned work in one list)                |
+
+The overview strip on the inbox starts collapsed; on a project it follows that project, elsewhere the whole
+workspace. Charts are drawn without a chart library and each has a text equivalent for screen readers.
+
+Admins start with the workspace view (unassigned work, the projects table); editors and viewers start with their
+own work and what needs attention.
+
+## Customise
+
+Choose **Customise** (or **Customise dashboard** in the [command palette](/docs/dashboard/search-and-shortcuts)):
+
+- **Add widget** opens a list of the widgets that are not on the dashboard yet, by group.
+- **Move** a widget by dragging it, or with its **Move earlier** and **Move later** buttons (the buttons also work
+  with a keyboard).
+- **Resize** it: width of a quarter, third, half, two thirds or the full row (a 12-column grid), and a short, medium
+  or tall height.
+- **Remove** a widget you do not need.
+- **Reset to default** brings back the layout for your role. **Done** leaves edit mode.
+
+The **Date range** menu (last 7, 14, 30 or 90 days) sets the period for the tiles and charts, and is saved with the
+layout.
+
+<Callout title="Layouts are saved per browser">
+  A layout is stored in your browser, per person and per screen. It does not follow you to another browser or
+  device, and a layout identical to the default is not stored, so later improvements to the defaults still
+  reach you. Viewers can customise too: it only changes their own browser.
+</Callout>
+
+## The stats endpoint
+
+Everything on a screen comes from one request, so moving or resizing a widget never reloads data.
+
+```http
+GET /api/stats?days=14&projectId=<uuid>
+```
+
+| Parameter   | Description                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------- |
+| `days`      | The range: `7`, `14` (default), `30` or `90`.                                               |
+| `projectId` | Optional. Limit the numbers to one project; a project of another workspace matches nothing. |
+
+The response holds `totals` (`active`, `created`, `previousCreated`, `resolved`, `unassigned`, `overdue`, `mine`,
+`urgent`, `avgResolutionHours`), `byStatus`, `byKind`, `byPriority`, `byProject` (only without `projectId`), a
+zero-filled daily `series` of `created` and `resolved` (oldest first, UTC days) and the latest `recent` activity.
+Trashed items are not counted. The call needs a dashboard session and reads only your own workspace; it is not part
+of the token API. The dashboard refreshes the numbers when the [live stream](/docs/dashboard#live-updates)
+reports a change.
+
+## Not built yet
+
+Several named dashboards, a per-card editor, funnel and gauge charts, a dashboard-wide filter bar and saving
+layouts on the server (so they follow your account) are not available. The inbox filters cover ad-hoc slicing.

@@ -58,7 +58,7 @@ export function idbKV<T>(store: (typeof STORES)[number]): KV<T> {
       return await new Promise<R>((resolve, reject) => {
         const req = fn(d.transaction(store, mode).objectStore(store));
         req.onsuccess = () => resolve(req.result as R);
-        req.onerror = () => reject(req.error ?? new Error("IndexedDB request failed"));
+        req.onerror = () => reject(req.error ?? new Error("idb failed"));
       });
     } catch {
       return fallback();
