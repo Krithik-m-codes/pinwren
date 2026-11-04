@@ -283,4 +283,7 @@ export default {
   imgNext: "Следующее изображение",
   imgPos: "{i} из {n}",
   imgFailed: "Не удалось показать это изображение",
+  errPromptText: "Что-то пошло не так. Отправить отчёт?",
+  errPromptSend: "Отправить отчёт",
+  errPromptDismiss: "Закрыть",
 } satisfies Catalog;

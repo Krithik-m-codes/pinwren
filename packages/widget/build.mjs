@@ -22,7 +22,7 @@ const pkgDir = fileURLToPath(new URL(".", import.meta.url));
 const dist = join(pkgDir, "dist");
 const outdirs = [dist, join(pkgDir, "..", "..", "apps", "web", "public")];
 const LOCALES = ["es", "fr", "de", "pt-BR", "it", "ja", "hi", "nl", "zh", "ru"];
-const CHUNKS = ["panel", "report", "editor", "capture", "replay", "flows", "shots"];
+const CHUNKS = ["panel", "report", "editor", "capture", "replay", "flows", "shots", "errors"];
 const src = join(pkgDir, "src");
 const pkg = JSON.parse(await readFile(join(pkgDir, "package.json"), "utf8"));
 
@@ -37,6 +37,7 @@ const BUDGET = {
   replay: 60,
   flows: 10,
   shots: 12,
+  errors: 3,
 };
 
 // Chunks share the core's modules through `window.__pinwrenLib` (src/lib.ts) instead of bundling copies:

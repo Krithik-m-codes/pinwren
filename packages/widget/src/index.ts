@@ -61,7 +61,7 @@ const call = (cb: Handler, data?: unknown) => {
   try {
     cb(data);
   } catch (err) {
-    console.warn("[pinwren] event handler failed", err);
+    console.warn("[pinwren] handler failed", err);
   }
 };
 
@@ -88,7 +88,7 @@ let scope: string | undefined;
 const init = safe((o: PinwrenOptions) => {
   if (g.__pinwrenInstance) return; // one widget per page
   if (typeof o.projectKey !== "string" || !o.projectKey || typeof o.endpoint !== "string") {
-    console.warn("[pinwren] init needs a projectKey and an endpoint");
+    console.warn("[pinwren] init needs projectKey and endpoint");
     return;
   }
   const endpoint = trimTrailingSlashes(o.endpoint);

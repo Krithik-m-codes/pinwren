@@ -123,6 +123,48 @@ referrer. Bug reports add page timing: time to first byte, DOMContentLoaded, loa
 contentful paint. In [privacy mode](/docs/widget/privacy) the user agent shrinks to “Chrome on Windows”, the
 time zone, referrer and timing are left out, and the console is capped at errors.
 
+### Error prompt
+
+Off by default. Switch on **Offer a report after an error** (Widget tab › Behaviour, `widgetConfig.errorPrompt`) and
+the widget listens for uncaught errors and unhandled promise rejections on your pages, the way a crash-report dialog
+does. When one happens it shows a small, non-blocking toast, “Something went wrong. Send a report?”, in the corner.
+**Send report** opens the usual bug-report form with the title filled in from the error message; the error and its
+stack are added to the report's console log (even when console capture is off) and to `metadata.error`. Dismissing
+the toast sends nothing, and nothing is captured about an error the visitor does not choose to report.
+
+- **Rate limited.** At most three prompts per browser session, at least 30 seconds apart, and an identical error
+  (same message and first stack frame, ignoring numbers) is offered only once. The toast disappears by itself after
+  12 seconds.
+- **Only where the widget is.** No prompt while the widget is hidden by its [visibility](/docs/widget/visibility)
+  rules or the viewport rule, while a report is already open, or when bug reports are switched off.
+- **Privacy mode.** Never offered, and `/w/config` returns `errorPrompt: false`: the error text and stack are page
+  content. The consent notice still appears in the form, as for any report.
+- **No cost when off.** The listener is a separate lazy chunk (`widget-errors.js`, under 2 KB gzip) that is only
+  requested for projects with the switch on. Errors from cross-origin scripts that the browser reports only as
+  “Script error.” and errors thrown by the widget's own files are ignored.
+
+### Session and trace links
+
+If the page already runs Sentry, PostHog, LogRocket or Datadog RUM, the report records where to find the visitor's
+session in those tools. The widget only reads globals those SDKs already expose. It never loads them, calls the
+network or starts a recording, and it validates every value before sending:
+
+| Tool        | Read from                                                                                     | Stored in `metadata.observability`                          |
+| ----------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Sentry      | `window.Sentry` (`getCurrentScope().lastEventId()`, `getReplay()`) or the v7 `__SENTRY__` hub | `sentry: { eventId, replayId, host }` (`host` from the DSN) |
+| PostHog     | `posthog.get_session_id()`, `posthog.get_session_replay_url()`                                | `posthog: { sessionId, replayUrl }`                         |
+| LogRocket   | `LogRocket.sessionURL`                                                                        | `logrocket: { sessionUrl }`                                 |
+| Datadog RUM | `DD_RUM.getInternalContext()`, `DD_RUM.getInitConfiguration().site`                           | `datadog: { sessionId, applicationId, site }`               |
+
+In the dashboard the item's **Details** show **Open in Sentry / PostHog / LogRocket / Datadog** buttons. Sentry and
+Datadog links are built from the stored ids (Sentry resolves the organisation when you are signed in; self-hosted
+Sentry works through the DSN host); PostHog and LogRocket use the URL the SDK gave. Only `https:` links without
+credentials are ever rendered, ids and hosts must be plain tokens, and hovering a button shows the domain it opens.
+
+Any site can supply the same shape itself, for another tool or when the SDK is not reachable from the page, with
+[`Pinwren.setMetadata({ observability: { sentry: { eventId } } })`](/docs/widget/api#metadata); detected values win
+over yours. Nothing is read in [privacy mode](/docs/widget/privacy).
+
 ## Session replay
 
 Session replay is off by default. Turn it on in the project's **Capture** tab (**Session replay** › **Record

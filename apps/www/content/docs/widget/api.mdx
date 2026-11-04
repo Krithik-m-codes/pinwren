@@ -81,6 +81,10 @@ data — is refused with a `[pinwren]` console warning and the previous value st
 context changes. Like `identify`, it may be called before the widget has loaded. With React, pass the
 `metadata` prop of `<Pinwren>` (compared by value) and `visible` to show or hide it.
 
+To link a report to a monitoring tool, put its ids under `observability`; the dashboard turns them into
+“Open in …” buttons, and the widget fills in Sentry, PostHog, LogRocket and Datadog by itself. See
+[Session and trace links](/docs/widget/bug-reports#session-and-trace-links).
+
 ## Events
 
 | Event    | Handler receives       | Fires when                                                                                                                             |

@@ -266,4 +266,7 @@ export default {
   imgNext: "अगली छवि",
   imgPos: "{n} में से {i}",
   imgFailed: "यह छवि दिखाई नहीं जा सकी",
+  errPromptText: "कुछ गड़बड़ हो गई। रिपोर्ट भेजें?",
+  errPromptSend: "रिपोर्ट भेजें",
+  errPromptDismiss: "खारिज करें",
 } satisfies Catalog;

@@ -20,7 +20,7 @@ export function identityOf(user: unknown, opts: unknown): Identity {
   let signature: string | undefined;
   if (id && sig !== undefined) {
     if (typeof sig === "string" && /^[0-9a-f]{64}$/i.test(sig.trim())) signature = sig.trim().toLowerCase();
-    else console.warn("[pinwren] identify: the signature must be a hex HMAC-SHA256 of the user id; ignored");
+    else console.warn("[pinwren] identify: signature must be hex HMAC-SHA256");
   }
   return { id, name: str(u.name, 120), email: str(u.email, 254), signature };
 }
