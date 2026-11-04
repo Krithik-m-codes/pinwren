@@ -148,6 +148,12 @@ Mostly on the **Widget** tab (**Behaviour** and **Consent notice** cards); panel
         "Mask every text field in screenshots, drop timing data, coarsen the user agent and force the consent notice on — see Privacy & masking.",
       default: "false",
     },
+    errorPrompt: {
+      type: "boolean",
+      description:
+        "When the page throws an uncaught error or an unhandled promise rejection, offer to send a bug report with the error attached — see Error prompt in Bug reports. Never in privacy mode.",
+      default: "false",
+    },
   }}
 />
 

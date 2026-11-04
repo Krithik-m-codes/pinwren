@@ -9,6 +9,7 @@ export * from "./origins";
 export * from "./realtime";
 export * from "./roles";
 export * from "./rounds";
+export * from "./share";
 export * from "./schemas";
 export * from "./security";
 export * from "./strings";

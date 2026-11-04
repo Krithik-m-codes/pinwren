@@ -27,18 +27,25 @@ const roundColumns = {
   dueAt: reviewRound.dueAt,
   status: reviewRound.status,
   closedAt: reviewRound.closedAt,
+  requireSignoff: reviewRound.requireSignoff,
   createdBy: reviewRound.createdBy,
   createdAt: reviewRound.createdAt,
   updatedAt: reviewRound.updatedAt,
   total: sql<number>`(select count(*)::int from ${feedback} f where f.round_id = ${roundId} and f.deleted_at is null)`,
   open: sql<number>`(select count(*)::int from ${feedback} f where f.round_id = ${roundId} and f.deleted_at is null and f.status in (${activeList}))`,
   closed: sql<number>`(select count(*)::int from ${feedback} f where f.round_id = ${roundId} and f.deleted_at is null and f.status in (${closedList}))`,
+  // The newest client answer decides ("none" before anyone has answered).
+  signoff: sql<
+    "none" | "approved" | "changes_requested"
+  >`coalesce((select s.decision from round_signoff s where s.round_id = ${roundId} and s.org_id = "review_round"."org_id" order by s.created_at desc limit 1), 'none')`,
 };
 
-type RoundRow = { total: number; open: number; closed: number } & Omit<
-  typeof reviewRound.$inferSelect,
-  "orgId"
->;
+type RoundRow = {
+  total: number;
+  open: number;
+  closed: number;
+  signoff: "none" | "approved" | "changes_requested";
+} & Omit<typeof reviewRound.$inferSelect, "orgId">;
 
 const roundOut = ({ total, open, closed, ...r }: RoundRow) => ({ ...r, counts: { total, open, closed } });
 export type RoundOut = ReturnType<typeof roundOut>;
@@ -86,6 +93,7 @@ export async function createRound(
       projectId,
       name: body.name,
       dueAt: body.dueAt ? new Date(body.dueAt) : null,
+      requireSignoff: body.requireSignoff ?? false,
       createdBy: userId,
     })
     .returning({ id: reviewRound.id });
@@ -98,6 +106,18 @@ export async function updateRound(orgId: string, id: string, patch: ReviewRoundU
   const set: Partial<typeof reviewRound.$inferInsert> = {};
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.dueAt !== undefined) set.dueAt = patch.dueAt ? new Date(patch.dueAt) : null;
+  if (patch.requireSignoff !== undefined) set.requireSignoff = patch.requireSignoff;
+  if (patch.status === "closed" && current.status !== "closed") {
+    // A round that needs its client's approval stays open until the newest answer is "approved".
+    const needs = patch.requireSignoff ?? current.requireSignoff;
+    if (needs && current.signoff !== "approved") {
+      throw new ApiError(
+        409,
+        "SIGNOFF_REQUIRED",
+        "This round needs the client's approval before it can be closed.",
+      );
+    }
+  }
   if (patch.status !== undefined && patch.status !== current.status) {
     set.status = patch.status;
     set.closedAt = patch.status === "closed" ? new Date() : null;

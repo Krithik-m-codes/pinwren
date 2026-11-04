@@ -51,6 +51,12 @@ export type WebhookPayload = {
     rule?: { id: string; name: string };
     /** Panel action runs (`action.run`, F-016). */
     action?: { id: string; label: string };
+    /**
+     * `round.signoff`: the round and the client's answer. `feedback` is then a stand-in describing the round
+     * (number 0), so chat formatters and generic receivers keep one shape.
+     */
+    round?: { id: string; name: string; projectId: string };
+    signoff?: { decision: string; name: string; email: string; note: string };
   };
 };
 
@@ -87,6 +93,7 @@ export const EVENT_TITLES: Record<string, string> = {
   "comment.created": "New comment",
   "comment.updated": "Comment edited",
   "comment.deleted": "Comment deleted",
+  "round.signoff": "Round sign-off",
   ping: "Test delivery",
 };
 

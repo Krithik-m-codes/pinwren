@@ -93,6 +93,7 @@ export const TAG_TYPES = [
   "Automation",
   "Guest",
   "Stats",
+  "Share",
 ] as const;
 export type TagType = (typeof TAG_TYPES)[number];
 

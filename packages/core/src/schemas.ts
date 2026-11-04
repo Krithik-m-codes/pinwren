@@ -468,6 +468,7 @@ export const NOTIFICATION_TYPES = [
   "comment.created",
   "comment.mentioned",
   "webhook.disabled",
+  "round.signoff",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -580,6 +581,7 @@ export const WEBHOOK_EVENTS = [
   "comment.created",
   "comment.updated",
   "comment.deleted",
+  "round.signoff",
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 /**
@@ -723,6 +725,7 @@ export const EMAIL_TEMPLATE_KEYS = [
   "reporter_priority",
   "reporter_assigned",
   "webhook_disabled",
+  "round_signoff",
 ] as const;
 export type EmailTemplateKey = (typeof EMAIL_TEMPLATE_KEYS)[number];
 

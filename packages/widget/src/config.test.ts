@@ -25,6 +25,7 @@ describe("resolveConfig", () => {
       consent: { enabled: false, text: null, privacyUrl: null },
       panelActions: [],
       privacyMode: false,
+      errorPrompt: false,
       visibility: {
         environments: "all",
         minViewportWidth: 0,

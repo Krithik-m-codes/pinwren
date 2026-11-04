@@ -37,6 +37,8 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
       labelId = id(),
       endpointId = id(),
       integrationId = id(),
+      roundId = id(),
+      shareLinkId = id(),
       ruleId = id();
     const userId = `user-${org}`;
     await admin`insert into organization (id, name, slug) values (${org}, ${org}, ${org})`;
@@ -44,7 +46,7 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
     const rows: Record<string, Row> = {
       project: { id: projectId, org_id: org, name: org, slug: org, public_key: org },
       page: { id: id(), org_id: org, project_id: projectId, url: "https://example.invalid/" },
-      review_round: { id: id(), org_id: org, project_id: projectId, name: org },
+      review_round: { id: roundId, org_id: org, project_id: projectId, name: org },
       review_link: { id: id(), org_id: org, project_id: projectId, label: org, token_hash: org },
       feedback: {
         id: feedbackId,
@@ -54,6 +56,23 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
         kind: "bug",
         body: org,
         client_id: id(),
+      },
+      share_link: {
+        id: shareLinkId,
+        org_id: org,
+        project_id: projectId,
+        round_id: roundId,
+        token_hash: `share-${org}`,
+        expires_at: "2099-01-01T00:00:00Z",
+      },
+      round_signoff: {
+        id: id(),
+        org_id: org,
+        round_id: roundId,
+        share_link_id: shareLinkId,
+        decision: "approved",
+        name: org,
+        email: `${org}@test.invalid`,
       },
       diagnostics: { feedback_id: feedbackId },
       feedback_ai: { feedback_id: feedbackId, org_id: org },
@@ -201,7 +220,7 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
     const rows = await admin<
       { name: string; valid: boolean }[]
     >`select conname as name, convalidated as valid from pg_constraint where connamespace = 'public'::regnamespace and conname like '%_tenant_fk'`;
-    expect(rows).toHaveLength(27);
+    expect(rows).toHaveLength(32);
     expect(rows.every((row) => row.valid)).toBe(true);
   });
 

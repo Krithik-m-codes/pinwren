@@ -264,4 +264,7 @@ export default {
   imgNext: "下一张图片",
   imgPos: "第 {i} 张，共 {n} 张",
   imgFailed: "无法显示此图片",
+  errPromptText: "出了点问题。要发送报告吗？",
+  errPromptSend: "发送报告",
+  errPromptDismiss: "关闭",
 } satisfies Catalog;

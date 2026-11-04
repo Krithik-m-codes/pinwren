@@ -14,6 +14,7 @@ import {
   type ProjectAiConfig,
   type RejectedOrigin,
   REVIEW_ROUND_STATUSES,
+  SIGNOFF_DECISIONS,
   VIEW_LAYOUTS,
   type WidgetConsent,
   WEBHOOK_KINDS,
@@ -22,6 +23,7 @@ import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   boolean,
+  check,
   customType,
   foreignKey,
   index,
@@ -196,6 +198,8 @@ export const reviewRound = pgTable(
     dueAt: timestamp("due_at", { withTimezone: true }),
     status: reviewRoundStatusEnum("status").notNull().default("active"),
     closedAt: timestamp("closed_at", { withTimezone: true }),
+    /** When on, the round can only be closed after a client's latest sign-off is "approved". */
+    requireSignoff: boolean("require_signoff").notNull().default(false),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     ...timestamps,
   },
@@ -909,6 +913,68 @@ export const reviewLink = pgTable(
     index("review_link_project_idx").on(t.projectId),
     uniqueIndex("review_link_id_org_uq").on(t.id, t.orgId),
     tenantReference("review_link_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
+  ],
+);
+
+/**
+ * Share links: an expiring, revocable, login-free read-only view of one report (`feedback_id`) or of a review
+ * round (`round_id`, where a client can also sign off). Only a SHA-256 of the token is stored; the URL is shown
+ * once, at creation. A password, when set, is an scrypt hash checked before an unlock token is issued.
+ */
+export const shareLink = pgTable(
+  "share_link",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    feedbackId: uuid("feedback_id").references(() => feedback.id, { onDelete: "cascade" }),
+    roundId: uuid("round_id").references(() => reviewRound.id, { onDelete: "cascade" }),
+    label: text("label").notNull().default(""),
+    tokenHash: text("token_hash").notNull().unique(),
+    passwordHash: text("password_hash"),
+    /** Whether the viewer may post public comments (only honoured while the project allows guest replies). */
+    allowComments: boolean("allow_comments").notNull().default(false),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastViewedAt: timestamp("last_viewed_at", { withTimezone: true }),
+    viewCount: integer("view_count").notNull().default(0),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("share_link_project_idx").on(t.projectId),
+    index("share_link_feedback_idx").on(t.feedbackId),
+    index("share_link_round_idx").on(t.roundId),
+    uniqueIndex("share_link_id_org_uq").on(t.id, t.orgId),
+    check("share_link_target_ck", sql`(${t.feedbackId} is null) <> (${t.roundId} is null)`),
+    tenantReference("share_link_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
+    tenantReference("share_link_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
+    tenantReference("share_link_round_tenant_fk", t.roundId, t.orgId, reviewRound.id, reviewRound.orgId),
+  ],
+);
+
+/** A client's approve / request-changes answer on a review round, left through a round share link. */
+export const roundSignoff = pgTable(
+  "round_signoff",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => reviewRound.id, { onDelete: "cascade" }),
+    shareLinkId: uuid("share_link_id").references(() => shareLink.id, { onDelete: "set null" }),
+    decision: text("decision", { enum: SIGNOFF_DECISIONS }).notNull(),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    note: text("note").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("round_signoff_round_idx").on(t.roundId, t.createdAt),
+    tenantReference("round_signoff_round_tenant_fk", t.roundId, t.orgId, reviewRound.id, reviewRound.orgId),
+    tenantReference("round_signoff_link_tenant_fk", t.shareLinkId, t.orgId, shareLink.id, shareLink.orgId),
   ],
 );
 

@@ -1,9 +1,33 @@
-import { type DashboardStats, type DashboardStatsQuery, fillSeries } from "@pinwren/core";
-import { activity, feedback, getDb, project, user } from "@pinwren/db";
+import {
+  type DashboardStats,
+  type DashboardStatsQuery,
+  DEVICE_CLASSES,
+  fillBuckets,
+  CLOSED_STATUSES,
+  fillSeries,
+  TIME_BUCKET_LIMITS_H,
+} from "@pinwren/core";
+import { activity, feedback, getDb, page, project, reviewRound, user } from "@pinwren/db";
 import { and, desc, eq, gte, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import { ACTIVE_STATUSES } from "./feedback";
 
 const DAY = 86_400_000;
+
+/** SQL `case` mapping an hours expression to its bucket index (see TIME_BUCKETS). */
+const bucketCase = (hours: SQL) =>
+  sql`case ${sql.join(
+    TIME_BUCKET_LIMITS_H.map(
+      (limit, i) => sql`when ${hours} < ${sql.raw(String(limit))} then ${sql.raw(String(i))}`,
+    ),
+    sql` `,
+  )} else ${sql.raw(String(TIME_BUCKET_LIMITS_H.length))} end`;
+
+/** Browser family / OS names come from the widget; blank ones are grouped as "Unknown". */
+const envText = (field: "browser" | "os") =>
+  sql<string>`coalesce(nullif(trim(${feedback.environment}->>${sql.raw(`'${field}'`)}), ''), 'Unknown')`;
+
+/** Device class from the captured viewport width; keep in step with `deviceClass()` in @pinwren/core. */
+const deviceExpr = sql<string>`case when (${feedback.environment}#>>'{viewport,w}') ~ '^[0-9]{1,5}$' then case when (${feedback.environment}#>>'{viewport,w}')::int < 768 then 'mobile' when (${feedback.environment}#>>'{viewport,w}')::int < 1024 then 'tablet' else 'desktop' end else 'unknown' end`;
 
 /**
  * The numbers behind the dashboards (`GET /api/stats`). Every query is filtered by the caller's org id on
@@ -34,6 +58,8 @@ export async function dashboardStats(
         overdue: sql<number>`count(*) filter (where ${active} and ${feedback.dueAt} < ${now.toISOString()}::timestamptz)::int`,
         mine: sql<number>`count(*) filter (where ${active} and ${userId} = any(${feedback.assigneeIds}))::int`,
         urgent: sql<number>`count(*) filter (where ${active} and ${feedback.priority} in ('urgent','high'))::int`,
+        // Due date missed: still open and past due, or resolved (in the range) after it.
+        slaBreached: sql<number>`count(*) filter (where ${feedback.dueAt} is not null and ((${active} and ${feedback.dueAt} < ${now.toISOString()}::timestamptz) or (${gte(feedback.resolvedAt, since)} and ${feedback.resolvedAt} > ${feedback.dueAt})))::int`,
         avgHours: sql<
           string | null
         >`avg(extract(epoch from (${feedback.resolvedAt} - ${feedback.createdAt})) / 3600) filter (where ${gte(feedback.resolvedAt, since)})`,
@@ -105,6 +131,14 @@ export async function dashboardStats(
       .limit(10),
   ]);
 
+  const [topPages, browsers, systems, devices, timing, rounds, reporters] = await extras(
+    orgId,
+    q.projectId,
+    since,
+    scope,
+    active,
+  );
+
   const t = totalRow[0];
   const rows = new Map<string, { date: string; created?: number; resolved?: number }>();
   for (const r of created) rows.set(r.date, { date: r.date, created: r.n });
@@ -123,12 +157,174 @@ export async function dashboardStats(
       mine: t?.mine ?? 0,
       urgent: t?.urgent ?? 0,
       avgResolutionHours: avg === null || Number.isNaN(avg) ? null : Math.round(avg * 10) / 10,
+      slaBreached: t?.slaBreached ?? 0,
     },
     byStatus: byStatus.map((r) => ({ key: r.key, count: r.count })),
     byKind: byKind.map((r) => ({ key: r.key, count: r.count })),
     byPriority: byPriority.map((r) => ({ key: r.key, count: r.count })),
     byProject,
     series: fillSeries([...rows.values()], q.days, now),
+    topPages,
+    browsers,
+    operatingSystems: systems,
+    devices: DEVICE_CLASSES.map((key) => ({
+      key,
+      count: devices.find((d) => d.key === key)?.count ?? 0,
+    })).filter((d) => d.count > 0),
+    firstResponse: timing.response,
+    resolveTime: timing.resolve,
+    rounds,
+    reporters,
     recent: recent.map((r) => ({ ...r, at: r.at.toISOString(), actor: r.actor })),
   };
+}
+
+type TimingRow = { metric: string; b: number | null; n: number; median: number | null };
+
+/** The widgets that need their own queries (distributions, pages, rounds, reporters); all org-scoped. */
+async function extras(
+  orgId: string,
+  projectId: string | undefined,
+  since: Date,
+  scope: SQL | undefined,
+  active: SQL,
+) {
+  const db = getDb();
+  const inRange = and(scope, gte(feedback.createdAt, since));
+  const sinceIso = since.toISOString();
+  const onProject = projectId ? sql`and f.project_id = ${projectId}` : sql``;
+  const roundProject = projectId ? eq(reviewRound.projectId, projectId) : undefined;
+  const closedList = sql.raw(CLOSED_STATUSES.map((x) => `'${x}'`).join(","));
+  const who = sql<string>`coalesce(${feedback.reporterId}, lower(${feedback.reporterGuest}->>'email'), ${feedback.reporterGuest}->>'externalId')`;
+  const rid = sql.raw(`"review_round"."id"`);
+  const roundOrg = sql.raw(`"review_round"."org_id"`);
+  const count = sql<number>`count(*)::int`;
+
+  return Promise.all([
+    db
+      .select({
+        url: page.url,
+        count,
+        active: sql<number>`count(*) filter (where ${active})::int`,
+      })
+      .from(feedback)
+      .innerJoin(page, and(eq(page.id, feedback.pageId), eq(page.orgId, feedback.orgId)))
+      .where(inRange)
+      .groupBy(page.url)
+      .orderBy(desc(count), page.url)
+      .limit(8),
+    db
+      .select({ key: envText("browser"), count })
+      .from(feedback)
+      .where(inRange)
+      .groupBy(sql`1`)
+      .orderBy(desc(count))
+      .limit(6),
+    db
+      .select({ key: envText("os"), count })
+      .from(feedback)
+      .where(inRange)
+      .groupBy(sql`1`)
+      .orderBy(desc(count))
+      .limit(6),
+    db
+      .select({ key: deviceExpr, count })
+      .from(feedback)
+      .where(inRange)
+      .groupBy(sql`1`)
+      .then((rows) =>
+        rows.filter((r): r is { key: (typeof DEVICE_CLASSES)[number]; count: number } =>
+          (DEVICE_CLASSES as readonly string[]).includes(r.key),
+        ),
+      ),
+    // First response = the first thing a teammate did with the item (any activity but its creation).
+    db
+      .execute<TimingRow>(
+        sql`
+          with base as (
+            select f.created_at, f.resolved_at,
+              (select min(a.created_at) from activity a
+                where a.feedback_id = f.id and a.org_id = f.org_id and a.actor_id is not null and a.type <> 'created') as first_at
+            from feedback f
+            where f.org_id = ${orgId} and f.deleted_at is null ${onProject}
+              and (f.created_at >= ${sinceIso}::timestamptz or f.resolved_at >= ${sinceIso}::timestamptz)
+          ),
+          resp as (
+            select greatest(extract(epoch from (first_at - created_at)) / 3600, 0)::float8 as h
+            from base where first_at is not null and created_at >= ${sinceIso}::timestamptz
+          ),
+          res as (
+            select greatest(extract(epoch from (resolved_at - created_at)) / 3600, 0)::float8 as h
+            from base where resolved_at is not null and resolved_at >= ${sinceIso}::timestamptz
+          )
+          select 'response' as metric, ${bucketCase(sql`h`)} as b, count(*)::int as n, null::float8 as median from resp group by 2
+          union all
+          select 'response_median', null, count(*)::int, percentile_cont(0.5) within group (order by h) from resp
+          union all
+          select 'resolve', ${bucketCase(sql`h`)}, count(*)::int, null from res group by 2
+          union all
+          select 'resolve_median', null, count(*)::int, percentile_cont(0.5) within group (order by h) from res`,
+      )
+      .then((rows) => timingOf(Array.from(rows))),
+    db
+      .select({
+        id: reviewRound.id,
+        name: reviewRound.name,
+        projectId: reviewRound.projectId,
+        projectName: project.name,
+        dueAt: reviewRound.dueAt,
+        requireSignoff: reviewRound.requireSignoff,
+        total: sql<number>`(select count(*)::int from feedback f where f.round_id = ${rid} and f.org_id = ${roundOrg} and f.deleted_at is null)`,
+        closed: sql<number>`(select count(*)::int from feedback f where f.round_id = ${rid} and f.org_id = ${roundOrg} and f.deleted_at is null and f.status in (${closedList}))`,
+        signoff: sql<
+          "none" | "approved" | "changes_requested"
+        >`coalesce((select s.decision from round_signoff s where s.round_id = ${rid} and s.org_id = ${roundOrg} order by s.created_at desc limit 1), 'none')`,
+      })
+      .from(reviewRound)
+      .innerJoin(project, and(eq(project.id, reviewRound.projectId), eq(project.orgId, reviewRound.orgId)))
+      .where(
+        and(
+          eq(reviewRound.orgId, orgId),
+          eq(reviewRound.status, "active"),
+          isNull(project.archivedAt),
+          roundProject,
+        ),
+      )
+      .orderBy(sql`${reviewRound.dueAt} asc nulls last`, desc(reviewRound.createdAt))
+      .limit(6)
+      .then((rows) => rows.map((r) => ({ ...r, dueAt: r.dueAt?.toISOString() ?? null }))),
+    db
+      .select({
+        id: who,
+        name: sql<
+          string | null
+        >`max(coalesce(${user.name}, ${feedback.reporterGuest}->>'name', ${feedback.reporterGuest}->>'email'))`,
+        count,
+        resolved: sql<number>`count(*) filter (where ${feedback.resolvedAt} is not null)::int`,
+      })
+      .from(feedback)
+      .leftJoin(user, eq(user.id, feedback.reporterId))
+      .where(and(inRange, sql`${who} is not null`))
+      .groupBy(who)
+      .orderBy(desc(count))
+      .limit(8)
+      .then((rows) => rows.map((r) => ({ ...r, name: r.name ?? "Anonymous" }))),
+  ]);
+}
+
+/** Rows of the timing query to the two distributions. */
+function timingOf(rows: TimingRow[]) {
+  const dist = (metric: "response" | "resolve") => {
+    const median = rows.find((r) => r.metric === `${metric}_median`);
+    return {
+      sample: median?.n ?? 0,
+      medianHours: median?.median == null ? null : Math.round(median.median * 10) / 10,
+      buckets: fillBuckets(
+        rows
+          .filter((r) => r.metric === metric && r.b !== null)
+          .map((r) => ({ index: Number(r.b), count: r.n })),
+      ),
+    };
+  };
+  return { response: dist("response"), resolve: dist("resolve") };
 }

@@ -1,0 +1,61 @@
+---
+title: Share links and client sign-off
+description: Send a report or a whole review round to someone without an account. Expiring, revocable, optionally password-protected links, public comments, and Approve / Request changes sign-off with an email and webhook.
+---
+
+## Share one report
+
+Open a report in the inbox and choose **Share**. Pick how long the link lasts (1, 7, 30 or 90 days), optionally add
+a password, and optionally allow comments. **Create link** shows the URL once: copy it then. Pinwren keeps only a
+hash of the link's secret, so it cannot show the URL again.
+
+Whoever opens the link needs no account. They see:
+
+- the report, its status and priority, the page and the browser and operating system;
+- the screenshot and the session replay, when there are any;
+- a **console and network summary**: counts, plus the errors, warnings and failed requests. Email addresses,
+  tokens, card and phone numbers and IP addresses are masked, and query strings are removed from URLs;
+- the **public** comments. Internal notes, assignees and the reporter's identity are never shown.
+
+If you allow comments and the project accepts replies, the visitor can post a public comment under a name they
+type. A shared link can never write an internal note.
+
+The secret travels in the URL fragment (after the `#`), so it is not sent to any server in the address, in logs or
+in a `Referer` header. The page removes it from the address bar as soon as it opens.
+
+## Manage links
+
+The same dialog lists every link for the item: its status (active, expired, revoked), how many times it was
+opened, when it was last opened, and whether it has a password or comments. **Revoke** stops a link at once.
+Viewers can see the list but not create or revoke links. A workspace can create 100 links an hour; visitors are
+rate-limited per address, and password attempts are limited per link.
+
+## Client sign-off on a review round
+
+In **Projects › Rounds**, choose **Share** on a round. The link shows the round's progress, its items and the
+sign-offs so far. The client enters a name and email and chooses **Approve** or **Request changes** (changes need
+a note). The newest answer is the round's sign-off state, shown on the round card and in the **Round progress**
+dashboard widget.
+
+- **Client sign-offs** in the round's menu opens the timeline of every answer, with name, email and note.
+- Turn on **Require client approval before closing** when you create or edit a round: it can then only be closed
+  once the latest answer is **Approved**. Closing earlier answers `409 SIGNOFF_REQUIRED`.
+- Each answer notifies the project's team: a bell entry and an email (unless they switched status-change emails
+  off), and the `round.signoff` [webhook](/docs/integrations) event for endpoints subscribed to it. Its payload
+  carries `data.round` and `data.signoff`; `data.feedback` is a stand-in describing the round (number 0).
+- A closed round no longer takes answers.
+
+## API
+
+The dashboard uses these session routes (all scoped to your workspace):
+
+| Route                               | What it does                                |
+| ----------------------------------- | ------------------------------------------- |
+| `POST /api/share-links`             | Create a link for `feedbackId` or `roundId` |
+| `GET /api/feedback/:id/share-links` | Links for a report                          |
+| `GET /api/rounds/:id/share-links`   | Links for a round                           |
+| `DELETE /api/share-links/:id`       | Revoke                                      |
+| `GET /api/rounds/:id/signoffs`      | The sign-off state and timeline of a round  |
+
+Visitors use `GET /api/share/:projectKey` and its `unlock`, `assets/:id`, `comments` and `signoff` routes with the
+secret in the `x-pinwren-share-token` header.

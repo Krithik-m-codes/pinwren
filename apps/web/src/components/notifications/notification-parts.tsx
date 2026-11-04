@@ -5,6 +5,7 @@ import {
   Bell,
   BellRing,
   CircleDot,
+  ClipboardCheck,
   Flag,
   type LucideIcon,
   MailWarning,
@@ -32,6 +33,7 @@ const ICONS: Record<string, LucideIcon> = {
   "comment.created": MessageSquare,
   "comment.mentioned": AtSign,
   "webhook.disabled": WebhookOff,
+  "round.signoff": ClipboardCheck,
 };
 
 export function NotificationIcon({

@@ -14,7 +14,7 @@ that is listed under "Remaining WP-21 work". The approved design and implementat
 
 ## Database inventory
 
-`packages/db/src/tenant-inventory.ts` classifies all 46 exported tables. The inventory test compares
+`packages/db/src/tenant-inventory.ts` classifies all 48 exported tables. The inventory test compares
 against actual Drizzle schema exports and tenant foreign keys, so a new table or relationship must be
 classified. Direct ownership means a protected `org_id`; parent ownership means a child derives its
 organization through all declared protected parents. Identity tables serve users across memberships;
@@ -23,7 +23,7 @@ system tables serve explicitly authorized instance operations.
 Cloud also protects organization, membership and invitation rows by their organization identifier.
 Tenant reads of user profiles expose only `id`, `name`, `email` and `image`, and only for members or
 contributors linked to that organization's feedback, comments, activity or watcher rows. Private account
-flags remain available only through the authenticated account repository. There are 36 protected tables.
+flags remain available only through the authenticated account repository. There are 38 protected tables.
 
 Better Auth uses a separate, stable identity pool. Its service role has identity/system grants and a
 fixed eight-column token-verification projection; it cannot read tenant feedback or token display names.
@@ -50,7 +50,7 @@ required.
 
 ## HTTP entry points
 
-`packages/api/src/tenant-route-inventory.json` records all 190 mounted endpoint signatures, including
+`packages/api/src/tenant-route-inventory.json` records all 200 mounted endpoint signatures, including
 the ALL-method `/mcp` handler. Each record names its authorization boundary, whether its handler needs
 special treatment for streaming/external work, and its required authorization test case. These names
 are planned coverage identifiers, not claims that the corresponding integration test already passes.
@@ -134,7 +134,7 @@ temporary databases. Never point it at customer data.
 The policy/context tranche passed 80 checks on local PostgreSQL 16 across inventory, context, real pooled connection
 reuse/rollback, row policies and migration failure tests. The original 27 content tables have scoped read and
 missing-context cases. All 23 direct ownership tables reject ownership changes and foreign
-UPDATE/DELETE RETURNING. Valid local CRUD succeeds. Twenty-seven composite tenant foreign keys are
+UPDATE/DELETE RETURNING. Valid local CRUD succeeds. Thirty-two composite tenant foreign keys are
 validated. Foreign project references, duplicate links and cross-tenant label joins are rejected,
 including label inconsistencies introduced by privileged maintenance. Upgrade tests prove that
 inconsistent legacy page ownership and label joins abort the migration without changing rows or
@@ -205,14 +205,14 @@ selfhost unit runs and exercised by the integration runner.
 
 ### Route-wide acceptance evidence (Task 8)
 
-Every entry of `packages/api/src/tenant-route-inventory.json` (190 routes) has one executable case, and the
+Every entry of `packages/api/src/tenant-route-inventory.json` (200 routes) has one executable case, and the
 inventory and the case registries are compared in both directions, so an added, renamed or reclassified
 route without a case fails. Both suites run against real PostgreSQL with the restricted runtime role, in a
 fixture holding two workspaces (A and B) with a project, report, comment, label, round, review link, saved view,
 webhook endpoint and delivery, tracker integration, asset, notification, template, brand asset, email delivery
 and API token each.
 
-- `cloud-routes-db.test.ts` covers the 133 `tenant`, 10 `identity`, 17 `system` and 5 `public` routes.
+- `cloud-routes-db.test.ts` covers the 138 `tenant`, 10 `identity`, 17 `system` and 5 `public` routes.
   Signed in (cookie or API token) to workspace A, each id-bearing tenant route names workspace B's resource and must
   answer 404 or 403; routes with no id (lists, creates, singleton settings) run as A and must return nothing of B's.
   Every case also hashes all of workspace B's rows (direct tables, parent-owned tables, workspace, members,

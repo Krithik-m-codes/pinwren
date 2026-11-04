@@ -30,6 +30,8 @@ export type WidgetConfig = {
   panelActions: PanelAction[];
   /** F-021: mask every text field in screenshots, no performance metadata, coarse user agent. */
   privacyMode: boolean;
+  /** Offer a bug report when the page throws an uncaught error (off by default). */
+  errorPrompt: boolean;
   /**
    * F-012 (wave-4 §4, wave-5 §2): where and for whom the widget shows. Widget-side only; `forceShow` overrides
    * every rule, a valid review link (`?pinwren_review=`) overrides `mode`.
@@ -86,6 +88,7 @@ export const DEFAULT_CONFIG: WidgetConfig = {
   consent: { enabled: false, text: null, privacyUrl: null },
   panelActions: [],
   privacyMode: false,
+  errorPrompt: false,
   visibility: {
     environments: "all",
     minViewportWidth: 0,
@@ -289,15 +292,15 @@ export const MAX_HOST_METADATA_BYTES = 14_000;
 export function hostMetadata(raw: unknown): { ok: Record<string, unknown> | null; error?: string } {
   if (raw === null || raw === undefined) return { ok: null };
   if (typeof raw !== "object" || Array.isArray(raw) || Object.getPrototypeOf(raw) !== Object.prototype)
-    return { ok: null, error: "setMetadata takes a plain object (or null)" };
+    return { ok: null, error: "setMetadata needs a plain object" };
   let json: string;
   try {
     json = JSON.stringify(raw);
   } catch {
-    return { ok: null, error: "setMetadata: the object can't be turned into JSON" };
+    return { ok: null, error: "setMetadata: not JSON-serialisable" };
   }
   if (json.length > MAX_HOST_METADATA_BYTES)
-    return { ok: null, error: `setMetadata: keep it under ${MAX_HOST_METADATA_BYTES} bytes of JSON` };
+    return { ok: null, error: `setMetadata: over ${MAX_HOST_METADATA_BYTES} bytes` };
   // A copy, so later changes by the host don't leak into reports already being written.
   return { ok: JSON.parse(json) as Record<string, unknown> };
 }

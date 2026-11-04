@@ -13,6 +13,7 @@ import {
   ImageIcon,
   Languages,
   Link2,
+  Share2,
   Loader2,
   MoreHorizontal,
   Paperclip,
@@ -30,6 +31,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AnnotationsToggle, CaptureView, type Marker } from "@/components/capture-view";
+import { ShareDialog } from "@/components/share-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { copyText } from "@/components/copy-button";
 import { DatePicker } from "@/components/date-picker";
@@ -105,6 +107,7 @@ import { AiSummaryCard } from "./ai-summary-card";
 import { DueDate, PresenceStack } from "./inbox-list";
 import { ItemActions } from "./item-actions";
 import { AssigneesPicker, ItemSearchPicker, LabelChips, LabelPicker } from "./pickers";
+import { type ObservabilityLink, observabilityLinks } from "@/lib/observability";
 import { type ReplayHandle, ReplayViewer } from "./replay-viewer";
 import { CommentComposer, Timeline } from "./timeline";
 
@@ -222,6 +225,7 @@ function DetailBody({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmPurge, setConfirmPurge] = useState(false);
   const [dupOpen, setDupOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const replay = assets.find((a) => a.kind === "replay");
   const player = useRef<ReplayHandle | null>(null);
   const [replayAt, setReplayAt] = useState<number | null>(null);
@@ -335,6 +339,11 @@ function DetailBody({
             >
               {linking.isLoading ? <Loader2 className="animate-spin" /> : <ExternalLink />}
               <span className="hidden sm:inline">{t("inbox1.openOnPage")}</span>
+            </Button>
+          )}
+          {!inTrash && (
+            <Button variant="ghost" size="sm" onClick={() => setShareOpen(true)} data-testid="share-report">
+              <Share2 /> <span className="hidden sm:inline">{t("share.button")}</span>
             </Button>
           )}
           <DropdownMenu>
@@ -763,6 +772,12 @@ function DetailBody({
         </section>
       </div>
 
+      <ShareDialog
+        target={{ kind: "feedback", id }}
+        title={`#${f.number}`}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
@@ -1139,20 +1154,23 @@ function ContextTabs({
             )}
           </Meta>
         </dl>
-        {f.metadata && Object.keys(f.metadata).length > 0 && (
+        <ObservabilityChips metadata={f.metadata} />
+        {f.metadata && Object.keys(f.metadata).filter((k) => k !== "observability").length > 0 && (
           // What the site attached with `Pinwren.setMetadata()` / `metadata` (plan, build, feature flags…).
           <div className="mt-4 space-y-2" data-testid="host-metadata">
             <h4 className="text-xs font-medium text-muted-foreground">{t("inbox1.fromYourSite")}</h4>
             <dl className="grid grid-cols-[6.5rem_1fr] gap-x-4 gap-y-2 text-sm sm:grid-cols-[8rem_1fr]">
-              {Object.entries(f.metadata).map(([k, v]) => (
-                <Meta key={k} label={k}>
-                  {typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? (
-                    <span className="break-all">{String(v)}</span>
-                  ) : (
-                    <code className="font-mono text-xs break-all">{JSON.stringify(v)}</code>
-                  )}
-                </Meta>
-              ))}
+              {Object.entries(f.metadata)
+                .filter(([k]) => k !== "observability")
+                .map(([k, v]) => (
+                  <Meta key={k} label={k}>
+                    {typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? (
+                      <span className="break-all">{String(v)}</span>
+                    ) : (
+                      <code className="font-mono text-xs break-all">{JSON.stringify(v)}</code>
+                    )}
+                  </Meta>
+                ))}
             </dl>
           </div>
         )}
@@ -1310,4 +1328,48 @@ function Meta({ label, children }: { label: string; children: React.ReactNode })
 export function firstLine(text: string) {
   const line = text.split("\n")[0] ?? "";
   return line.length > 120 ? `${line.slice(0, 117)}…` : line;
+}
+
+const CHIP_LABEL = {
+  "sentry:event": "inbox1.openSentryEvent",
+  "sentry:replay": "inbox1.openSentryReplay",
+  "posthog:replay": "inbox1.openPostHog",
+  "logrocket:session": "inbox1.openLogRocket",
+  "datadog:replay": "inbox1.openDatadog",
+} as const satisfies Partial<Record<`${ObservabilityLink["provider"]}:${ObservabilityLink["kind"]}`, string>>;
+
+/** "Open in Sentry / PostHog / …": the session and error ids the widget found on the page, as validated https links. */
+function ObservabilityChips({ metadata }: { metadata: unknown }) {
+  const t = useT();
+  const links = observabilityLinks(metadata);
+  if (!links.length) return null;
+  return (
+    <div className="mt-4 space-y-2" data-testid="observability-links">
+      <h4 className="text-xs font-medium text-muted-foreground">{t("inbox1.monitoring")}</h4>
+      <div className="flex flex-wrap gap-2">
+        {links.map((l) => {
+          const key = `${l.provider}:${l.kind}` as keyof typeof CHIP_LABEL;
+          return (
+            <Button
+              key={key}
+              variant="outline"
+              size="sm"
+              render={
+                // The URL was validated as https without credentials; the host is shown so a link to an
+                // unexpected domain is visible before it is clicked.
+                <a
+                  href={l.href}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                  title={new URL(l.href).host}
+                />
+              }
+            >
+              <ExternalLink /> {t(CHIP_LABEL[key])}
+            </Button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }

@@ -67,6 +67,7 @@ export type RoundUpdate = {
   name?: string | undefined;
   dueAt?: string | null | undefined;
   status?: "active" | "closed" | undefined;
+  requireSignoff?: boolean | undefined;
 };
 
 /** One row of a feedback list. */

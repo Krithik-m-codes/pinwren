@@ -199,6 +199,7 @@ export const emailTemplateForm = emailTemplateUpdate;
 export const roundForm = z.object({
   name: required("Name the round", reviewRoundCreate.shape.name),
   dueAt: z.date().nullable(),
+  requireSignoff: z.boolean(),
 });
 
 export const saveViewForm = z.object({
