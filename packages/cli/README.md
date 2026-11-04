@@ -44,6 +44,15 @@ Signed in as Ann (admin)
   Web app            3 open
 ```
 
+## `pinwren feedback` and `pinwren repro`
+
+```sh
+pinwren feedback list --status open --kind bug      # search (--project, --text, --limit, --json)
+pinwren feedback get <id>                           # one item
+pinwren feedback brief <id> | claude -p "Fix this"  # agent-ready brief (masked data; replay/screenshot linked)
+pinwren repro <id> --out tests/pinwren-142.spec.ts  # DRAFT Playwright test; caveats go to stderr
+```
+
 ## Environment
 
 `PINWREN_URL`, `PINWREN_KEY` and `PINWREN_TOKEN` fill `--url`, `--key` and `--token`.

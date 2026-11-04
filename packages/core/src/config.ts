@@ -66,8 +66,21 @@ export const panelAction = z
     url: actionUrl,
     icon: z.enum(PANEL_ACTION_ICONS).nullable().default(null),
     visibleTo: z.enum(PANEL_ACTION_VISIBILITY).default("everyone"),
+    /**
+     * Webhook actions only: marks the action as the project's "agent webhook". It is offered under
+     * "Fix with agent", and its `action.run` payload also carries the agent brief (masked data, no replay
+     * or screenshot).
+     */
+    agent: z.boolean().default(false),
   })
   .superRefine((a, ctx) => {
+    if (a.agent && a.kind !== "webhook") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["agent"],
+        message: "Only webhook actions can receive an agent brief",
+      });
+    }
     if (a.kind === "webhook" && /\{[A-Za-z]+\}/.test(a.url)) {
       ctx.addIssue({ code: "custom", path: ["url"], message: "Webhook URLs are fixed — no placeholders" });
     }

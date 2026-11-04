@@ -3,7 +3,7 @@ import { diagnostics, feedback, feedbackAsset, getDb, page, project } from "@pin
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { notFound } from "../errors";
 import { storage } from "../storage";
-import { readReplay, type ReplayStep, replaySteps } from "./replay";
+import { readReplay, type ReplayStep, replayTrace, type TraceStep } from "./replay";
 
 // `GET /api/v1/feedback/:id/reproduction` → what an AI agent (MCP `get_reproduction_context`) or a
 // developer needs to reproduce a report: page, environment, element, ordered steps from the replay
@@ -53,7 +53,34 @@ async function readAll(stream: ReadableStream, limit: number): Promise<Uint8Arra
   return new Uint8Array(Buffer.concat(chunks));
 }
 
-export async function reproductionContext(orgId: string, id: string) {
+export type ReproEnv = {
+  browser?: string;
+  os?: string;
+  userAgent?: string;
+  viewport?: { w?: number; h?: number };
+  dpr?: number;
+  locale?: string;
+  timezone?: string;
+};
+
+/** Everything stored about one report that reproduction output is built from (all of it masked at capture). */
+export type ReproInput = {
+  f: typeof feedback.$inferSelect;
+  projectName: string;
+  pageUrl: string | null;
+  env: ReproEnv;
+  anchor: Anchor | null;
+  trace: TraceStep[];
+  timeline: ReplayStep[];
+  failing: NetworkRow[];
+  errors: ConsoleRow[];
+  replay: { durationMs: number; events: number; summarized: boolean } | null;
+  screenshotAssetId: string | null;
+};
+
+export type { Anchor, ConsoleRow, NetworkRow };
+
+export async function loadReproInput(orgId: string, id: string): Promise<ReproInput> {
   const db = getDb();
   const [row] = await db
     .select({ f: feedback, projectName: project.name, pageUrl: page.url })
@@ -77,7 +104,7 @@ export async function reproductionContext(orgId: string, id: string) {
   const failing = networkRows.filter((n) => n.status === 0 || n.status >= 400).slice(-30);
 
   let replaySummary: { durationMs: number; events: number; summarized: boolean } | null = null;
-  let steps: ReplayStep[] = [];
+  let trace: TraceStep[] = [];
   if (replay) {
     const meta = (replay.meta ?? {}) as { durationMs?: unknown; events?: unknown };
     let events: unknown[] | null = null;
@@ -88,7 +115,7 @@ export async function reproductionContext(orgId: string, id: string) {
     } catch (err) {
       console.warn("[pinwren] could not read replay", err);
     }
-    if (events) steps = replaySteps(events);
+    if (events) trace = replayTrace(events);
     replaySummary = {
       durationMs: typeof meta.durationMs === "number" ? meta.durationMs : 0,
       events: typeof meta.events === "number" ? meta.events : (events?.length ?? 0),
@@ -96,9 +123,16 @@ export async function reproductionContext(orgId: string, id: string) {
     };
   }
 
+  const [shot] = await db
+    .select({ id: feedbackAsset.id })
+    .from(feedbackAsset)
+    .where(and(eq(feedbackAsset.feedbackId, id), eq(feedbackAsset.kind, "screenshot")))
+    .orderBy(desc(feedbackAsset.createdAt))
+    .limit(1);
+
   // One timeline: replay steps, failing requests and errors, in time order.
   const timeline: ReplayStep[] = [
-    ...steps,
+    ...trace.slice(-80).map(({ at, kind, text }) => ({ at, kind, text })),
     ...failing.map((n) => ({
       at: n.at,
       kind: "network",
@@ -106,18 +140,27 @@ export async function reproductionContext(orgId: string, id: string) {
     })),
     ...errors.map((e) => ({ at: e.at, kind: "error", text: `Console error: ${e.message.slice(0, 300)}` })),
   ].sort((a, b) => a.at - b.at);
-  const t0 = timeline[0]?.at ?? 0;
 
-  const env = (f.environment ?? {}) as {
-    browser?: string;
-    os?: string;
-    userAgent?: string;
-    viewport?: { w?: number; h?: number };
-    dpr?: number;
-    locale?: string;
-    timezone?: string;
+  return {
+    f,
+    projectName: row.projectName,
+    pageUrl: row.pageUrl,
+    env: f.environment ?? {},
+    anchor: anchorOf(f.anchor),
+    trace,
+    timeline,
+    failing,
+    errors,
+    replay: replaySummary,
+    screenshotAssetId: shot?.id ?? null,
   };
-  const anchor = anchorOf(f.anchor);
+}
+
+export async function reproductionContext(orgId: string, id: string) {
+  const input = await loadReproInput(orgId, id);
+  const { f, env, anchor, timeline, failing, errors, replay: replaySummary } = input;
+  const row = { projectName: input.projectName, pageUrl: input.pageUrl };
+  const t0 = timeline[0]?.at ?? 0;
   const title = f.title?.trim() || f.body.slice(0, 80);
   const lines: string[] = [
     `# Reproduce #${f.number}: ${mdText(title, 120)}`,

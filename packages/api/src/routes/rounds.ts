@@ -28,6 +28,17 @@ const viewOut = (v: ViewRow, me: string, ownerName: string | null) => ({
   updatedAt: v.updatedAt,
 });
 
+/** The views one member can use: every shared one plus their own (shared by the dashboard and `/api/v1`). */
+export async function listViews(orgId: string, userId: string) {
+  const rows = await getDb()
+    .select({ v: savedView, ownerName: user.name })
+    .from(savedView)
+    .leftJoin(user, eq(user.id, savedView.ownerId))
+    .where(and(eq(savedView.orgId, orgId), or(eq(savedView.shared, true), eq(savedView.ownerId, userId))))
+    .orderBy(asc(savedView.name));
+  return rows.map((r) => viewOut(r.v, userId, r.ownerName));
+}
+
 /** Review rounds (F-055) and saved views — wave-4 contract §2. */
 export const rounds = new Hono<{ Variables: SessionVars }>()
   .get("/projects/:id/rounds", async (c) =>
@@ -61,20 +72,7 @@ export const rounds = new Hono<{ Variables: SessionVars }>()
   })
 
   // --- Saved views ----------------------------------------------------------------------------------
-  .get("/views", async (c) => {
-    const rows = await getDb()
-      .select({ v: savedView, ownerName: user.name })
-      .from(savedView)
-      .leftJoin(user, eq(user.id, savedView.ownerId))
-      .where(
-        and(
-          eq(savedView.orgId, c.var.orgId),
-          or(eq(savedView.shared, true), eq(savedView.ownerId, c.var.userId)),
-        ),
-      )
-      .orderBy(asc(savedView.name));
-    return c.json({ views: rows.map((r) => viewOut(r.v, c.var.userId, r.ownerName)) });
-  })
+  .get("/views", async (c) => c.json({ views: await listViews(c.var.orgId, c.var.userId) }))
   .post("/views", zValidator("json", savedViewCreate), async (c) => {
     const body = c.req.valid("json");
     // Viewers keep personal views; sharing one would change what the whole team sees.

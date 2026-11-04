@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { doctor, status } from "./checks";
+import { briefFor, formatList, listFeedback, reproFor } from "./feedback";
 import {
   assertProjectKey,
   detectFramework,
@@ -125,5 +126,67 @@ describe("status", () => {
       }),
     );
     expect(s).toEqual({ user: "Ann", role: "member", projects: [{ id: "p", name: "Shop", openCount: 3 }] });
+  });
+});
+
+describe("feedback commands", () => {
+  const route =
+    (handler: (path: string) => unknown): typeof fetch =>
+    (input: string | URL | Request) => {
+      const u = new URL(input instanceof Request ? input.url : input.toString());
+      return Promise.resolve(
+        new Response(JSON.stringify(handler(u.pathname + u.search)), {
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    };
+
+  it("lists feedback as one safe line per item", async () => {
+    const seen: string[] = [];
+    const page = await listFeedback(
+      "https://fb.example.com",
+      "pwt_x",
+      { status: "open", kind: "bug", limit: 5 },
+      route((p) => {
+        seen.push(p);
+        return {
+          items: [
+            {
+              id: "0192f0c4-4f6e-7c1a-8d55-9a3e2b1c4d5e",
+              number: 12,
+              status: "open",
+              priority: "high",
+              kind: "bug",
+              title: "Pay\u001b[31m button\nbroken",
+              body: "x",
+            },
+          ],
+          nextCursor: null,
+        };
+      }),
+    );
+    expect(seen[0]).toBe("/api/v1/feedback?status=open&kind=bug&limit=5");
+    const out = formatList(page);
+    expect(out).toContain("#12");
+    expect(out).toContain("Pay [31m button broken");
+    expect(out).not.toContain("\u001b");
+    expect(formatList({ items: [], nextCursor: null })).toBe("No feedback matches.");
+  });
+
+  it("fetches the brief and the repro test from the API", async () => {
+    const paths: string[] = [];
+    const f = route((p) => {
+      paths.push(p);
+      return p.endsWith("/brief")
+        ? { markdown: "# Fix feedback #12\n" }
+        : { filename: "pinwren-12-x.spec.ts", code: "// DRAFT", caveats: ["draft"], stats: {} };
+    });
+    expect((await briefFor("https://fb.example.com", "pwt_x", "abc", f)).markdown).toBe(
+      "# Fix feedback #12\n",
+    );
+    expect((await reproFor("https://fb.example.com", "pwt_x", "abc", f)).filename).toBe(
+      "pinwren-12-x.spec.ts",
+    );
+    expect(paths).toEqual(["/api/v1/feedback/abc/brief", "/api/v1/feedback/abc/repro-test"]);
   });
 });

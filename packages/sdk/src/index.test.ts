@@ -95,6 +95,56 @@ describe("Pinwren client", () => {
   });
 });
 
+describe("agent hand-off, labels, views and stats", () => {
+  it("calls the new endpoints", async () => {
+    const { calls, fetchImpl } = fake([
+      json({ markdown: "# Fix" }),
+      json({ filename: "a.spec.ts", code: "x", caveats: [] }),
+      json({ labels: [{ id: "l", name: "n", color: "#fff", count: 1 }] }),
+      json({ views: [{ id: "v" }] }),
+      json({ days: 30 }),
+    ]);
+    const pw = new Pinwren({ url: "https://fb.example.com", token: "pwt_x", fetch: fetchImpl });
+    expect((await pw.feedback.brief("a b")).markdown).toBe("# Fix");
+    expect((await pw.feedback.reproTest("a")).filename).toBe("a.spec.ts");
+    expect((await pw.labels.list("p")).at(0)?.count).toBe(1);
+    expect(await pw.views.list()).toEqual([{ id: "v" }]);
+    expect((await pw.stats.get({ days: 30 })).days).toBe(30);
+    expect(calls.map((c) => c.url.replace("https://fb.example.com/api/v1", ""))).toEqual([
+      "/feedback/a%20b/brief",
+      "/feedback/a/repro-test",
+      "/projects/p/labels",
+      "/views",
+      "/stats?days=30",
+    ]);
+  });
+});
+
+describe("API parity", () => {
+  // The audit found the client missing /stats: every GET /api/v1 route must have an SDK method.
+  it("has a method for every /api/v1 route", () => {
+    const inventory = JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL("../../api/src/tenant-route-inventory.json", import.meta.url)),
+        "utf8",
+      ),
+    ) as Record<string, unknown>;
+    const source = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
+    const exempt = new Set(["GET /api/v1/token"]); // reached through `request()` by the CLI's `status`
+    const missing = Object.keys(inventory)
+      .filter((k) => k.includes(" /api/v1/") && !exempt.has(k))
+      .filter((k) => {
+        const path = k.split(" /api/v1")[1] ?? "";
+        const pattern = path
+          .split("/")
+          .map((seg) => (seg.startsWith(":") ? String.raw`\$\{enc\([^)]*\)\}` : seg))
+          .join("/");
+        return !new RegExp(`["\`]${pattern}["\`?]`).test(source);
+      });
+    expect(missing).toEqual([]);
+  });
+});
+
 describe("generated types", () => {
   it("are up to date with the Zod schemas (run `pnpm --filter @pinwren/sdk generate`)", async () => {
     const file = fileURLToPath(new URL("./types.generated.ts", import.meta.url));

@@ -3,3 +3,4 @@ export * from "./repro";
 export * from "./summary";
 export * from "./triage";
 export * from "./translate";
+export * from "./repro-test";
