@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  type AutomationCondition,
   type AutomationFacts,
   type AutomationTrigger,
   aiLabelBulkRequest,
@@ -112,7 +113,7 @@ describe("conditions", () => {
     expect(conditionPasses({ field: "browser", values: ["chrome"] }, facts())).toBe(true);
     expect(conditionPasses({ field: "browser", values: ["Safari"] }, facts())).toBe(false);
     expect(conditionPasses({ field: "browser", values: ["Chrome"] }, facts({ browser: null }))).toBe(false);
-    const domain = { field: "reporterEmailDomain", values: ["acme.com"] } as const;
+    const domain: AutomationCondition = { field: "reporterEmailDomain", values: ["acme.com"] };
     expect(conditionPasses(domain, facts())).toBe(true);
     expect(conditionPasses(domain, facts({ reporterEmail: null }))).toBe(false);
     expect(conditionPasses(domain, facts({ reporterEmail: "a@evil.acme.com.io" }))).toBe(false);
