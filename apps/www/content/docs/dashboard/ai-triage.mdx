@@ -27,13 +27,15 @@ machine, a self-hosted gateway), either set `AI_BASE_URL` in the environment (se
 
 **Project → AI triage**:
 
-| Switch                          | What it adds to each new report                                                               |
-| ------------------------------- | --------------------------------------------------------------------------------------------- |
-| **Enable AI triage**            | Runs the options below in the background after a report arrives                               |
-| **Executive summaries**         | A one-paragraph summary and a suggested title                                                 |
-| **Priority & kind suggestions** | A suggested priority (shown as a **Suggest:** chip next to the priority) and kind             |
-| **Duplicate detection**         | Compares the report with the 10 most recent items in the project and flags a likely duplicate |
-| **Reproduction steps**          | Numbered steps to reproduce, from the report and its console errors and failed requests       |
+| Switch                                    | What it adds to each new report                                                                                             |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Enable AI triage**                      | Runs the options below in the background after a report arrives                                                             |
+| **Executive summaries**                   | A one-paragraph summary and a suggested title                                                                               |
+| **Priority & kind suggestions**           | A suggested priority (shown as a **Suggest:** chip next to the priority) and kind                                           |
+| **Duplicate detection**                   | Compares the report with the 10 most recent items in the project and flags a likely duplicate                               |
+| **Reproduction steps**                    | Numbered steps to reproduce, from the report and its console errors and failed requests                                     |
+| **Label suggestions**                     | Ghost chips with labels from the project (or one new name): accept or dismiss, see [Automation](/docs/dashboard/automation) |
+| **Apply label suggestions automatically** | Off by default. Applies suggestions of labels that already exist without asking                                             |
 
 Nothing is applied on its own. On the item you see the summary, the suggested priority and a duplicate banner, and you
 choose: **Apply title**, click the **Suggest:** chip to set the priority, or **Link as duplicate**. Each is an
@@ -49,7 +51,8 @@ project AI triage off.
 ## What the provider receives
 
 The report's title and text, the page URL, the element it points at, error-level console entries, and failed requests
-(method, status and URL **without its query string**). **Never sent:** screenshots, session replays, request or
+(method, status and URL **without its query string**). The label request sends only the report text, the page URL and
+the project's label names. **Never sent:** screenshots, session replays, request or
 response bodies, the reporter's name and email.
 
 AI is skipped entirely for a project with **Privacy mode** on, and for the whole instance when

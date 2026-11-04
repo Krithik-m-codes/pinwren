@@ -36,7 +36,8 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
       feedbackId = id(),
       labelId = id(),
       endpointId = id(),
-      integrationId = id();
+      integrationId = id(),
+      ruleId = id();
     const userId = `user-${org}`;
     await admin`insert into organization (id, name, slug) values (${org}, ${org}, ${org})`;
     await admin`insert into "user" (id, name, email) values (${userId}, ${userId}, ${`${org}@test.invalid`})`;
@@ -123,6 +124,24 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
       email_suppression: { org_id: org, email: `${org}@test.invalid` },
       billing_subscription: { org_id: org, plan: "pro", status: "active", interval: "monthly" },
       billing_event: { org_id: org, webhook_id: id(), type: "subscription.active" },
+      automation_rule: {
+        id: ruleId,
+        org_id: org,
+        project_id: projectId,
+        name: org,
+        trigger: admin.json({ event: "feedback_created", toStatuses: [], labelId: null }),
+        actions: admin.json([{ type: "set_priority", priority: "high" }]),
+      },
+      automation_run: {
+        id: id(),
+        org_id: org,
+        rule_id: ruleId,
+        project_id: projectId,
+        feedback_id: feedbackId,
+        event: "feedback_created",
+        status: "success",
+      },
+      label_suggestion: { id: id(), org_id: org, feedback_id: feedbackId, label_id: labelId, name: org },
     };
     for (const [table, row] of Object.entries(rows)) await admin`insert into ${admin(table)} ${admin(row)}`;
     fixture[org] = rows;
@@ -182,7 +201,7 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
     const rows = await admin<
       { name: string; valid: boolean }[]
     >`select conname as name, convalidated as valid from pg_constraint where connamespace = 'public'::regnamespace and conname like '%_tenant_fk'`;
-    expect(rows).toHaveLength(21);
+    expect(rows).toHaveLength(27);
     expect(rows.every((row) => row.valid)).toBe(true);
   });
 

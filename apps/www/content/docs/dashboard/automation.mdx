@@ -1,0 +1,93 @@
+---
+title: Automation rules
+description: Per-project rules that assign, label, prioritise, notify and open tracker issues for you, plus AI label suggestions you accept in one click.
+---
+
+Automation rules do the routine triage. A rule reads **when [event] and [conditions] then [actions]**, belongs to one
+project, and runs in the background right after the report is saved, so it never slows down the widget.
+
+Rules live in **Project → Automation**. Workspace admins create, edit, test and delete them; everyone else can read them
+and the run log.
+
+## When
+
+| Event                    | Fires                                                                       |
+| ------------------------ | --------------------------------------------------------------------------- |
+| **A new report arrives** | Once per report, after it is saved                                          |
+| **The status changes**   | On every status change; optionally only when the new status is one you pick |
+| **A label is added**     | When a label is added to a report; optionally only for one label            |
+| **A comment is added**   | On every new comment (team replies and reporter replies)                    |
+
+## And (conditions)
+
+Every condition must hold. With none, the rule runs for every matching event.
+
+| Condition                 | Matches                                                                                                                |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Type**                  | The report type (Bug, Change, Question, Other), one or several                                                         |
+| **Priority**              | The current priority, one or several                                                                                   |
+| **Page URL pattern**      | The page path, written like a [page-scope pattern](/docs/dashboard/page-review): `/pricing`, `/product/:id`, `/docs/*` |
+| **Browser**               | Chrome, Safari, Firefox, Edge, Opera or Samsung Internet, from the captured environment                                |
+| **Reporter email domain** | The part after the `@` of the reporter's address, exact match (`acme.com` does not match `mail.acme.com`)              |
+| **Has label**             | At least one of the chosen labels is on the report                                                                     |
+| **Has an attachment**     | Yes or no                                                                                                              |
+| **Has a replay**          | Yes or no                                                                                                              |
+
+## Then (actions)
+
+Actions run in order. One failing action is recorded in the run log and does not stop the next one.
+
+| Action                      | What it does                                                                                                                                                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Assign to**               | _Assign all of them_ adds the chosen members. _Take turns (round robin)_ gives each new report to the next person in the list; a report that already has an assignee is left alone. Viewers are never picked. |
+| **Add label**               | Adds one of the project's labels                                                                                                                                                                              |
+| **Set priority / status**   | Changes the field                                                                                                                                                                                             |
+| **Add to round**            | Moves the report into an active review round of the project                                                                                                                                                   |
+| **Notify Slack or webhook** | Sends the event to one of your [webhook endpoints](/docs/integrations/webhooks) (Slack, Discord, Teams, generic, …). The payload gains a `rule` object with the rule's id and name                            |
+| **Send email**              | Emails chosen members and/or extra addresses a short summary with a link to the report                                                                                                                        |
+| **Create tracker issue**    | Queues an issue in one of the project's trackers (GitHub, GitLab, Linear, Jira), the same way "Send to…" does                                                                                                 |
+
+Changes a rule makes are real edits: they appear on the item's timeline as **Rule "name" assigned …**, fire webhooks,
+notify assignees and stream to open inboxes. Nothing is attributed to a person.
+
+## Loop protection
+
+A rule's own changes can wake other rules but never the same rule again:
+
+- Every event caused by a rule carries the chain of rules that led to it. A rule is skipped (and logged as **Skipped**)
+  when its own id is already in the chain.
+- Chains stop after **3** hops.
+- Each (rule, event) pair is claimed once, so a retried background job never applies an action twice.
+
+## Test a rule
+
+The flask button on a rule opens the tester: describe a sample report (type, priority, page, browser, reporter email,
+attachment, replay) and see which conditions hold and whether the rule would run. Nothing is changed, sent or logged.
+
+## Run log
+
+Below the rules, the **Run log** lists the latest runs of the project with the item, the result (_Done_, _Partly done_,
+_Failed_, _Skipped_) and what each action did. Entries are kept for 30 days.
+
+## AI label suggestions
+
+With [AI triage](/docs/dashboard/ai-triage) on for the project, **Project → AI triage → Label suggestions** suggests
+labels for each new report: from the project's existing labels, or one new name.
+
+- Suggestions appear on the item as dashed **ghost chips** with **Accept** (✓) and **Dismiss** (✕), and **Accept all**.
+  Accepting a new name creates the label. A dismissed suggestion is not proposed again for that item.
+- In the inbox, select items and press **Accept AI labels** to accept every pending suggestion on them.
+- Nothing is applied on its own. **Apply label suggestions automatically** is off by default; when you turn it on, only
+  labels that already exist are applied, and a new label is always left for you to accept.
+- Only the report text and the page URL are sent to the provider. Screenshots, replays and captured logs are never part
+  of the label request, and projects with Privacy mode skip AI entirely.
+
+## Limits
+
+Up to 50 rules per project, 10 conditions and 10 actions per rule.
+
+## API
+
+Rules, the run log, the dry run and the AI chips are on the dashboard API (session cookie, workspace admin for writes).
+See the [automation contract](https://github.com/Krithik-m-codes/pinwren/blob/main/docs/contracts/automation.md) for the
+endpoints and shapes.

@@ -47,6 +47,8 @@ export type WebhookPayload = {
     comment?: CommentPayload;
     changes?: Record<string, { from: unknown; to: unknown }>;
     actor?: { kind: string; id: string | null };
+    /** Set when an automation rule sent this message (`notify_webhook`). */
+    rule?: { id: string; name: string };
     /** Panel action runs (`action.run`, F-016). */
     action?: { id: string; label: string };
   };

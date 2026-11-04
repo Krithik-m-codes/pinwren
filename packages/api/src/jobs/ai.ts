@@ -1,8 +1,17 @@
-import { suggestSeverity, summarizeReport, synthesizeReproSteps, verifyDuplicate } from "@pinwren/ai";
-import { diagnostics, feedback, feedbackAi, page, project, withOrg } from "@pinwren/db";
+import {
+  resolveLabelSuggestions,
+  suggestLabels,
+  suggestSeverity,
+  summarizeReport,
+  synthesizeReproSteps,
+  verifyDuplicate,
+} from "@pinwren/ai";
+import { projectAiConfigSchema } from "@pinwren/core";
+import { diagnostics, feedback, feedbackAi, label, page, project, withOrg } from "@pinwren/db";
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import { publishDomainEvent } from "../realtime/publish";
 import { getAiClientForOrg } from "../services/ai";
+import { autoApplySuggestions, recordSuggestions } from "../services/label-suggestions";
 
 export type AiEnrichJob = {
   feedbackId: string;
@@ -50,6 +59,37 @@ export function failedRequests(
     if (out.length >= MAX_LOG_LINES) break;
   }
   return out;
+}
+
+type EnrichItem = { title: string | null; body: string; pageUrl: string | null };
+
+/** Ask the model for labels from the project's own set (or one new name) and store them as pending chips. */
+async function suggestLabelsFor(
+  provider: Parameters<typeof suggestLabels>[0],
+  job: AiEnrichJob,
+  item: EnrichItem,
+  autoApply: boolean,
+): Promise<void> {
+  const existing = await withOrg(job.orgId, (db) =>
+    db
+      .select({ id: label.id, name: label.name })
+      .from(label)
+      .where(and(eq(label.projectId, job.projectId), eq(label.orgId, job.orgId)))
+      .limit(100),
+  );
+  const output = await suggestLabels(provider, {
+    title: item.title,
+    body: item.body,
+    url: item.pageUrl,
+    existingLabels: existing.map((l) => l.name),
+    allowNew: true,
+  });
+  const suggestions = resolveLabelSuggestions(output, existing, { allowNew: true });
+  if (!suggestions.length) return;
+  await withOrg(job.orgId, async () => {
+    const stored = await recordSuggestions(job.orgId, job.feedbackId, suggestions);
+    if (autoApply) await autoApplySuggestions(job.orgId, job.feedbackId, stored);
+  });
 }
 
 export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
@@ -263,6 +303,18 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
           },
         }),
     );
+
+    // 6b. Label suggestions. Separate from the tasks above: only the text and page URL are sent (no
+    // screenshot, replay or captured logs), and a failure here never loses the enrichment just recorded.
+    // Projects saved before the label switches existed lack them: parse fills the defaults.
+    const labels = projectAiConfigSchema.parse(p.aiConfig);
+    if (labels.autoLabels) {
+      try {
+        await suggestLabelsFor(client.provider, job, item, labels.autoApplyLabels);
+      } catch (err) {
+        console.warn("[pinwren] AI label suggestions failed", err);
+      }
+    }
 
     // 7. Emit domain update via SSE
     publishDomainEvent({
