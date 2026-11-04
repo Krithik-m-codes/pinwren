@@ -71,11 +71,13 @@ export const automationAction = z.discriminatedUnion("type", [
   z.object({ type: z.literal("add_to_round"), roundId: z.uuid() }),
   /** Post the event to one of the organisation's webhook endpoints (Slack, Discord, Teams, generic, ...). */
   z.object({ type: z.literal("notify_webhook"), endpointId: z.uuid() }),
-  z.object({
-    type: z.literal("notify_email"),
-    userIds: z.array(z.string().min(1).max(100)).max(20).default([]),
-    emails: z.array(z.email().max(254)).max(10).default([]),
-  }),
+  z
+    .object({
+      type: z.literal("notify_email"),
+      userIds: z.array(z.string().min(1).max(100)).max(20).default([]),
+      emails: z.array(z.email().max(254)).max(10).default([]),
+    })
+    .refine((a) => a.userIds.length + a.emails.length > 0, { message: "Choose at least one recipient" }),
   z.object({ type: z.literal("create_issue"), integrationId: z.uuid() }),
 ]);
 export type AutomationAction = z.infer<typeof automationAction>;

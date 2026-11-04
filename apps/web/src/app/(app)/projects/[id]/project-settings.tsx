@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActionsTab } from "./actions-tab";
 import { AiTab } from "./ai-tab";
+import { AutomationTab } from "./automation-tab";
 import { CaptureTab } from "./capture-tab";
 import { DangerTab } from "./danger-tab";
 import { InstallTab } from "./install-tab";
@@ -33,6 +34,7 @@ const TABS = [
   { value: "actions", label: "projects2.tabActions" },
   { value: "trackers", label: "projects2.tabIssueTrackers" },
   { value: "labels", label: "projects2.labels" },
+  { value: "automation", label: "automation.tab" },
   { value: "ai", label: "projects2.tabAiTriage" },
   { value: "privacy", label: "projects2.tabPrivacyData" },
   { value: "danger", label: "projects2.dangerZone" },
@@ -135,6 +137,9 @@ export function ProjectSettings({ id }: { id: string }) {
             </TabsContent>
             <TabsContent value="trackers" className="pt-3">
               <TrackersTab project={p} />
+            </TabsContent>
+            <TabsContent value="automation" className="pt-3">
+              <AutomationTab project={p} />
             </TabsContent>
             <TabsContent value="ai" className="pt-3">
               <AiTab project={p} />

@@ -20,6 +20,7 @@ import {
   PencilLine,
   Trash2,
   UserRound,
+  Workflow,
   Zap,
 } from "lucide-react";
 import Link from "next/link";
@@ -50,6 +51,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
 import type { ActivityEvent, Comment, FeedbackDetail } from "@/lib/api";
+import type { Key } from "@/lib/i18n/en";
 import type { TFn } from "@/lib/i18n/english";
 import { useT } from "@/lib/i18n/provider";
 import {
@@ -103,6 +105,10 @@ const isPriority = (v: unknown): v is Priority => typeof v === "string" && v in 
 
 function actorOf(e: ActivityEvent, t: TFn): string {
   if (e.actorName) return e.actorName;
+  // Changes made by an automation rule or by the AI (label auto-apply) are attributed to it, never to a person.
+  if (e.actorKind === "rule")
+    return t("automation.ruleActor", { name: str(e.data.ruleName, t("automation.aRule")) });
+  if (e.actorKind === "ai") return t("automation.aiActor");
   if (e.actorKind === "guest")
     return e.data.via === "reporter" ? t("inbox2.theReporter") : t("inbox2.visitor");
   if (e.actorKind === "integration") return trackerName(e.data.via) ?? t("inbox2.anIntegration");
@@ -129,6 +135,14 @@ function rich(text: string, parts: Record<string, React.ReactNode>): React.React
     .split(/\{(\w+)\}/)
     .map((piece, i) => (i % 2 === 0 ? piece : <Fragment key={i}>{parts[piece]}</Fragment>));
 }
+
+/** Timeline sentences for what a rule did besides changing a field. */
+const RULE_ACTION_KEY: Record<string, Key> = {
+  notify_webhook: "automation.evNotifyWebhook",
+  notify_email: "automation.evNotifyEmail",
+  create_issue: "automation.evCreateIssue",
+  add_to_round: "automation.evAddToRound",
+};
 
 /** One line per activity row: who did what, with the before → after values. */
 function EventLine({ event: e }: { event: ActivityEvent }) {
@@ -297,6 +311,12 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
             ),
           })
         : rich(t("inbox2.evNotDuplicate"), { who });
+  } else if (e.type === "rule_action") {
+    icon = <Workflow className="size-3.5" />;
+    body = rich(t(RULE_ACTION_KEY[str(e.data.action)] ?? "automation.evRuleGeneric"), {
+      who,
+      target: <span className="text-foreground">{str(e.data.target)}</span>,
+    });
   } else if (e.type === "deleted") {
     icon = <Trash2 className="size-3.5" />;
     body = rich(t("inbox2.evMovedToTrash"), { who });
