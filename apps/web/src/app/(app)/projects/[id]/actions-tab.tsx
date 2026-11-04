@@ -31,6 +31,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { SettingRow } from "@/components/setting-row";
 import type { ProjectDetail } from "@/lib/api";
 import { useI18n, useT } from "@/lib/i18n/provider";
 import { SecretCard } from "@/components/secret-card";
@@ -45,6 +47,7 @@ type Draft = {
   url: string;
   icon: PanelAction["icon"];
   visibleTo: PanelAction["visibleTo"];
+  agent: boolean;
 };
 
 const slug = (s: string) =>
@@ -99,7 +102,15 @@ export function ActionsTab({ project }: { project: ProjectDetail }) {
               onClick={() =>
                 setEditing({
                   index: null,
-                  draft: { id: "", label: "", kind: "link", url: "", icon: null, visibleTo: "everyone" },
+                  draft: {
+                    id: "",
+                    label: "",
+                    kind: "link",
+                    url: "",
+                    icon: null,
+                    visibleTo: "everyone",
+                    agent: false,
+                  },
                 })
               }
             >
@@ -129,6 +140,11 @@ export function ActionsTab({ project }: { project: ProjectDetail }) {
                       <Badge variant="outline" className="font-normal">
                         {a.kind === "link" ? t("projects1.kindLink") : t("projects1.kindWebhook")}
                       </Badge>
+                      {a.agent && (
+                        <Badge variant="secondary" className="font-normal">
+                          {t("handoff.agentBadge")}
+                        </Badge>
+                      )}
                       <Badge variant="secondary" className="font-normal">
                         {a.visibleTo === "team" ? t("projects1.teamOnly") : t("projects1.teamPlusWidget")}
                       </Badge>
@@ -250,6 +266,7 @@ const actionForm = z
     url: z.string(),
     icon: z.enum(PANEL_ACTION_ICONS).nullable(),
     visibleTo: z.enum(PANEL_ACTION_VISIBILITY),
+    agent: z.boolean(),
   })
   .superRefine((v, ctx) => {
     const r = panelAction.safeParse({ ...v, id: "draft" });
@@ -280,6 +297,7 @@ function ActionDialog({
       url: initial.url,
       icon: initial.icon,
       visibleTo: initial.visibleTo,
+      agent: initial.agent,
     },
   });
   const { errors } = form.formState;
@@ -318,6 +336,7 @@ function ActionDialog({
                   onChange={(k) => {
                     field.onChange(k);
                     if (k === "webhook") form.setValue("visibleTo", "team");
+                    else form.setValue("agent", false);
                   }}
                   options={[
                     { value: "link", label: t("projects1.openALink") },
@@ -387,6 +406,22 @@ function ActionDialog({
               <p className="text-xs text-muted-foreground">{t("projects1.webhookDashboardOnly")}</p>
             )}
           </div>
+          {kind === "webhook" && (
+            <Controller
+              control={form.control}
+              name="agent"
+              render={({ field }) => (
+                <SettingRow
+                  label={t("handoff.agentWebhook")}
+                  htmlFor="action-agent"
+                  description={t("handoff.agentWebhookDescription")}
+                  className="py-0"
+                >
+                  <Switch id="action-agent" checked={field.value} onCheckedChange={field.onChange} />
+                </SettingRow>
+              )}
+            />
+          )}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
               {t("projects1.cancel")}

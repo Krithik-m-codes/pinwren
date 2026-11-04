@@ -47,8 +47,10 @@ export function ItemActions({ data }: { data: FeedbackDetail }) {
       .catch((e: unknown) => toast.error(t("inbox2.issueCreateFailed"), { description: errorMessage(e) }));
   };
 
+  // Agent webhooks live under "Fix with agent".
+  const actions = data.panelActions.filter((a) => !a.agent);
   const unsent = data.integrations.filter((i) => !data.issues.some((l) => l.integrationId === i.id));
-  if (!data.panelActions.length && !data.integrations.length && !data.issues.length) return null;
+  if (!actions.length && !data.integrations.length && !data.issues.length) return null;
 
   return (
     <section
@@ -86,7 +88,7 @@ export function ItemActions({ data }: { data: FeedbackDetail }) {
           {t("inbox2.sendTo", { tracker: TRACKER_NAMES[i.provider] })}
         </Button>
       ))}
-      {data.panelActions.map((a) =>
+      {actions.map((a) =>
         a.kind === "link" ? (
           <a
             key={a.id}

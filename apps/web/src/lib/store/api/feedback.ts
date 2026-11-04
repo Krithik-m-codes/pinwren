@@ -1,4 +1,4 @@
-import type { FeedbackKind, FeedbackStatus, Priority } from "@pinwren/core";
+import type { ApiAgentBrief, ApiReproTest, FeedbackKind, FeedbackStatus, Priority } from "@pinwren/core";
 import type { InfiniteData } from "@reduxjs/toolkit/query";
 import type { ThunkDispatch, UnknownAction } from "@reduxjs/toolkit";
 import type { ActionResult, FeedbackDetail, FeedbackList, FeedbackRow, IssueLink, Label } from "@/lib/api";
@@ -320,6 +320,16 @@ export const feedbackApi = projectsApi.injectEndpoints({
     /** "Copy as Markdown": the reproduction context (page, environment, steps, failing requests). */
     reproduction: build.query<Reproduction, string>({
       query: (id) => `/feedback/${id}/reproduction`,
+      keepUnusedDataFor: 30,
+    }),
+    /** "Fix with agent": the brief, its commands and links (masked data only). */
+    agentBrief: build.query<ApiAgentBrief, string>({
+      query: (id) => `/feedback/${id}/brief`,
+      keepUnusedDataFor: 30,
+    }),
+    /** The draft Playwright test; `polish` lets the org's AI provider tidy it (opt-in). */
+    reproTest: build.query<ApiReproTest, { id: string; polish?: boolean }>({
+      query: ({ id, polish }) => `/feedback/${id}/repro-test${polish ? "?polish=1" : ""}`,
       keepUnusedDataFor: 30,
     }),
     /** Follow / unfollow (wave-5 contract §3.2), optimistic on the open detail. */
