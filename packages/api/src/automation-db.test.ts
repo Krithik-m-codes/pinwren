@@ -174,7 +174,11 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Automation rules", ()
     expect(list.rules.map((r: Json) => r.id)).toContain(id);
     const patched = await request(`/api/automations/${id}`, { method: "PATCH", body: { enabled: false } });
     expect(patched.status).toBe(200);
-    expect((await json(patched)).rule.enabled).toBe(false);
+    const after = (await json(patched)).rule;
+    expect(after.enabled).toBe(false);
+    // A patch changes only what it names: switching a rule off keeps its conditions and actions.
+    expect(after.conditions).toHaveLength(2);
+    expect(after.actions).toEqual([{ type: "set_priority", priority: "high" }]);
     expect((await request(`/api/automations/${id}`, { method: "DELETE" })).status).toBe(204);
     expect((await request(`/api/automations/${id}`)).status).toBe(404);
   });

@@ -4,6 +4,7 @@ import {
   type AutomationTrigger,
   aiLabelBulkRequest,
   automationRuleCreate,
+  automationRuleUpdate,
   automationTestRequest,
   browserFamily,
   conditionPasses,
@@ -61,6 +62,12 @@ describe("automation rule schema", () => {
     expect(action({ type: "notify_email", emails: ["a@b.co"] })).toBe(true);
     expect(action({ type: "notify_email", emails: ["nope"] })).toBe(false);
     expect(action({ type: "assign", userIds: [] })).toBe(false);
+  });
+
+  it("keeps an update to exactly the fields it names (no defaults filled in)", () => {
+    expect(automationRuleUpdate.parse({ enabled: false })).toEqual({ enabled: false });
+    expect(automationRuleUpdate.parse({})).toEqual({});
+    expect(automationRuleUpdate.safeParse({ actions: [] }).success).toBe(false);
   });
 
   it("caps the number of conditions", () => {

@@ -83,16 +83,20 @@ export const automationAction = z.discriminatedUnion("type", [
 export type AutomationAction = z.infer<typeof automationAction>;
 export type AutomationActionType = AutomationAction["type"];
 
-const ruleBody = z.object({
+const ruleShape = {
   name: z.string().trim().min(1, "Name the rule").max(100),
-  enabled: z.boolean().default(true),
   trigger: automationTrigger,
-  conditions: z.array(automationCondition).max(MAX_RULE_CONDITIONS).default([]),
+  conditions: z.array(automationCondition).max(MAX_RULE_CONDITIONS),
   actions: z.array(automationAction).min(1, "Add at least one action").max(MAX_RULE_ACTIONS),
+};
+export const automationRuleCreate = z.object({
+  ...ruleShape,
+  enabled: z.boolean().default(true),
+  conditions: ruleShape.conditions.default([]),
 });
-export const automationRuleCreate = ruleBody;
 export type AutomationRuleCreate = z.infer<typeof automationRuleCreate>;
-export const automationRuleUpdate = ruleBody.partial();
+/** A patch names only what changes: no defaults here, or an `enabled`-only patch would clear the conditions. */
+export const automationRuleUpdate = z.object({ ...ruleShape, enabled: z.boolean() }).partial();
 export type AutomationRuleUpdate = z.infer<typeof automationRuleUpdate>;
 
 /** A dry-run request: an existing item of the project, or hand-written sample facts. */
