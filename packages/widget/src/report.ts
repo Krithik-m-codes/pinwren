@@ -22,6 +22,7 @@ import { adoptStyle, h, ICONS, icon, trapFocus } from "./dom";
 import type { Editor, EditorModule } from "./editor";
 import { environment, errText, uuid } from "./env";
 import { cleanPageUrl } from "./export";
+import { withObservability } from "./observability";
 import { consentBlock, identityFields } from "./form";
 import { addEnglish, t, tn } from "./i18n";
 import * as I from "./icons";
@@ -64,6 +65,8 @@ export type ReportCtx = {
   urlPattern: string | undefined;
   /** Host context from `Pinwren.setMetadata` (wave-5 §3.3), read when the report is sent. */
   metadata: () => Record<string, unknown> | null;
+  /** Set when the error prompt opened this report: pre-fills the title and rides along as `metadata.error`. */
+  fromError?: { message: string; stack?: string | undefined; source?: string | undefined } | undefined;
   replay: ReplayOffer | null;
   submit: (p: FeedbackPayload) => Promise<Created>;
   queue: (clientId: string, p: FeedbackPayload) => Promise<void>;
@@ -228,6 +231,7 @@ export class BugReport {
       if (answer === "resume") return this.restore(draft);
       await drafts.del(this.ctx.project).catch(ignoreDraftError);
     }
+    if (this.ctx.fromError) this.title.value = this.ctx.fromError.message.slice(0, 200);
     this.ctx.root.style.visibility = "hidden"; // the launcher must not flash into the first frame
     // The editor isn't needed until the screenshot is there: it downloads while SnapDOM works.
     const editor = this.loadEd();
@@ -249,6 +253,18 @@ export class BugReport {
       this.ctx.root.style.visibility = "";
     }
     if (!this.closed) this.build();
+  }
+
+  /** The console/network buffers, plus the error the visitor chose to report (even if console capture is off). */
+  private diagnostics() {
+    const d = snapshotDiagnostics();
+    const e = this.ctx.fromError;
+    if (
+      e &&
+      !d.console.slice(-5).some((c) => c.level === "error" && c.message.includes(e.message.slice(0, 80)))
+    )
+      d.console.push({ level: "error", message: (e.stack ?? e.message).slice(0, 2000), at: Date.now() });
+    return d;
   }
 
   /** Load the editor chunk; a failure leaves `Ed` null and the screenshot area offers the fallbacks. */
@@ -1157,12 +1173,12 @@ export class BugReport {
       reporter,
       consent,
       replay: replay ?? undefined,
-      diagnostics: snapshotDiagnostics(),
+      diagnostics: this.diagnostics(),
       // Privacy mode (wave-3 §3) sends no page-timing metadata.
-      metadata: mergeMetadata(
-        this.ctx.metadata(),
-        this.ctx.cfg.privacyMode ? undefined : { performance: performanceTiming() },
-      ),
+      metadata: mergeMetadata(withObservability(this.ctx.metadata(), this.ctx.cfg.privacyMode), {
+        ...(this.ctx.cfg.privacyMode ? {} : { performance: performanceTiming() }),
+        ...(this.ctx.fromError ? { error: this.ctx.fromError } : {}),
+      }),
       // Annotations travel as vectors over the (redacted, cropped) capture; the dashboard can hide them.
       screenshot: shot?.screenshot,
       annotations: shot?.annotations ?? undefined,

@@ -342,6 +342,17 @@ export function WidgetTab({ project }: { project: ProjectDetail }) {
                 />
               </SettingRow>
               <SettingRow
+                label={t("projects2.errorPrompt")}
+                htmlFor="error-prompt"
+                description={t("projects2.errorPromptDescription")}
+              >
+                <Switch
+                  id="error-prompt"
+                  checked={draft.errorPrompt}
+                  onCheckedChange={(errorPrompt) => commit({ errorPrompt })}
+                />
+              </SettingRow>
+              <SettingRow
                 label={t("projects2.readOnly")}
                 htmlFor="read-only"
                 description={t("projects2.readOnlyDescription")}

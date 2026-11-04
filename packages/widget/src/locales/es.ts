@@ -265,4 +265,7 @@ export default {
   imgNext: "Imagen siguiente",
   imgPos: "{i} de {n}",
   imgFailed: "No se pudo mostrar esta imagen",
+  errPromptText: "Algo salió mal. ¿Enviar un informe?",
+  errPromptSend: "Enviar informe",
+  errPromptDismiss: "Descartar",
 } satisfies Catalog;

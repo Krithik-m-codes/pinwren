@@ -265,4 +265,7 @@ export default {
   imgNext: "Volgende afbeelding",
   imgPos: "{i} van {n}",
   imgFailed: "Deze afbeelding kan niet worden getoond",
+  errPromptText: "Er ging iets mis. Een melding versturen?",
+  errPromptSend: "Melding versturen",
+  errPromptDismiss: "Sluiten",
 } satisfies Catalog;
