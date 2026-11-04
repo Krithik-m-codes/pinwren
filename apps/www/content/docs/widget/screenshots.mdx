@@ -1,0 +1,43 @@
+---
+title: Add screenshot
+description: Let reporters attach a screenshot of the visible area, the full page, a dragged area, one element or their browser tab, then annotate it.
+---
+
+The attachment area of a [bug report](/docs/widget/bug-reports) has an **Add screenshot** menu, so a reporter does not
+have to take a screenshot elsewhere and upload it. Screenshots count towards the report's attachment limits (3 files, 5 MB each).
+
+## The options
+
+| Option                     | What it captures                                                                                                                | How                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Visible area               | What is in the window now                                                                                                       | Page capture, no browser prompt                                   |
+| Full page                  | The whole scrolling page                                                                                                        | Page capture, no browser prompt                                   |
+| Selected area              | A rectangle the reporter drags (<kbd>Esc</kbd> cancels); the hint reads "Drag to select an area"                                | Cropped from a capture of the window, so it uses the page capture |
+| An element                 | One element picked on the page                                                                                                  | Page capture                                                      |
+| This tab (browser capture) | Exactly what the browser shows, including content a page capture cannot reproduce (some video, canvas and cross-origin content) | The browser's own screen capture, which **asks permission**       |
+
+The page captures run inside the page and never leave the browser. Elements marked as
+[masked](/docs/widget/privacy) are hidden in them, like in every Pinwren capture.
+
+### The permission prompt
+
+Only **This tab** uses the browser's screen-capture API. The browser shows its own prompt ("share this tab"), the
+reporter confirms, and the widget takes one frame and stops sharing straight away. A tab capture shows the
+viewport only; for a full page or an element Pinwren uses the page capture. If the reporter cancels the prompt or
+the browser blocks it, the widget says the capture was cancelled or blocked and offers the other options; nothing
+is attached. Browsers that do not offer tab capture (most phones) simply fail that option the same way.
+
+## After the capture
+
+The shot opens in the [annotation editor](/docs/widget/bug-reports#annotation-editor); **Attach** adds it to the
+report. In the attachment list each screenshot has a thumbnail with **Annotate**, **Retake** and **Remove**, and a
+click opens a preview that zooms and pans (fit to window, actual size, previous and next image when there are
+several). Screenshots are sent as attachments, quality follows the project's **screenshot quality** setting and the
+reporter's "Reduce capture quality" switch (see [bug reports](/docs/widget/bug-reports#capture-modes)), and the
+team sees them in the item's detail like any attachment.
+
+## Size
+
+The screenshot code is its own lazy file, `widget-shots.<hash>.js` (about 10 KB gzipped, budget 12 KB), downloaded
+together with the report form and never on a normal page view, so the widget's startup size is unchanged. If it
+cannot load, the report form falls back to a plain file list.

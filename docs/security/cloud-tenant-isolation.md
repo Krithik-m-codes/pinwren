@@ -1,10 +1,14 @@
 # Cloud tenant isolation
 
-Status: implementation in progress. Cloud signup is implemented but closed by default and not certified for customers. The transaction context,
-policy definitions, relationship constraints, Cloud provisioning and startup validation are implemented.
-Authenticated request integration includes identity repositories, finite tenant scopes, streams and mixed-I/O
-handlers. Public capability integration includes key/Origin, guest/review, signed asset/unsubscribe and inbound
-signature boundaries. Worker query integration remains unfinished. The approved design and implementation plan are in
+Status: request-path isolation implemented and tested; **not certified for customers**. Cloud sign-up is implemented
+but closed by default. The transaction context, policy definitions, relationship constraints, Cloud provisioning and
+startup validation are implemented. Authenticated request integration includes identity repositories, finite tenant
+scopes, streams and mixed-I/O handlers. Public capability integration includes key/Origin, guest/review, signed
+asset/unsubscribe and inbound signature boundaries. Route-wide acceptance evidence covers all 173 inventoried routes
+(see "Route-wide acceptance evidence"). Background jobs: the AI, digest, dispatch, maintenance and webhook-delivery
+paths were split into org-scoped units, but some still call `getDb()` (for example parts of `jobs/dispatch.ts`,
+`jobs/maintenance.ts`, `jobs/notify.ts`) and no negative test under the restricted role proves every one of them;
+that is listed under "Remaining WP-21 work". The approved design and implementation plan are in
 `docs/superpowers/specs/2026-10-29-cloud-tenant-isolation-design.md` and
 `docs/superpowers/plans/2026-10-29-cloud-tenant-isolation.md`.
 
@@ -267,7 +271,7 @@ and `cloud-signup.test.ts` (rules and counters).
 ## Remaining WP-21 work (explicitly incomplete)
 
 - Cloud sign-up is **built but ships closed** (`PINWREN_CLOUD_SIGNUPS` defaults to `closed`; see "Cloud
-  sign-up" below). Do not set it to `open` in production until the items below are done;
+  sign-up" above). Do not set it to `open` in production until the items below are done;
   `PINWREN_DISABLE_SIGNUP` semantics and first-account promotion remain closed in Cloud mode.
 - Branch review: one independent whole-branch review against the spec has not yet been obtained.
 - Required protected-branch CI (PostgreSQL 16 and 17 matrix, existing builds and browser journeys) has not been
