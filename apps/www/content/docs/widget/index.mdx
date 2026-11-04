@@ -113,6 +113,22 @@ The hook returns `{ ready, open, close, identify, setPageScope, on }`.
 </Tab>
 </Tabs>
 
+## Check the installation
+
+On the project's **Install** tab, **Check installation** fetches each of your **Allowed sites** from the server and
+looks for the widget's script tag. For every site it says one of:
+
+- **Widget found**: the tag is on the page with this project's key.
+- **Script tag not found**: paste the snippet into the page's `<head>` or your tag manager, publish and check again.
+  Pages rendered only in the browser cannot be read this way; open the site and look for the launcher.
+- **Another project's key is on the site**: the page uses a different `data-project` than this project's.
+- **Couldn't reach the site**, with the reason: timeout, host name does not resolve, invalid TLS certificate, page
+  too large, an error status, or a private or reserved address (the server will not contact those; use the terminal
+  check on the tab).
+
+Below the result the tab also shows whether the widget has ever loaded from any site, when it last did, and
+whether an origin was refused because it is not under Allowed sites.
+
 ## Script attributes
 
 | Attribute                           | Required | What it does                                                                                                                                              |
