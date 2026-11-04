@@ -5,18 +5,20 @@ import {
   CircleCheck,
   Download,
   FileText,
+  History,
   Inbox,
   MoreHorizontal,
   Pencil,
   Plus,
   RotateCcw,
   Settings,
+  Share2,
   Target,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { Controller } from "react-hook-form";
+import { Controller, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { ButtonLink } from "@/components/button-link";
 import { LocalDate } from "@/components/feedback-meta";
@@ -24,6 +26,8 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DatePicker } from "@/components/date-picker";
 import { controlProps, Field, FormError, useZodForm } from "@/components/form";
 import { PageHeader } from "@/components/page-header";
+import { SignoffBadge, SignoffsDialog } from "@/components/round-signoffs";
+import { ShareDialog } from "@/components/share-dialog";
 import { EmptyState, ErrorState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -44,6 +48,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ReviewRound } from "@/lib/api";
 import { roundForm } from "@/lib/form-schemas";
@@ -187,6 +192,8 @@ function RoundCard({
 }) {
   const t = useT();
   const [updateRound, update] = useUpdateRoundMutation();
+  const [sharing, setSharing] = useState(false);
+  const [signoffs, setSignoffs] = useState(false);
   const { total, open, closed } = r.counts;
   const pct = total ? Math.round((closed / total) * 100) : 0;
   const overdue = r.status === "active" && !!r.dueAt && new Date(r.dueAt) < new Date();
@@ -219,6 +226,7 @@ function RoundCard({
                 {t("projects1.closed")}
               </Badge>
             )}
+            <SignoffBadge state={r.signoff} required={r.requireSignoff} />
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -242,6 +250,9 @@ function RoundCard({
                   render={<a href={exportUrl("pdf")} download aria-label={t("projects1.exportPdf")} />}
                 >
                   <FileText /> {t("projects1.exportPdf")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSignoffs(true)}>
+                  <History /> {t("share.signoffsMenu")}
                 </DropdownMenuItem>
                 {canWrite && (
                   <>
@@ -315,6 +326,9 @@ function RoundCard({
             >
               <Inbox /> {t("projects1.viewItems")}
             </Link>
+            <Button size="sm" variant="outline" onClick={() => setSharing(true)} data-testid="share-round">
+              <Share2 /> {t("share.button")}
+            </Button>
             {canWrite && r.status === "active" && (
               <Button
                 size="sm"
@@ -328,6 +342,13 @@ function RoundCard({
           </div>
         </CardContent>
       </Card>
+      <ShareDialog
+        target={{ kind: "round", id: r.id }}
+        title={r.name}
+        open={sharing}
+        onOpenChange={setSharing}
+      />
+      <SignoffsDialog roundId={r.id} roundName={r.name} open={signoffs} onOpenChange={setSignoffs} />
     </li>
   );
 }
@@ -365,14 +386,20 @@ function RoundForm({
   const [create] = useCreateRoundMutation();
   const [update] = useUpdateRoundMutation();
   const form = useZodForm(roundForm, {
-    defaultValues: { name: round?.name ?? "", dueAt: round?.dueAt ? new Date(round.dueAt) : null },
+    defaultValues: {
+      name: round?.name ?? "",
+      dueAt: round?.dueAt ? new Date(round.dueAt) : null,
+      requireSignoff: round?.requireSignoff ?? false,
+    },
   });
+  const requireSignoff = useWatch({ control: form.control, name: "requireSignoff" });
   const { errors, isSubmitting } = form.formState;
-  const submit = form.handleSubmit(async ({ name, dueAt }) => {
+  const submit = form.handleSubmit(async ({ name, dueAt, requireSignoff }) => {
     const due = dueAt ? endOfDay(dueAt) : null;
     try {
-      if (round) await update({ id: round.id, projectId, patch: { name, dueAt: due } }).unwrap();
-      else await create({ projectId, body: { name, dueAt: due } }).unwrap();
+      if (round)
+        await update({ id: round.id, projectId, patch: { name, dueAt: due, requireSignoff } }).unwrap();
+      else await create({ projectId, body: { name, dueAt: due, requireSignoff } }).unwrap();
       toast.success(round ? t("projects1.roundSaved", { name }) : t("projects1.roundStarted", { name }));
       onDone();
     } catch (e) {
@@ -411,6 +438,19 @@ function RoundForm({
           )}
         />
       </Field>
+      <div className="flex items-start justify-between gap-3 rounded-lg border p-3">
+        <div className="grid gap-0.5">
+          <span id="round-signoff-label" className="text-sm font-medium">
+            {t("share.requireSignoff")}
+          </span>
+          <span className="text-xs text-muted-foreground">{t("share.requireSignoffHelp")}</span>
+        </div>
+        <Switch
+          aria-labelledby="round-signoff-label"
+          checked={requireSignoff}
+          onCheckedChange={(v) => form.setValue("requireSignoff", v)}
+        />
+      </div>
       <FormError message={errors.root?.message} />
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onDone}>

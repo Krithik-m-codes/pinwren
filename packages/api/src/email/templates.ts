@@ -352,6 +352,23 @@ export const TEMPLATES: Record<EmailTemplateKey, TemplateDefinition> = {
     body: "# Webhook disabled\n\nDeliveries to **{{webhookName}}** failed for 3 days ({{lastError}}), so {{productName}} stopped sending them. Fix the receiver, then turn the webhook back on.",
     cta: { label: "Review the webhook", urlVariable: "settingsUrl" },
   },
+  round_signoff: {
+    key: "round_signoff",
+    name: "Round sign-off",
+    description: "To the project's team when a client approves a review round or asks for changes.",
+    variables: [
+      v("projectName", "Project name", "Marketing site"),
+      v("roundName", "The review round", "Homepage redesign, round 2"),
+      v("decision", "Approved or Changes requested", "Approved"),
+      v("reviewerName", "Who answered", "Dana Reviewer"),
+      v("reviewerEmail", "Their email address", "dana@example.com"),
+      v("note", "Their note (may be empty)", "Looks good, ship it."),
+      v("link", "Link to the round in the dashboard", "https://feedback.example.com/projects/p1/rounds"),
+    ],
+    subject: "[{{projectName}}] {{reviewerName}}: {{decision}} on {{roundName}}",
+    body: "# {{decision}}\n\n{{reviewerName}} ({{reviewerEmail}}) answered on the review round **{{roundName}}** in {{projectName}}.\n\n> {{note}}",
+    cta: { label: "Open the round", urlVariable: "link" },
+  },
 };
 
 /** Templates a workspace may customise: every one except the account emails. */

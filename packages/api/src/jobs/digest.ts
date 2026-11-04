@@ -49,12 +49,15 @@ export function digestLine(n: Row): string {
         return `${who ?? "a visitor"} replied`;
       case "comment.mentioned":
         return `${who ?? "someone"} mentioned you`;
+      case "round.signoff":
+        return `${str(d.reviewerName) ?? "a client"} ${d.decision === "approved" ? "approved" : "requested changes on"} the round`;
       case "webhook.disabled":
         return `webhook “${str(d.name) ?? "unnamed"}” was disabled`;
       default:
         return "update";
     }
   })();
+  if (n.type === "round.signoff") return `Round ${str(d.roundName) ?? ""}: ${what}`;
   if (n.type === "webhook.disabled") return `Integrations: ${what}`;
   const num = typeof d.number === "number" ? `#${d.number} ` : "";
   const title = str(d.title) ?? "Untitled feedback";

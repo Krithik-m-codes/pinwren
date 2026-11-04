@@ -17,6 +17,11 @@ export async function assetResponse(orgId: string, id: string): Promise<Response
       .where(and(eq(feedbackAsset.id, id), eq(feedbackAsset.orgId, orgId))),
   );
   if (!a) throw notFound("Asset");
+  return respondWithAsset(a);
+}
+
+/** Stream a looked-up asset row with the sandboxing headers; the caller has already authorised it. */
+export async function respondWithAsset(a: typeof feedbackAsset.$inferSelect): Promise<Response> {
   const file = await storage().get(a.storageKey);
   if (!file) throw notFound("Asset file");
   const headers: Record<string, string> = {

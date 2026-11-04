@@ -25,6 +25,8 @@ import { v1 } from "./routes/v1";
 import { aiRoutes } from "./routes/ai";
 import { widget } from "./routes/widget";
 import { guestPortal } from "./routes/guest";
+import { share } from "./routes/share";
+import { shareLinks } from "./routes/share-links";
 import { workspace } from "./routes/workspace";
 
 export { getAuth } from "./auth";
@@ -135,6 +137,8 @@ export const app = new Hono()
   .route("/api", unsubscribe)
   .route("/api", teamUnsubscribe)
   .route("/api", guestPortal)
+  // Share links (report / round view, password unlock, comments, client sign-off): capability = the link token.
+  .route("/api", share)
   .route("/api", dashboard)
   // Users and workspace settings (wave-5 §3.1); after `dashboard`, whose session and viewer guards
   // (`use` on /api/*) run for them too.
@@ -150,6 +154,7 @@ export const app = new Hono()
   // After the dashboard: its session and viewer guards (`use` on /api/*) run for these routes too.
   .route("/api", projectData)
   .route("/api", reviewLinks)
+  .route("/api", shareLinks)
   .route("/w", widget)
   // After the widget router: its key/Origin check sets `project` and adds the CORS headers.
   .route("/w", reviewLinkWidget)

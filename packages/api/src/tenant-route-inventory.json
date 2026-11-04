@@ -69,6 +69,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: DELETE /api/rounds/:id"
   },
+  "DELETE /api/share-links/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/share-links/:id"
+  },
   "DELETE /api/tokens/:id": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -183,6 +188,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/feedback/:id/reproduction"
+  },
+  "GET /api/feedback/:id/share-links": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/feedback/:id/share-links"
   },
   "GET /api/feedback/export": {
     "boundary": "tenant",
@@ -324,6 +334,16 @@
     "databaseLifetime": "stream",
     "check": "foreign tenant: GET /api/rounds/:id/export"
   },
+  "GET /api/rounds/:id/share-links": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/rounds/:id/share-links"
+  },
+  "GET /api/rounds/:id/signoffs": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/rounds/:id/signoffs"
+  },
   "GET /api/settings/ai": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -338,6 +358,16 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/setup-checklist"
+  },
+  "GET /api/share/:key": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/share/:key"
+  },
+  "GET /api/share/:key/assets/:id": {
+    "boundary": "capability",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: GET /api/share/:key/assets/:id"
   },
   "GET /api/sign-in-methods": {
     "boundary": "public",
@@ -818,6 +848,26 @@
     "boundary": "public",
     "databaseLifetime": "finite",
     "check": "public authorization: POST /api/setup/claim"
+  },
+  "POST /api/share-links": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/share-links"
+  },
+  "POST /api/share/:key/comments": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/share/:key/comments"
+  },
+  "POST /api/share/:key/signoff": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/share/:key/signoff"
+  },
+  "POST /api/share/:key/unlock": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/share/:key/unlock"
   },
   "POST /api/tokens": {
     "boundary": "tenant",

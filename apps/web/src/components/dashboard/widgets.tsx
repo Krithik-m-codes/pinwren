@@ -5,14 +5,15 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { type ReactNode } from "react";
-import { KIND_META, PRIORITY_META, RelativeTime, STATUS_META } from "@/components/feedback-meta";
+import { KIND_META, pathOf, PRIORITY_META, RelativeTime, STATUS_META } from "@/components/feedback-meta";
 import { EmptyState } from "@/components/states";
 import { WIDGETS, type WidgetId } from "@/lib/dashboard/catalog";
 import type { Key } from "@/lib/i18n/en";
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 import { AreaChart, BarList, Donut } from "./charts";
-import { CircleCheck, FolderKanban, Inbox } from "lucide-react";
+import { CircleCheck, FolderKanban, Inbox, Target, Users } from "lucide-react";
+import { SignoffBadge } from "@/components/round-signoffs";
 
 // Widget bodies. Each one is a pure view of the stats object (one request feeds the whole screen), so a
 // widget can be added, moved or resized without anything refetching. `projectId` narrows the links.
@@ -151,6 +152,16 @@ export function KpiWidget({ id, stats, projectId }: WidgetProps & { id: WidgetId
           hint={t("dash.highOrUrgent")}
           tone={s.urgent ? "text-orange-600 dark:text-orange-400" : undefined}
           href={inbox(projectId, { priority: "urgent" })}
+        />
+      );
+    case "kpi.sla":
+      return (
+        <Tile
+          label={label}
+          value={s.slaBreached}
+          hint={t("dash.slaHint")}
+          tone={s.slaBreached ? "text-destructive" : undefined}
+          href={inbox(projectId, { status: "all" })}
         />
       );
     default:
@@ -303,6 +314,116 @@ export function ProjectBarsWidget({ stats }: WidgetProps) {
   );
 }
 
+export function BrowsersWidget({ stats }: WidgetProps) {
+  const { t } = useI18n();
+  const bars = stats.browsers.map((b) => ({
+    key: b.key,
+    label: b.key === "Unknown" ? t("dash.unknown") : b.key,
+    value: b.count,
+    className: "text-blue-500",
+  }));
+  return (
+    <Panel title={useTitle("chart.browsers")}>
+      {bars.length === 0 ? <Quiet icon={Inbox} text={t("dash.noItems")} /> : <BarList bars={bars} />}
+    </Panel>
+  );
+}
+
+export function SystemsWidget({ stats }: WidgetProps) {
+  const { t } = useI18n();
+  const bars = stats.operatingSystems.map((b) => ({
+    key: b.key,
+    label: b.key === "Unknown" ? t("dash.unknown") : b.key,
+    value: b.count,
+    className: "text-violet-500",
+  }));
+  return (
+    <Panel title={useTitle("chart.systems")}>
+      {bars.length === 0 ? <Quiet icon={Inbox} text={t("dash.noItems")} /> : <BarList bars={bars} />}
+    </Panel>
+  );
+}
+
+const DEVICE_KEYS = {
+  desktop: "dash.deviceDesktop",
+  tablet: "dash.deviceTablet",
+  mobile: "dash.deviceMobile",
+  unknown: "dash.unknown",
+} as const satisfies Record<DashboardStats["devices"][number]["key"], Key>;
+const DEVICE_COLORS = {
+  desktop: "text-blue-500",
+  tablet: "text-violet-500",
+  mobile: "text-emerald-500",
+  unknown: "text-muted-foreground",
+} as const;
+
+export function DevicesWidget({ stats }: WidgetProps) {
+  const { t } = useI18n();
+  const slices = stats.devices.map((d) => ({
+    key: d.key,
+    label: t(DEVICE_KEYS[d.key]),
+    value: d.count,
+    className: DEVICE_COLORS[d.key],
+  }));
+  const total = slices.reduce((a, s) => a + s.value, 0);
+  return (
+    <Panel title={useTitle("chart.devices")}>
+      {total === 0 ? (
+        <Quiet icon={Inbox} text={t("dash.noItems")} />
+      ) : (
+        <Donut
+          slices={slices}
+          total={total}
+          centre={t("dash.total")}
+          summary={slices.map((s) => `${s.label} ${s.value}`).join(", ")}
+        />
+      )}
+    </Panel>
+  );
+}
+
+const BUCKET_KEYS = {
+  "1h": "dash.bucket1h",
+  "4h": "dash.bucket4h",
+  "24h": "dash.bucket24h",
+  "3d": "dash.bucket3d",
+  "7d": "dash.bucket7d",
+  over7d: "dash.bucketOver7d",
+} as const satisfies Record<DashboardStats["firstResponse"]["buckets"][number]["key"], Key>;
+
+/** A histogram as bars, with the median in the panel header. */
+function TimeWidget({ id, dist }: { id: WidgetId; dist: DashboardStats["firstResponse"] }) {
+  const { t } = useI18n();
+  const title = useTitle(id);
+  const bars = dist.buckets.map((b) => ({
+    key: b.key,
+    label: t(BUCKET_KEYS[b.key]),
+    value: b.count,
+    className: "text-blue-500",
+  }));
+  return (
+    <Panel
+      title={title}
+      action={
+        dist.medianHours === null ? undefined : (
+          <span className="text-[11px] text-muted-foreground">
+            {t("dash.median", { time: formatHours(dist.medianHours, t) })}
+          </span>
+        )
+      }
+    >
+      {dist.sample === 0 ? <Quiet icon={Inbox} text={t("dash.noTiming")} /> : <BarList bars={bars} />}
+    </Panel>
+  );
+}
+
+export const FirstResponseWidget = ({ stats }: WidgetProps) => (
+  <TimeWidget id="chart.firstResponse" dist={stats.firstResponse} />
+);
+export const ResolveTimeWidget = ({ stats }: WidgetProps) => (
+  <TimeWidget id="chart.resolveTime" dist={stats.resolveTime} />
+);
+
 // --- Lists -------------------------------------------------------------------------------------------
 
 function Quiet({ icon, text }: { icon: typeof Inbox; text: string }) {
@@ -394,6 +515,114 @@ export function ProjectsWidget({ stats }: WidgetProps) {
   );
 }
 
+export function PagesWidget({ stats }: WidgetProps) {
+  const { t } = useI18n();
+  const max = Math.max(1, ...stats.topPages.map((p) => p.count));
+  return (
+    <Panel title={useTitle("list.pages")}>
+      {stats.topPages.length === 0 ? (
+        <Quiet icon={Inbox} text={t("dash.noPages")} />
+      ) : (
+        <ul className="-mx-1 min-h-0 flex-1 space-y-1 overflow-hidden text-xs" data-testid="top-pages">
+          {stats.topPages.map((p) => (
+            <li key={p.url} className="grid grid-cols-[minmax(0,1fr)_2.5rem] items-center gap-2 px-1">
+              <span className="min-w-0">
+                <span className="block truncate" title={p.url}>
+                  {pathOf(p.url)}
+                </span>
+                <span className="block h-1 rounded-full bg-muted">
+                  <span
+                    className="block h-full rounded-full bg-blue-500"
+                    style={{ width: `${(p.count / max) * 100}%` }}
+                  />
+                </span>
+              </span>
+              <span className="text-right tabular-nums">
+                {p.count}
+                <span className="sr-only"> ({t("dash.openCount", { n: p.active })})</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+export function RoundsWidget({ stats }: WidgetProps) {
+  const { t } = useI18n();
+  return (
+    <Panel title={useTitle("list.rounds")}>
+      {stats.rounds.length === 0 ? (
+        <Quiet icon={Target} text={t("dash.noRounds")} />
+      ) : (
+        <ul className="-mx-1 min-h-0 flex-1 space-y-2 overflow-hidden text-xs" data-testid="round-progress">
+          {stats.rounds.map((r) => {
+            const pct = r.total ? Math.round((r.closed / r.total) * 100) : 0;
+            return (
+              <li key={r.id}>
+                <Link
+                  href={`/projects/${r.projectId}/rounds` as Route}
+                  className="block rounded px-1 py-0.5 hover:bg-muted/60"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span className="min-w-0 flex-1 truncate font-medium">{r.name}</span>
+                    <SignoffBadge state={r.signoff} required={r.requireSignoff} />
+                    <span className="shrink-0 text-muted-foreground tabular-nums">
+                      {r.closed}/{r.total}
+                    </span>
+                  </span>
+                  <span
+                    className="mt-1 block h-1.5 overflow-hidden rounded-full bg-muted"
+                    role="progressbar"
+                    aria-label={r.name}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={pct}
+                  >
+                    <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                  </span>
+                  <span className="block truncate text-[11px] text-muted-foreground">{r.projectName}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+export function ReportersWidget({ stats }: WidgetProps) {
+  const { t } = useI18n();
+  return (
+    <Panel title={useTitle("list.reporters")}>
+      {stats.reporters.length === 0 ? (
+        <Quiet icon={Users} text={t("dash.noReporters")} />
+      ) : (
+        <table className="w-full min-w-0 text-xs" data-testid="reporter-board">
+          <thead className="text-left text-[11px] text-muted-foreground">
+            <tr>
+              <th className="pb-1 font-normal">{t("dash.colReporter")}</th>
+              <th className="pb-1 text-right font-normal">{t("dash.colFiled")}</th>
+              <th className="pb-1 text-right font-normal">{t("dash.colResolved")}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/60">
+            {stats.reporters.map((r) => (
+              <tr key={r.id}>
+                <td className="max-w-0 truncate py-1">{r.name}</td>
+                <td className="py-1 text-right tabular-nums">{r.count}</td>
+                <td className="py-1 text-right text-muted-foreground tabular-nums">{r.resolved}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Panel>
+  );
+}
+
 /** "What needs you": the counts that mean someone should act, each a link into the inbox. */
 export function AttentionWidget({ stats, projectId }: WidgetProps) {
   const { t } = useI18n();
@@ -440,6 +669,22 @@ export function WidgetBody({ id, ...props }: WidgetProps & { id: WidgetId }) {
       return <PriorityWidget {...props} />;
     case "chart.projects":
       return <ProjectBarsWidget {...props} />;
+    case "chart.browsers":
+      return <BrowsersWidget {...props} />;
+    case "chart.systems":
+      return <SystemsWidget {...props} />;
+    case "chart.devices":
+      return <DevicesWidget {...props} />;
+    case "chart.firstResponse":
+      return <FirstResponseWidget {...props} />;
+    case "chart.resolveTime":
+      return <ResolveTimeWidget {...props} />;
+    case "list.pages":
+      return <PagesWidget {...props} />;
+    case "list.rounds":
+      return <RoundsWidget {...props} />;
+    case "list.reporters":
+      return <ReportersWidget {...props} />;
     case "list.recent":
       return <RecentWidget {...props} />;
     case "list.projects":
