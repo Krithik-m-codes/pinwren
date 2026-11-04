@@ -39,6 +39,12 @@ and admins only; members see the tab read-only.
       description: "team keeps a link in the dashboard only. Webhook actions are always team.",
       default: '"everyone"',
     },
+    agent: {
+      type: "boolean",
+      description:
+        "Webhook only. Marks the action as the project's agent webhook: it appears under “Fix with agent” and its payload also carries the masked brief.",
+      default: "false",
+    },
   }}
 />
 
@@ -134,3 +140,29 @@ export function verify(secret: string, timestamp: string, body: string, header: 
 ```
 
 Verify against the raw request body, and reject timestamps that are more than a few minutes old.
+
+## Agent webhook (“Fix with agent”)
+
+Turn on **Agent webhook** when you add a webhook action to offer it under **Fix with agent** on a feedback item
+instead of as a plain button. Running it POSTs the usual signed `action.run` payload with one extra field,
+`data.brief`:
+
+```json
+{
+  "event": "action.run",
+  "data": {
+    "feedback": { "…": "…" },
+    "action": { "id": "claude-bot", "label": "Claude bot" },
+    "brief": {
+      "markdown": "# Fix feedback #142: …",
+      "hints": { "route": "/cart", "files": [] },
+      "links": { "dashboard": "https://…" }
+    }
+  }
+}
+```
+
+The brief is built from the diagnostics already stored and masked at capture. It never contains the session replay
+or the screenshot — it links to the item in the dashboard instead — so nothing visual reaches the receiver (or any
+AI) unless a person shares it. The receiver can start work straight from `brief.markdown`, or call back through the
+[MCP server](/docs/api/mcp) with `get_repro_test` for a draft Playwright test.
