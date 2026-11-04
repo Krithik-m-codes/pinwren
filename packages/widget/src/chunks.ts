@@ -20,7 +20,7 @@
 
 declare const __PINWREN_MANIFEST__: Record<string, string> | undefined;
 
-export type ChunkName = "capture" | "editor" | "report" | "panel" | "replay" | "flows" | "shots";
+export type ChunkName = "capture" | "editor" | "report" | "panel" | "replay" | "flows" | "shots" | "errors";
 
 /** The window global a chunk registers itself on: `__pinwren` + the capitalised name. */
 const globalOf = (name: ChunkName) => `__pinwren${name.charAt(0).toUpperCase()}${name.slice(1)}`;
@@ -64,11 +64,11 @@ export function loadChunk<T>(base: string, name: ChunkName): Promise<T> {
         s.remove();
         const m = w[globalOf(name)];
         if (m) resolve(m);
-        else reject(new Error(`${src} did not register`));
+        else reject(new Error(`${src} not registered`));
       };
       s.onerror = () => {
         s.remove();
-        reject(new Error(`Couldn't load ${src}`));
+        reject(new Error(`failed to load ${src}`));
       };
       document.head.append(s);
     }).catch((err: unknown) => {

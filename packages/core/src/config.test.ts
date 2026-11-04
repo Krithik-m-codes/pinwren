@@ -160,6 +160,7 @@ describe("panel actions (F-016)", () => {
   it("defaults to none", () => {
     expect(parseWidgetConfig({}).panelActions).toEqual([]);
     expect(parseWidgetConfig({}).privacyMode).toBe(false);
+    expect(parseWidgetConfig({}).errorPrompt).toBe(false);
   });
   it("fills icon + visibility defaults", () => {
     const c = widgetConfig.parse({ panelActions: [link] });
@@ -227,6 +228,12 @@ describe("public widget config", () => {
     const off = publicWidgetConfig(widgetConfig.parse({}), captureConfig.parse({ console: "off" }));
     expect(off.capture.console).toBe("off");
     expect(off.widget.consent.enabled).toBe(false);
+    // the error prompt is opt-in, and never offered in privacy mode
+    const on = widgetConfig.parse({ errorPrompt: true });
+    expect(publicWidgetConfig(on, captureConfig.parse({})).widget.errorPrompt).toBe(true);
+    expect(publicWidgetConfig({ ...on, privacyMode: true }, captureConfig.parse({})).widget.errorPrompt).toBe(
+      false,
+    );
   });
 });
 

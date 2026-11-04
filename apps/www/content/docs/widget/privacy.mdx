@@ -48,7 +48,9 @@ portals, health or finance apps, anything under GDPR scrutiny). It changes both 
 - no page-timing metadata is sent;
 - the user agent is reduced to the browser and OS families (“Chrome on Windows”) — no versions, no device
   model; time zone and referrer are left out;
-- session replay is off unless the page explicitly opts in (`allowReplayInPrivacyMode`).
+- session replay is off unless the page explicitly opts in (`allowReplayInPrivacyMode`);
+- the [error prompt](/docs/widget/bug-reports#error-prompt) is never shown and no
+  [Sentry / PostHog / LogRocket / Datadog ids](/docs/widget/bug-reports#session-and-trace-links) are attached.
 
 **On the server**
 

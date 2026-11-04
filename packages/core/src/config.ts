@@ -182,6 +182,12 @@ export const widgetConfig = z.object({
    */
   privacyMode: z.boolean().default(false),
   /**
+   * Offer a bug report when the host page throws an uncaught error or an unhandled promise rejection: a small
+   * non-blocking toast that opens the report form with the error attached. Off by default; the widget skips it in
+   * privacy mode and where it is hidden, and caps it per session.
+   */
+  errorPrompt: z.boolean().default(false),
+  /**
    * Query parameters that don't identify a page on this site (session ids, A/B flags…), on top of the built-in
    * trackers (`IGNORED_QUERY_PARAMS`). A trailing `*` matches a prefix. Applied by the server when it groups
    * reports into pages (`normalizePageUrl`); existing pages are re-grouped on the next start.
@@ -279,6 +285,7 @@ export function publicWidgetConfig(
   const c: CaptureConfig = { ...capture };
   if (widget.privacyMode) {
     w.consent = { ...w.consent, enabled: true };
+    w.errorPrompt = false; // no error text or stack leaves the page in privacy mode
     if (CONSOLE_RANK[c.console] > CONSOLE_RANK.errors) c.console = "errors";
   }
   return { widget: w, capture: c };

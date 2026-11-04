@@ -71,6 +71,7 @@ test("hashed chunks: the manifest in widget.js names every file, within the size
     [
       "capture",
       "editor",
+      "errors",
       "flows",
       "panel",
       "replay",
@@ -93,6 +94,7 @@ test("hashed chunks: the manifest in widget.js names every file, within the size
   expect(gz("replay")).toBeLessThanOrEqual(60 * 1024);
   expect(gz("flows")).toBeLessThanOrEqual(10 * 1024);
   expect(gz("shots")).toBeLessThanOrEqual(12 * 1024);
+  expect(gz("errors")).toBeLessThanOrEqual(3 * 1024);
   // SnapDOM alone is ~88 KB gzip; this guards against the editor (or anything else) creeping back in.
   expect(gz("capture")).toBeLessThanOrEqual(92 * 1024);
   // The editor lives only in its own chunk.

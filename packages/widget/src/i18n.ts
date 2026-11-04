@@ -2,13 +2,14 @@ import { chunkUrl, script } from "./chunks";
 import { en } from "./locales/en";
 import type { enPanel } from "./locales/en-panel";
 import type { enReport } from "./locales/en-report";
+import type { enErrors } from "./locales/en-errors";
 import type { enShots } from "./locales/en-shots";
 
 // Widget i18n (F-013). The core's English ships in widget.js and each lazy chunk brings its own English
 // (`addEnglish`); every other catalogue is a small separate file (`widget-i18n-<code>.js`, built next to
 // widget.js) that registers itself on `window.__pinwrenI18n`, so a visitor only downloads their own language.
 
-export type English = typeof en & typeof enPanel & typeof enReport & typeof enShots;
+export type English = typeof en & typeof enPanel & typeof enReport & typeof enShots & typeof enErrors;
 export type Key = keyof English;
 /** English plural forms are `_one`/`_other`; languages with more forms (Russian: 2–4 vs 5–20) add `_few`/`_many`. */
 type ExtraPlural = Record<`${string}_few` | `${string}_many`, string>;
@@ -89,8 +90,8 @@ export async function loadLocale(code: Locale, assets: string, timeoutMs = 3000)
       await new Promise<void>((resolve, reject) => {
         const s = script(chunkUrl(assets, `i18n-${code}`));
         s.onload = () => resolve();
-        s.onerror = () => reject(new Error(`locale ${code} unavailable`));
-        setTimeout(() => reject(new Error(`locale ${code} timed out`)), timeoutMs);
+        s.onerror = () => reject(new Error(`no locale ${code}`));
+        setTimeout(() => reject(new Error(`locale ${code} timeout`)), timeoutMs);
         document.head.append(s);
       });
     } catch (err) {

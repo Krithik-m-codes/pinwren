@@ -335,6 +335,9 @@ export const projects2 = {
   "projects2.rightClickDescription":
     "Opens the composer at the cursor. Links, inputs and modifier-clicks keep the browser menu.",
   "projects2.rightClickToComment": "Right-click to comment",
+  "projects2.errorPrompt": "Offer a report after an error",
+  "projects2.errorPromptDescription":
+    "When the page throws an uncaught error, a small prompt offers to send a bug report with the error attached. At most three times per visit; never in privacy mode.",
   "projects2.rotateConfirmDescription":
     "The widget on your site stops working until you replace the key in the snippet.",
   "projects2.rotateIdentitySecretDescription":
