@@ -1,0 +1,43 @@
+---
+title: Element and region picker
+description: The Element and Region modes when leaving a comment, the breadcrumb, and what visitors see as markers on the page.
+---
+
+When someone starts a comment, the widget puts a transparent layer over the page so that pressing and dragging
+never selects text or triggers the page's own handlers. A small toolbar offers two modes.
+
+## Element and Region
+
+| Mode        | What a click or drag does                                                                                                           |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Element** | The element under the pointer is outlined; a click pins the comment to it (the hint reads "Click the part of the page to capture"). |
+| **Region**  | Drag a rectangle; the comment is anchored to the smallest element that contains it.                                                 |
+
+The last mode you used is kept until the page is closed, so a second comment starts where the first left off. A
+plain click or drag in Element mode keeps working as before: a click is a pin, a drag of more than 5 px a region.
+For the keyboard (<kbd>Shift</kbd> for the parent, arrow keys to walk the DOM, <kbd>Enter</kbd> to pick) and touch
+(long-press, then drag) see [comments](/docs/widget/comments#leave-a-comment).
+
+### Breadcrumb
+
+A breadcrumb shows the path to the outlined element (up to five ancestors). Click an ancestor to pick it instead,
+which is quicker than aiming at a thin wrapper.
+
+## Markers
+
+The page's items show as numbered **markers** coloured by type (blue question, orange change, red bug, grey
+other); resolved items stay as a muted check. Hover for a preview and an outline of the element, click for the
+thread. **Hide markers** takes them off the page (remembered per visitor and project). Markers are placed again when
+the page renders late or an element is replaced, so single-page apps keep their pins.
+
+### Who sees which markers
+
+| Situation                                                                       | Markers shown                                                                                                |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Show existing pins to visitors** is on (`publicRead`)                         | Every item of the page.                                                                                      |
+| It is off (the default for new projects: a **private** project)                 | Only the visitor's own items and the team's public replies on them, found with the browser's reporter token. |
+| The visitor opened a valid [review link](/docs/dashboard/settings#review-links) | Every item of the page, even in a private project: reviewing the page is what the link is for.               |
+| A signed "Open on page" link from the dashboard                                 | The thread that was linked.                                                                                  |
+
+Items whose element is gone are listed in the sidebar instead of being dropped, and a pin found with low
+confidence is marked **Moved?**; see [anchoring](/docs/widget/anchoring).

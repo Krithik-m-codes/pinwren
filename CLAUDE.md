@@ -1,6 +1,6 @@
 # Pinwren — agent instructions
 
-Pinwren is a visual feedback and bug-reporting platform: an embeddable widget (anchored comment pins + annotated bug reports with console/network/replay) and a triage dashboard, shipped as AGPL self-host, commercial Enterprise (`ee/`) and multi-tenant Cloud from one codebase.
+Pinwren is a visual feedback and bug-reporting platform: an embeddable widget (anchored comment pins + annotated bug reports with console/network/replay) and a triage dashboard, shipped as AGPL self-host, commercial Enterprise (licence-gated features) and multi-tenant Cloud from one codebase.
 
 The full specification lives in `blueprint/` (files 00–14). `blueprint/14-feature-parity.md` is the checklist of every SitePing and BugPin feature Pinwren must match — flip a row's status in the same commit that ships it. When code and blueprint disagree, the blueprint wins unless an ADR in `docs/adr/` says otherwise.
 
@@ -29,7 +29,7 @@ The full specification lives in `blueprint/` (files 00–14). `blueprint/14-feat
   - **Hydration:** anything a client component renders on its first pass must come from the server (seeded queries) or be identical on both sides; live-only state (presence, "new" items) is shown after `useMounted()`; times and dates go through `<RelativeTime>` / `<LocalDate>`.
   - Viewers (`role: viewer`) get read-only screens: `useViewer().canWrite`, and `<ReadOnly>` disables every design-system control inside it.
 
-- `packages/*` never import `ee/` or `apps/`. `ee/*` imports only `packages/*`. `apps/server` reaches `ee/` only through `ee/index.ts` behind `requireEntitlement()`.
+- `packages/*` never import `apps/`. There is no `ee/` directory and no `apps/server`: the apps are `apps/web` (dashboard + API host) and `apps/www` (marketing and docs). Enterprise and Cloud features live in the same packages and are gated by entitlements: the licence schema is `packages/core/src/license.ts` and its resolution is `packages/api/src/license/index.ts` (ADR 0019; routes use `hasFeature()` / `assertFeatureWritable()`), and the Cloud plan table and rules are in `packages/core` and `packages/api/src/billing` (ADR 0023).
 - Wire types come from Zod schemas in `packages/core` — never hand-write a request/response type.
 - Every tenant query goes through `withOrg(orgId, tx => …)`; never query tenant tables with the bare DB handle.
 - Postgres is the only required service. Do not add Redis, a queue broker or an object store as a hard dependency.
@@ -49,13 +49,13 @@ The full specification lives in `blueprint/` (files 00–14). `blueprint/14-feat
 
 ## Licensing rules
 
-- MIT packages: `widget`, `widget-react`, `sdk-js`, `mcp`, `anchoring`, `capture`. Never add copyleft dependencies to them.
+- MIT packages: `widget` (anchoring and capture are modules inside it, not separate packages), `react`, `sdk`, `mcp`, `cli`. The server packages (`ai`, `api`, `core`, `db`) are AGPL-3.0. Never add copyleft dependencies to the MIT ones.
 - **Never copy code from BugPin (AGPL-3.0)** or other copyleft projects. SitePing (MIT) code may be adapted — record it in `THIRD_PARTY_NOTICES.md`.
-- Never move a feature from Community into `ee/`.
+- Never move a feature from Community into a paid edition.
 
 ## Testing
 
-Write tests with the code. Coverage ≥ 80 % for `packages/anchoring`, `packages/capture`, `packages/core`, `ee/licensing`, `ee/billing`. Every security mitigation has a test. Do not mark work done with failing or skipped tests.
+Write tests with the code. There is no coverage gate in CI or in the Vitest configs (the 80 % target in the older spec is not enforced); the real gates are the unit, smoke, tenant-isolation and Playwright suites in `.github/workflows/ci.yml` and the size budgets in `packages/widget/build.mjs`. Aim for the code you touch (widget anchoring and capture, `packages/core`, licence and billing) to be covered. Every security mitigation has a test. Do not mark work done with failing or skipped tests.
 
 ## When the spec is silent
 

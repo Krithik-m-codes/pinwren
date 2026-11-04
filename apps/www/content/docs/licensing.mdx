@@ -56,6 +56,28 @@ Feedback data, your website and the code of the sites the widget runs on are nev
 
 The full proposal is on the [pricing page](/pricing).
 
+### Cloud plans and limits
+
+Cloud billing is built (checkout through Dodo Payments, in test mode until the service goes live) but sign-up is
+still closed, so these are the rules a Cloud workspace follows, not something you can buy today. A workspace is on
+**Free** or **Pro**; the **Business** plan in the table is not built yet.
+
+| Limit             | Free | Pro   |
+| ----------------- | ---- | ----- |
+| Team seats        | 3    | 10    |
+| Projects          | 1    | 10    |
+| Reports per month | 100  | 2,000 |
+
+- **Seats and projects** are hard limits. Creating a project or inviting a person past the limit is refused with
+  `402 PLAN_LIMIT_PROJECTS` or `402 PLAN_LIMIT_SEATS`.
+- **Reports** are soft first: a banner in the dashboard shows from 100 % of the month's allowance, and the widget
+  only stops accepting new reports at 120 % (`429 FEEDBACK_UNAVAILABLE`; the widget keeps the report in its offline
+  queue). Guests are never counted as seats.
+- **Pro** also removes the "Powered by Pinwren" badge (`white_label`).
+- A failed renewal keeps Pro for **14 days**; after that the workspace is Free. Nothing is deleted. Projects above
+  the Free limit keep working, only new ones are refused.
+- None of this applies to self-hosted installs: without Cloud billing configured every limit is off.
+
 ### The principle
 
 > **Free:** everything a single team needs to collect, triage and route feedback, at any scale, on its own
