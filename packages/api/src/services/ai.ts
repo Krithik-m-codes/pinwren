@@ -1,6 +1,11 @@
 import { withOrg } from "@pinwren/db";
 import { createAiClient, translateText, type AiClient, type AiFetch } from "@pinwren/ai";
-import { type AiProviderConfig, type AiProviderType, type ProjectAiConfig } from "@pinwren/core";
+import {
+  type AiProviderConfig,
+  type AiProviderType,
+  type ProjectAiConfig,
+  projectAiConfigSchema,
+} from "@pinwren/core";
 import { feedback, feedbackAi, feedbackTranslation, getDb, orgSetting, project } from "@pinwren/db";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -212,7 +217,8 @@ export async function getProjectAiConfig(projectId: string, orgId: string): Prom
     .where(and(eq(project.id, projectId), eq(project.orgId, orgId)));
 
   if (!p) throw notFound("Project");
-  return p.aiConfig;
+  // Rows saved before the label switches existed lack them: fill the schema defaults.
+  return projectAiConfigSchema.parse(p.aiConfig);
 }
 
 export type PartialProjectAiConfig = {
@@ -222,6 +228,8 @@ export type PartialProjectAiConfig = {
   detectDuplicates?: boolean | undefined;
   generateRepro?: boolean | undefined;
   allowReplayInAi?: boolean | undefined;
+  autoLabels?: boolean | undefined;
+  autoApplyLabels?: boolean | undefined;
 };
 
 export async function updateProjectAiConfig(
@@ -237,6 +245,8 @@ export async function updateProjectAiConfig(
     detectDuplicates: patch.detectDuplicates ?? current.detectDuplicates,
     generateRepro: patch.generateRepro ?? current.generateRepro,
     allowReplayInAi: patch.allowReplayInAi ?? current.allowReplayInAi,
+    autoLabels: patch.autoLabels ?? current.autoLabels,
+    autoApplyLabels: patch.autoApplyLabels ?? current.autoApplyLabels,
   };
 
   await getDb()

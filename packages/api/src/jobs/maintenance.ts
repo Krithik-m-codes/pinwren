@@ -1,5 +1,6 @@
 import {
   afterOrgCommit,
+  automationRun,
   currentOrgId,
   feedback,
   feedbackAsset,
@@ -64,6 +65,8 @@ export async function applyRetention(): Promise<{ feedback: number; deliveries: 
       const webhookRows = await pruneDeliveries();
       const emailRows = await pruneEmailDeliveries();
       await db.delete(notification).where(sql`${notification.readAt} < now() - interval '90 days'`);
+      // The automation run log keeps a month, like webhook deliveries.
+      await db.delete(automationRun).where(sql`${automationRun.createdAt} < now() - interval '30 days'`);
       return { removed, webhookRows, emailRows };
     });
     total += result.removed;

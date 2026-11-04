@@ -23,6 +23,7 @@ import { pageLinks } from "./routes/page-links";
 import { teamUnsubscribe, unsubscribe } from "./routes/unsubscribe";
 import { v1 } from "./routes/v1";
 import { aiRoutes } from "./routes/ai";
+import { automationRoutes } from "./routes/automation";
 import { widget } from "./routes/widget";
 import { guestPortal } from "./routes/guest";
 import { workspace } from "./routes/workspace";
@@ -147,6 +148,7 @@ export const app = new Hono()
   // Signed page links + re-pin (wave-5 §3.3); after `dashboard`, whose session middleware covers /api/*.
   .route("/api", pageLinks)
   .route("/api", aiRoutes)
+  .route("/api", automationRoutes)
   // After the dashboard: its session and viewer guards (`use` on /api/*) run for these routes too.
   .route("/api", projectData)
   .route("/api", reviewLinks)

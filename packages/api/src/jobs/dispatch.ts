@@ -19,6 +19,7 @@ import { queueDelivery } from "../webhooks/deliver";
 import { WEBHOOK_API_VERSION, type WebhookPayload } from "../webhooks/format";
 import { enqueueOnce, membersWanting, notify, teamRenderOptions } from "./notify";
 import { reporterThreadUrl } from "./thread-url";
+import { wantsAutomation } from "../services/automation-engine";
 
 // Fan-out of one domain event (wave-5 contract §3.2, BugPin dispatch rules): webhooks and issue sync
 // first, then the bell, team emails and reporter emails.
@@ -412,6 +413,14 @@ export async function dispatchEvent(e: DomainEvent): Promise<void> {
       await syncIssueState(e.feedbackId, newStatus(e, ctx));
     }
     await notifications(e, ctx, commentInfo);
+    // Automation rules run from their own job, after the bell and emails, so a rule can never hold them back.
+    if (wantsAutomation(e)) {
+      await enqueue(
+        QUEUES.automation,
+        e,
+        e.id ? { singletonKey: `automation:${e.id}`, singletonSeconds: 3600 } : {},
+      );
+    }
     // Last, so enrichment can never hold back the bell or the emails; once per item if this event is retried.
     if (e.type === "feedback.created") {
       await enqueue(

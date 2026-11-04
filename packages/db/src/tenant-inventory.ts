@@ -90,6 +90,9 @@ export const tenantInventory: readonly TenantTable[] = [
   { table: "billing_subscription", ownership: "direct", parents: [] },
   { table: "billing_event", ownership: "direct", parents: [] },
   { table: "review_link", ownership: "direct", parents: ["project"] },
+  { table: "label_suggestion", ownership: "direct", parents: ["feedback", "label"] },
+  { table: "automation_rule", ownership: "direct", parents: ["project"] },
+  { table: "automation_run", ownership: "direct", parents: ["automation_rule", "project", "feedback"] },
   {
     table: "user",
     ownership: "identity",
