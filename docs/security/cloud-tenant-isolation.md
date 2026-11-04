@@ -130,7 +130,7 @@ temporary databases. Never point it at customer data.
 The policy/context tranche passed 80 checks on local PostgreSQL 16 across inventory, context, real pooled connection
 reuse/rollback, row policies and migration failure tests. The original 27 content tables have scoped read and
 missing-context cases. All 23 direct ownership tables reject ownership changes and foreign
-UPDATE/DELETE RETURNING. Valid local CRUD succeeds. Twenty-one composite tenant foreign keys are
+UPDATE/DELETE RETURNING. Valid local CRUD succeeds. Twenty-six composite tenant foreign keys are
 validated. Foreign project references, duplicate links and cross-tenant label joins are rejected,
 including label inconsistencies introduced by privileged maintenance. Upgrade tests prove that
 inconsistent legacy page ownership and label joins abort the migration without changing rows or
