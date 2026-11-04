@@ -2230,6 +2230,32 @@ if (process.env.SMOKE_SKIP_PACKAGES === "1") {
       repro.steps.findIndex((s) => s.kind === "click") < repro.steps.findIndex((s) => s.kind === "network"),
     repro.markdown.slice(0, 120),
   );
+  const brief = await pw.feedback.brief(replayFid);
+  check(
+    "agent brief: steps, errors, element and links; replay/screenshot never inlined",
+    brief.markdown.startsWith("# Fix feedback #") &&
+      brief.markdown.includes("Request failed: POST /api/pay") &&
+      brief.privacy.replayIncluded === false &&
+      brief.commands.claude.startsWith("claude '") &&
+      brief.links.cursor.startsWith("cursor://") &&
+      !brief.markdown.includes("data:image"),
+    brief.markdown.slice(0, 120),
+  );
+  const draftTest = await pw.feedback.reproTest(replayFid);
+  check(
+    "repro test: draft Playwright file with caveats and the recorded click",
+    draftTest.code.includes("@playwright/test") &&
+      draftTest.code.includes('"[id=\\"pay\\"]"') &&
+      draftTest.caveats.length > 0 &&
+      draftTest.stats.hasReplay === true,
+    draftTest.code.slice(0, 200),
+  );
+  const stats4 = await pw.stats.get({ days: 30 });
+  check("SDK reads stats", stats4.days === 30 && stats4.totals.active >= 1, JSON.stringify(stats4.totals));
+  check(
+    "SDK lists labels and views",
+    Array.isArray(await pw.labels.list(projectId)) && Array.isArray(await pw.views.list()),
+  );
   const rounds4 = await pw.rounds.list(projectId);
   check(
     "SDK lists rounds",
@@ -2278,14 +2304,23 @@ if (process.env.SMOKE_SKIP_PACKAGES === "1") {
   );
   const tools = (await http.listTools()).tools.map((t) => t.name).sort();
   check(
-    "MCP (HTTP) exposes the 7 tools",
+    "MCP (HTTP) exposes the 16 tools",
     JSON.stringify(tools) ===
       JSON.stringify(
         [
           "add_comment",
+          "get_agent_brief",
+          "get_asset",
           "get_feedback",
+          "get_repro_test",
           "get_reproduction_context",
+          "get_round",
+          "get_stats",
+          "list_assets",
+          "list_labels",
           "list_projects",
+          "list_rounds",
+          "list_saved_views",
           "resolve_feedback",
           "search_feedback",
           "update_feedback",
@@ -2357,7 +2392,7 @@ if (process.env.SMOKE_SKIP_PACKAGES === "1") {
       stderr: "ignore",
     }),
   );
-  check("MCP (stdio) lists the tools", (await stdio.listTools()).tools.length === 7);
+  check("MCP (stdio) lists the tools", (await stdio.listTools()).tools.length === 16);
   res = await stdio.callTool({ name: "search_feedback", arguments: { projectId, status: "all", limit: 3 } });
   check("MCP (stdio) search_feedback", JSON.parse(mcpText(res)).items.length === 3);
   await stdio.close();
