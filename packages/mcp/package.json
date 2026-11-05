@@ -71,7 +71,7 @@
     }
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@pinwren/sdk": "workspace:^",
     "zod": "^4.1.0"
   },
