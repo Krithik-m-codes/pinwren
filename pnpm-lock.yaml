@@ -217,8 +217,8 @@ importers:
         specifier: ^2.14.0
         version: 2.14.0
       turbo:
-        specifier: ^2.6.0
-        version: 2.11.9
+        specifier: ^2.11.10
+        version: 2.11.10
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -653,14 +653,14 @@ importers:
         specifier: ^1.64.1
         version: 1.64.1
       '@rrweb/record':
-        specifier: ^2.1.7
-        version: 2.1.7
+        specifier: ^2.2.0
+        version: 2.2.0
       '@types/node':
         specifier: ^22
         version: 22.20.5
       '@zumer/snapdom':
-        specifier: ^3.3.6
-        version: 3.3.6
+        specifier: ^3.6.0
+        version: 3.6.0
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
@@ -2361,8 +2361,8 @@ packages:
   '@rrweb/packer@2.1.7':
     resolution: {integrity: sha512-X0o+kpdHiTzzr6R9ThpZ425SbUzUI1ZArhiWuFU8DA3n9pZ48ThxVd9VMG/5psycDyuV2Dl2BTBJV5uYPaA6Ng==}
 
-  '@rrweb/record@2.1.7':
-    resolution: {integrity: sha512-lIAbWdH8JwRuujURxTBtgrlsPvyBUGXUa9aB5hK8s5DdHgagyLFkIaAWhtthuOwT3o4o4+w38yUVPLc3W2oOrw==}
+  '@rrweb/record@2.2.0':
+    resolution: {integrity: sha512-hJYM4yaS3aFAGPuK1X80kgWod4g3FxG3fymfXLjDkBQvcDrGKTluLENnXYVklbt97eXOJ117uwV9y+xFFYmTIQ==}
 
   '@rrweb/replay@2.1.7':
     resolution: {integrity: sha512-KqS3iUxafAL8dO8fwCEydrOc3rYbGwnV73wac4JO5s1I7fgd6toX3tJFKnAuIUnbAcgSO+DQZ7GrsGX8hOAODQ==}
@@ -2370,8 +2370,14 @@ packages:
   '@rrweb/types@2.1.7':
     resolution: {integrity: sha512-fNua4du3xvMlC5iK8lYU1CEg+9wsA7FXUzahVBBVGBKqVPSifROLVh3mfV90hhsfAcs4jAvLbl23v28hXrxZWg==}
 
+  '@rrweb/types@2.2.0':
+    resolution: {integrity: sha512-2gTA/pRpIbuET123oSdX5ZUDZfWCOIMYBvpSai3fr5pk9LcbccPqqaXflX+roP4oKenLjNtJPGpFK3BfYeBKnA==}
+
   '@rrweb/utils@2.1.7':
     resolution: {integrity: sha512-ZQpnuthKb8U2BvSDtiX6z8XkEPUUbCXhcrOY5yqqtPP2O5RP8YgPlo8HkU/tFStMd/Wn8cfy9DmkhialwUUvrA==}
+
+  '@rrweb/utils@2.2.0':
+    resolution: {integrity: sha512-e8FEp8wLswqgjDHpQNUUVfEXeDsrRMOVouvqIGKvnPxKYonjLlh0mU3O/17QNvCixFG5eUFR1B2jgTdiLlZxeQ==}
 
   '@rtsao/scc@1.1.0':
     resolution: {integrity: sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==}
@@ -2559,33 +2565,33 @@ packages:
   '@tsconfig/svelte@1.0.13':
     resolution: {integrity: sha512-5lYJP45Xllo4yE/RUBccBT32eBlRDbqN8r1/MIvQbKxW3aFqaYPCNgm8D5V20X4ShHcwvYWNlKg3liDh1MlBoA==}
 
-  '@turbo/darwin-64@2.11.9':
-    resolution: {integrity: sha512-OkW+EESJjo248CThWe9DfuUqzGcRwHe1DXKWRw9DSZ0lMkocKbbwNMjWVCiO+WNBcARDM0ibu0c9SbuIe4mw6w==}
+  '@turbo/darwin-64@2.11.10':
+    resolution: {integrity: sha512-By4idRap5+nLnMuRzLB4qkOPRlvNdyY1ne4VJYDyUoUB11H94k7uif9mbe3JT8JSNXs1D68uMcBj6hJ/jMQRvA==}
     cpu: [x64]
     os: [darwin]
 
-  '@turbo/darwin-arm64@2.11.9':
-    resolution: {integrity: sha512-NIbFEogMaIyOi2egLH7XtuW0DXmPOpydnanyB3rw/WXCPYl1OAFRPHPGixIaakGnfNLey8LMmKemgNtqtFKdcg==}
+  '@turbo/darwin-arm64@2.11.10':
+    resolution: {integrity: sha512-pyEYlVcuexOPa92p0Wlwl9YT1Is5D60lxN3ItWm3g30YLvFaUq86TF4BBWg5ZAc0uMTnrOzCvuCsOBTdzUWnRQ==}
     cpu: [arm64]
     os: [darwin]
 
-  '@turbo/linux-64@2.11.9':
-    resolution: {integrity: sha512-RkD/Atqqek2WNnYJlmPogZpXjAW+cSsPXDn7E0mufSNN86ClXCSKme/BBYMeIvPoFZ4egPJLF+JpYkuuNkMYhg==}
+  '@turbo/linux-64@2.11.10':
+    resolution: {integrity: sha512-1tYeR/IDZ5HEdsb0jNq2L2xam5nMQ+g80tlV2BZmv4OFw+pMcUM0mMmUcfc5wXPPNHVNPuDMjh9Y8G8HgXPLZA==}
     cpu: [x64]
     os: [android, linux]
 
-  '@turbo/linux-arm64@2.11.9':
-    resolution: {integrity: sha512-iW/0YGS9D9YlgD4ad2IEEolD9PuNJGdkEI650AELLln8YaGsloiH8QyTUnajjxPufMuY/eWRWxO+PMBYsGvVlA==}
+  '@turbo/linux-arm64@2.11.10':
+    resolution: {integrity: sha512-HuekQxvVGhUd46g1Im/DKdOtglHr4/gguZAvzEpPUgtxNkztSa8lWhQEGQ+EmPQ0n7w19qjThFU+OfEEd0uvlw==}
     cpu: [arm64]
     os: [android, linux]
 
-  '@turbo/windows-64@2.11.9':
-    resolution: {integrity: sha512-rg/kuQmSm9m/z8W5HYHLMSnTbLDXBs/9liVZh9YnfkGYm0DlFj2SV9/0fQy/EpJTq81O36kMb7p8Fmt9f67ocA==}
+  '@turbo/windows-64@2.11.10':
+    resolution: {integrity: sha512-UJOP3BkbreY3/JlMgJR6ZiimxYIBn+c+B4tnBIxD0E9c3Estmk+XoVNVBNBottZLNRXe3/ScgOU4+/k8tIWysg==}
     cpu: [x64]
     os: [win32]
 
-  '@turbo/windows-arm64@2.11.9':
-    resolution: {integrity: sha512-PgjBpLPW/WDsKzeBmNuw2QHtPxT/PtcloN3rHFTqVyMsqkLlyHVJbSusuhYoYFdi08lZ9Stryw66UOuPg/yW0w==}
+  '@turbo/windows-arm64@2.11.10':
+    resolution: {integrity: sha512-xOkEjF3ws/b/YNlc+bvJHMYBn+vL+QbEISZFVi0qS+ImmhA1X3/gmNmBrjjIG3dg6aeN+n6gQitzSkXQ286qJQ==}
     cpu: [arm64]
     os: [win32]
 
@@ -2934,8 +2940,8 @@ packages:
   '@yuku-toolchain/types@0.19.0':
     resolution: {integrity: sha512-tFkNbsP4WXX9UMUC5syJGdK9dPMLK0PPaIuXCcCYH75sZ8MrebfBZ2XvCILRTw8AgLivSSCfDa4R67iYBDa4Kg==}
 
-  '@zumer/snapdom@3.3.6':
-    resolution: {integrity: sha512-Ynxm2UJz6/diX/M2Xi9R5xqAgg/MrfsiEVJqAjUzcDI1kwnlfK+3F2tiP3BQJWgRouuYjT07cxeSYs31zgR2GA==}
+  '@zumer/snapdom@3.6.0':
+    resolution: {integrity: sha512-qS0jj/Y7JzXBoavd0fwBPliBkcH2Yh5arfR5iR7CbdWonUj3ZIjj2nDU3G7pcxP7RbJJwsDnCUZeE6efbIYWVw==}
 
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
@@ -5783,6 +5789,9 @@ packages:
   rrdom@2.1.7:
     resolution: {integrity: sha512-jm7IN2aaG6891OqFAYw/b8dw5FLiMeCTrU4HIUr40I6tTaUX2Rrhba5vjjMRARQClBFDA04vvf9HFD9WnZFpFg==}
 
+  rrdom@2.2.0:
+    resolution: {integrity: sha512-gxcBJWVtS/Xz+Ys8xcjPoWqr+C7wz/MS8NgmKw136I47Xygy17FYOGZqoGwEyvBn724jRDK1ljS+8w9FsZStOg==}
+
   rrule-temporal@2.2.8:
     resolution: {integrity: sha512-+wWUe0J02oMh1UWKIt1RTu2H0Cz+gP11O/iweK0MN2UP6JLGeepTUkbSBa90Hxq0W+ywSxM9IlJNouIUdMOwhg==}
 
@@ -5792,8 +5801,14 @@ packages:
   rrweb-snapshot@2.1.7:
     resolution: {integrity: sha512-exIZ4dxX498CZszs4ji0KKn8lhX9sBPBdD431t0RQOqCTStAHrmdWKK2s8tWSL32iRS+AOafbMuf6TOIZxW6ug==}
 
+  rrweb-snapshot@2.2.0:
+    resolution: {integrity: sha512-Tg/PiCLy+zV9C0Jfb4IAGABtt5l/UOvwW5xjFk41ZQhBfUjeqPP1rZ9HMDrFPc7cawCUEenWw54+g/4vluO5lg==}
+
   rrweb@2.1.7:
     resolution: {integrity: sha512-UZzK43vVmbtBt5WyEVO/CO8q9hKi38LRZDQS5C+X+FYgpVLK4vhWyUzzi1K0iXzHFb3MOVaTak5TAsdK5K6V6Q==}
+
+  rrweb@2.2.0:
+    resolution: {integrity: sha512-ofVzPq11/yIQ7WhVb++rJGI2LoPPrxdqu0QAvRA4KGeXJ7LH52jQ0VlRH4+VXn5PA/7pz85/rRkQyBUqT1LraQ==}
 
   run-applescript@7.1.0:
     resolution: {integrity: sha512-DPe5pVFaAsinSaV6QjQ6gdiedWDcRCbUuiQfQa2wmWV7+xC9bGulGI8+TdRmoFkAPaBXk8CrAbnlY2ISniJ47Q==}
@@ -6186,8 +6201,8 @@ packages:
     resolution: {integrity: sha512-axr3IdNuVIxnaK5XGEUFTu3YmAQ6lllgrvqfEoR16g/HGnYY/6We4oWENtAnzK6/LpJ2ur9PAb80RBt7/U4ugw==}
     engines: {node: '>= 6.0.0'}
 
-  turbo@2.11.9:
-    resolution: {integrity: sha512-k2ev5dv9OgP2pJwaPuydkZdid+haX2U5TDGcPtpAz0gb0nbRR3eXY/cpfrlvHih52YRTxWIcRVKc0ri3C2Scrg==}
+  turbo@2.11.10:
+    resolution: {integrity: sha512-3GJYwig8ygEI89oaOZdduJX8/aw6O9eRPYHoIt6T3FZl9hkKjiyIspufJoVgqXihPoJu8M5CSV0DlZvzfohBCw==}
     hasBin: true
 
   tw-animate-css@1.4.0:
@@ -7976,11 +7991,11 @@ snapshots:
       '@rrweb/types': 2.1.7
       fflate: 0.4.9
 
-  '@rrweb/record@2.1.7':
+  '@rrweb/record@2.2.0':
     dependencies:
-      '@rrweb/types': 2.1.7
-      '@rrweb/utils': 2.1.7
-      rrweb: 2.1.7
+      '@rrweb/types': 2.2.0
+      '@rrweb/utils': 2.2.0
+      rrweb: 2.2.0
 
   '@rrweb/replay@2.1.7':
     dependencies:
@@ -7989,7 +8004,11 @@ snapshots:
 
   '@rrweb/types@2.1.7': {}
 
+  '@rrweb/types@2.2.0': {}
+
   '@rrweb/utils@2.1.7': {}
+
+  '@rrweb/utils@2.2.0': {}
 
   '@rtsao/scc@1.1.0': {}
 
@@ -8189,22 +8208,22 @@ snapshots:
 
   '@tsconfig/svelte@1.0.13': {}
 
-  '@turbo/darwin-64@2.11.9':
+  '@turbo/darwin-64@2.11.10':
     optional: true
 
-  '@turbo/darwin-arm64@2.11.9':
+  '@turbo/darwin-arm64@2.11.10':
     optional: true
 
-  '@turbo/linux-64@2.11.9':
+  '@turbo/linux-64@2.11.10':
     optional: true
 
-  '@turbo/linux-arm64@2.11.9':
+  '@turbo/linux-arm64@2.11.10':
     optional: true
 
-  '@turbo/windows-64@2.11.9':
+  '@turbo/windows-64@2.11.10':
     optional: true
 
-  '@turbo/windows-arm64@2.11.9':
+  '@turbo/windows-arm64@2.11.10':
     optional: true
 
   '@tybys/wasm-util@0.10.4':
@@ -8495,7 +8514,7 @@ snapshots:
 
   '@yuku-toolchain/types@0.19.0': {}
 
-  '@zumer/snapdom@3.3.6': {}
+  '@zumer/snapdom@3.6.0': {}
 
   accepts@2.0.0:
     dependencies:
@@ -11719,6 +11738,10 @@ snapshots:
     dependencies:
       rrweb-snapshot: 2.1.7
 
+  rrdom@2.2.0:
+    dependencies:
+      rrweb-snapshot: 2.2.0
+
   rrule-temporal@2.2.8:
     dependencies:
       temporal-spec: 1.0.1
@@ -11733,6 +11756,10 @@ snapshots:
     dependencies:
       postcss: 8.5.31
 
+  rrweb-snapshot@2.2.0:
+    dependencies:
+      postcss: 8.5.31
+
   rrweb@2.1.7:
     dependencies:
       '@rrweb/types': 2.1.7
@@ -11743,6 +11770,17 @@ snapshots:
       mitt: 3.0.1
       rrdom: 2.1.7
       rrweb-snapshot: 2.1.7
+
+  rrweb@2.2.0:
+    dependencies:
+      '@rrweb/types': 2.2.0
+      '@rrweb/utils': 2.2.0
+      '@types/css-font-loading-module': 0.0.7
+      '@xstate/fsm': 1.6.5
+      base64-arraybuffer: 1.0.2
+      mitt: 3.0.1
+      rrdom: 2.2.0
+      rrweb-snapshot: 2.2.0
 
   run-applescript@7.1.0: {}
 
@@ -12242,14 +12280,14 @@ snapshots:
     dependencies:
       tslib: 1.14.1
 
-  turbo@2.11.9:
+  turbo@2.11.10:
     optionalDependencies:
-      '@turbo/darwin-64': 2.11.9
-      '@turbo/darwin-arm64': 2.11.9
-      '@turbo/linux-64': 2.11.9
-      '@turbo/linux-arm64': 2.11.9
-      '@turbo/windows-64': 2.11.9
-      '@turbo/windows-arm64': 2.11.9
+      '@turbo/darwin-64': 2.11.10
+      '@turbo/darwin-arm64': 2.11.10
+      '@turbo/linux-64': 2.11.10
+      '@turbo/linux-arm64': 2.11.10
+      '@turbo/windows-64': 2.11.10
+      '@turbo/windows-arm64': 2.11.10
 
   tw-animate-css@1.4.0: {}
 
