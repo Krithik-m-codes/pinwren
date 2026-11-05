@@ -23,7 +23,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@better-auth/passkey": "^1.7.12",
+    "@better-auth/passkey": "^1.7.14",
     "@hono/zod-validator": "^0.9.1",
     "@pinwren/ai": "workspace:*",
     "@pinwren/core": "workspace:*",
@@ -33,8 +33,8 @@
     "aws4fetch": "^1.0.20",
     "better-auth": "^1.7.12",
     "drizzle-orm": "^0.45.4",
-    "hono": "^4.13.13",
-    "nodemailer": "^10.1.7",
+    "hono": "^4.13.14",
+    "nodemailer": "^10.2.1",
     "pg-boss": "^12.38.0",
     "postgres": "^3.4.9",
     "zod": "^4.1.0"
