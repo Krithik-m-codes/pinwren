@@ -31,7 +31,7 @@
     "@pinwren/core": "workspace:*",
     "@pinwren/db": "workspace:*",
     "@reduxjs/toolkit": "^2.13.0",
-    "better-auth": "^1.7.12",
+    "better-auth": "^1.7.14",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
     "cn": "^0.5.0",
