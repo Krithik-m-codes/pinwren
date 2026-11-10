@@ -22,8 +22,12 @@ const pkgDir = fileURLToPath(new URL(".", import.meta.url));
 const dist = join(pkgDir, "dist");
 const outdirs = [dist, join(pkgDir, "..", "..", "apps", "web", "public")];
 const LOCALES = ["es", "fr", "de", "pt-BR", "it", "ja", "hi", "nl", "zh", "ru"];
-const CHUNKS = ["panel", "report", "editor", "capture", "replay", "flows", "shots", "errors"];
+const CHUNKS = ["panel", "report", "editor", "capture", "replay", "flows", "shots", "errors", "record"];
 const src = join(pkgDir, "src");
+// Per-chunk translations: `locales/<code>-<chunk>.ts` (English ones are `en-<chunk>.ts` and ship in the chunk).
+const extras = (await readdir(join(src, "locales"))).filter((f) =>
+  LOCALES.some((code) => f.startsWith(`${code}-`) && f.endsWith(".ts")),
+);
 const pkg = JSON.parse(await readFile(join(pkgDir, "package.json"), "utf8"));
 
 // Hard gzip budgets in KiB, also checked in wave4.e2e.ts. ADR 0022 records the existing 92 KiB capture
@@ -38,6 +42,8 @@ const BUDGET = {
   flows: 10,
   shots: 12,
   errors: 3,
+  // ADR 0029: screen recording is its own chunk, fetched only when a bug report opens on a project that allows it.
+  record: 14,
 };
 
 // Chunks share the core's modules through `window.__pinwrenLib` (src/lib.ts) instead of bundling copies:
@@ -111,6 +117,18 @@ const sizes = (code) => ({
   brotli: brotliCompressSync(code).length,
 });
 
+// A language's entry: its catalogue plus the per-chunk files next to it, merged into one object.
+function localeEntry(code) {
+  const own = extras.filter((f) => f.startsWith(`${code}-`)).map((f) => f.replace(/\.ts$/, ""));
+  const imports = own.map((f, i) => `import x${i} from "./locales/${f}";`);
+  const merged = ["c", ...own.map((_, i) => `x${i}`)].join(", ");
+  return [
+    ...imports,
+    `import c from "./locales/${code}";`,
+    `(window.__pinwrenI18n ||= {})[${JSON.stringify(code)}] = Object.assign({}, ${merged});`,
+  ].join(";");
+}
+
 async function buildAll() {
   const started = Date.now();
   const parts = await Promise.all([
@@ -122,7 +140,7 @@ async function buildAll() {
       key: `i18n-${code}`,
       code: await bundle({
         stdin: {
-          contents: `import c from "./locales/${code}"; (window.__pinwrenI18n ||= {})[${JSON.stringify(code)}] = c;`,
+          contents: localeEntry(code),
           resolveDir: src,
           loader: "ts",
         },
