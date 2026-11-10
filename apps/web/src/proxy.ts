@@ -10,7 +10,7 @@ const flag = (v: string | undefined) => v === "true" || v === "1";
 const trusted = (v: string | undefined) => !!v && (/^true$/i.test(v.trim()) || Number(v) > 0);
 
 /** Signed-in screens. Without a session cookie there is nothing to render: send people to sign in at once. */
-const APP_PATHS = /^\/(inbox|projects|settings|onboarding)(\/|$)/;
+const APP_PATHS = /^\/(inbox|projects|settings|onboarding|slack)(\/|$)/;
 
 export function proxy(request: NextRequest) {
   const d = httpsDecision(request, {

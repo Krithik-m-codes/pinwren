@@ -169,6 +169,7 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
       <>
         {rich(t("inbox2.evStatusChanged"), { who, change })}
         {e.data.via === "api" && <> {t("inbox2.viaApi")}</>}
+        {e.data.via === "slack" && <> {t("slack.viaSlack")}</>}
         {typeof e.data.issue === "number" && <> {t("inbox2.issueNumber", { number: e.data.issue })}</>}
       </>
     );
