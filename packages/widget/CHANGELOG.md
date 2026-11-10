@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/Krithik-m-codes/pinwren/compare/widget-v0.5.0...widget-v0.6.0) (2026-11-10)
+
+
+### Features
+
+* **widget:** error-triggered report prompt and observability link-outs ([#43](https://github.com/Krithik-m-codes/pinwren/issues/43)) ([9548b00](https://github.com/Krithik-m-codes/pinwren/commit/9548b00b28cdcd36fc4f7eff9b9e49a28a993d3b))
+
 ## [0.5.0](https://github.com/Krithik-m-codes/pinwren/compare/widget-v0.4.0...widget-v0.5.0) (2026-11-02)
 
 

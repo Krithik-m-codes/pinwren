@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/Krithik-m-codes/pinwren/compare/sdk-v0.2.0...sdk-v0.3.0) (2026-11-10)
+
+
+### Features
+
+* agent hand-off, generated repro tests and MCP/SDK/CLI parity ([#45](https://github.com/Krithik-m-codes/pinwren/issues/45)) ([f2efbac](https://github.com/Krithik-m-codes/pinwren/commit/f2efbacdebcbd193aafe4059fd423cadf6ad3221))
+* share links, client sign-off and reporting widgets ([#44](https://github.com/Krithik-m-codes/pinwren/issues/44)) ([98ab038](https://github.com/Krithik-m-codes/pinwren/commit/98ab038b1a7ddcfb7853ad3976e4ae2dae7c6ced))
+
 ## [0.2.0](https://github.com/Krithik-m-codes/pinwren/compare/sdk-v0.1.1...sdk-v0.2.0) (2026-10-26)
 
 
