@@ -2618,7 +2618,7 @@
   "palette.searching": "Buscando comentarios…",
   "palette.searchAll": "Buscar «{q}» en todos los comentarios",
   "landing.label": "Página de inicio",
-  "landing.description": "Lo que abre Pinwren al visitar el sitio. Se guarda en este dispositivo.",
+  "landing.description": "Lo que abre Pinwren al visitar el sitio. Se guarda en tu cuenta.",
   "landing.inbox": "Bandeja de entrada",
   "landing.dashboard": "Panel",
   "landing.myWork": "Mi trabajo",

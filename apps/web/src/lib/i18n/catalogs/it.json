@@ -2618,7 +2618,7 @@
   "palette.searching": "Ricerca nei feedback…",
   "palette.searchAll": "Cerca “{q}” in tutti i feedback",
   "landing.label": "Pagina iniziale",
-  "landing.description": "La pagina in cui si apre Pinwren quando visiti il sito. Salvata su questo dispositivo.",
+  "landing.description": "La pagina in cui si apre Pinwren quando visiti il sito. Salvata nel tuo account.",
   "landing.inbox": "Inbox",
   "landing.dashboard": "Dashboard",
   "landing.myWork": "Il mio lavoro",

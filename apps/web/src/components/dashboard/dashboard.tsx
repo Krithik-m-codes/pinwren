@@ -272,6 +272,7 @@ function DashboardBoard({
               variant="outline"
               size="sm"
               onClick={() => void customise()}
+              disabled={!board.ready}
               data-testid="dashboard-customise"
             >
               {editable ? <SlidersHorizontal /> : <Copy />}{" "}

@@ -13,6 +13,7 @@ import { dateToDay, type DashFilters, dayToDate, hasFilters } from "@/lib/dashbo
 import { useI18n } from "@/lib/i18n/provider";
 import { useLabelsQuery, useProjectsQuery } from "@/lib/store/api";
 import { cn } from "@/lib/utils";
+import { useMounted } from "@/lib/use-synced-state";
 import { useMembers } from "@/lib/viewer";
 
 // The home dashboard's filter bar: project, label, assignee and date range. It only reports changes; the
@@ -20,7 +21,8 @@ import { useMembers } from "@/lib/viewer";
 
 const ALL = "__all";
 const RANGES: Range[] = [7, 14, 30, 90];
-const dateText = (day: string) => dayToDate(day).toLocaleDateString(undefined, { dateStyle: "medium" });
+const dateText = (day: string, local: boolean) =>
+  local ? dayToDate(day).toLocaleDateString(undefined, { dateStyle: "medium" }) : day;
 
 export function FilterBar({
   filters,
@@ -157,6 +159,8 @@ function RangePicker({
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  // Dates are written in the person's locale, which the server cannot know: ISO until mounted.
+  const local = useMounted();
   const custom = !!filters.from;
   const start = filters.from ? dayToDate(filters.from) : undefined;
   const selected: DateRange | undefined =
@@ -164,8 +168,8 @@ function RangePicker({
   const label = !filters.from
     ? t(`dash.range${days}` as "dash.range7")
     : filters.to
-      ? t("dashx.rangeBetween", { from: dateText(filters.from), to: dateText(filters.to) })
-      : t("dashx.rangeSince", { from: dateText(filters.from) });
+      ? t("dashx.rangeBetween", { from: dateText(filters.from, local), to: dateText(filters.to, local) })
+      : t("dashx.rangeSince", { from: dateText(filters.from, local) });
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

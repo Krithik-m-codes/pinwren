@@ -2618,7 +2618,7 @@
   "palette.searching": "Recherche dans les retours…",
   "palette.searchAll": "Rechercher « {q} » dans tous les retours",
   "landing.label": "Page de démarrage",
-  "landing.description": "La page sur laquelle Pinwren s'ouvre quand vous visitez le site. Enregistré sur cet appareil.",
+  "landing.description": "La page sur laquelle Pinwren s'ouvre quand vous visitez le site. Enregistré dans votre compte.",
   "landing.inbox": "Boîte de réception",
   "landing.dashboard": "Tableau de bord",
   "landing.myWork": "Mon travail",

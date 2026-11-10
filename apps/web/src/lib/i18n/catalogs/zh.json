@@ -2618,7 +2618,7 @@
   "palette.searching": "正在搜索反馈…",
   "palette.searchAll": "在所有反馈中搜索“{q}”",
   "landing.label": "起始页",
-  "landing.description": "访问站点时 Pinwren 打开的页面。保存在此设备上。",
+  "landing.description": "访问站点时 Pinwren 打开的页面。保存在你的账号中。",
   "landing.inbox": "收件箱",
   "landing.dashboard": "仪表盘",
   "landing.myWork": "我的工作",

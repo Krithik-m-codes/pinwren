@@ -2618,7 +2618,7 @@
   "palette.searching": "फ़ीडबैक खोजा जा रहा है…",
   "palette.searchAll": "“{q}” के लिए सारा फ़ीडबैक खोजें",
   "landing.label": "शुरुआती पेज",
-  "landing.description": "साइट खोलने पर Pinwren जहाँ खुलता है। इसी डिवाइस पर सहेजा जाता है।",
+  "landing.description": "साइट खोलने पर Pinwren जहाँ खुलता है। आपके खाते में सहेजा जाता है।",
   "landing.inbox": "इनबॉक्स",
   "landing.dashboard": "डैशबोर्ड",
   "landing.myWork": "मेरा काम",

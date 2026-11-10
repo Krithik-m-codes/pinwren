@@ -14,7 +14,7 @@ import {
   Users,
 } from "lucide-react";
 import { useState } from "react";
-import { Controller } from "react-hook-form";
+import { Controller, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -116,10 +116,12 @@ export function DashboardSwitcher({
             <DropdownMenuLabel>{t("dashx.myDashboards")}</DropdownMenuLabel>
             <DropdownMenuRadioGroup value={current} onValueChange={pick}>
               {mine.length === 0 && (
-                <DropdownMenuRadioItem value={BUILTIN}>{builtinName}</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value={BUILTIN} closeOnClick>
+                  {builtinName}
+                </DropdownMenuRadioItem>
               )}
               {mine.map((d) => (
-                <DropdownMenuRadioItem key={d.id} value={d.id} data-dashboard={d.name}>
+                <DropdownMenuRadioItem key={d.id} value={d.id} data-dashboard={d.name} closeOnClick>
                   <span className="truncate">{d.name}</span>
                   {board.defaultId === d.id && (
                     <span className="ml-auto text-[10px] text-muted-foreground">
@@ -136,7 +138,7 @@ export function DashboardSwitcher({
               <DropdownMenuLabel>{t("dashx.sharedDashboards")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={current} onValueChange={pick}>
                 {shared.map((d) => (
-                  <DropdownMenuRadioItem key={d.id} value={d.id} data-dashboard={d.name}>
+                  <DropdownMenuRadioItem key={d.id} value={d.id} data-dashboard={d.name} closeOnClick>
                     <Users className="size-3.5" />
                     <span className="truncate">{d.name}</span>
                     {board.defaultId === d.id && (
@@ -379,7 +381,7 @@ function PublishForm({
     defaultValues: { shared: dashboard.shared, roles: dashboard.defaultRoles },
   });
   const { errors, isSubmitting } = form.formState;
-  const shared = form.watch("shared");
+  const shared = useWatch({ control: form.control, name: "shared" });
   const submit = form.handleSubmit(async (v) => {
     try {
       await onSubmit(v.shared, v.shared ? v.roles : []);

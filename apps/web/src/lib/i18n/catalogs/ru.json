@@ -2684,7 +2684,7 @@
   "palette.searching": "Поиск отзывов…",
   "palette.searchAll": "Искать «{q}» во всех отзывах",
   "landing.label": "Стартовая страница",
-  "landing.description": "Что открывается при входе на сайт Pinwren. Сохраняется на этом устройстве.",
+  "landing.description": "Что открывается при входе на сайт Pinwren. Сохраняется в вашей учётной записи.",
   "landing.inbox": "Входящие",
   "landing.dashboard": "Дашборд",
   "landing.myWork": "Мои задачи",

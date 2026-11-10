@@ -301,3 +301,23 @@ three direct-ownership tables, each with the `pinwren_tenant` policy and composi
   after commit. `automation-db.test.ts` runs it against PostgreSQL with the restricted runtime role: rules naming
   another workspace's label or member are refused when saved, workspace B's identical rule never fires for A's event,
   and loop protection, idempotent retries and partial failures are asserted.
+
+## Dashboards and per-person state
+
+Design: `docs/adr/0029-server-dashboards-named-shared.md`. Migration `0017` adds two direct-ownership tables with the
+`pinwren_tenant` policy, both in `tenant-inventory.ts`, and one identity column:
+
+| Table / column             | Scope                          | Notes                                                                                                                 |
+| -------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `dashboard`                | direct (`org_id`)              | Named layouts per screen; visible to the owner and, when `shared`, to the workspace; unique name per owner and screen |
+| `workspace_preference`     | direct (`org_id`, `user_id`)   | Default dashboard per screen and pinned projects of one member in one workspace                                       |
+| `user_preference.ui_state` | identity (one row per account) | Start page and dismissed prompts; follows the person across workspaces                                                |
+
+- No composite foreign keys: nothing references another tenant table. A stored default or pin that no longer points
+  at a visible dashboard or live project is ignored on read, and a write that names another workspace's dashboard or
+  project is a 404.
+- 9 new routes (5 dashboard, 2 workspace-preference, 2 ui-state), each with a case in `cloud-routes-db.test.ts`
+  (workspace B's shared dashboard and workspace preference rows are part of the fixture, so the before/after hash
+  proves a foreign call changes nothing); `dashboards-db.test.ts` covers visibility, publishing and role defaults
+  inside one workspace and that `/api/stats` ignores a foreign project or label.
+- `GET /api/stats` gained `labelId`, `assigneeId` and `from`/`to`; every query still names `org_id`.

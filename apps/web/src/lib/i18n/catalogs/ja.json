@@ -2618,7 +2618,7 @@
   "palette.searching": "フィードバックを検索中…",
   "palette.searchAll": "すべてのフィードバックから「{q}」を検索",
   "landing.label": "開始ページ",
-  "landing.description": "サイトを開いたときに最初に表示されるページです。このデバイスに保存されます。",
+  "landing.description": "サイトを開いたときに最初に表示されるページです。アカウントに保存されます。",
   "landing.inbox": "受信トレイ",
   "landing.dashboard": "ダッシュボード",
   "landing.myWork": "自分の作業",

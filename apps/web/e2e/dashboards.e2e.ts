@@ -23,8 +23,7 @@ test.describe("dashboards", () => {
     await shoot(page, "dashboard-home", { fullPage: true });
 
     await board.getByRole("button", { name: "Date range" }).click();
-    await page.getByRole("menuitemradio", { name: "Last 90 days" }).click();
-    await page.keyboard.press("Escape"); // radio items keep the menu open
+    await page.getByRole("button", { name: "Last 90 days" }).click();
     await expect(board.getByRole("button", { name: "Date range" })).toContainText("90");
 
     await page.getByTestId("dashboard-customise").click();

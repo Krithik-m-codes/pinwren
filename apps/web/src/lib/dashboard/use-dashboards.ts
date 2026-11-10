@@ -136,6 +136,8 @@ export function useDashboards({
 
   return {
     loaded,
+    /** Edits wait for the first answer (or its failure, which falls back to this device). */
+    ready: loaded || query.isError,
     isError: query.isError && !loaded,
     refetch: query.refetch,
     /** Every dashboard of the screen the person can open: own first, then the workspace's. */
@@ -158,6 +160,7 @@ export function useDashboards({
     duplicate: async (id: string, name?: string): Promise<ApiDashboard> =>
       (await duplicateRow({ id, scope, ...(name ? { name } : {}) }).unwrap()).dashboard,
     remove: async (id: string) => {
+      setPending(null); // a layout saved a moment ago must not come back once its dashboard is gone
       await deleteRow({ id, scope }).unwrap();
     },
     makeDefault: async (id: string | null) => {

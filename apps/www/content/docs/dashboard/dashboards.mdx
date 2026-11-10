@@ -1,6 +1,6 @@
 ---
 title: Dashboards
-description: The home dashboard and the overview strips on the inbox, projects and notifications, how to customise them, and the stats endpoint behind them.
+description: The home dashboard and the overview strips, named and shared dashboards, the filter bar, how to customise them, and the stats endpoint behind them.
 ---
 
 Pinwren has a **Dashboard** (first entry in the sidebar, `/dashboard`) and a collapsible **Overview** strip at the
@@ -33,36 +33,75 @@ Choose **Customise** (or **Customise dashboard** in the [command palette](/docs/
 - **Remove** a widget you do not need.
 - **Reset to default** brings back the layout for your role. **Done** leaves edit mode.
 
-The **Date range** menu (last 7, 14, 30 or 90 days) sets the period for the tiles and charts, and is saved with the
-layout.
+The **Date range** (last 7, 14, 30 or 90 days, or a custom span from the calendar) sets the period for the tiles
+and charts. The preset is saved with the layout; a custom span lives in the link.
 
-<Callout title="Layouts are saved per browser">
-  A layout is stored in your browser, per person and per screen. It does not follow you to another browser or
-  device, and a layout identical to the default is not stored, so later improvements to the defaults still
-  reach you. Viewers can customise too: it only changes their own browser.
+<Callout title="Layouts follow your account">
+  Your dashboards are stored on the server, per person and per screen, so they follow you to every browser and
+  device. The first time you open a dashboard after upgrading, the layout your browser kept is imported once
+  as **My dashboard**. Until you save something you see the built-in layout for your role, so later
+  improvements to the defaults still reach you. Viewers can customise too: it only changes their own
+  dashboards.
 </Callout>
+
+## Several dashboards
+
+The dashboard name next to **Customise** opens the picker. Keep as many dashboards as you like per screen (up to
+25), for example **Triage** and **Exec weekly**:
+
+- **New dashboard…** starts from the layout you are looking at and opens it. Each dashboard has its own link
+  (`/dashboard?dash=…`).
+- **Rename**, **Duplicate** and **Delete** act on the open dashboard. Names are unique for you on a screen.
+- **Open by default** makes it the one that opens on that screen; choose it again to stop.
+- The overview strips on the inbox, projects, a project and notifications have the same picker.
+
+### Sharing with the workspace
+
+An Admin can open **Share with workspace…** on any of their dashboards. Everyone in the workspace then sees it under
+**Shared with the workspace**, read-only. They choose **Duplicate to my dashboards** (or **Customise**, which does
+the same) to get a copy they can change. Admins can also edit or remove a shared dashboard, and unsharing hides it
+again. People who already copied it keep their copies.
+
+In the same dialog an Admin can make a shared dashboard the starting point for **Admins**, **Editors** or **Viewers**.
+Anyone in those roles who has not made a dashboard of their own then starts there instead of on the built-in
+layout; a role has one such dashboard per screen.
+
+## Filter bar
+
+The home dashboard has a filter bar above the widgets: **Project**, **Label** (of the chosen project),
+**Assignee** (anyone, you, unassigned or a teammate) and the **Date range**. Every number, chart and list follows
+it. The filters are kept in the address bar, so you can copy the link (**Copy link**) and send a filtered view to a
+colleague; **Clear filters** removes them. Review rounds follow only the project filter.
+
+## Also on your account
+
+The start page (Settings › Profile) and the dismissed update and support prompts follow your account too, and you
+can pin projects in the sidebar (hover a project, then the pin). If your session expires while a screen is open,
+Pinwren says so and takes you to sign-in, then back to the same page and filters.
 
 ## The stats endpoint
 
 Everything on a screen comes from one request, so moving or resizing a widget never reloads data.
 
 ```http
-GET /api/stats?days=14&projectId=<uuid>
+GET /api/stats?days=14&projectId=<uuid>&labelId=<uuid>&assigneeId=me&from=2026-03-01&to=2026-03-31
 ```
 
-| Parameter   | Description                                                                                 |
-| ----------- | ------------------------------------------------------------------------------------------- |
-| `days`      | The range: `7`, `14` (default), `30` or `90`.                                               |
-| `projectId` | Optional. Limit the numbers to one project; a project of another workspace matches nothing. |
+| Parameter    | Description                                                                                                         |
+| ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `days`       | The range: `7`, `14` (default), `30` or `90`.                                                                       |
+| `from`, `to` | An explicit span of UTC dates (`YYYY-MM-DD`, inclusive, at most 366 days; `to` defaults to today). Replaces `days`. |
+| `projectId`  | Optional. Limit the numbers to one project; a project of another workspace matches nothing.                         |
+| `labelId`    | Optional. Only items with this label; a label of another workspace matches nothing.                                 |
+| `assigneeId` | Optional. `me`, `none` (unassigned) or a member id.                                                                 |
 
 The response holds `totals` (`active`, `created`, `previousCreated`, `resolved`, `unassigned`, `overdue`, `mine`,
 `urgent`, `avgResolutionHours`), `byStatus`, `byKind`, `byPriority`, `byProject` (only without `projectId`), a
-zero-filled daily `series` of `created` and `resolved` (oldest first, UTC days) and the latest `recent` activity.
-Trashed items are not counted. The call needs a dashboard session and reads only your own workspace; it is not part
-of the token API. The dashboard refreshes the numbers when the [live stream](/docs/dashboard#live-updates)
+zero-filled daily `series` of `created` and `resolved` (oldest first, UTC days, ending on `to` when it is set) and the latest `recent` activity.
+Trashed items are not counted. The call needs a dashboard session and reads only your own workspace; the token API
+has the same numbers and filters at `GET /api/v1/stats` (SDK `stats.get`, MCP `get_stats`). The dashboard refreshes the numbers when the [live stream](/docs/dashboard#live-updates)
 reports a change.
 
 ## Not built yet
 
-Several named dashboards, a per-card editor, funnel and gauge charts, a dashboard-wide filter bar and saving
-layouts on the server (so they follow your account) are not available. The inbox filters cover ad-hoc slicing.
+A per-card editor and funnel and gauge charts are not available. The inbox filters cover ad-hoc slicing.
