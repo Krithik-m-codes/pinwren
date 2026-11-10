@@ -744,20 +744,109 @@ export const emailTemplatePreview = z.object({
 
 export const emailTemplateTest = emailTemplatePreview.extend({ to: z.email().optional() });
 
-// --- Issue trackers (F-076 GitHub, F-077 GitLab, F-078 Linear, F-079 Jira Cloud) ------------------------
+// --- Issue trackers (F-076 GitHub, F-077 GitLab, F-078 Linear, F-079 Jira Cloud; ADR 0029: Trello, Asana,
+// ClickUp, Notion) --------------------------------------------------------------------------------------
 
-export const ISSUE_PROVIDERS = ["github", "gitlab", "linear", "jira"] as const;
+export const ISSUE_PROVIDERS = [
+  "github",
+  "gitlab",
+  "linear",
+  "jira",
+  "trello",
+  "asana",
+  "clickup",
+  "notion",
+] as const;
 export type IssueProvider = (typeof ISSUE_PROVIDERS)[number];
 /** Which new feedback opens an issue on its own; "manual" = only the "Send to …" button. */
 export const ISSUE_AUTO_CREATE = ["manual", "bugs", "all"] as const;
 
+/** Providers whose items are not "issues in a repository": a card, a task or a database page (ADR 0029). */
+export const BOARD_PROVIDERS = ["trello", "asana", "clickup", "notion"] as const;
+export type BoardProvider = (typeof BOARD_PROVIDERS)[number];
+export const isBoardProvider = (p: IssueProvider): p is BoardProvider =>
+  (BOARD_PROVIDERS as readonly string[]).includes(p);
+
+/**
+ * The per-project settings each board provider accepts: ids and names that map a Pinwren item onto the
+ * provider's own model (target list, done state, priority). Every value is a short string; unknown keys are
+ * refused so a stored setting always means something.
+ */
+export const TRACKER_SETTING_KEYS = {
+  /** `listId`: where new cards go. `doneListId`: moving a card here closes the item (else archive = closed). */
+  trello: ["listId", "doneListId", "priorityLow", "priorityMedium", "priorityHigh", "priorityUrgent"],
+  /** `sectionGid`: put new tasks in this section. `priorityField`: a custom field; priority* are its option gids. */
+  asana: ["sectionGid", "priorityField", "priorityLow", "priorityMedium", "priorityHigh", "priorityUrgent"],
+  /** `teamId`: the Workspace id (found automatically when the token sees one). priority*: 1 urgent … 4 low. */
+  clickup: [
+    "teamId",
+    "openStatus",
+    "closedStatus",
+    "priorityLow",
+    "priorityMedium",
+    "priorityHigh",
+    "priorityUrgent",
+  ],
+  /** `statusProperty`: a Status, Select or Checkbox property. priority*: option names of `priorityProperty`. */
+  notion: [
+    "statusProperty",
+    "openValue",
+    "closedValue",
+    "priorityProperty",
+    "priorityLow",
+    "priorityMedium",
+    "priorityHigh",
+    "priorityUrgent",
+  ],
+} as const satisfies Record<BoardProvider, readonly string[]>;
+export const TRACKER_REQUIRED_SETTINGS: Partial<Record<BoardProvider, readonly string[]>> = {
+  trello: ["listId"],
+};
+
+export const trackerSettings = z
+  .record(z.string().min(1).max(40), z.string().trim().max(200))
+  .refine((v) => Object.keys(v).length <= 20, "Too many settings");
+export type TrackerSettings = z.infer<typeof trackerSettings>;
+
+/** Why a provider's settings are refused (null = valid). Blank values count as unset. */
+export function trackerSettingsError(
+  provider: IssueProvider,
+  settings: Record<string, string>,
+): string | null {
+  const allowed: readonly string[] = isBoardProvider(provider) ? TRACKER_SETTING_KEYS[provider] : [];
+  const unknown = Object.keys(settings).find((k) => !allowed.includes(k));
+  if (unknown) return `${unknown} is not a setting for this tracker`;
+  if (isBoardProvider(provider)) {
+    for (const k of TRACKER_REQUIRED_SETTINGS[provider] ?? []) {
+      if (!settings[k]?.trim()) return `${k} is required`;
+    }
+    if (provider === "clickup") {
+      for (const k of ["priorityLow", "priorityMedium", "priorityHigh", "priorityUrgent"]) {
+        const v = settings[k]?.trim();
+        if (v && !/^[1-4]$/.test(v)) return `${k} must be a ClickUp priority from 1 (urgent) to 4 (low)`;
+      }
+    }
+  }
+  return null;
+}
+
+/** Blank values are dropped: an unset setting and an empty one mean the same. */
+export const cleanTrackerSettings = (settings: Record<string, string>): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(settings)
+      .map(([k, v]) => [k, v.trim()] as const)
+      .filter(([, v]) => v !== ""),
+  );
+
 const repoPattern = /^[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)+$/;
 /** A Linear team key (`ENG`) or a Jira project key (`WEB`). */
 const keyPattern = /^[A-Za-z][A-Za-z0-9_]{0,9}$/;
+const uuidPattern = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
 
 /**
  * What `repo` holds for each provider, and why a value is refused (null = valid). GitHub: `owner/name`;
- * GitLab: `group/subgroup/project`; Linear: the team key; Jira: the project key.
+ * GitLab: `group/subgroup/project`; Linear: the team key; Jira: the project key; Trello: the board id;
+ * Asana: the project gid; ClickUp: the list id; Notion: the database id.
  */
 export function trackerRepoError(provider: IssueProvider, repo: string): string | null {
   if (provider === "linear" || provider === "jira") {
@@ -767,37 +856,64 @@ export function trackerRepoError(provider: IssueProvider, repo: string): string 
         ? "Use the team key, like ENG"
         : "Use the project key, like WEB";
   }
+  if (provider === "trello") {
+    return /^([a-f0-9]{24}|[A-Za-z0-9]{8})$/.test(repo)
+      ? null
+      : "Use the board id (24 characters) or its 8-character short link";
+  }
+  if (provider === "asana") return /^\d{5,30}$/.test(repo) ? null : "Use the project's numeric id (gid)";
+  if (provider === "clickup") return /^[A-Za-z0-9_-]{3,30}$/.test(repo) ? null : "Use the list id";
+  if (provider === "notion") return uuidPattern.test(repo) ? null : "Use the database id (32 characters)";
   if (!repoPattern.test(repo)) return "Use owner/name (GitLab: group/project)";
   if (provider === "github" && repo.split("/").length !== 2) return "GitHub repositories are owner/name";
   return null;
 }
 
-/** Linear team keys and Jira project keys are upper case; repository paths are kept as typed. */
-export const normalizeTrackerRepo = (provider: IssueProvider, repo: string): string =>
-  provider === "linear" || provider === "jira" ? repo.trim().toUpperCase() : repo.trim();
+/**
+ * Linear team keys and Jira project keys are upper case; Notion ids are lower-case UUIDs with dashes;
+ * repository paths and other ids are kept as typed.
+ */
+export const normalizeTrackerRepo = (provider: IssueProvider, repo: string): string => {
+  const r = repo.trim();
+  if (provider === "linear" || provider === "jira") return r.toUpperCase();
+  if (provider === "notion" && uuidPattern.test(r)) {
+    const h = r.replaceAll("-", "").toLowerCase();
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+  }
+  return r;
+};
 
 const trackerUrl = z.url({ protocol: /^https?$/ }).max(500);
-/** Inbound webhook signing secret supplied by the tracker (Linear generates its own). */
+/** Inbound webhook signing secret supplied by the tracker (Linear generates its own; Trello: the app secret). */
 const trackerWebhookSecret = z.string().trim().min(16).max(200);
+/** Trello: the API key of the Power-Up the token was issued for. */
+const trackerApiKey = z.string().trim().min(8).max(200);
 
 export const issueIntegrationCreate = z
   .object({
     provider: z.enum(ISSUE_PROVIDERS),
     /** Personal / project access token, Linear API key or Jira API token. Stored encrypted, never returned. */
     token: z.string().trim().min(8).max(500),
-    /** GitHub `owner/name`; GitLab `group/subgroup/project`; Linear team key; Jira project key. */
+    /**
+     * GitHub `owner/name`; GitLab `group/subgroup/project`; Linear team key; Jira project key; Trello board id;
+     * Asana project gid; ClickUp list id; Notion database id.
+     */
     repo: z.string().trim().min(1).max(300),
     /**
      * GitHub Enterprise API or self-managed GitLab base URL (null = GITHUB_API_URL / GITLAB_URL). Jira: the
-     * site URL, required (`https://acme.atlassian.net`). Linear: unused.
+     * site URL, required (`https://acme.atlassian.net`). The other trackers have no self-hosted URL.
      */
     apiUrl: trackerUrl.nullable().optional(),
     /** Jira only: the Atlassian account email the API token belongs to. */
     email: z.email().max(254).optional(),
+    /** Trello only: the API key; stored encrypted together with the token. */
+    apiKey: trackerApiKey.optional(),
     labels: z.array(z.string().trim().min(1).max(50)).max(10).default([]),
     autoCreate: z.enum(ISSUE_AUTO_CREATE).default("manual"),
-    /** Linear: the signing secret Linear shows for the webhook. Others: generated by Pinwren. */
+    /** Linear: the signing secret Linear shows. Trello: the Power-Up's app secret. Others: generated. */
     webhookSecret: trackerWebhookSecret.optional(),
+    /** Board providers: target list / status / priority mapping (see `TRACKER_SETTING_KEYS`). */
+    settings: trackerSettings.default({}),
   })
   .superRefine((v, ctx) => {
     const repoError = trackerRepoError(v.provider, v.repo);
@@ -808,22 +924,32 @@ export const issueIntegrationCreate = z
     } else if (v.email !== undefined) {
       ctx.addIssue({ code: "custom", path: ["email"], message: "Only Jira takes an account email" });
     }
-    if (v.provider === "linear" && v.apiUrl) {
-      ctx.addIssue({ code: "custom", path: ["apiUrl"], message: "Linear has no self-hosted URL" });
+    if (v.provider === "trello") {
+      if (!v.apiKey) ctx.addIssue({ code: "custom", path: ["apiKey"], message: "Enter the Trello API key" });
+    } else if (v.apiKey !== undefined) {
+      ctx.addIssue({ code: "custom", path: ["apiKey"], message: "Only Trello takes an API key" });
     }
+    if (v.provider !== "github" && v.provider !== "gitlab" && v.provider !== "jira" && v.apiUrl) {
+      ctx.addIssue({ code: "custom", path: ["apiUrl"], message: "This tracker has no self-hosted URL" });
+    }
+    const settingsError = trackerSettingsError(v.provider, cleanTrackerSettings(v.settings));
+    if (settingsError) ctx.addIssue({ code: "custom", path: ["settings"], message: settingsError });
   });
 
-/** `repo` and `email` are checked against the stored provider by the route. */
+/** `repo`, `email`, `apiKey` and `settings` are checked against the stored provider by the route. */
 export const issueIntegrationUpdate = z.object({
   token: z.string().trim().min(8).max(500).optional(),
   repo: z.string().trim().min(1).max(300).optional(),
   apiUrl: trackerUrl.nullable().optional(),
   email: z.email().max(254).optional(),
+  apiKey: trackerApiKey.optional(),
   labels: z.array(z.string().trim().min(1).max(50)).max(10).optional(),
   autoCreate: z.enum(ISSUE_AUTO_CREATE).optional(),
   active: z.boolean().optional(),
-  /** Replace the inbound webhook secret with the one the tracker shows (Linear). */
+  /** Replace the inbound webhook secret with the one the tracker shows (Linear, Trello). */
   webhookSecret: trackerWebhookSecret.optional(),
+  /** Replaces all settings of a board provider. */
+  settings: trackerSettings.optional(),
 });
 
 export const issueCreate = z.object({ integrationId: z.uuid() });
