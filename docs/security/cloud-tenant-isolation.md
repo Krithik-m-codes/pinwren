@@ -283,7 +283,7 @@ and `cloud-signup.test.ts` (rules and counters).
 
 ## Automation rules and AI label suggestions
 
-Design: `docs/adr/0026-automation-rules-and-ai-labels.md`; API: `docs/contracts/automation.md`. Migration `0012` adds
+Design: `docs/adr/0028-automation-rules-and-ai-labels.md`; API: `docs/contracts/automation.md`. Migration `0012` adds
 three direct-ownership tables, each with the `pinwren_tenant` policy and composite `(id, org_id)` foreign keys, all in
 `tenant-inventory.ts`:
 

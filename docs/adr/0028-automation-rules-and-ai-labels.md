@@ -1,4 +1,4 @@
-# ADR 0026 — Automation rules and AI label suggestions
+# ADR 0028 — Automation rules and AI label suggestions
 
 **Status:** accepted
 
