@@ -18,6 +18,7 @@ import { automation } from "./en/automation";
 import { billing } from "./en/billing";
 import { cloud } from "./en/cloud";
 import { dashboard } from "./en/dashboard";
+import { dashx } from "./en/dashx";
 import { global } from "./en/global";
 import { handoff } from "./en/handoff";
 import { share } from "./en/share";
@@ -49,6 +50,7 @@ export const en = {
   ...automation,
   ...cloud,
   ...dashboard,
+  ...dashx,
   ...global,
   ...handoff,
   ...share,

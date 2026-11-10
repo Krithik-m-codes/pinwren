@@ -1,6 +1,6 @@
 "use client";
 
-import { Bookmark, MoreHorizontal, Pencil, Plus, Trash2, Users } from "lucide-react";
+import { Bookmark, MoreHorizontal, Pencil, Pin, PinOff, Plus, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -29,6 +29,10 @@ import { useT } from "@/lib/i18n/provider";
 import { paramsForFilters } from "@/lib/inbox-filters";
 import { here } from "@/lib/routes";
 import { errorMessage, useDeleteViewMutation, useProjectsQuery, useViewsQuery } from "@/lib/store/api";
+import {
+  useUpdateWorkspacePreferencesMutation,
+  useWorkspacePreferencesQuery,
+} from "@/lib/store/api/dashboards";
 import { useViewer } from "@/lib/viewer";
 
 /** Link to the inbox showing a saved view's filters and layout (`saved` marks it active). */
@@ -142,6 +146,19 @@ function ProjectsGroup() {
   // Creating projects is an Admin permission (projects.manage, wave-5 §3.7).
   const { isAdmin } = useViewer();
   const current = pathname === "/inbox" ? params.get("project") : null;
+  // Pinned projects come first (per person and workspace, ADR 0029); viewers may pin too.
+  const prefs = useWorkspacePreferencesQuery(undefined);
+  const [savePrefs] = useUpdateWorkspacePreferencesMutation();
+  const pinnedIds = prefs.data?.preferences.pinnedProjectIds ?? [];
+  const all = projects.data?.projects ?? [];
+  const pinned = pinnedIds.flatMap((id) => all.find((p) => p.id === id) ?? []);
+  const rest = all.filter((p) => !pinnedIds.includes(p.id));
+  const togglePin = (id: string) => {
+    const next = pinnedIds.includes(id) ? pinnedIds.filter((x) => x !== id) : [...pinnedIds, id];
+    void savePrefs({ pinnedProjectIds: next })
+      .unwrap()
+      .catch((e: unknown) => toast.error(errorMessage(e)));
+  };
   return (
     <SidebarGroup>
       <SidebarGroupLabel>{t("components2.projects")}</SidebarGroupLabel>
@@ -152,18 +169,40 @@ function ProjectsGroup() {
       )}
       <SidebarGroupContent>
         <SidebarMenu>
-          {projects.data?.projects.map((p) => (
-            <SidebarMenuItem key={p.id}>
-              <SidebarMenuButton
-                isActive={current === p.id || pathname.startsWith(`/projects/${p.id}`)}
-                render={<Link href={`/inbox?project=${p.id}`} />}
-              >
-                <span className="size-2 shrink-0 rounded-full bg-primary/70" />
-                <span className="truncate">{p.name}</span>
-              </SidebarMenuButton>
-              {!!p.openCount && <SidebarMenuBadge>{p.openCount}</SidebarMenuBadge>}
-            </SidebarMenuItem>
-          ))}
+          {[...pinned, ...rest].map((p) => {
+            const isPinned = pinnedIds.includes(p.id);
+            return (
+              <SidebarMenuItem key={p.id} data-project={p.name} data-pinned={isPinned || undefined}>
+                <SidebarMenuButton
+                  isActive={current === p.id || pathname.startsWith(`/projects/${p.id}`)}
+                  render={<Link href={`/inbox?project=${p.id}`} />}
+                >
+                  {isPinned ? (
+                    <Pin className="size-3 shrink-0 text-primary" aria-hidden />
+                  ) : (
+                    <span className="size-2 shrink-0 rounded-full bg-primary/70" />
+                  )}
+                  <span className="truncate">{p.name}</span>
+                </SidebarMenuButton>
+                {!!p.openCount && (
+                  <SidebarMenuBadge className="group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0">
+                    {p.openCount}
+                  </SidebarMenuBadge>
+                )}
+                <SidebarMenuAction
+                  showOnHover
+                  aria-label={
+                    isPinned
+                      ? t("dashx.unpinProject", { name: p.name })
+                      : t("dashx.pinProject", { name: p.name })
+                  }
+                  onClick={() => togglePin(p.id)}
+                >
+                  {isPinned ? <PinOff /> : <Pin />}
+                </SidebarMenuAction>
+              </SidebarMenuItem>
+            );
+          })}
           {projects.data?.projects.length === 0 && (
             <p className="px-2 text-xs text-muted-foreground">{t("components2.noProjectsYet")}</p>
           )}

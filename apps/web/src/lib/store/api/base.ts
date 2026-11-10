@@ -1,6 +1,7 @@
 import { createApi, type FetchArgs, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type { BaseQueryFn, FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import { translateNow } from "@/lib/i18n/provider";
+import { sessionExpired } from "@/lib/session-expiry";
 
 /** A failed request as the dashboard sees it: the HTTP status and the problem-details code (blueprint 04 §1). */
 export type ApiError = { status: number; code: string; message: string };
@@ -61,7 +62,11 @@ export type BaseQuery = BaseQueryFn<string | FetchArgs, unknown, ApiError>;
 export const baseQuery: BaseQuery = async (args, api, extraOptions: object) => {
   const { apiBase } = api.extra as StoreExtra;
   const result = await rawQuery(apiBase)(args, api, extraOptions);
-  if (result.error) return { error: toApiError(result.error) };
+  if (result.error) {
+    // A signed-in screen whose session is gone: say so and go to sign-in, then come back here.
+    if (result.error.status === 401 && typeof window !== "undefined") sessionExpired();
+    return { error: toApiError(result.error) };
+  }
   return { data: result.data ?? null };
 };
 
@@ -94,6 +99,8 @@ export const TAG_TYPES = [
   "Guest",
   "Stats",
   "Share",
+  "Dashboard",
+  "UiState",
 ] as const;
 export type TagType = (typeof TAG_TYPES)[number];
 

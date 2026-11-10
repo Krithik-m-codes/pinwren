@@ -72,13 +72,13 @@ export function SupportNudge() {
   const { t } = useI18n();
   const { me, userId } = useViewer();
   const community = useEntitlementsQuery(undefined).data?.edition === "community";
-  const { state, patch } = useNudgeState(userId);
+  const { state, patch, ready } = useNudgeState(userId);
   // The clock is read once per mount: render stays pure and the strip does not flicker at a boundary.
   const [now] = useState(() => Date.now());
   const eligible = !!me?.nudges && me.instanceAdmin && community;
   useEffect(() => {
-    if (eligible && !state.firstSeen) patch({ firstSeen: new Date().toISOString() });
-  }, [eligible, state.firstSeen, patch]);
+    if (eligible && ready && !state.firstSeen) patch({ firstSeen: new Date().toISOString() });
+  }, [eligible, ready, state.firstSeen, patch]);
   if (!eligible || !supportCardVisible(state, now)) return null;
   const acted = () => patch({ supportSnoozedUntil: snoozeUntil(Date.now(), SUPPORT_ACTED_SNOOZE_DAYS) });
   return (
