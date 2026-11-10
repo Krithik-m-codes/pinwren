@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/Krithik-m-codes/pinwren/compare/mcp-v0.2.0...mcp-v0.3.0) (2026-11-10)
+
+
+### Features
+
+* agent hand-off, generated repro tests and MCP/SDK/CLI parity ([#45](https://github.com/Krithik-m-codes/pinwren/issues/45)) ([f2efbac](https://github.com/Krithik-m-codes/pinwren/commit/f2efbacdebcbd193aafe4059fd423cadf6ad3221))
+
 ## [0.2.0](https://github.com/Krithik-m-codes/pinwren/compare/mcp-v0.1.1...mcp-v0.2.0) (2026-10-26)
 
 

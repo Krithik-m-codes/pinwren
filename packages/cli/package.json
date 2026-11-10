@@ -1,6 +1,6 @@
 {
   "name": "@pinwren/cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Pinwren command line: install the widget, check an instance, list open feedback",
   "keywords": [
     "pinwren",

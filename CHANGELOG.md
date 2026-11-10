@@ -8,6 +8,17 @@ From the first release on, release-please adds a section per version from the Co
 `main`; the widget's own changes are also listed in [`packages/widget/CHANGELOG.md`](packages/widget/CHANGELOG.md)
 once it is published.
 
+## [0.5.0](https://github.com/Krithik-m-codes/pinwren/compare/v0.4.0...v0.5.0) (2026-11-10)
+
+
+### Features
+
+* agent hand-off, generated repro tests and MCP/SDK/CLI parity ([#45](https://github.com/Krithik-m-codes/pinwren/issues/45)) ([f2efbac](https://github.com/Krithik-m-codes/pinwren/commit/f2efbacdebcbd193aafe4059fd423cadf6ad3221))
+* ai auto-labels and per-project automation rules ([#46](https://github.com/Krithik-m-codes/pinwren/issues/46)) ([007131d](https://github.com/Krithik-m-codes/pinwren/commit/007131d37e16f7a24b674420570ac85f13a07d60))
+* share links, client sign-off and reporting widgets ([#44](https://github.com/Krithik-m-codes/pinwren/issues/44)) ([98ab038](https://github.com/Krithik-m-codes/pinwren/commit/98ab038b1a7ddcfb7853ad3976e4ae2dae7c6ced))
+* **widget:** error-triggered report prompt and observability link-outs ([#43](https://github.com/Krithik-m-codes/pinwren/issues/43)) ([9548b00](https://github.com/Krithik-m-codes/pinwren/commit/9548b00b28cdcd36fc4f7eff9b9e49a28a993d3b))
+* **www:** load the pinwren widget on the marketing site ([#32](https://github.com/Krithik-m-codes/pinwren/issues/32)) ([fa52b0f](https://github.com/Krithik-m-codes/pinwren/commit/fa52b0f384286024c3f9aa6c24a6f1e7d66f3132))
+
 ## [0.4.0](https://github.com/Krithik-m-codes/pinwren/compare/v0.3.0...v0.4.0) (2026-11-02)
 
 
