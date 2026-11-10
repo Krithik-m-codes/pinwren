@@ -199,6 +199,16 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/feedback/:id/ai/labels"
   },
+  "GET /api/feedback/:id/brief": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/feedback/:id/brief"
+  },
+  "GET /api/feedback/:id/repro-test": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/feedback/:id/repro-test"
+  },
   "GET /api/feedback/:id/reproduction": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -439,6 +449,16 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/v1/feedback/:id"
   },
+  "GET /api/v1/feedback/:id/brief": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/feedback/:id/brief"
+  },
+  "GET /api/v1/feedback/:id/repro-test": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/feedback/:id/repro-test"
+  },
   "GET /api/v1/feedback/:id/reproduction": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -448,6 +468,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/v1/projects"
+  },
+  "GET /api/v1/projects/:id/labels": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/projects/:id/labels"
   },
   "GET /api/v1/projects/:id/rounds": {
     "boundary": "tenant",
@@ -459,10 +484,20 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/v1/rounds/:id"
   },
+  "GET /api/v1/stats": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/stats"
+  },
   "GET /api/v1/token": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/v1/token"
+  },
+  "GET /api/v1/views": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/views"
   },
   "GET /api/views": {
     "boundary": "tenant",

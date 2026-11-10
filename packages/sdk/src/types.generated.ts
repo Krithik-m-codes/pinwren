@@ -402,3 +402,180 @@ export type Reproduction = {
     summarized: boolean;
   } | null;
 };
+
+/** A brief a coding agent can act on, with the commands and links that deliver it (masked data only). */
+export type AgentBrief = {
+  feedbackId: string;
+  number: number;
+  title: string;
+  markdown: string;
+  hints: {
+    repo: {
+      provider: string;
+      path: string;
+    } | null;
+    searchTerms: string[];
+    route: string | null;
+    files: string[];
+  };
+  commands: {
+    claude: string;
+    claudeMcpSetup: string;
+    claudePipe: string;
+    vscode: string;
+  };
+  links: {
+    cursor: string;
+    dashboard: string;
+  };
+  privacy: {
+    replayIncluded: false;
+    screenshotIncluded: false;
+    note: string;
+  };
+};
+
+/** A draft Playwright test for a report. Always show its caveats next to the code. */
+export type ReproTest = {
+  feedbackId: string;
+  filename: string;
+  language: "typescript";
+  code: string;
+  caveats: string[];
+  stats: {
+    scripted: number;
+    skipped: number;
+    hasReplay: boolean;
+    expectations: string[];
+  };
+  polished: boolean;
+};
+
+/** A project label with its live item count. */
+export type Label = {
+  id: string;
+  name: string;
+  color: string;
+  count: number;
+  [key: string]: unknown;
+};
+
+/** A saved inbox view. */
+export type SavedView = {
+  id: string;
+  name: string;
+  filters: Record<string, unknown>;
+  layout: string;
+  shared: boolean;
+  ownerId: string;
+  mine: boolean;
+  createdAt: string;
+  updatedAt: string;
+  [key: string]: unknown;
+};
+
+/** Filters for `stats.get`. */
+export type StatsQuery = {
+  projectId?: string | undefined;
+  days?: number | undefined;
+};
+
+/** Workspace numbers: totals, breakdowns and a daily series. */
+export type Stats = {
+  days: number;
+  totals: {
+    active: number;
+    created: number;
+    previousCreated: number;
+    resolved: number;
+    unassigned: number;
+    overdue: number;
+    mine: number;
+    urgent: number;
+    avgResolutionHours: number | null;
+    slaBreached: number;
+  };
+  byStatus: {
+    key: "open" | "in_progress" | "in_review" | "resolved" | "wont_fix" | "duplicate";
+    count: number;
+  }[];
+  byKind: {
+    key: "comment" | "bug" | "idea" | "question";
+    count: number;
+  }[];
+  byPriority: {
+    key: "none" | "low" | "medium" | "high" | "urgent";
+    count: number;
+  }[];
+  byProject: {
+    id: string;
+    name: string;
+    active: number;
+    total: number;
+  }[];
+  series: {
+    date: string;
+    created: number;
+    resolved: number;
+  }[];
+  topPages: {
+    url: string;
+    count: number;
+    active: number;
+  }[];
+  browsers: {
+    key: string;
+    count: number;
+  }[];
+  operatingSystems: {
+    key: string;
+    count: number;
+  }[];
+  devices: {
+    key: "desktop" | "tablet" | "mobile" | "unknown";
+    count: number;
+  }[];
+  firstResponse: {
+    sample: number;
+    medianHours: number | null;
+    buckets: {
+      key: "1h" | "4h" | "24h" | "3d" | "7d" | "over7d";
+      count: number;
+    }[];
+  };
+  resolveTime: {
+    sample: number;
+    medianHours: number | null;
+    buckets: {
+      key: "1h" | "4h" | "24h" | "3d" | "7d" | "over7d";
+      count: number;
+    }[];
+  };
+  rounds: {
+    id: string;
+    name: string;
+    projectId: string;
+    projectName: string;
+    dueAt: string | null;
+    total: number;
+    closed: number;
+    requireSignoff: boolean;
+    signoff: "none" | "approved" | "changes_requested";
+  }[];
+  reporters: {
+    id: string;
+    name: string;
+    count: number;
+    resolved: number;
+  }[];
+  recent: {
+    id: string;
+    type: string;
+    at: string;
+    actor: string | null;
+    feedbackId: string;
+    projectId: string;
+    number: number;
+    title: string | null;
+  }[];
+};

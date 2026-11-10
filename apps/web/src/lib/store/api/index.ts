@@ -54,6 +54,8 @@ export const {
   useRestoreFeedbackMutation,
   usePurgeFeedbackMutation,
   useLazyReproductionQuery,
+  useAgentBriefQuery,
+  useReproTestQuery,
   useWatchFeedbackMutation,
   usePageLinkMutation,
   useMarkItemNotificationsReadMutation,

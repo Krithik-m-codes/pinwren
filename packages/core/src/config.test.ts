@@ -180,6 +180,13 @@ describe("panel actions (F-016)", () => {
     });
     expect(c.panelActions[0]?.visibleTo).toBe("team");
   });
+  it("marks an agent webhook, and only a webhook can be one", () => {
+    const hook = { id: "agent", label: "Send to agent", kind: "webhook", url: "https://hooks.example.com/a" };
+    expect(widgetConfig.parse({ panelActions: [hook] }).panelActions[0]?.agent).toBe(false);
+    const c = widgetConfig.parse({ panelActions: [{ ...hook, agent: true }] });
+    expect(c.panelActions[0]).toMatchObject({ agent: true, visibleTo: "team" });
+    expect(widgetConfig.safeParse({ panelActions: [{ ...link, agent: true }] }).success).toBe(false);
+  });
   it("rejects bad ids, schemes, placeholders, duplicates and more than five", () => {
     const bad = (a: Record<string, unknown>) =>
       !widgetConfig.safeParse({ panelActions: [{ ...link, ...a }] }).success;

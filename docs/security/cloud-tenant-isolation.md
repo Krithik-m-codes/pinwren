@@ -50,7 +50,7 @@ required.
 
 ## HTTP entry points
 
-`packages/api/src/tenant-route-inventory.json` records all 200 mounted endpoint signatures, including
+`packages/api/src/tenant-route-inventory.json` records all 207 mounted endpoint signatures, including
 the ALL-method `/mcp` handler. Each record names its authorization boundary, whether its handler needs
 special treatment for streaming/external work, and its required authorization test case. These names
 are planned coverage identifiers, not claims that the corresponding integration test already passes.
@@ -205,14 +205,14 @@ selfhost unit runs and exercised by the integration runner.
 
 ### Route-wide acceptance evidence (Task 8)
 
-Every entry of `packages/api/src/tenant-route-inventory.json` (200 routes) has one executable case, and the
+Every entry of `packages/api/src/tenant-route-inventory.json` (207 routes) has one executable case, and the
 inventory and the case registries are compared in both directions, so an added, renamed or reclassified
 route without a case fails. Both suites run against real PostgreSQL with the restricted runtime role, in a
 fixture holding two workspaces (A and B) with a project, report, comment, label, round, review link, saved view,
 webhook endpoint and delivery, tracker integration, asset, notification, template, brand asset, email delivery
 and API token each.
 
-- `cloud-routes-db.test.ts` covers the 138 `tenant`, 10 `identity`, 17 `system` and 5 `public` routes.
+- `cloud-routes-db.test.ts` covers the 145 `tenant`, 10 `identity`, 17 `system` and 5 `public` routes.
   Signed in (cookie or API token) to workspace A, each id-bearing tenant route names workspace B's resource and must
   answer 404 or 403; routes with no id (lists, creates, singleton settings) run as A and must return nothing of B's.
   Every case also hashes all of workspace B's rows (direct tables, parent-owned tables, workspace, members,

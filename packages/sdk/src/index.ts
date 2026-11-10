@@ -1,4 +1,5 @@
 import type {
+  AgentBrief,
   CommentCreate,
   Comment,
   FeedbackDetail,
@@ -7,10 +8,15 @@ import type {
   FeedbackListQuery,
   FeedbackRow,
   FeedbackUpdate,
+  Label,
   Project,
   Reproduction,
+  ReproTest,
   Round,
   RoundUpdate,
+  SavedView,
+  Stats,
+  StatsQuery,
 } from "./types.generated";
 
 export type * from "./types.generated";
@@ -174,6 +180,17 @@ export class Pinwren {
     /** Steps, failing requests and console errors (plus a replay summary when one was recorded). */
     reproduction: (id: string): Promise<Reproduction> =>
       this.#json<Reproduction>("GET", `/feedback/${enc(id)}/reproduction`),
+
+    /**
+     * An agent-ready brief (report, repro steps, page + element, environment, errors, code hints) with the
+     * commands and links that hand it to Claude Code, Cursor or VS Code. Masked data only: the replay and
+     * screenshot are linked, never included.
+     */
+    brief: (id: string): Promise<AgentBrief> => this.#json<AgentBrief>("GET", `/feedback/${enc(id)}/brief`),
+
+    /** A draft Playwright test for the report. Show `caveats` with the code: it is a draft, not a verified test. */
+    reproTest: (id: string): Promise<ReproTest> =>
+      this.#json<ReproTest>("GET", `/feedback/${enc(id)}/repro-test`),
   };
 
   readonly comments = {
@@ -194,6 +211,22 @@ export class Pinwren {
     /** Rename, reschedule or close a round. Needs `feedback:write`. */
     update: async (id: string, patch: RoundUpdate): Promise<Round> =>
       (await this.#json<{ round: Round }>("PATCH", `/rounds/${enc(id)}`, { body: patch })).round,
+  };
+
+  readonly labels = {
+    /** A project's labels, each with the number of live items carrying it. */
+    list: async (projectId: string): Promise<Label[]> =>
+      (await this.#json<{ labels: Label[] }>("GET", `/projects/${enc(projectId)}/labels`)).labels,
+  };
+
+  readonly views = {
+    /** Saved inbox views the token's owner can use (shared ones and their own). */
+    list: async (): Promise<SavedView[]> => (await this.#json<{ views: SavedView[] }>("GET", "/views")).views,
+  };
+
+  readonly stats = {
+    /** Workspace numbers for the last 7, 14 (default), 30 or 90 days, optionally for one project. */
+    get: (query: StatsQuery = {}): Promise<Stats> => this.#json<Stats>("GET", "/stats", { query }),
   };
 
   readonly assets = {

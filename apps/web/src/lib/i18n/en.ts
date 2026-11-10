@@ -19,6 +19,7 @@ import { billing } from "./en/billing";
 import { cloud } from "./en/cloud";
 import { dashboard } from "./en/dashboard";
 import { global } from "./en/global";
+import { handoff } from "./en/handoff";
 import { share } from "./en/share";
 
 // The dashboard's English strings: the source of every translation key. They are split by area (en/*.ts) so
@@ -49,6 +50,7 @@ export const en = {
   ...cloud,
   ...dashboard,
   ...global,
+  ...handoff,
   ...share,
 } as const;
 

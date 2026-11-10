@@ -6,6 +6,7 @@ import { parseArgs } from "node:util";
 import { PinwrenError } from "@pinwren/sdk";
 import pkg from "../package.json" with { type: "json" };
 import { doctor, status } from "./checks";
+import { briefFor, formatDetail, formatList, getFeedback, listFeedback, reproFor } from "./feedback";
 import {
   assertProjectKey,
   detectFramework,
@@ -25,6 +26,15 @@ Usage:
       Check the server, widget.js and the widget config for a project key + origin.
   pinwren status --url <instance> --token <pwt_…> [--json]
       List projects and their open feedback.
+
+  pinwren feedback list  --url <instance> --token <pwt_…> [--project <id>] [--status open|active|all|…] [--kind bug|…] [--text <q>] [--limit <n>] [--json]
+      Search feedback.
+  pinwren feedback get   <id> --url <instance> --token <pwt_…> [--json]
+      Show one item.
+  pinwren feedback brief <id> --url <instance> --token <pwt_…> [--json]
+      Print the agent-ready brief (Markdown). Pipe it: pinwren feedback brief <id> | claude -p "Fix this"
+  pinwren repro <id> --url <instance> --token <pwt_…> [--out <file.spec.ts>] [--json]
+      Print (or save) a DRAFT Playwright test for the report; the caveats go to stderr.
 
 Environment: PINWREN_URL, PINWREN_KEY, PINWREN_TOKEN fill the matching flags.`;
 
@@ -121,6 +131,12 @@ async function run(argv: string[]): Promise<number> {
       framework: { type: "string" },
       file: { type: "string" },
       write: { type: "boolean" },
+      project: { type: "string" },
+      status: { type: "string" },
+      kind: { type: "string" },
+      text: { type: "string" },
+      limit: { type: "string" },
+      out: { type: "string" },
       json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },
@@ -169,6 +185,66 @@ async function run(argv: string[]): Promise<number> {
     for (const p of s.projects)
       console.log(`  ${p.name.padEnd(width)}  ${String(p.openCount).padStart(4)} open`);
     return 0;
+  }
+
+  if (command === "feedback" || command === "repro") {
+    const token = values.token ?? process.env.PINWREN_TOKEN;
+    if (!token)
+      throw new Error("--token (or PINWREN_TOKEN) is required: create one in Settings › API tokens");
+    const [, a, b] = positionals;
+    const sub = command === "repro" ? "repro" : a;
+    const id = command === "repro" ? a : b;
+    const need = () => {
+      if (!id)
+        throw new Error(
+          `Usage: pinwren ${command === "repro" ? "repro" : `feedback ${sub ?? "list|get|brief"}`} <id>`,
+        );
+      return id;
+    };
+    if (sub === "list") {
+      const limit = values.limit ? Number(values.limit) : undefined;
+      if (limit !== undefined && !(Number.isInteger(limit) && limit >= 1 && limit <= 100))
+        throw new Error("--limit is a whole number from 1 to 100");
+      const page = await listFeedback(url, token, {
+        project: values.project,
+        status: values.status,
+        kind: values.kind,
+        text: values.text,
+        limit,
+      });
+      console.log(values.json ? JSON.stringify(page, null, 2) : formatList(page));
+      return 0;
+    }
+    if (sub === "get") {
+      const d = await getFeedback(url, token, need());
+      console.log(values.json ? JSON.stringify(d, null, 2) : formatDetail(d));
+      return 0;
+    }
+    if (sub === "brief") {
+      const brief = await briefFor(url, token, need());
+      console.log(values.json ? JSON.stringify(brief, null, 2) : brief.markdown);
+      return 0;
+    }
+    if (sub === "repro") {
+      const t = await reproFor(url, token, need());
+      if (values.json) {
+        console.log(JSON.stringify(t, null, 2));
+        return 0;
+      }
+      for (const c of t.caveats) console.error(`! ${c}`);
+      if (values.out) {
+        writeFileSync(values.out, t.code);
+        console.error(
+          ok(
+            `Wrote ${values.out} (${t.stats.scripted} scripted step(s)). It is a draft: review it before use.`,
+          ),
+        );
+      } else {
+        console.log(t.code);
+      }
+      return 0;
+    }
+    throw new Error("Usage: pinwren feedback list|get|brief, or pinwren repro <id>");
   }
 
   throw new Error(`Unknown command "${command}". Run pinwren --help.`);

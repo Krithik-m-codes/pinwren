@@ -105,6 +105,7 @@ import { AiReproSteps } from "./ai-repro-steps";
 import { AiLabelSuggestions } from "./ai-label-suggestions";
 import { AiSummaryCard } from "./ai-summary-card";
 import { DueDate, PresenceStack } from "./inbox-list";
+import { AgentHandoff } from "./agent-handoff";
 import { ItemActions } from "./item-actions";
 import { AssigneesPicker, ItemSearchPicker, LabelChips, LabelPicker } from "./pickers";
 import { type ObservabilityLink, observabilityLinks } from "@/lib/observability";
@@ -326,6 +327,7 @@ function DetailBody({
               </span>
             </Button>
           )}
+          {!inTrash && <AgentHandoff data={data} />}
           <Button variant="ghost" size="sm" onClick={() => copyText(itemLink(f.id), t("inbox1.linkCopied"))}>
             <Link2 /> <span className="hidden sm:inline">{t("inbox1.copyLink")}</span>
           </Button>

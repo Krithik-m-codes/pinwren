@@ -7,6 +7,7 @@ import { ApiError, notFound } from "../errors";
 import { type OutboundFetch, outboundErrorText, safeFetch } from "../outbound/safe-fetch";
 import { buildRequest, WEBHOOK_API_VERSION, type WebhookPayload } from "../webhooks/format";
 import { loadFeedbackContext } from "./feedback-payload";
+import { agentBrief } from "./handoff";
 
 // Panel actions (F-016, wave-3 contract §1). Link actions open in the browser; webhook actions are
 // POSTed from here, signed with the project's action secret exactly like generic webhooks.
@@ -73,6 +74,8 @@ export async function runPanelAction(
     const ctx = await loadFeedbackContext(feedbackId);
     if (!ctx) throw notFound("Feedback");
     const secret = await ensureActionSecret(row.p);
+    // An agent webhook also gets the brief, so the receiver can start work without calling back.
+    const brief = action.agent ? await agentBrief(orgId, feedbackId) : null;
     const payload: WebhookPayload = {
       id: crypto.randomUUID(),
       event: "action.run",
@@ -82,6 +85,7 @@ export async function runPanelAction(
         feedback: ctx.payload,
         action: { id: action.id, label: action.label },
         actor: { kind: "user", id: userId },
+        ...(brief ? { brief: { markdown: brief.markdown, hints: brief.hints, links: brief.links } } : {}),
       },
     };
     const req = buildRequest("generic", payload, secret);

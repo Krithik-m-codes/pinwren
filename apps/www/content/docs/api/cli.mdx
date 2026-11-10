@@ -18,6 +18,10 @@ npm install -g @pinwren/cli
 pinwren init   [--url <instance>] [--key <pk_…>] [--framework html|vite|next] [--write] [--file <path>]
 pinwren doctor --url <instance> [--key <pk_…>] [--origin <https://your-site>] [--json]
 pinwren status --url <instance> --token <pwt_…> [--json]
+pinwren feedback list  --url <instance> --token <pwt_…> [--project <id>] [--status <s>] [--kind <k>] [--text <q>] [--limit <n>] [--json]
+pinwren feedback get   <id> --url <instance> --token <pwt_…> [--json]
+pinwren feedback brief <id> --url <instance> --token <pwt_…> [--json]
+pinwren repro <id>          --url <instance> --token <pwt_…> [--out <file.spec.ts>] [--json]
 ```
 
 `-h` / `--help` prints the usage and `-v` / `--version` the version. The environment variables
@@ -99,3 +103,36 @@ Signed in as Ada Lovelace (owner)
 
 It calls `GET /api/v1/token` and `GET /api/v1/projects`, so a token with the `feedback:read` scope is enough.
 `--json` prints `{ user, role, projects: [{ id, name, openCount }] }`.
+
+## `pinwren feedback`
+
+Search and read feedback from the terminal, with a token that has the `feedback:read` scope.
+
+```bash
+pinwren feedback list --url https://feedback.example.com --token pwt_… --status open --kind bug --limit 10
+pinwren feedback get 0192f0c4-4f6e-7c1a-8d55-9a3e2b1c4d5e
+```
+
+`list` prints one line per item (number, id, status, priority, kind, title); report text is cut to one line and
+stripped of control characters. `--status` takes a status or `active` / `all`. `--json` prints the API's answer.
+
+`brief` prints the agent-ready brief as Markdown — the same text as **Fix with agent** in the dashboard and
+the MCP tool `get_agent_brief`. It is built from the stored, masked diagnostics; the replay and screenshot are
+linked, never included. Pipe it straight into a coding agent:
+
+```bash
+pinwren feedback brief 0192f0c4-… | claude -p "Fix the issue described in this Pinwren brief."
+```
+
+## `pinwren repro`
+
+Prints a **draft** Playwright test (TypeScript) for the report, or saves it with `--out`:
+
+```bash
+pinwren repro 0192f0c4-… --out tests/pinwren-142.spec.ts
+```
+
+The test opens the page, replays the interactions from the session replay when one was recorded, and asserts on
+the console errors, failing requests or pinned element in the report. It is generated without a model and is a
+starting point, not a verified test: the caveats are printed to stderr (and written in the file's header), so read,
+run and adjust it before you rely on it.
