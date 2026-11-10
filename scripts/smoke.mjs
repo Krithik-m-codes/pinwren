@@ -453,6 +453,67 @@ r = await W("/w/feedback", {
 });
 check("attachment type mismatch rejected", r.status === 400, r.status);
 
+// Screen recordings (ADR 0029): stored as an attachment with their duration, served for playback.
+const webm = `data:video/webm;base64,${Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 1, 2, 3, 4, 5, 6, 7, 8]).toString("base64")}`;
+r = await W("/w/feedback", {
+  method: "POST",
+  json: {
+    ...report,
+    clientId: crypto.randomUUID(),
+    recording: { dataUrl: webm, durationMs: 4200, audio: true },
+  },
+});
+check("screen recording accepted", r.status === 201, r.status);
+r = await call(`/api/feedback/${r.body.feedback?.id}`);
+const rec = r.body.assets?.find((a) => a.kind === "attachment" && a.meta?.recording === true);
+check(
+  "recording stored as an attachment with its duration",
+  rec?.contentType === "video/webm" && rec.meta.durationMs === 4200 && rec.meta.audio === true,
+);
+r = rec ? await call(`/api/assets/${rec.id}`) : { status: 0, headers: new Headers() };
+check(
+  "recording served inline with range support",
+  r.status === 200 &&
+    (r.headers.get("content-disposition") ?? "").startsWith("inline") &&
+    r.headers.get("accept-ranges") === "bytes",
+);
+r = rec ? await call(`/api/assets/${rec.id}`, { headers: { range: "bytes=4-7" } }) : { status: 0 };
+check("recording answers a byte range", r.status === 206, r.status);
+r = await W("/w/feedback", {
+  method: "POST",
+  json: {
+    ...report,
+    clientId: crypto.randomUUID(),
+    recording: { dataUrl: "data:video/webm;base64,PGh0bWw+", durationMs: 1000, audio: false },
+  },
+});
+check(
+  "recording with fake bytes rejected",
+  r.status === 400 && r.body.code === "INVALID_RECORDING",
+  r.status,
+);
+r = await call(`/api/projects/${projectId}`, {
+  method: "PATCH",
+  json: { captureConfig: { recording: { enabled: false } } },
+});
+r = await W("/w/feedback", {
+  method: "POST",
+  json: {
+    ...report,
+    clientId: crypto.randomUUID(),
+    recording: { dataUrl: webm, durationMs: 4200, audio: true },
+  },
+});
+r = await call(`/api/feedback/${r.body.feedback?.id}`);
+check(
+  "recording ignored while the project turned recordings off",
+  !(r.body.assets ?? []).some((a) => a.meta?.recording === true),
+);
+await call(`/api/projects/${projectId}`, {
+  method: "PATCH",
+  json: { captureConfig: { recording: { enabled: true } } },
+});
+
 // --- Invitations + a second member -----------------------------------------------------------------
 console.log("\n— team");
 const memberEmail = `smoke-member+${Date.now()}@example.com`;
