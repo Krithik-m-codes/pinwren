@@ -102,6 +102,41 @@ export const dashboardStats = z.object({
       signoff: z.enum(["none", "approved", "changes_requested"]),
     }),
   ),
+  /**
+   * Possible regressions: new reports that look like a resolved item (ADR 0029). `total` is the ones filed in the
+   * range, `open` those still being worked on; `items` the newest.
+   */
+  regressions: z.object({
+    total: count,
+    open: count,
+    items: z.array(
+      z.object({
+        id: z.string(),
+        number: z.number().int(),
+        title: z.string().nullable(),
+        status: feedbackStatus,
+        projectId: z.string(),
+        projectName: z.string(),
+        confidence: z.enum(["possible", "likely"]),
+        /** The resolved item it may be a regression of. */
+        ofId: z.string(),
+        ofNumber: z.number().int(),
+        createdAt: z.string(),
+      }),
+    ),
+  }),
+  /** Releases with the items fixed in them and the regressions reported from them, newest release first. */
+  releases: z.array(
+    z.object({
+      id: z.string(),
+      version: z.string(),
+      projectId: z.string(),
+      projectName: z.string(),
+      deployedAt: z.string(),
+      fixed: count,
+      regressions: count,
+    }),
+  ),
   /** Who filed the most (items filed in the range). */
   reporters: z.array(z.object({ id: z.string(), name: z.string(), count, resolved: count })),
   recent: z.array(

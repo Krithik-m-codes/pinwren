@@ -326,6 +326,10 @@ export const projectUpdate = z.object({
   notifyReporter: z.boolean().optional(),
   /** Widget reports + replies per IP per minute. null uses the instance default. */
   widgetRateLimitPerMin: z.number().int().min(1).max(1000).nullable().optional(),
+  /** Flag new reports that look like a resolved item (ADR 0029). */
+  detectRegressions: z.boolean().optional(),
+  /** Reopen the resolved original when a regression is flagged. */
+  autoReopenRegressions: z.boolean().optional(),
   /** Archive (true) or restore (false). Archived projects leave lists and their widget key stops working. */
   archived: z.boolean().optional(),
 });
@@ -369,6 +373,13 @@ export const feedbackUpdate = z.object({
   duplicateOfId: z.uuid().nullable().optional(),
   /** Convert between comment / bug / idea / question. */
   kind: feedbackKind.optional(),
+  /**
+   * The release that fixed a resolved item (same project). Needs the item to be resolved (now or in the same
+   * request); null clears it. Reopening an item clears it too.
+   */
+  fixedInReleaseId: z.uuid().nullable().optional(),
+  /** Resolved, fix ships in the next release: becomes the next release the project records. */
+  fixedInNextRelease: z.boolean().optional(),
 });
 export type FeedbackUpdate = z.infer<typeof feedbackUpdate>;
 
@@ -402,6 +413,10 @@ export const feedbackListQuery = z.object({
   reporter: z.string().trim().max(254).optional(),
   /** Only items with (true) or without (false) a session replay. */
   hasReplay: queryBool.optional(),
+  /** Only possible regressions (true) or only items that are not (false). */
+  regression: queryBool.optional(),
+  /** Only items marked fixed in this release. */
+  fixedInReleaseId: z.uuid().optional(),
   /** Browser name contains this text (from the captured environment), e.g. `Safari`. */
   browser: z.string().trim().max(60).optional(),
   /** Deleted items (the trash) instead of live ones. Org admins only; others get 403. */
@@ -469,6 +484,8 @@ export const NOTIFICATION_TYPES = [
   "comment.mentioned",
   "webhook.disabled",
   "round.signoff",
+  /** A new report looks like a resolved item coming back (ADR 0029). */
+  "feedback.regression_detected",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -582,6 +599,8 @@ export const WEBHOOK_EVENTS = [
   "comment.updated",
   "comment.deleted",
   "round.signoff",
+  /** A new report looks like a resolved item coming back (ADR 0029). */
+  "feedback.regression_detected",
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 /**
@@ -665,7 +684,12 @@ export type WebhookUpdate = z.infer<typeof webhookUpdate>;
 
 // --- API tokens + public API ----------------------------------------------------------------------------
 
-export const API_TOKEN_SCOPES = ["feedback:read", "feedback:write", "comments:write"] as const;
+export const API_TOKEN_SCOPES = [
+  "feedback:read",
+  "feedback:write",
+  "comments:write",
+  "releases:write",
+] as const;
 export type ApiTokenScope = (typeof API_TOKEN_SCOPES)[number];
 
 export const apiTokenCreate = z.object({
@@ -726,6 +750,7 @@ export const EMAIL_TEMPLATE_KEYS = [
   "reporter_assigned",
   "webhook_disabled",
   "round_signoff",
+  "regression_detected",
 ] as const;
 export type EmailTemplateKey = (typeof EMAIL_TEMPLATE_KEYS)[number];
 

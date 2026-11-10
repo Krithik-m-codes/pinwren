@@ -34,11 +34,12 @@ export const tenantInventory: readonly TenantTable[] = [
     bootstrapColumns: ["id", "org_id", "public_key", "allowed_origins", "archived_at"],
   },
   { table: "page", ownership: "direct", parents: ["project"] },
+  { table: "project_release", ownership: "direct", parents: ["project"] },
   { table: "review_round", ownership: "direct", parents: ["project"] },
   {
     table: "feedback",
     ownership: "direct",
-    parents: ["project", "page", "review_round", "feedback", "review_link"],
+    parents: ["project", "page", "review_round", "feedback", "review_link", "project_release"],
   },
   { table: "diagnostics", ownership: "parent", parents: ["feedback"] },
   { table: "feedback_ai", ownership: "direct", parents: ["feedback"] },

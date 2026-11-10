@@ -7,6 +7,7 @@ export * from "./guest";
 export * from "./license";
 export * from "./origins";
 export * from "./realtime";
+export * from "./releases";
 export * from "./roles";
 export * from "./rounds";
 export * from "./share";
