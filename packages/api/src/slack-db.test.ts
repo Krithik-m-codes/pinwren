@@ -805,6 +805,26 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Interactive Slack", (
     expect(ws?.last_error).toMatch(/invite/);
   });
 
+  it("the dispatcher queues a Slack job only for routable events of a connected workspace", async () => {
+    const { queueSlack } = await import("./slack/queue");
+    const { withOrg } = await import("../../db/src/tenant-context");
+    // The dispatcher calls it inside the event's organisation scope.
+    const dispatch = (e: ReturnType<typeof event>) => withOrg(orgA, () => queueSlack(e as never));
+    const queued = () => effects.enqueue.mock.calls.filter((c) => c[0] === "slack.deliver");
+    await dispatch(event("feedback.created"));
+    expect(queued()).toHaveLength(1);
+    expect(queued()[0]?.[1]).toMatchObject({ orgId: orgA, feedbackId: ids.itemA, type: "feedback.created" });
+    // Events a route can't carry never reach the Slack queue.
+    effects.enqueue.mockClear();
+    await dispatch(event("feedback.labels_changed"));
+    expect(queued()).toHaveLength(0);
+    // Nor does anything while the app is paused.
+    expect((await request("/api/slack", { method: "PUT", body: { active: false } })).status).toBe(200);
+    await dispatch(event("feedback.created"));
+    expect(queued()).toHaveLength(0);
+    expect((await request("/api/slack", { method: "PUT", body: { active: true } })).status).toBe(200);
+  });
+
   it("does nothing while the connection is switched off", async () => {
     const { deliverSlack } = await import("./slack/deliver");
     await db()`delete from slack_message where org_id = ${orgA}`;

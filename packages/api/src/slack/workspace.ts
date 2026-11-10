@@ -1,5 +1,5 @@
 import { getDb, slackWorkspace, withOrg } from "@pinwren/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { decryptSecret } from "../crypto";
 import { slackClient, type SlackApi } from "./client";
 
@@ -30,6 +30,16 @@ export async function workspaceOfOrg(orgId: string): Promise<SlackWorkspaceRow |
     const [ws] = await getDb().select().from(slackWorkspace).where(eq(slackWorkspace.orgId, orgId));
     return ws ?? null;
   });
+}
+
+/** Is an active Slack app connected? Cheap enough to ask for every event (runs inside the event's scope). */
+export async function slackConnected(orgId: string): Promise<boolean> {
+  const [row] = await getDb()
+    .select({ id: slackWorkspace.id })
+    .from(slackWorkspace)
+    .where(and(eq(slackWorkspace.orgId, orgId), eq(slackWorkspace.active, true)))
+    .limit(1);
+  return !!row;
 }
 
 /** Remember why the last Slack call failed (shown in settings); null clears it. */

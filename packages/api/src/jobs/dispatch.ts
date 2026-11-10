@@ -13,6 +13,7 @@ import {
   loadFeedbackContext,
   loadFeedbackFacts,
 } from "../services/feedback-payload";
+import { queueSlack } from "../slack/queue";
 import { enqueue, QUEUES } from "./boss";
 import { addWatchers, watcherIds } from "../services/watchers";
 import { queueDelivery } from "../webhooks/deliver";
@@ -414,9 +415,7 @@ export async function dispatchEvent(e: DomainEvent): Promise<void> {
     }
     await notifications(e, ctx, commentInfo);
     // Slack cards run from their own job too: a Slack outage must not delay anything above.
-    if (e.type !== "feedback.deleted") {
-      await enqueue(QUEUES.slack, e, e.id ? { singletonKey: `slack:${e.id}`, singletonSeconds: 3600 } : {});
-    }
+    await queueSlack(e);
     // Automation rules run from their own job, after the bell and emails, so a rule can never hold them back.
     if (wantsAutomation(e)) {
       await enqueue(

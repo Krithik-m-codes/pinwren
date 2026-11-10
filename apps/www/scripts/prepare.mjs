@@ -79,6 +79,7 @@ const GROUPS = [
     ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"],
   ],
   ["Issue trackers", ["GITHUB_API_URL", "GITLAB_URL"]],
+  ["Slack", ["SLACK_API_URL"]],
   ["Updates", ["PINWREN_UPDATE_CHECK", "PINWREN_NUDGES", "PINWREN_UPDATE_REPO", "PINWREN_VERSION"]],
   ["Enterprise licence", ["PINWREN_LICENSE_FILE", "PINWREN_INSTANCE_ID"]],
 ];
@@ -135,6 +136,8 @@ const DESCRIPTIONS = {
   GITHUB_CLIENT_SECRET: "Client secret of that GitHub OAuth app. Set both or neither.",
   GITHUB_API_URL: "GitHub API base URL. Each integration can override it (GitHub Enterprise Server).",
   GITLAB_URL: "GitLab base URL. Each integration can override it (self-managed GitLab).",
+  SLACK_API_URL:
+    "Slack Web API base URL used by the Slack app integration. Change it only for a mock or a proxy.",
   PINWREN_UPDATE_CHECK:
     "Daily check for a newer release, shown to instance admins. Setting it locks the switch in Settings › Security; it is off on its own while any project uses privacy mode.",
   PINWREN_NUDGES:
