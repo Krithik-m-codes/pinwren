@@ -14,6 +14,8 @@ const NO_COOKIE_AUTH = [
   /^\/mcp(\/|$)/,
   /^\/w(\/|$)/,
   /^\/api\/integrations\/(github|gitlab)\/webhook$/,
+  // Slack signs its form-encoded requests; there is no cookie to forge.
+  /^\/api\/slack\/(interactivity|commands)$/,
 ];
 
 /**

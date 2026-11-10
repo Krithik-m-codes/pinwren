@@ -5,6 +5,7 @@ import type { DomainEvent } from "../events";
 import { type IssueJob, runIssueJob } from "../integrations/issues";
 import { type ProjectExportJob, runProjectExport } from "../services/project-export";
 import { runAutomations } from "../services/automation-engine";
+import { deliverSlack } from "../slack/deliver";
 import { runUpdateCheck } from "../settings/instance";
 import { runDelivery } from "../webhooks/deliver";
 import { getBoss, QUEUES } from "./boss";
@@ -82,6 +83,11 @@ export async function startJobs(): Promise<void> {
       QUEUES.automation,
       { batchSize: 5, pollingIntervalSeconds: 1, localConcurrency: 2 },
       each(runAutomations),
+    );
+    await boss.work<DomainEvent>(
+      QUEUES.slack,
+      { batchSize: 5, pollingIntervalSeconds: 1, localConcurrency: 2 },
+      each(deliverSlack),
     );
     // Cron schedules are stored in Postgres; pg-boss creates each occurrence once across processes.
     await boss.schedule(QUEUES.retention, "15 3 * * *");

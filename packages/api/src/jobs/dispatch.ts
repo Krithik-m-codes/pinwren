@@ -413,6 +413,10 @@ export async function dispatchEvent(e: DomainEvent): Promise<void> {
       await syncIssueState(e.feedbackId, newStatus(e, ctx));
     }
     await notifications(e, ctx, commentInfo);
+    // Slack cards run from their own job too: a Slack outage must not delay anything above.
+    if (e.type !== "feedback.deleted") {
+      await enqueue(QUEUES.slack, e, e.id ? { singletonKey: `slack:${e.id}`, singletonSeconds: 3600 } : {});
+    }
     // Automation rules run from their own job, after the bell and emails, so a rule can never hold them back.
     if (wantsAutomation(e)) {
       await enqueue(

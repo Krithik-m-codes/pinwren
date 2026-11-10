@@ -28,6 +28,8 @@ export const QUEUES = {
   aiEnrich: "ai.enrich",
   /** Automation rules: evaluate a project's rules for one committed domain event. */
   automation: "automation.run",
+  /** Interactive Slack: post or refresh the cards for one domain event. */
+  slack: "slack.deliver",
 } as const;
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 
@@ -59,6 +61,8 @@ export function getBoss(): Promise<PgBoss> {
       boss.createQueue(QUEUES.aiEnrich, { retryLimit: 2, retryDelay: 60, retryBackoff: true }),
       // Runs are claimed per (rule, event), so a retry after a crash never applies an action twice.
       boss.createQueue(QUEUES.automation, { retryLimit: 2, retryDelay: 30, retryBackoff: true }),
+      // Retried only when Slack rate-limits the app; other failures are recorded on the connection.
+      boss.createQueue(QUEUES.slack, { retryLimit: 4, retryDelay: 30, retryBackoff: true }),
     ]);
     return boss;
   })().catch((err: unknown) => {
