@@ -1,12 +1,138 @@
 ---
 title: Slack
-description: Post new feedback, status changes and comments to a Slack channel through an incoming webhook.
+description: Interactive Slack with cards, buttons, a /pinwren command and "Create feedback from message", or plain posts through an incoming webhook.
 ---
 
-Pinwren posts to Slack with an **incoming webhook** — no Slack app to install on the server and nothing to expose to
-the internet.
+Pinwren works with Slack in two ways. Use the **Slack app** for the full experience, or an **incoming webhook** when
+all you want is a post in a channel and nothing to expose to the internet.
 
-## Set it up
+|                                                              | Slack app                  | Incoming webhook |
+| ------------------------------------------------------------ | -------------------------- | ---------------- |
+| Posts feedback, status changes and comments to channels      | Yes, per project and event | Yes              |
+| Buttons on the message (assign to me, set status, add label) | Yes                        | No               |
+| `/pinwren` command and "Create feedback from message"        | Yes                        | No               |
+| Needs Slack to reach your Pinwren over the internet          | Yes                        | No               |
+
+## The Slack app
+
+### Set it up
+
+<Steps>
+<Step>
+
+Open **Settings › Integrations** in Pinwren and find the **Slack** card. Press **Copy app manifest**.
+
+</Step>
+<Step>
+
+In Slack, go to **api.slack.com › Your apps › Create New App › From a manifest**, pick your workspace and paste the
+manifest. It already contains the message shortcut, the global shortcut, the `/pinwren` command, the bot permissions
+and the two URLs Slack calls (built from your `PINWREN_URL`). Install the app to the workspace.
+
+</Step>
+<Step>
+
+On the app's **Basic Information** page copy the **Signing Secret**; on **OAuth & Permissions** copy the **Bot User
+OAuth Token** (it starts `xoxb-`). Paste both into the Slack card and press **Connect Slack**. Pinwren asks Slack
+whether the token works before it saves anything.
+
+</Step>
+<Step>
+
+Under **Channel routing** press **Add route**, pick a project (or all projects), a channel and the events to post.
+Press **Send test message**: a "Test message from Pinwren" appears in the channel. For a private channel, invite the
+app first with `/invite @Pinwren`.
+
+</Step>
+</Steps>
+
+Slack has to be able to reach `PINWREN_URL`. The URLs it calls are `<PINWREN_URL>/api/slack/interactivity` and
+`<PINWREN_URL>/api/slack/commands`. A server on a private network can't be reached by Slack; use the
+[incoming webhook](#incoming-webhook) there.
+
+The bot scopes are `chat:write`, `chat:write.public`, `commands`, `users:read`, `users:read.email`, `channels:read` and
+`groups:read`. `users:read.email` is how people are matched to Pinwren members (see below).
+
+### What the card looks like
+
+Each routed event posts a card: the project and number (linked to the dashboard), the title and text, and a line with
+the kind, status, priority, assignees, labels, reporter and page. Under it:
+
+- **Assign to me** adds you to the assignees.
+- **Set status** is a menu of the six statuses, set to the current one.
+- **Add label** is a menu of the project's labels (the first 100).
+- **Open** opens the item in the dashboard.
+
+A button acts **as you**, with the same rules as the dashboard: Admins and Editors can change items, Viewers can't.
+The change goes through the normal update path, so it shows in the timeline ("via Slack"), triggers notifications,
+webhooks and automation rules, and the card is refreshed in place straight away. Later changes made anywhere
+(dashboard, API, another button) refresh the same card and add a one-line reply in its thread, such as "Ada set the
+status to resolved". Internal notes are never posted to Slack.
+
+### Who is who: the account mapping
+
+A button press arrives as a Slack user, so Pinwren has to know which member that is:
+
+1. The first time someone presses a button or runs a command, Pinwren reads their Slack email (`users.info`) and
+   looks for a member of this workspace with the same **confirmed** email. If there is one, the two are linked and the
+   link is remembered.
+2. If there isn't, the person gets a private message with a **Link my Pinwren account** link (valid for an hour).
+   Opening it while signed in to the right workspace asks for a confirmation, then links that Slack user to the
+   signed-in member. Nothing is linked until the member presses the button, so a link sent by someone else can't tie
+   their Slack account to yours without your agreement.
+3. Guests, bots and deactivated Slack users are never linked.
+
+The **Account mapping** section shows who is linked (by email or by the member), has **Match from Slack** to link
+everyone whose email matches in one pass, and lets an Admin unlink a person.
+
+### File feedback from Slack
+
+- **Create feedback from message.** On any message, open the three-dots menu, choose **More message shortcuts**, then
+  **Create feedback from message**. A form opens with the message text filled in, a project and a type. The new item
+  keeps the Slack message's link in its text and details, so you can get back to the conversation.
+- **`/pinwren new [title]`** opens the same form with the title filled in. `/pinwren link` sends you the link to connect
+  your account, and `/pinwren help` lists the commands. Answers to commands are visible only to you.
+- If a route sends that channel's events to a project, the form starts on that project.
+
+Items filed from Slack are attributed to the linked member and have the source **Slack**. One person can file 20 items
+an hour this way.
+
+### Security
+
+- **Every request is verified.** Slack signs each request with your app's signing secret. Pinwren recomputes the
+  signature over the raw body, compares it in constant time and refuses requests older than five minutes (replay).
+  An unknown team, a wrong signature and a stale timestamp all get the same answer, so nothing reveals which Slack
+  workspaces are connected.
+- **Each interaction runs once.** Slack's trigger id is remembered, so a redelivered request is acknowledged and
+  ignored. Submitting a form twice creates one item.
+- **One Slack workspace, one Pinwren workspace.** A Slack team can be connected to a single Pinwren workspace, and a
+  button can only reach items of the workspace its team is connected to. The signing secret and bot token are stored
+  encrypted (AES-256-GCM, key derived from `PINWREN_SECRET`) and are never returned by the API; the settings only show
+  the last four characters of the token.
+- **Untrusted text stays text.** Titles, bodies, names, labels and page URLs are escaped or placed in plain-text
+  blocks, so a report can't contain a working link or an `@channel` mention.
+- **Rate limited.** 600 requests a minute per sender address and per workspace, 60 button presses a minute per person
+  and 20 new items an hour per person.
+- Disconnecting removes the routes, the account links and the record of posted cards.
+
+### If something doesn't work
+
+The Slack card shows the last error Slack returned, in words. The usual ones:
+
+| You see                            | Fix                                                                                           |
+| ---------------------------------- | --------------------------------------------------------------------------------------------- |
+| The app isn't in a routed channel  | Run `/invite @Pinwren` in that channel                                                        |
+| Slack rejected the bot token       | Reinstall the app and paste the new token; check it is the **Bot** token (`xoxb-`)            |
+| The app is missing a permission    | Add the scopes listed above, reinstall the app and paste the new token                        |
+| Buttons say the app didn't respond | Slack can't reach `PINWREN_URL`, or the signing secret in Pinwren isn't the app's current one |
+| "Your Slack email doesn't match"   | Sign in to Pinwren with that email, or use the link in the message                            |
+
+## Incoming webhook
+
+The simpler way: a Slack **incoming webhook**. There is no Slack app to install on the server and nothing to expose to
+the internet. It posts messages, but has no buttons and no commands.
+
+### Set it up
 
 <Steps>
 <Step>
@@ -30,7 +156,7 @@ Open the new webhook from the list and press **Send test event**. A "Test delive
 </Step>
 </Steps>
 
-## What a message looks like
+### What a message looks like
 
 Each event becomes one message:
 
@@ -43,7 +169,7 @@ Each event becomes one message:
 The notification preview text reads like `Status changed → resolved: Marketing site #142 Checkout button does
 nothing`. Link unfurling is off, so a page URL never expands into a preview card.
 
-## Safe with untrusted text
+### Safe with untrusted text
 
 Feedback comes from anyone who can open your site, so Pinwren never lets it format a Slack message:
 
@@ -53,7 +179,7 @@ Feedback comes from anyone who can open your site, so Pinwren never lets it form
   `~`, `` ` `` and `|` are broken with a zero-width space.
 - Long text is cut to fit Slack's block limits (about 2,900 characters for the body).
 
-## Good to know
+### Good to know
 
 - The webhook URL is a credential: Pinwren stores it encrypted and only ever shows it masked after you save
   (`https://hooks.slack.com/…abcd`), in the dashboard and the API alike. Anyone with the URL can post to the
