@@ -500,3 +500,38 @@ test("dark mode report and destroy() tears the modal down", async ({ page }) => 
   await page.evaluate(() => (window as unknown as { Pinwren: { destroy(): void } }).Pinwren.destroy());
   await expect(page.locator("pinwren-root")).toHaveCount(0);
 });
+
+test("data-release rides along on a bug report as metadata.release, under the host's own", async ({
+  page,
+}) => {
+  const mock = await mockApi(page);
+  await ready(page, "/?release=1.4.2");
+  await openReport(page);
+  await report(page).getByLabel("Describe the bug").fill("Which build is this");
+  await report(page).getByRole("button", { name: "Send report" }).click();
+  await expect(toast(page)).toContainText("#1 sent");
+  expect((mock.items[0]?.payload?.metadata as { release?: string }).release).toBe("1.4.2");
+
+  // A release the host set with setMetadata wins over the script tag's.
+  await page.evaluate(() => {
+    (window as unknown as { Pinwren: { setMetadata: (m: object) => void } }).Pinwren.setMetadata({
+      release: "2.0.0-rc.1",
+      plan: "pro",
+    });
+  });
+  await openReport(page);
+  await report(page).getByLabel("Describe the bug").fill("Second build");
+  await report(page).getByRole("button", { name: "Send report" }).click();
+  await expect(toast(page)).toContainText("#2 sent");
+  expect(mock.items[1]?.payload?.metadata).toMatchObject({ release: "2.0.0-rc.1", plan: "pro" });
+});
+
+test("a report without data-release carries no release", async ({ page }) => {
+  const mock = await mockApi(page);
+  await ready(page);
+  await openReport(page);
+  await report(page).getByLabel("Describe the bug").fill("No release");
+  await report(page).getByRole("button", { name: "Send report" }).click();
+  await expect(toast(page)).toContainText("#1 sent");
+  expect(mock.items[0]?.payload?.metadata).not.toHaveProperty("release");
+});
