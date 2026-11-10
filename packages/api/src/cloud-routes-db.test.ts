@@ -95,6 +95,7 @@ const resourceOf: Record<string, string> = {
   rounds: "roundB",
   tokens: "tokenIdB",
   views: "viewB",
+  dashboards: "dashboardB",
   webhooks: "webhookB",
   projects: "projectB",
   assets: "assetB",
@@ -155,6 +156,7 @@ const cases: Record<string, Spec> = {
   }),
   "DELETE /api/automations/:id": foreign(),
   "DELETE /api/comments/:id": foreign(),
+  "DELETE /api/dashboards/:id": foreign(),
   "DELETE /api/email-templates/:key": scoped(),
   "DELETE /api/feedback/:id": foreign(),
   "DELETE /api/feedback/:id/forever": foreign(),
@@ -268,6 +270,12 @@ const cases: Record<string, Spec> = {
       },
     }),
   }),
+  // Dashboards: the caller is workspace A and names workspace B's dashboard (shared, so it is visible inside B)
+  // or project; dashboards-db.test.ts covers visibility and publishing inside one workspace.
+  "PATCH /api/dashboards/:id": foreign({ body: () => ({ name: "foreign edit" }) }),
+  "PATCH /api/me/workspace-preferences": foreign({
+    body: (ids) => ({ pinnedProjectIds: [ids.projectB ?? ""] }),
+  }),
   "PATCH /api/integrations/:id": foreign({ body: () => ({ repo: "foreign/edit" }) }),
   "PATCH /api/automations/:id": foreign({ body: () => ({ name: "foreign edit" }) }),
   "PATCH /api/labels/:id": foreign({ body: () => ({ name: "foreign edit" }) }),
@@ -282,6 +290,10 @@ const cases: Record<string, Spec> = {
   "PATCH /api/webhooks/:id": foreign({ body: () => ({ name: "foreign edit" }) }),
   "PATCH /api/workspace": scoped({ body: () => ({ name: "Renamed A" }) }),
   "POST /api/branding/assets": scoped({ body: () => ({ dataUrl }) }),
+  "POST /api/dashboards": scoped({
+    body: () => ({ scope: "home", name: "scoped dashboard", layout: { v: 1, slots: [], days: 14 } }),
+  }),
+  "POST /api/dashboards/:id/duplicate": foreign({ body: () => ({}) }),
   "POST /api/email-templates/:key/preview": scoped({ body: () => ({}) }),
   "POST /api/email-templates/:key/test": scoped({ body: () => ({}) }),
   // Automation rules and AI label chips: the caller is workspace A and names workspace B's rule, project or
@@ -457,6 +469,34 @@ const cases: Record<string, Spec> = {
       } finally {
         await database()`delete from invitation where id=${invitation}`;
       }
+    },
+  }),
+  "GET /api/dashboards": scoped({ path: () => "/api/dashboards?scope=home" }),
+  "GET /api/me/workspace-preferences": scoped(),
+  "GET /api/me/ui-state": authorization({
+    run: async ({ send }) => {
+      const response = await send({ method: "GET", path: "/api/me/ui-state" });
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect((await send({ method: "GET", path: "/api/me/ui-state" }, "none")).status).toBe(401);
+    },
+  }),
+  "PATCH /api/me/ui-state": authorization({
+    run: async ({ send, snapshot, database, ids }) => {
+      const before = await snapshot();
+      const response = await send({
+        method: "PATCH",
+        path: "/api/me/ui-state",
+        body: { startPage: "dashboard" },
+      });
+      expect(response.status).toBe(200);
+      expect(
+        await database()`select user_id from user_preference where ui_state->>'startPage'='dashboard'`,
+      ).toMatchObject([{ user_id: String(ids.userA) }]);
+      expect(await snapshot()).toBe(before);
+      expect(
+        (await send({ method: "PATCH", path: "/api/me/ui-state", body: { startPage: "inbox" } }, "none"))
+          .status,
+      ).toBe(401);
     },
   }),
   "GET /api/me/preferences": authorization({
@@ -705,6 +745,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
         token: randomUUID(),
         mail: randomUUID(),
         rule: randomUUID(),
+        dashboard: randomUUID(),
       };
       await db`insert into comment (id,org_id,feedback_id,body) values (${row.comment},${org ?? ""},${feedbackId},${mark})`;
       await db`insert into label (id,org_id,project_id,name,color) values (${row.label},${org ?? ""},${projectId},${mark},'#112233')`;
@@ -714,6 +755,8 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
       await db`insert into review_round (id,org_id,project_id,name) values (${row.round},${org ?? ""},${projectId},${mark})`;
       await db`insert into review_link (id,org_id,project_id,label,token_hash) values (${row.reviewLink},${org ?? ""},${projectId},${mark},${randomUUID()})`;
       await db`insert into share_link (id,org_id,project_id,feedback_id,label,token_hash,expires_at) values (${row.shareLink},${org ?? ""},${projectId},${feedbackId},${mark},${randomUUID()},now() + interval '1 day')`;
+      await db`insert into dashboard (id,org_id,owner_id,scope,name,layout,shared) values (${row.dashboard},${org ?? ""},${user ?? ""},'home',${mark},${db.json({ v: 1, slots: [], days: 14 })},true)`;
+      await db`insert into workspace_preference (org_id,user_id,pinned_project_ids) values (${org ?? ""},${user ?? ""},${db.json([projectId])})`;
       await db`insert into saved_view (id,org_id,owner_id,name,shared) values (${row.view},${org ?? ""},${user ?? ""},${mark},true)`;
       await db`insert into webhook_endpoint (id,org_id,project_id,name,url) values (${row.endpoint},${org ?? ""},${projectId},${mark},'https://example.test/hook')`;
       const payload = {
@@ -746,6 +789,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
           reviewLinkB: row.reviewLink,
           shareLinkB: row.shareLink,
           viewB: row.view,
+          dashboardB: row.dashboard,
           webhookB: row.endpoint,
           deliveryB: row.delivery,
           integrationB: row.integration,

@@ -3,6 +3,7 @@ export * from "./automation";
 export * from "./billing";
 export * from "./config";
 export * from "./dashboard-stats";
+export * from "./dashboards";
 export * from "./guest";
 export * from "./license";
 export * from "./origins";

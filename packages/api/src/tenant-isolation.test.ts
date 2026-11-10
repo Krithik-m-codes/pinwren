@@ -161,6 +161,15 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
         status: "success",
       },
       label_suggestion: { id: id(), org_id: org, feedback_id: feedbackId, label_id: labelId, name: org },
+      dashboard: {
+        id: id(),
+        org_id: org,
+        owner_id: userId,
+        scope: "home",
+        name: org,
+        layout: admin.json({ v: 1, slots: [], days: 14 }),
+      },
+      workspace_preference: { org_id: org, user_id: userId },
     };
     for (const [table, row] of Object.entries(rows)) await admin`insert into ${admin(table)} ${admin(row)}`;
     fixture[org] = rows;

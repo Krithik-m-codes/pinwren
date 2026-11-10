@@ -24,6 +24,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: DELETE /api/comments/:id"
   },
+  "DELETE /api/dashboards/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/dashboards/:id"
+  },
   "DELETE /api/email-templates/:key": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -169,6 +174,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/branding"
   },
+  "GET /api/dashboards": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/dashboards"
+  },
   "GET /api/email-assets/:token": {
     "boundary": "capability",
     "databaseLifetime": "external",
@@ -268,6 +278,16 @@
     "boundary": "identity",
     "databaseLifetime": "finite",
     "check": "identity authorization: GET /api/me/preferences"
+  },
+  "GET /api/me/ui-state": {
+    "boundary": "identity",
+    "databaseLifetime": "finite",
+    "check": "identity authorization: GET /api/me/ui-state"
+  },
+  "GET /api/me/workspace-preferences": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/me/workspace-preferences"
   },
   "GET /api/members": {
     "boundary": "tenant",
@@ -584,6 +604,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: PATCH /api/comments/:id"
   },
+  "PATCH /api/dashboards/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/dashboards/:id"
+  },
   "PATCH /api/feedback/:id": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -613,6 +638,16 @@
     "boundary": "identity",
     "databaseLifetime": "finite",
     "check": "identity authorization: PATCH /api/me/profile"
+  },
+  "PATCH /api/me/ui-state": {
+    "boundary": "identity",
+    "databaseLifetime": "finite",
+    "check": "identity authorization: PATCH /api/me/ui-state"
+  },
+  "PATCH /api/me/workspace-preferences": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/me/workspace-preferences"
   },
   "PATCH /api/members/:userId": {
     "boundary": "tenant",
@@ -738,6 +773,16 @@
     "boundary": "tenant",
     "databaseLifetime": "external",
     "check": "foreign tenant: POST /api/branding/assets"
+  },
+  "POST /api/dashboards": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/dashboards"
+  },
+  "POST /api/dashboards/:id/duplicate": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/dashboards/:id/duplicate"
   },
   "POST /api/email-templates/:key/preview": {
     "boundary": "tenant",

@@ -5,10 +5,11 @@ import {
   fillBuckets,
   CLOSED_STATUSES,
   fillSeries,
+  statsWindow,
   TIME_BUCKET_LIMITS_H,
 } from "@pinwren/core";
 import { activity, feedback, getDb, page, project, reviewRound, user } from "@pinwren/db";
-import { and, desc, eq, gte, inArray, isNull, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, type SQL, sql } from "drizzle-orm";
 import { ACTIVE_STATUSES } from "./feedback";
 
 const DAY = 86_400_000;
@@ -29,9 +30,28 @@ const envText = (field: "browser" | "os") =>
 /** Device class from the captured viewport width; keep in step with `deviceClass()` in @pinwren/core. */
 const deviceExpr = sql<string>`case when (${feedback.environment}#>>'{viewport,w}') ~ '^[0-9]{1,5}$' then case when (${feedback.environment}#>>'{viewport,w}')::int < 768 then 'mobile' when (${feedback.environment}#>>'{viewport,w}')::int < 1024 then 'tablet' else 'desktop' end else 'unknown' end`;
 
+/** The dashboard-wide filters that apply to items (project is handled separately: it also narrows rounds). */
+type ItemFilter = { labelId: string | undefined; assigneeId: string | undefined };
+
+/** SQL conditions on `feedback` for the label and assignee filters. */
+function itemConditions(f: ItemFilter, userId: string): SQL[] {
+  const out: SQL[] = [];
+  if (f.labelId) {
+    out.push(
+      sql`exists (select 1 from feedback_label fl where fl.feedback_id = ${feedback.id} and fl.label_id = ${f.labelId})`,
+    );
+  }
+  if (f.assigneeId === "none") out.push(sql`cardinality(${feedback.assigneeIds}) = 0`);
+  else if (f.assigneeId) {
+    out.push(sql`${f.assigneeId === "me" ? userId : f.assigneeId} = any(${feedback.assigneeIds})`);
+  }
+  return out;
+}
+
 /**
  * The numbers behind the dashboards (`GET /api/stats`). Every query is filtered by the caller's org id on
- * `feedback` (and `project`/`activity`), so a `projectId` from another workspace simply matches nothing.
+ * `feedback` (and `project`/`activity`), so a `projectId` or `labelId` from another workspace simply
+ * matches nothing. The label and assignee filters narrow items; the review-round list only follows the project.
  */
 export async function dashboardStats(
   orgId: string,
@@ -40,9 +60,17 @@ export async function dashboardStats(
   now = new Date(),
 ): Promise<DashboardStats> {
   const db = getDb();
-  const since = new Date(now.getTime() - q.days * DAY);
-  const before = new Date(since.getTime() - q.days * DAY);
-  const live: SQL[] = [eq(feedback.orgId, orgId), isNull(feedback.deletedAt)];
+  const { since, until, days } = statsWindow(q, now);
+  const before = new Date(since.getTime() - days * DAY);
+  /** Inside the window: from `since`, and before `until` when the range has an end. */
+  const inWindow = (col: Parameters<typeof gte>[0]) =>
+    and(gte(col, since), until ? lt(col, until) : undefined);
+  const filter: ItemFilter = { labelId: q.labelId, assigneeId: q.assigneeId };
+  const live: SQL[] = [
+    eq(feedback.orgId, orgId),
+    isNull(feedback.deletedAt),
+    ...itemConditions(filter, userId),
+  ];
   if (q.projectId) live.push(eq(feedback.projectId, q.projectId));
   const scope = and(...live);
   const active = inArray(feedback.status, [...ACTIVE_STATUSES]);
@@ -51,18 +79,18 @@ export async function dashboardStats(
     db
       .select({
         active: sql<number>`count(*) filter (where ${active})::int`,
-        created: sql<number>`count(*) filter (where ${gte(feedback.createdAt, since)})::int`,
+        created: sql<number>`count(*) filter (where ${inWindow(feedback.createdAt)})::int`,
         previousCreated: sql<number>`count(*) filter (where ${gte(feedback.createdAt, before)} and ${feedback.createdAt} < ${since.toISOString()}::timestamptz)::int`,
-        resolved: sql<number>`count(*) filter (where ${gte(feedback.resolvedAt, since)})::int`,
+        resolved: sql<number>`count(*) filter (where ${inWindow(feedback.resolvedAt)})::int`,
         unassigned: sql<number>`count(*) filter (where ${active} and cardinality(${feedback.assigneeIds}) = 0)::int`,
         overdue: sql<number>`count(*) filter (where ${active} and ${feedback.dueAt} < ${now.toISOString()}::timestamptz)::int`,
         mine: sql<number>`count(*) filter (where ${active} and ${userId} = any(${feedback.assigneeIds}))::int`,
         urgent: sql<number>`count(*) filter (where ${active} and ${feedback.priority} in ('urgent','high'))::int`,
         // Due date missed: still open and past due, or resolved (in the range) after it.
-        slaBreached: sql<number>`count(*) filter (where ${feedback.dueAt} is not null and ((${active} and ${feedback.dueAt} < ${now.toISOString()}::timestamptz) or (${gte(feedback.resolvedAt, since)} and ${feedback.resolvedAt} > ${feedback.dueAt})))::int`,
+        slaBreached: sql<number>`count(*) filter (where ${feedback.dueAt} is not null and ((${active} and ${feedback.dueAt} < ${now.toISOString()}::timestamptz) or (${inWindow(feedback.resolvedAt)} and ${feedback.resolvedAt} > ${feedback.dueAt})))::int`,
         avgHours: sql<
           string | null
-        >`avg(extract(epoch from (${feedback.resolvedAt} - ${feedback.createdAt})) / 3600) filter (where ${gte(feedback.resolvedAt, since)})`,
+        >`avg(extract(epoch from (${feedback.resolvedAt} - ${feedback.createdAt})) / 3600) filter (where ${inWindow(feedback.resolvedAt)})`,
       })
       .from(feedback)
       .where(scope),
@@ -87,7 +115,7 @@ export async function dashboardStats(
         n: sql<number>`count(*)::int`,
       })
       .from(feedback)
-      .where(and(scope, gte(feedback.createdAt, since)))
+      .where(and(scope, inWindow(feedback.createdAt)))
       .groupBy(sql`1`),
     db
       .select({
@@ -95,7 +123,7 @@ export async function dashboardStats(
         n: sql<number>`count(*)::int`,
       })
       .from(feedback)
-      .where(and(scope, gte(feedback.resolvedAt, since)))
+      .where(and(scope, inWindow(feedback.resolvedAt)))
       .groupBy(sql`1`),
     q.projectId
       ? Promise.resolve([])
@@ -107,7 +135,15 @@ export async function dashboardStats(
             total: sql<number>`count(${feedback.id})::int`,
           })
           .from(project)
-          .leftJoin(feedback, and(eq(feedback.projectId, project.id), isNull(feedback.deletedAt)))
+          .leftJoin(
+            feedback,
+            and(
+              eq(feedback.projectId, project.id),
+              eq(feedback.orgId, project.orgId),
+              isNull(feedback.deletedAt),
+              ...itemConditions(filter, userId),
+            ),
+          )
           .where(and(eq(project.orgId, orgId), isNull(project.archivedAt)))
           .groupBy(project.id, project.name)
           .orderBy(desc(sql`3`), project.name)
@@ -134,9 +170,11 @@ export async function dashboardStats(
   const [topPages, browsers, systems, devices, timing, rounds, reporters] = await extras(
     orgId,
     q.projectId,
-    since,
+    { since, until },
     scope,
     active,
+    filter,
+    userId,
   );
 
   const t = totalRow[0];
@@ -146,7 +184,7 @@ export async function dashboardStats(
   const avg = t?.avgHours == null ? null : Number(t.avgHours);
 
   return {
-    days: q.days,
+    days,
     totals: {
       active: t?.active ?? 0,
       created: t?.created ?? 0,
@@ -163,7 +201,7 @@ export async function dashboardStats(
     byKind: byKind.map((r) => ({ key: r.key, count: r.count })),
     byPriority: byPriority.map((r) => ({ key: r.key, count: r.count })),
     byProject,
-    series: fillSeries([...rows.values()], q.days, now),
+    series: fillSeries([...rows.values()], days, until ? new Date(until.getTime() - 1) : now),
     topPages,
     browsers,
     operatingSystems: systems,
@@ -185,14 +223,34 @@ type TimingRow = { metric: string; b: number | null; n: number; median: number |
 async function extras(
   orgId: string,
   projectId: string | undefined,
-  since: Date,
+  window: { since: Date; until: Date | null },
   scope: SQL | undefined,
   active: SQL,
+  filter: ItemFilter,
+  userId: string,
 ) {
   const db = getDb();
-  const inRange = and(scope, gte(feedback.createdAt, since));
+  const { since, until } = window;
+  const inRange = and(
+    scope,
+    gte(feedback.createdAt, since),
+    until ? lt(feedback.createdAt, until) : undefined,
+  );
   const sinceIso = since.toISOString();
+  const untilIso = until?.toISOString();
   const onProject = projectId ? sql`and f.project_id = ${projectId}` : sql``;
+  const onLabel = filter.labelId
+    ? sql`and exists (select 1 from feedback_label fl where fl.feedback_id = f.id and fl.label_id = ${filter.labelId})`
+    : sql``;
+  const assignee = filter.assigneeId === "me" ? userId : filter.assigneeId;
+  const onAssignee =
+    filter.assigneeId === "none"
+      ? sql`and cardinality(f.assignee_ids) = 0`
+      : assignee
+        ? sql`and ${assignee} = any(f.assignee_ids)`
+        : sql``;
+  // The window's upper edge, on a column of the `base` CTE or of `f`.
+  const before = (col: string) => (untilIso ? sql`and ${sql.raw(col)} < ${untilIso}::timestamptz` : sql``);
   const roundProject = projectId ? eq(reviewRound.projectId, projectId) : undefined;
   const closedList = sql.raw(CLOSED_STATUSES.map((x) => `'${x}'`).join(","));
   const who = sql<string>`coalesce(${feedback.reporterId}, lower(${feedback.reporterGuest}->>'email'), ${feedback.reporterGuest}->>'externalId')`;
@@ -246,16 +304,16 @@ async function extras(
               (select min(a.created_at) from activity a
                 where a.feedback_id = f.id and a.org_id = f.org_id and a.actor_id is not null and a.type <> 'created') as first_at
             from feedback f
-            where f.org_id = ${orgId} and f.deleted_at is null ${onProject}
-              and (f.created_at >= ${sinceIso}::timestamptz or f.resolved_at >= ${sinceIso}::timestamptz)
+            where f.org_id = ${orgId} and f.deleted_at is null ${onProject} ${onLabel} ${onAssignee}
+              and ((f.created_at >= ${sinceIso}::timestamptz ${before("f.created_at")}) or (f.resolved_at >= ${sinceIso}::timestamptz ${before("f.resolved_at")}))
           ),
           resp as (
             select greatest(extract(epoch from (first_at - created_at)) / 3600, 0)::float8 as h
-            from base where first_at is not null and created_at >= ${sinceIso}::timestamptz
+            from base where first_at is not null and created_at >= ${sinceIso}::timestamptz ${before("created_at")}
           ),
           res as (
             select greatest(extract(epoch from (resolved_at - created_at)) / 3600, 0)::float8 as h
-            from base where resolved_at is not null and resolved_at >= ${sinceIso}::timestamptz
+            from base where resolved_at is not null and resolved_at >= ${sinceIso}::timestamptz ${before("resolved_at")}
           )
           select 'response' as metric, ${bucketCase(sql`h`)} as b, count(*)::int as n, null::float8 as median from resp group by 2
           union all
