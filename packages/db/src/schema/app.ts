@@ -1,5 +1,8 @@
 import {
   type AnnotationLayer,
+  type AutomationAction,
+  type AutomationCondition,
+  type AutomationTrigger,
   type CaptureGeometry,
   EMAIL_DELIVERY_STATUSES,
   EMAIL_DIGEST_FREQUENCIES,
@@ -140,6 +143,8 @@ export const project = pgTable(
       detectDuplicates: true,
       generateRepro: true,
       allowReplayInAi: false,
+      autoLabels: true,
+      autoApplyLabels: false,
     }),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps,
@@ -1013,4 +1018,120 @@ export const billingEvent = pgTable(
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.orgId, t.webhookId] })],
+);
+
+/**
+ * AI label suggestions (WP-27): a ghost chip on the item until someone accepts or dismisses it. `labelId` set
+ * means an existing label of the project; null means a proposed new one, created only on accept.
+ * `name` is a snapshot, so the chip still reads right after the label is renamed or deleted.
+ */
+export const labelSuggestion = pgTable(
+  "label_suggestion",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    feedbackId: uuid("feedback_id")
+      .notNull()
+      .references(() => feedback.id, { onDelete: "cascade" }),
+    labelId: uuid("label_id").references(() => label.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    reason: text("reason"),
+    status: text("status", { enum: ["pending", "accepted", "dismissed"] })
+      .notNull()
+      .default("pending"),
+    decidedBy: text("decided_by").references(() => user.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // One chip per name and item, whatever its state: a dismissed suggestion is not proposed again.
+    uniqueIndex("label_suggestion_feedback_name_uq").on(t.feedbackId, sql`lower(${t.name})`),
+    index("label_suggestion_feedback_idx").on(t.feedbackId, t.status),
+    index("label_suggestion_org_pending_idx")
+      .on(t.orgId, t.feedbackId)
+      .where(sql`${t.status} = 'pending'`),
+    tenantReference(
+      "label_suggestion_feedback_tenant_fk",
+      t.feedbackId,
+      t.orgId,
+      feedback.id,
+      feedback.orgId,
+    ),
+    tenantReference("label_suggestion_label_tenant_fk", t.labelId, t.orgId, label.id, label.orgId),
+  ],
+);
+
+/** Per-project automation rule: when [trigger] and [conditions] then [actions] (WP-28). */
+export const automationRule = pgTable(
+  "automation_rule",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    trigger: jsonb("trigger").$type<AutomationTrigger>().notNull(),
+    conditions: jsonb("conditions").$type<AutomationCondition[]>().notNull().default([]),
+    actions: jsonb("actions").$type<AutomationAction[]>().notNull(),
+    /** Round-robin position; only ever incremented, one step per run that assigned. */
+    rotation: integer("rotation").notNull().default(0),
+    runCount: integer("run_count").notNull().default(0),
+    lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    index("automation_rule_project_idx").on(t.projectId, t.enabled),
+    uniqueIndex("automation_rule_id_org_uq").on(t.id, t.orgId),
+    tenantReference("automation_rule_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
+  ],
+);
+
+export type AutomationActionResult = {
+  type: string;
+  ok: boolean;
+  /** Human-readable outcome, e.g. "Assigned to Priya". Never holds secrets. */
+  detail: string;
+};
+
+/** The run log: one row per rule that matched an event (or failed trying). Unique per rule and event. */
+export const automationRun = pgTable(
+  "automation_run",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    ruleId: uuid("rule_id")
+      .notNull()
+      .references(() => automationRule.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    feedbackId: uuid("feedback_id").references(() => feedback.id, { onDelete: "cascade" }),
+    /** The domain event that fired the rule; makes a retried job idempotent. */
+    eventId: text("event_id"),
+    event: text("event").notNull(),
+    depth: integer("depth").notNull().default(0),
+    status: text("status", { enum: ["success", "partial", "failed", "skipped"] }).notNull(),
+    results: jsonb("results").$type<AutomationActionResult[]>().notNull().default([]),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("automation_run_rule_idx").on(t.ruleId, t.createdAt),
+    index("automation_run_project_idx").on(t.projectId, t.createdAt),
+    uniqueIndex("automation_run_rule_event_uq")
+      .on(t.ruleId, t.eventId)
+      .where(sql`${t.eventId} is not null`),
+    tenantReference(
+      "automation_run_rule_tenant_fk",
+      t.ruleId,
+      t.orgId,
+      automationRule.id,
+      automationRule.orgId,
+    ),
+    tenantReference("automation_run_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
+    tenantReference("automation_run_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
+  ],
 );

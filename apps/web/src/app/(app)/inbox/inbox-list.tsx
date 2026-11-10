@@ -24,6 +24,7 @@ import {
   RotateCcw,
   Search,
   SearchX,
+  Sparkles,
   Tag,
   Target,
   Trash2,
@@ -58,7 +59,8 @@ import { UserAvatar } from "@/components/user-avatar";
 import { type FeedbackRow, type ItemLabel, isForbidden, type Member, type PresenceUser } from "@/lib/api";
 import { useI18n, useT } from "@/lib/i18n/provider";
 import { CLEAR_FILTERS, exportUrl, extraFilterCount, type FeedbackListArgs } from "@/lib/inbox-filters";
-import { useRoundsQuery } from "@/lib/store/api";
+import { toast } from "sonner";
+import { errorMessage, useBulkAiLabelsMutation, useRoundsQuery } from "@/lib/store/api";
 import type { FeedbackFields, FeedbackPatch, ItemChange } from "@/lib/store/api/feedback";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { selectionCleared } from "@/lib/store/slices/inbox";
@@ -444,10 +446,11 @@ function BulkBar({
   onDelete: () => void;
   onClear: () => void;
 }) {
-  const t = useT();
+  const { t, tn } = useI18n();
   const rounds = useRoundsQuery(projectId ?? "", { skip: !projectId });
   const active = rounds.data?.rounds.filter((r) => r.status === "active") ?? [];
   const [labelsOpen, setLabelsOpen] = useState(false);
+  const [acceptAiLabels, { isLoading: acceptingAi }] = useBulkAiLabelsMutation();
   // Labels belong to a project: the picker needs every checked item to share one.
   const projects = new Set(rows.map((r) => r.projectId));
   const labelProject = projects.size === 1 ? [...projects][0] : undefined;
@@ -495,6 +498,29 @@ function BulkBar({
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger render={<span />}>
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid="bulk-accept-ai-labels"
+            disabled={acceptingAi}
+            onClick={() =>
+              void acceptAiLabels({ feedbackIds: rows.map((r) => r.id), action: "accept" })
+                .unwrap()
+                .then((r) =>
+                  r.accepted
+                    ? toast.success(tn("automation.labelsAccepted", r.accepted))
+                    : toast.info(t("automation.noSuggestions")),
+                )
+                .catch((e: unknown) => toast.error(errorMessage(e)))
+            }
+          >
+            <Sparkles /> {t("automation.acceptAiLabels")}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{t("automation.acceptAiLabelsHint")}</TooltipContent>
+      </Tooltip>
       {labelProject ? (
         <LabelPicker
           projectId={labelProject}

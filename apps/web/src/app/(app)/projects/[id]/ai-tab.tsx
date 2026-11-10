@@ -28,6 +28,8 @@ export function AiTab({ project: p }: { project: ProjectDetail }) {
     detectDuplicates: true,
     generateRepro: true,
     allowReplayInAi: false,
+    autoLabels: true,
+    autoApplyLabels: false,
   };
 
   const handleToggle = async (patch: Partial<ProjectAiConfig>, label: string) => {
@@ -132,6 +134,34 @@ export function AiTab({ project: p }: { project: ProjectDetail }) {
                 disabled={!config.enabled || isUpdating}
                 onCheckedChange={(generateRepro) =>
                   handleToggle({ generateRepro }, t("projects1.reproductionSynthesis"))
+                }
+              />
+            </SettingRow>
+
+            <SettingRow
+              label={t("automation.aiLabels")}
+              htmlFor="project-ai-labels"
+              description={t("automation.aiLabelsDescription")}
+            >
+              <Switch
+                id="project-ai-labels"
+                checked={config.autoLabels}
+                disabled={!config.enabled || isUpdating}
+                onCheckedChange={(autoLabels) => handleToggle({ autoLabels }, t("automation.aiLabelsShort"))}
+              />
+            </SettingRow>
+
+            <SettingRow
+              label={t("automation.aiAutoApply")}
+              htmlFor="project-ai-auto-apply"
+              description={t("automation.aiAutoApplyDescription")}
+            >
+              <Switch
+                id="project-ai-auto-apply"
+                checked={config.autoApplyLabels}
+                disabled={!config.enabled || !config.autoLabels || isUpdating}
+                onCheckedChange={(autoApplyLabels) =>
+                  handleToggle({ autoApplyLabels }, t("automation.aiAutoApplyShort"))
                 }
               />
             </SettingRow>

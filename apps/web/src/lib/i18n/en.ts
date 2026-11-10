@@ -14,6 +14,7 @@ import { shell } from "./en/shell";
 import { validation } from "./en/validation";
 import { gallery } from "./en/gallery";
 import { guest } from "./en/guest";
+import { automation } from "./en/automation";
 import { billing } from "./en/billing";
 import { cloud } from "./en/cloud";
 import { dashboard } from "./en/dashboard";
@@ -45,6 +46,7 @@ export const en = {
   ...guest,
   ...gallery,
   ...billing,
+  ...automation,
   ...cloud,
   ...dashboard,
   ...global,

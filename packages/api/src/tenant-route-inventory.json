@@ -14,6 +14,11 @@
     "databaseLifetime": "finite",
     "check": "system authorization: DELETE /api/admin/license"
   },
+  "DELETE /api/automations/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/automations/:id"
+  },
   "DELETE /api/comments/:id": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -139,6 +144,11 @@
     "databaseLifetime": "finite",
     "check": "identity authorization: GET /api/auth/*"
   },
+  "GET /api/automations/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/automations/:id"
+  },
   "GET /api/avatars/:userId": {
     "boundary": "identity",
     "databaseLifetime": "external",
@@ -183,6 +193,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/feedback/:id"
+  },
+  "GET /api/feedback/:id/ai/labels": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/feedback/:id/ai/labels"
   },
   "GET /api/feedback/:id/brief": {
     "boundary": "tenant",
@@ -293,6 +308,16 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/projects/:id/ai"
+  },
+  "GET /api/projects/:id/automation-runs": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects/:id/automation-runs"
+  },
+  "GET /api/projects/:id/automations": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects/:id/automations"
   },
   "GET /api/projects/:id/export": {
     "boundary": "tenant",
@@ -544,6 +569,11 @@
     "databaseLifetime": "finite",
     "check": "system authorization: PATCH /api/admin/settings/sign-in"
   },
+  "PATCH /api/automations/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/automations/:id"
+  },
   "PATCH /api/branding": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -674,10 +704,20 @@
     "databaseLifetime": "finite",
     "check": "system authorization: POST /api/admin/update-check"
   },
+  "POST /api/ai/labels/bulk": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/ai/labels/bulk"
+  },
   "POST /api/auth/*": {
     "boundary": "identity",
     "databaseLifetime": "finite",
     "check": "identity authorization: POST /api/auth/*"
+  },
+  "POST /api/automations/:id/test": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/automations/:id/test"
   },
   "POST /api/billing/checkout": {
     "boundary": "tenant",
@@ -718,6 +758,16 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: POST /api/feedback/:id/ai/apply"
+  },
+  "POST /api/feedback/:id/ai/labels/:suggestionId/accept": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/feedback/:id/ai/labels/:suggestionId/accept"
+  },
+  "POST /api/feedback/:id/ai/labels/:suggestionId/dismiss": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/feedback/:id/ai/labels/:suggestionId/dismiss"
   },
   "POST /api/feedback/:id/ai/translate": {
     "boundary": "tenant",
@@ -828,6 +878,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: POST /api/projects/:id/action-secret/rotate"
+  },
+  "POST /api/projects/:id/automations": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/projects/:id/automations"
   },
   "POST /api/projects/:id/check-install": {
     "boundary": "tenant",

@@ -1,9 +1,16 @@
 import { zValidator } from "@hono/zod-validator";
-import { aiProviderConfigSchema, aiTranslationRequestSchema, projectAiConfigSchema } from "@pinwren/core";
+import {
+  aiLabelBulkRequest,
+  aiProviderConfigSchema,
+  aiTranslationRequestSchema,
+  projectAiConfigSchema,
+} from "@pinwren/core";
+import { feedback, getDb } from "@pinwren/db";
+import { and, eq, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { SessionVars } from "../context";
-import { unauthorized } from "../errors";
+import { ApiError, notFound, unauthorized } from "../errors";
 import { requirePermission } from "../permissions";
 import {
   applyAiTriageSuggestions,
@@ -14,6 +21,7 @@ import {
   updateOrgAiSettings,
   updateProjectAiConfig,
 } from "../services/ai";
+import { decideSuggestions, listPendingSuggestions } from "../services/label-suggestions";
 
 const applyAiSchema = z.object({
   applyTitle: z.boolean().optional(),
@@ -33,6 +41,15 @@ const testAiSchema = z
       .or(z.literal("")),
   })
   .optional();
+
+/** The item must be a live one of this organisation: suggestion ids alone are never trusted. */
+async function liveItem(orgId: string, id: string): Promise<void> {
+  const [row] = await getDb()
+    .select({ id: feedback.id })
+    .from(feedback)
+    .where(and(eq(feedback.id, id), eq(feedback.orgId, orgId), isNull(feedback.deletedAt)));
+  if (!row) throw notFound("Feedback");
+}
 
 export const aiRoutes = new Hono<{ Variables: SessionVars }>()
   .use(async (c, next) => {
@@ -127,5 +144,61 @@ export const aiRoutes = new Hono<{ Variables: SessionVars }>()
         options,
       );
       return c.json(result);
+    },
+  )
+  // AI label suggestions: ghost chips on the item (accept / dismiss), and bulk from the inbox.
+  .get("/feedback/:id/ai/labels", async (c) => {
+    const id = c.req.param("id");
+    await liveItem(c.var.orgId, id);
+    return c.json({ suggestions: await listPendingSuggestions(c.var.orgId, [id]) });
+  })
+
+  .post("/feedback/:id/ai/labels/:suggestionId/accept", requirePermission("feedback.update"), async (c) => {
+    const result = await decideSuggestions(
+      c.var.orgId,
+      { kind: "user", userId: c.var.userId },
+      c.req.param("id"),
+      [c.req.param("suggestionId")],
+      "accept",
+    );
+    return c.json(result);
+  })
+
+  .post("/feedback/:id/ai/labels/:suggestionId/dismiss", requirePermission("feedback.update"), async (c) => {
+    const result = await decideSuggestions(
+      c.var.orgId,
+      { kind: "user", userId: c.var.userId },
+      c.req.param("id"),
+      [c.req.param("suggestionId")],
+      "dismiss",
+    );
+    return c.json(result);
+  })
+
+  .post(
+    "/ai/labels/bulk",
+    requirePermission("feedback.update"),
+    zValidator("json", aiLabelBulkRequest),
+    async (c) => {
+      const { feedbackIds, action } = c.req.valid("json");
+      let accepted = 0;
+      let dismissed = 0;
+      // Items that are gone or not this organisation's are skipped, not an error: a selection can go stale.
+      for (const id of new Set(feedbackIds)) {
+        try {
+          const r = await decideSuggestions(
+            c.var.orgId,
+            { kind: "user", userId: c.var.userId },
+            id,
+            "all",
+            action,
+          );
+          accepted += r.accepted;
+          dismissed += r.dismissed;
+        } catch (err) {
+          if (!(err instanceof ApiError) || err.status !== 404) throw err;
+        }
+      }
+      return c.json({ accepted, dismissed });
     },
   );

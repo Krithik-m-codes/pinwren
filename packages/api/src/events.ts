@@ -19,6 +19,11 @@ export type DomainEvent = {
   /** For feedback.updated / status_changed / assigned: field → { from, to }. */
   changes?: Record<string, { from: unknown; to: unknown }>;
   at: string;
+  /**
+   * Automation loop protection: the rules whose actions led to this event (oldest first). A rule never runs
+   * for an event its own chain produced, and chains stop at AUTOMATION_MAX_DEPTH.
+   */
+  ruleChain?: string[];
 };
 
 export type EventInput = Omit<DomainEvent, "at" | "id">;

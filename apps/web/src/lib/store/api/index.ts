@@ -1,10 +1,10 @@
-import { adminApi } from "./admin";
+import { automationApi } from "./automation";
 
 /**
  * The dashboard's RTK Query API with every endpoint (base → account → projects → feedback → rounds →
  * admin; each module injects into the previous one). Import hooks from here.
  */
-export const api = adminApi;
+export const api = automationApi;
 
 export const {
   // account
@@ -108,6 +108,16 @@ export const {
   useTestAiSettingsMutation,
   useProjectAiQuery,
   useUpdateProjectAiMutation,
+  // automation + AI label suggestions
+  useAutomationRulesQuery,
+  useCreateAutomationRuleMutation,
+  useUpdateAutomationRuleMutation,
+  useDeleteAutomationRuleMutation,
+  useTestAutomationRuleMutation,
+  useAutomationRunsQuery,
+  useAiLabelSuggestionsQuery,
+  useDecideLabelSuggestionMutation,
+  useBulkAiLabelsMutation,
 } = api;
 
 /**
@@ -122,3 +132,10 @@ export type HydrationEntries = {
 }[];
 
 export { type ApiError, errorMessage, isApiError, isForbidden } from "./base";
+export type {
+  AutomationRule,
+  AutomationRun,
+  AutomationRunResult,
+  AutomationTestResult,
+  LabelSuggestion,
+} from "./automation";

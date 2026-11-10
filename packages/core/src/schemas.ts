@@ -879,6 +879,10 @@ export const projectAiConfigSchema = z.object({
   detectDuplicates: z.boolean().default(true),
   generateRepro: z.boolean().default(true),
   allowReplayInAi: z.boolean().default(false),
+  /** Suggest labels (from the project's own, or one new name) as chips the team accepts or dismisses. */
+  autoLabels: z.boolean().default(true),
+  /** Apply suggestions of existing labels without asking. Off unless a project turns it on. */
+  autoApplyLabels: z.boolean().default(false),
 });
 export type ProjectAiConfig = z.infer<typeof projectAiConfigSchema>;
 

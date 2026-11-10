@@ -89,6 +89,7 @@ const resourceOf: Record<string, string> = {
   comments: "commentB",
   integrations: "integrationB",
   labels: "labelB",
+  automations: "automationB",
   "review-links": "reviewLinkB",
   "share-links": "shareLinkB",
   rounds: "roundB",
@@ -152,6 +153,7 @@ const cases: Record<string, Spec> = {
       expect(await snapshot()).toBe(before);
     },
   }),
+  "DELETE /api/automations/:id": foreign(),
   "DELETE /api/comments/:id": foreign(),
   "DELETE /api/email-templates/:key": scoped(),
   "DELETE /api/feedback/:id": foreign(),
@@ -215,6 +217,10 @@ const cases: Record<string, Spec> = {
   "GET /api/projects/:id/export/download": foreign(),
   "GET /api/projects/:id/identity-secret": foreign(),
   "GET /api/projects/:id/integrations": foreign(),
+  "GET /api/automations/:id": foreign(),
+  "GET /api/feedback/:id/ai/labels": foreign(),
+  "GET /api/projects/:id/automation-runs": foreign(),
+  "GET /api/projects/:id/automations": foreign(),
   "GET /api/projects/:id/labels": foreign(),
   "GET /api/projects/:id/notifications": foreign(),
   "GET /api/projects/:id/review-links": foreign(),
@@ -263,6 +269,7 @@ const cases: Record<string, Spec> = {
     }),
   }),
   "PATCH /api/integrations/:id": foreign({ body: () => ({ repo: "foreign/edit" }) }),
+  "PATCH /api/automations/:id": foreign({ body: () => ({ name: "foreign edit" }) }),
   "PATCH /api/labels/:id": foreign({ body: () => ({ name: "foreign edit" }) }),
   "PATCH /api/members/:userId": foreign({ body: () => ({ role: "viewer" }) }),
   "PATCH /api/projects/:id": foreign({ body: () => ({ name: "foreign edit" }) }),
@@ -277,6 +284,21 @@ const cases: Record<string, Spec> = {
   "POST /api/branding/assets": scoped({ body: () => ({ dataUrl }) }),
   "POST /api/email-templates/:key/preview": scoped({ body: () => ({}) }),
   "POST /api/email-templates/:key/test": scoped({ body: () => ({}) }),
+  // Automation rules and AI label chips: the caller is workspace A and names workspace B's rule, project or
+  // item (automation-db.test.ts covers rules naming another workspace's ids).
+  "POST /api/ai/labels/bulk": scoped({
+    body: (ids) => ({ feedbackIds: [ids.feedbackB], action: "accept" }),
+  }),
+  "POST /api/automations/:id/test": foreign({ body: () => ({ sample: {} }) }),
+  "POST /api/feedback/:id/ai/labels/:suggestionId/accept": foreign(),
+  "POST /api/feedback/:id/ai/labels/:suggestionId/dismiss": foreign(),
+  "POST /api/projects/:id/automations": foreign({
+    body: () => ({
+      name: "foreign rule",
+      trigger: { event: "feedback_created" },
+      actions: [{ type: "set_priority", priority: "high" }],
+    }),
+  }),
   "POST /api/feedback/:id/actions/:actionId": foreign(),
   "POST /api/feedback/:id/ai/apply": foreign({ body: () => ({ applyTitle: true }) }),
   "POST /api/feedback/:id/ai/translate": foreign({ body: () => ({ targetLocale: "fr" }) }),
@@ -682,9 +704,13 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
         notification: randomUUID(),
         token: randomUUID(),
         mail: randomUUID(),
+        rule: randomUUID(),
       };
       await db`insert into comment (id,org_id,feedback_id,body) values (${row.comment},${org ?? ""},${feedbackId},${mark})`;
       await db`insert into label (id,org_id,project_id,name,color) values (${row.label},${org ?? ""},${projectId},${mark},'#112233')`;
+      await db`insert into automation_rule (id,org_id,project_id,name,trigger,conditions,actions) values (${row.rule},${org ?? ""},${projectId},${mark},${db.json({ event: "feedback_created", toStatuses: [], labelId: null })},${db.json([])},${db.json([{ type: "set_priority", priority: "high" }])})`;
+      await db`insert into automation_run (org_id,rule_id,project_id,feedback_id,event,status) values (${org ?? ""},${row.rule},${projectId},${feedbackId},'feedback_created','success')`;
+      await db`insert into label_suggestion (org_id,feedback_id,label_id,name) values (${org ?? ""},${feedbackId},${row.label},${mark})`;
       await db`insert into review_round (id,org_id,project_id,name) values (${row.round},${org ?? ""},${projectId},${mark})`;
       await db`insert into review_link (id,org_id,project_id,label,token_hash) values (${row.reviewLink},${org ?? ""},${projectId},${mark},${randomUUID()})`;
       await db`insert into share_link (id,org_id,project_id,feedback_id,label,token_hash,expires_at) values (${row.shareLink},${org ?? ""},${projectId},${feedbackId},${mark},${randomUUID()},now() + interval '1 day')`;
@@ -715,6 +741,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
           feedbackB: feedbackId,
           commentB: row.comment,
           labelB: row.label,
+          automationB: row.rule,
           roundB: row.round,
           reviewLinkB: row.reviewLink,
           shareLinkB: row.shareLink,

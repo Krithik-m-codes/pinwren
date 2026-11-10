@@ -26,6 +26,8 @@ export const QUEUES = {
   projectExport: "project.export",
   /** AI enrichment: auto-summary, severity, duplicates, repro steps. */
   aiEnrich: "ai.enrich",
+  /** Automation rules: evaluate a project's rules for one committed domain event. */
+  automation: "automation.run",
 } as const;
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 
@@ -55,6 +57,8 @@ export function getBoss(): Promise<PgBoss> {
       // The job records its own failure on the export; a retry would only repeat it.
       boss.createQueue(QUEUES.projectExport, { retryLimit: 0, expireInSeconds: 3600 }),
       boss.createQueue(QUEUES.aiEnrich, { retryLimit: 2, retryDelay: 60, retryBackoff: true }),
+      // Runs are claimed per (rule, event), so a retry after a crash never applies an action twice.
+      boss.createQueue(QUEUES.automation, { retryLimit: 2, retryDelay: 30, retryBackoff: true }),
     ]);
     return boss;
   })().catch((err: unknown) => {

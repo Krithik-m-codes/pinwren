@@ -102,6 +102,7 @@ import { cn } from "@/lib/utils";
 import { useMembers, useViewer } from "@/lib/viewer";
 import { AiDuplicateBanner } from "./ai-duplicate-banner";
 import { AiReproSteps } from "./ai-repro-steps";
+import { AiLabelSuggestions } from "./ai-label-suggestions";
 import { AiSummaryCard } from "./ai-summary-card";
 import { DueDate, PresenceStack } from "./inbox-list";
 import { AgentHandoff } from "./agent-handoff";
@@ -721,6 +722,8 @@ function DetailBody({
             )}
           </div>
         )}
+
+        {canWrite && <AiLabelSuggestions feedbackId={f.id} />}
 
         {canWrite && <ItemActions data={data} />}
 
