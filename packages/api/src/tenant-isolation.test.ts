@@ -39,7 +39,8 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
       integrationId = id(),
       roundId = id(),
       shareLinkId = id(),
-      ruleId = id();
+      ruleId = id(),
+      releaseId = id();
     const userId = `user-${org}`;
     await admin`insert into organization (id, name, slug) values (${org}, ${org}, ${org})`;
     await admin`insert into "user" (id, name, email) values (${userId}, ${userId}, ${`${org}@test.invalid`})`;
@@ -47,6 +48,7 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
       project: { id: projectId, org_id: org, name: org, slug: org, public_key: org },
       page: { id: id(), org_id: org, project_id: projectId, url: "https://example.invalid/" },
       review_round: { id: roundId, org_id: org, project_id: projectId, name: org },
+      project_release: { id: releaseId, org_id: org, project_id: projectId, version: org },
       review_link: { id: id(), org_id: org, project_id: projectId, label: org, token_hash: org },
       feedback: {
         id: feedbackId,

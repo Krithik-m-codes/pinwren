@@ -64,6 +64,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: DELETE /api/members/:userId"
   },
+  "DELETE /api/releases/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/releases/:id"
+  },
   "DELETE /api/review-links/:id": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -349,6 +354,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/projects/:id/notifications"
   },
+  "GET /api/projects/:id/releases": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects/:id/releases"
+  },
   "GET /api/projects/:id/review-links": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -473,6 +483,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/v1/projects/:id/labels"
+  },
+  "GET /api/v1/projects/:id/releases": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/projects/:id/releases"
   },
   "GET /api/v1/projects/:id/rounds": {
     "boundary": "tenant",
@@ -633,6 +648,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: PATCH /api/projects/:id/notifications"
+  },
+  "PATCH /api/releases/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/releases/:id"
   },
   "PATCH /api/rounds/:id": {
     "boundary": "tenant",
@@ -914,6 +934,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: POST /api/projects/:id/pages/regroup"
   },
+  "POST /api/projects/:id/releases": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/projects/:id/releases"
+  },
   "POST /api/projects/:id/review-links": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -978,6 +1003,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: POST /api/v1/feedback/:id/comments"
+  },
+  "POST /api/v1/projects/:id/releases": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/v1/projects/:id/releases"
   },
   "POST /api/views": {
     "boundary": "tenant",

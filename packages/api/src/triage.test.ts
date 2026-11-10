@@ -117,6 +117,13 @@ describe("export", () => {
     attachmentCount: 0,
     commentCount: 2,
     labels: [{ id: ID, name: "checkout", color: "#e5484d" }],
+    release: null,
+    fixedInReleaseId: null,
+    fixedInVersion: null,
+    fixedInNextRelease: false,
+    regressionOfId: null,
+    regressionOfNumber: null,
+    regressionConfidence: null,
   };
 
   it("maps an item with names, labels and the workspace link", async () => {

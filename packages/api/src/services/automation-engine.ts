@@ -55,6 +55,7 @@ const EVENT_OF: Partial<Record<WebhookEvent, AutomationEvent>> = {
   "feedback.status_changed": "status_changed",
   "feedback.labels_changed": "label_added",
   "comment.created": "comment_added",
+  "feedback.regression_detected": "regression_detected",
 };
 
 export const automationEventOf = (type: WebhookEvent): AutomationEvent | undefined => EVENT_OF[type];

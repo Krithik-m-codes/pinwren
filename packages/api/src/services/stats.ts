@@ -7,8 +7,8 @@ import {
   fillSeries,
   TIME_BUCKET_LIMITS_H,
 } from "@pinwren/core";
-import { activity, feedback, getDb, page, project, reviewRound, user } from "@pinwren/db";
-import { and, desc, eq, gte, inArray, isNull, type SQL, sql } from "drizzle-orm";
+import { activity, feedback, getDb, page, project, projectRelease, reviewRound, user } from "@pinwren/db";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { ACTIVE_STATUSES } from "./feedback";
 
 const DAY = 86_400_000;
@@ -139,6 +139,8 @@ export async function dashboardStats(
     active,
   );
 
+  const releaseData = await releaseStats(orgId, q.projectId, since, scope, active);
+
   const t = totalRow[0];
   const rows = new Map<string, { date: string; created?: number; resolved?: number }>();
   for (const r of created) rows.set(r.date, { date: r.date, created: r.n });
@@ -174,8 +176,101 @@ export async function dashboardStats(
     firstResponse: timing.response,
     resolveTime: timing.resolve,
     rounds,
+    ...releaseData,
     reporters,
     recent: recent.map((r) => ({ ...r, at: r.at.toISOString(), actor: r.actor })),
+  };
+}
+
+/** The "Regressions" and "Fixed per release" widgets (ADR 0029); every query is filtered by the org id. */
+async function releaseStats(
+  orgId: string,
+  projectId: string | undefined,
+  since: Date,
+  scope: SQL | undefined,
+  active: SQL,
+): Promise<Pick<DashboardStats, "regressions" | "releases">> {
+  const db = getDb();
+  const regressed = and(scope, isNotNull(feedback.regressionOfId));
+  const rid = sql.raw(`"project_release"."id"`);
+  const rorg = sql.raw(`"project_release"."org_id"`);
+  const rproject = sql.raw(`"project_release"."project_id"`);
+  const rversion = sql.raw(`"project_release"."version"`);
+  const [totals, items, releases] = await Promise.all([
+    db
+      .select({
+        total: sql<number>`count(*) filter (where ${gte(feedback.createdAt, since)})::int`,
+        open: sql<number>`count(*) filter (where ${active})::int`,
+      })
+      .from(feedback)
+      .where(regressed),
+    db
+      .select({
+        id: feedback.id,
+        number: feedback.number,
+        title: feedback.title,
+        status: feedback.status,
+        projectId: feedback.projectId,
+        projectName: project.name,
+        confidence: feedback.regressionConfidence,
+        ofId: feedback.regressionOfId,
+        ofNumber: sql<number>`(select o.number from feedback o where o.id = ${feedback.regressionOfId} and o.org_id = ${feedback.orgId})`,
+        createdAt: feedback.createdAt,
+      })
+      .from(feedback)
+      .innerJoin(project, and(eq(project.id, feedback.projectId), eq(project.orgId, feedback.orgId)))
+      .where(regressed)
+      .orderBy(desc(feedback.createdAt))
+      .limit(8),
+    db
+      .select({
+        id: projectRelease.id,
+        version: projectRelease.version,
+        projectId: projectRelease.projectId,
+        projectName: project.name,
+        deployedAt: projectRelease.deployedAt,
+        fixed: sql<number>`(select count(*)::int from feedback f where f.fixed_in_release_id = ${rid} and f.org_id = ${rorg} and f.deleted_at is null)`,
+        regressions: sql<number>`(select count(*)::int from feedback f where f.project_id = ${rproject} and f.org_id = ${rorg} and f.deleted_at is null and f.regression_of_id is not null and lower(f.metadata->>'release') = lower(${rversion}))`,
+      })
+      .from(projectRelease)
+      .innerJoin(
+        project,
+        and(eq(project.id, projectRelease.projectId), eq(project.orgId, projectRelease.orgId)),
+      )
+      .where(
+        and(
+          eq(projectRelease.orgId, orgId),
+          isNull(project.archivedAt),
+          projectId ? eq(projectRelease.projectId, projectId) : undefined,
+        ),
+      )
+      .orderBy(desc(projectRelease.deployedAt))
+      .limit(8),
+  ]);
+  return {
+    regressions: {
+      total: totals[0]?.total ?? 0,
+      open: totals[0]?.open ?? 0,
+      items: items.flatMap((r) =>
+        r.ofId && r.confidence
+          ? [
+              {
+                id: r.id,
+                number: r.number,
+                title: r.title,
+                status: r.status,
+                projectId: r.projectId,
+                projectName: r.projectName,
+                confidence: r.confidence,
+                ofId: r.ofId,
+                ofNumber: r.ofNumber,
+                createdAt: r.createdAt.toISOString(),
+              },
+            ]
+          : [],
+      ),
+    },
+    releases: releases.map((r) => ({ ...r, deployedAt: r.deployedAt.toISOString() })),
   };
 }
 

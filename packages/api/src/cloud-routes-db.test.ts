@@ -90,6 +90,7 @@ const resourceOf: Record<string, string> = {
   integrations: "integrationB",
   labels: "labelB",
   automations: "automationB",
+  releases: "releaseB",
   "review-links": "reviewLinkB",
   "share-links": "shareLinkB",
   rounds: "roundB",
@@ -162,6 +163,7 @@ const cases: Record<string, Spec> = {
   "DELETE /api/integrations/:id": foreign(),
   "DELETE /api/labels/:id": foreign(),
   "DELETE /api/members/:userId": foreign(),
+  "DELETE /api/releases/:id": foreign(),
   "DELETE /api/review-links/:id": foreign(),
   "DELETE /api/rounds/:id": foreign(),
   "DELETE /api/share-links/:id": foreign(),
@@ -223,6 +225,7 @@ const cases: Record<string, Spec> = {
   "GET /api/projects/:id/automations": foreign(),
   "GET /api/projects/:id/labels": foreign(),
   "GET /api/projects/:id/notifications": foreign(),
+  "GET /api/projects/:id/releases": foreign(),
   "GET /api/projects/:id/review-links": foreign(),
   "GET /api/feedback/:id/share-links": foreign(),
   "GET /api/rounds/:id/share-links": foreign(),
@@ -242,6 +245,7 @@ const cases: Record<string, Spec> = {
   "GET /api/v1/feedback/:id/repro-test": foreign(),
   "GET /api/v1/projects": scoped(),
   "GET /api/v1/projects/:id/labels": foreign(),
+  "GET /api/v1/projects/:id/releases": foreign(),
   "GET /api/v1/stats": scoped(),
   "GET /api/v1/views": scoped(),
   "GET /api/v1/projects/:id/rounds": foreign(),
@@ -275,6 +279,7 @@ const cases: Record<string, Spec> = {
   "PATCH /api/projects/:id": foreign({ body: () => ({ name: "foreign edit" }) }),
   "PATCH /api/projects/:id/ai": foreign({ body: () => ({ enabled: true }) }),
   "PATCH /api/projects/:id/notifications": foreign({ body: () => ({ emails: ["foreign@test.invalid"] }) }),
+  "PATCH /api/releases/:id": foreign({ body: () => ({ notes: "foreign edit" }) }),
   "PATCH /api/rounds/:id": foreign({ body: () => ({ name: "foreign edit" }) }),
   "PATCH /api/v1/feedback/:id": foreign({ body: () => ({ title: "foreign edit" }) }),
   "PATCH /api/v1/rounds/:id": foreign({ body: () => ({ name: "foreign edit" }) }),
@@ -299,6 +304,10 @@ const cases: Record<string, Spec> = {
       actions: [{ type: "set_priority", priority: "high" }],
     }),
   }),
+  // Releases (ADR 0029): workspace A names workspace B's project or release. The v1 call carries a token with the
+  // releases:write scope so the refusal is the tenant check, not the scope check.
+  "POST /api/projects/:id/releases": foreign({ body: () => ({ version: "9.9.9" }) }),
+  "POST /api/v1/projects/:id/releases": foreign({ body: () => ({ version: "9.9.9" }) }),
   "POST /api/feedback/:id/actions/:actionId": foreign(),
   "POST /api/feedback/:id/ai/apply": foreign({ body: () => ({ applyTitle: true }) }),
   "POST /api/feedback/:id/ai/translate": foreign({ body: () => ({ targetLocale: "fr" }) }),
@@ -705,11 +714,14 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
         token: randomUUID(),
         mail: randomUUID(),
         rule: randomUUID(),
+        release: randomUUID(),
       };
       await db`insert into comment (id,org_id,feedback_id,body) values (${row.comment},${org ?? ""},${feedbackId},${mark})`;
       await db`insert into label (id,org_id,project_id,name,color) values (${row.label},${org ?? ""},${projectId},${mark},'#112233')`;
       await db`insert into automation_rule (id,org_id,project_id,name,trigger,conditions,actions) values (${row.rule},${org ?? ""},${projectId},${mark},${db.json({ event: "feedback_created", toStatuses: [], labelId: null })},${db.json([])},${db.json([{ type: "set_priority", priority: "high" }])})`;
       await db`insert into automation_run (org_id,rule_id,project_id,feedback_id,event,status) values (${org ?? ""},${row.rule},${projectId},${feedbackId},'feedback_created','success')`;
+      await db`insert into project_release (id,org_id,project_id,version,notes) values (${row.release},${org ?? ""},${projectId},${mark},${mark})`;
+      await db`update feedback set status='resolved', fixed_in_release_id=${row.release} where id=${feedbackId}`;
       await db`insert into label_suggestion (org_id,feedback_id,label_id,name) values (${org ?? ""},${feedbackId},${row.label},${mark})`;
       await db`insert into review_round (id,org_id,project_id,name) values (${row.round},${org ?? ""},${projectId},${mark})`;
       await db`insert into review_link (id,org_id,project_id,label,token_hash) values (${row.reviewLink},${org ?? ""},${projectId},${mark},${randomUUID()})`;
@@ -731,7 +743,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
       await db`insert into email_template (org_id,key,subject,body) values (${org ?? ""},'reporter_received',${mark},${mark})`;
       await db`insert into brand_asset (org_id,storage_key,content_type,bytes) values (${org ?? ""},${row.asset},'text/plain',1)`;
       await db`insert into email_delivery (id,org_id,to_address,template_key,subject,status,payload) values (${row.mail},${org ?? ""},${`${mark}@test.invalid`},'test',${mark},'sent',${db.json({})})`;
-      await db`insert into api_token (id,org_id,user_id,name,prefix,hash,scopes) values (${row.token},${org ?? ""},${user ?? ""},${mark},${token.slice(0, 12)},${await hashToken(token)},${db.array(["feedback:read", "feedback:write"])})`;
+      await db`insert into api_token (id,org_id,user_id,name,prefix,hash,scopes) values (${row.token},${org ?? ""},${user ?? ""},${mark},${token.slice(0, 12)},${await hashToken(token)},${db.array(["feedback:read", "feedback:write", "releases:write"])})`;
       if (key === "A") {
         ids.tokenA = token;
         ids.projectA = projectId;
@@ -742,6 +754,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
           commentB: row.comment,
           labelB: row.label,
           automationB: row.rule,
+          releaseB: row.release,
           roundB: row.round,
           reviewLinkB: row.reviewLink,
           shareLinkB: row.shareLink,
