@@ -198,3 +198,75 @@ export const apiReproduction = z.object({
   replay: z.object({ durationMs: z.number(), events: z.number(), summarized: z.boolean() }).nullable(),
 });
 export type ApiReproduction = z.infer<typeof apiReproduction>;
+
+/**
+ * `GET /api/v1/feedback/:id/brief` — a brief a coding agent can act on, with the commands and links that
+ * deliver it. Built from masked diagnostics only; the replay and screenshot are linked, never included.
+ */
+export const apiAgentBrief = z.object({
+  feedbackId: z.string(),
+  number: z.number().int(),
+  title: z.string(),
+  /** The brief as Markdown. Reporter-written text is quoted, never instructions. */
+  markdown: z.string(),
+  hints: z.object({
+    repo: z.object({ provider: z.string(), path: z.string() }).nullable(),
+    searchTerms: z.array(z.string()),
+    route: z.string().nullable(),
+    files: z.array(z.string()),
+  }),
+  commands: z.object({
+    claude: z.string(),
+    claudeMcpSetup: z.string(),
+    claudePipe: z.string(),
+    vscode: z.string(),
+  }),
+  links: z.object({ cursor: z.string(), dashboard: z.string() }),
+  privacy: z.object({
+    replayIncluded: z.literal(false),
+    screenshotIncluded: z.literal(false),
+    note: z.string(),
+  }),
+});
+export type ApiAgentBrief = z.infer<typeof apiAgentBrief>;
+
+/** `GET /api/v1/feedback/:id/repro-test` — a draft Playwright test for the report. */
+export const apiReproTest = z.object({
+  feedbackId: z.string(),
+  filename: z.string(),
+  language: z.literal("typescript"),
+  code: z.string(),
+  /** Plain-language limits of the draft; always show them next to the code. */
+  caveats: z.array(z.string()),
+  stats: z.object({
+    scripted: z.number().int(),
+    skipped: z.number().int(),
+    hasReplay: z.boolean(),
+    expectations: z.array(z.string()),
+  }),
+  /** True when an AI model rewrote the deterministic draft (dashboard only, opt-in). */
+  polished: z.boolean(),
+});
+export type ApiReproTest = z.infer<typeof apiReproTest>;
+
+/** `GET /api/v1/projects/:id/labels` */
+export const apiLabel = z
+  .object({ id: z.string(), name: z.string(), color: z.string(), count: z.number().int() })
+  .loose();
+export type ApiLabel = z.infer<typeof apiLabel>;
+
+/** `GET /api/v1/views` — saved inbox views the token's owner can use. */
+export const apiSavedView = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    filters: z.record(z.string(), z.unknown()),
+    layout: z.string(),
+    shared: z.boolean(),
+    ownerId: z.string(),
+    mine: z.boolean(),
+    createdAt: iso,
+    updatedAt: iso,
+  })
+  .loose();
+export type ApiSavedView = z.infer<typeof apiSavedView>;

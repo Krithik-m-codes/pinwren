@@ -111,15 +111,16 @@ Retries: 1 m, 5 m, 30 m, 2 h, 6 h, 12 h (then mark failed, alert admins). Endpoi
 
 Exposed at `/mcp` (Streamable HTTP) and as `npx @pinwren/mcp` (stdio, reads `PINWREN_URL` + `PINWREN_TOKEN`).
 
-| Tool                       | Description                                                                                                                                     |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_projects`            | Projects the token can see                                                                                                                      |
-| `search_feedback`          | Filters: project, status, kind, assignee, label, text, page, since; returns compact rows                                                        |
-| `get_feedback`             | Full item: body, thread, anchor (CSS selector + XPath + text), environment, metadata, console/network excerpt, asset URLs (signed, short-lived) |
-| `get_reproduction_context` | Ordered steps derived from replay events + failing requests + errors, as Markdown                                                               |
-| `update_feedback`          | Status, priority, assignee, labels                                                                                                              |
-| `add_comment`              | Internal note or public reply                                                                                                                   |
-| `resolve_feedback`         | Resolve with a resolution note (e.g. commit SHA / PR URL)                                                                                       |
+| Tool                       | Description                                                                                                                                                                                                             |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_projects`            | Projects the token can see                                                                                                                                                                                              |
+| `search_feedback`          | Filters: project, status, kind, assignee, label, text, page, since; returns compact rows                                                                                                                                |
+| `get_feedback`             | Full item: body, thread, anchor (CSS selector + XPath + text), environment, metadata, console/network excerpt, asset URLs (signed, short-lived)                                                                         |
+| `get_reproduction_context` | Ordered steps derived from replay events + failing requests + errors, as Markdown                                                                                                                                       |
+| `get_agent_brief`          | Agent-ready brief for fixing a report (masked data; replay/screenshot linked). Also `get_repro_test`, `list_labels`, `list_rounds`, `get_round`, `list_saved_views`, `get_stats`, `list_assets`, `get_asset` (ADR 0026) |
+| `update_feedback`          | Status, priority, assignee, labels                                                                                                                                                                                      |
+| `add_comment`              | Internal note or public reply                                                                                                                                                                                           |
+| `resolve_feedback`         | Resolve with a resolution note (e.g. commit SHA / PR URL)                                                                                                                                                               |
 
 Resources: `pinwren://project/{id}/open` (open items digest). Prompts: `triage_inbox`, `fix_feedback` (instructs the agent to locate the element via the selector in the repo, reproduce, fix, and resolve with the PR link).
 

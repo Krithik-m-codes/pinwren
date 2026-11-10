@@ -62,16 +62,27 @@ await pinwren.feedback.resolve(id, "Fixed in https://github.com/acme/site/pull/2
 // Steps, failing requests and console errors for reproducing a bug report
 const repro = await pinwren.feedback.reproduction(id);
 console.log(repro.markdown);
+
+// An agent-ready brief and a draft Playwright test (masked data only; replay and screenshot are linked)
+const brief = await pinwren.feedback.brief(id);
+console.log(brief.markdown, brief.commands.claude);
+const test = await pinwren.feedback.reproTest(id);
+console.log(test.caveats, test.code);
 ```
 
-| Method                        | Returns                                                            | Scope            |
-| ----------------------------- | ------------------------------------------------------------------ | ---------------- |
-| `feedback.list(query?)`       | `{ items, nextCursor }`                                            | `feedback:read`  |
-| `feedback.iterate(query?)`    | An async iterator over every matching item                         | `feedback:read`  |
-| `feedback.get(id)`            | The item with comments, assets, activity, diagnostics              | `feedback:read`  |
-| `feedback.update(id, patch)`  | The updated item                                                   | `feedback:write` |
-| `feedback.resolve(id, note?)` | The updated item                                                   | `feedback:write` |
-| `feedback.reproduction(id)`   | `{ feedbackId, markdown, steps, failingRequests, errors, replay }` | `feedback:read`  |
+| Method                             | Returns                                                             | Scope            |
+| ---------------------------------- | ------------------------------------------------------------------- | ---------------- |
+| `feedback.list(query?)`            | `{ items, nextCursor }`                                             | `feedback:read`  |
+| `feedback.iterate(query?)`         | An async iterator over every matching item                          | `feedback:read`  |
+| `feedback.get(id)`                 | The item with comments, assets, activity, diagnostics               | `feedback:read`  |
+| `feedback.update(id, patch)`       | The updated item                                                    | `feedback:write` |
+| `feedback.resolve(id, note?)`      | The updated item                                                    | `feedback:write` |
+| `feedback.reproduction(id)`        | `{ feedbackId, markdown, steps, failingRequests, errors, replay }`  | `feedback:read`  |
+| `feedback.brief(id)`               | `{ markdown, hints, commands, links, privacy }`                     | `feedback:read`  |
+| `feedback.reproTest(id)`           | `{ filename, code, caveats, stats }` — a draft, not a verified test | `feedback:read`  |
+| `labels.list(projectId)`           | The project's labels with live item counts                          | `feedback:read`  |
+| `views.list()`                     | Saved inbox views you can use                                       | `feedback:read`  |
+| `stats.get({ days?, projectId? })` | Totals, breakdowns and a daily series                               | `feedback:read`  |
 
 `query` takes `projectId`, `status` (a status, `"active"` or `"all"`), `kind`, `priority`, `assigneeId`, `roundId`,
 `q` (full-text), `page` (part of the page URL), `since` (ISO 8601), `limit` (1–100) and `cursor`. `patch` takes

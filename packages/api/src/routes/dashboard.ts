@@ -47,6 +47,7 @@ import {
   updateFeedback,
 } from "../services/feedback";
 import { dashboardStats } from "../services/stats";
+import { agentBrief, reproTest } from "../services/handoff";
 import { reproductionContext } from "../services/reproduction";
 import { getSecuritySettings } from "../settings/instance";
 import { resolveSmtp } from "../email/config";
@@ -403,6 +404,14 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
   /** "Copy as Markdown": the reproduction context the API and MCP serve, for the signed-in team. */
   .get("/feedback/:id/reproduction", async (c) =>
     c.json(await reproductionContext(c.var.orgId, c.req.param("id"))),
+  )
+
+  /** "Fix with agent": the brief, its commands and links (masked data only; replay and screenshot are linked). */
+  .get("/feedback/:id/brief", async (c) => c.json(await agentBrief(c.var.orgId, c.req.param("id"))))
+
+  /** Draft Playwright test; `?polish=1` lets the org's AI provider tidy it (opt-in, sends only the draft). */
+  .get("/feedback/:id/repro-test", async (c) =>
+    c.json(await reproTest(c.var.orgId, c.req.param("id"), { polish: c.req.query("polish") === "1" })),
   )
 
   .patch(
