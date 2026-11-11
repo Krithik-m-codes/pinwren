@@ -1,4 +1,4 @@
-# ADR 0033 — Server-side dashboards: named, shared, filterable
+# ADR 0037 — Server-side dashboards: named, shared, filterable
 
 **Status:** accepted. Supersedes the "per-browser persistence" part of ADR 0024 and the "dismissals are per
 browser" part of ADR 0025.

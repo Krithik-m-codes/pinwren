@@ -15,7 +15,11 @@ export type InboxState = {
   /** The last change as each item's previous values, so `u` puts every item back as it was. */
   lastChange: { each: ItemChange[]; label: string } | null;
   /** Per-device preferences (saved in localStorage by the listener middleware). */
-  prefs: { density: Density };
+  prefs: {
+    density: Density;
+    /** Custom field keys whose answers show on each row (ADR 0032). */
+    fieldColumns: string[];
+  };
 };
 
 export const initialInboxState: InboxState = {
@@ -23,7 +27,7 @@ export const initialInboxState: InboxState = {
   anchor: null,
   menu: null,
   lastChange: null,
-  prefs: { density: "comfortable" },
+  prefs: { density: "comfortable", fieldColumns: [] },
 };
 
 export const inboxSlice = createSlice({
@@ -68,6 +72,9 @@ export const inboxSlice = createSlice({
     densityChanged(state, action: PayloadAction<Density>) {
       state.prefs.density = action.payload;
     },
+    fieldColumnsChanged(state, action: PayloadAction<string[]>) {
+      state.prefs.fieldColumns = [...new Set(action.payload)].slice(0, 3);
+    },
     prefsLoaded(state, action: PayloadAction<Partial<InboxState["prefs"]>>) {
       state.prefs = { ...state.prefs, ...action.payload };
     },
@@ -81,5 +88,6 @@ export const {
   menuChanged,
   changeRecorded,
   densityChanged,
+  fieldColumnsChanged,
   prefsLoaded,
 } = inboxSlice.actions;

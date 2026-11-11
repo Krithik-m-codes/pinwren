@@ -4,7 +4,7 @@ import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { useUiStateQuery, useUpdateUiStateMutation } from "@/lib/store/api/dashboards";
 import { type NudgeState, parseNudgeState } from "./state";
 
-// Dismissals follow the person to every browser: they live in `user_preference.ui_state` (ADR 0033, which
+// Dismissals follow the person to every browser: they live in `user_preference.ui_state` (ADR 0037, which
 // replaces the per-browser choice of ADR 0025). The old localStorage entry is imported the first time the
 // account has nothing yet, then kept as a cache so a slow or unreachable server still hides what was dismissed.
 

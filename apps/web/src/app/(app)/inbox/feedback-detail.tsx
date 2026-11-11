@@ -103,6 +103,7 @@ import { useUrlParams } from "@/lib/use-url-params";
 import { useMounted } from "@/lib/use-synced-state";
 import { cn } from "@/lib/utils";
 import { useMembers, useViewer } from "@/lib/viewer";
+import { CustomFieldsCard } from "./custom-fields-card";
 import { AiDuplicateBanner } from "./ai-duplicate-banner";
 import { AiReproSteps } from "./ai-repro-steps";
 import { AiLabelSuggestions } from "./ai-label-suggestions";
@@ -110,6 +111,7 @@ import { AiSummaryCard } from "./ai-summary-card";
 import { DueDate, PresenceStack } from "./inbox-list";
 import { AgentHandoff } from "./agent-handoff";
 import { ItemActions } from "./item-actions";
+import { FixedInPicker, RegressionBanner, RegressionsOfThis, ReleaseBadges } from "./release-ui";
 import { AssigneesPicker, ItemSearchPicker, LabelChips, LabelPicker } from "./pickers";
 import { type ObservabilityLink, observabilityLinks } from "@/lib/observability";
 import { type ReplayHandle, ReplayViewer } from "./replay-viewer";
@@ -235,6 +237,8 @@ function DetailBody({
   const [replayAt, setReplayAt] = useState<number | null>(null);
 
   const Kind = KIND_META[f.kind].icon;
+  // The detail names the original in `regressionOf`; the badges read the list row's fields.
+  const releaseItem = { ...f, regressionOfNumber: f.regressionOf?.number ?? f.regressionOfNumber ?? null };
   const roundItems = [
     { value: NO_ROUND, label: t("inbox1.noRound") },
     ...(rounds.data?.rounds ?? [])
@@ -539,6 +543,16 @@ function DetailBody({
               />
             </div>
           )}
+          {f.regressionOf && (
+            <div className="mt-3">
+              <RegressionBanner feedback={f} canWrite={canWrite} onOpen={(item) => setParams({ item })} />
+            </div>
+          )}
+          {data.regressions && data.regressions.length > 0 && (
+            <div className="mt-3">
+              <RegressionsOfThis regressions={data.regressions} onOpen={(item) => setParams({ item })} />
+            </div>
+          )}
           {data.ai?.summary && (
             <div className="mt-3">
               <AiSummaryCard
@@ -572,6 +586,14 @@ function DetailBody({
                 ))}
               </SelectContent>
             </Select>
+            {f.status === "resolved" && (
+              <FixedInPicker
+                projectId={f.projectId}
+                fixedInReleaseId={f.fixedInReleaseId}
+                fixedInNextRelease={f.fixedInNextRelease}
+                onPick={(p) => patch(p)}
+              />
+            )}
             <Select
               items={priorityItems}
               value={f.priority}
@@ -723,6 +745,12 @@ function DetailBody({
                 {rounds.data?.rounds.find((r) => r.id === f.roundId)?.name ?? t("inbox1.inARound")}
               </Badge>
             )}
+            <ReleaseBadges item={releaseItem} fixedInVersion={f.fixedInRelease?.version} />
+          </div>
+        )}
+        {canWrite && (f.release || f.regressionOfId) && (
+          <div className="flex flex-wrap gap-2 text-sm">
+            <ReleaseBadges item={releaseItem} showFixed={false} />
           </div>
         )}
 
@@ -749,6 +777,8 @@ function DetailBody({
         <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">
           {activeTranslation?.body ?? f.body}
         </p>
+
+        <CustomFieldsCard feedback={f} canWrite={canWrite} />
 
         {data.ai?.reproductionSteps && data.ai.reproductionSteps.length > 0 && (
           <AiReproSteps steps={data.ai.reproductionSteps} />

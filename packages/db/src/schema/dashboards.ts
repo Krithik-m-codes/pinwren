@@ -28,7 +28,7 @@ const orgId = () =>
     .references(() => organization.id, { onDelete: "cascade" });
 
 /**
- * A named dashboard (ADR 0033): a layout for one screen, owned by one member of a workspace. `shared` publishes
+ * A named dashboard (ADR 0037): a layout for one screen, owned by one member of a workspace. `shared` publishes
  * it to the workspace (read-only for everyone else); `default_roles` makes a shared dashboard the starting
  * point for those roles instead of the built-in default. Names are unique per owner and screen, ignoring case.
  */

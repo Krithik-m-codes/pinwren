@@ -32,6 +32,8 @@ export type WidgetConfig = {
   privacyMode: boolean;
   /** Offer a bug report when the page throws an uncaught error (off by default). */
   errorPrompt: boolean;
+  /** The project's custom questions (ADR 0032), raw: widget-fields.js sanitises them when the report opens. */
+  customFields: unknown[];
   /**
    * F-012 (wave-4 §4, wave-5 §2): where and for whom the widget shows. Widget-side only; `forceShow` overrides
    * every rule, a valid review link (`?pinwren_review=`) overrides `mode`.
@@ -89,6 +91,7 @@ export const DEFAULT_CONFIG: WidgetConfig = {
   panelActions: [],
   privacyMode: false,
   errorPrompt: false,
+  customFields: [],
   visibility: {
     environments: "all",
     minViewportWidth: 0,

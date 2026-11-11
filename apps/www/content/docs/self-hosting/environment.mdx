@@ -92,8 +92,10 @@ never followed.
 - `PINWREN_OUTBOUND_ALLOW_PRIVATE=true` switches the address check off entirely. It is meant **for local
   development and tests only** — never set it on a server people can reach.
 
-`GITHUB_API_URL` and `GITLAB_URL` come from you, not from a user, so they may point at private addresses without
-the allowlist (timeouts, size caps and no-redirects still apply).
+`GITHUB_API_URL`, `GITLAB_URL` and `SLACK_API_URL` come from you, not from a user, so they may point at private
+addresses without the allowlist (timeouts, size caps and no-redirects still apply). `SLACK_API_URL` (default
+`https://slack.com/api`) is the Slack Web API the [Slack app](/docs/integrations/slack) calls; change it only for a
+mock or a proxy.
 
 ## AI triage
 

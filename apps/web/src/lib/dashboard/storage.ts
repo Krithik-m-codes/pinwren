@@ -4,7 +4,7 @@ import type { AppRole } from "@pinwren/core";
 import { useCallback, useSyncExternalStore } from "react";
 import { defaultLayout, type Layout, normaliseLayout, type Scope, startsCollapsed } from "./catalog";
 
-// Browser-side copies of dashboard state (ADR 0033). The server owns the layouts now; this file keeps
+// Browser-side copies of dashboard state (ADR 0037). The server owns the layouts now; this file keeps
 //  - the pre-server layout (`pinwren.dashboard.v1.*`), read once to import it into the account, then removed;
 //  - a cache of the last layout shown per screen (`pinwren.dashboard.v2.*`), so a slow or unreachable server
 //    still shows the person's dashboard instead of the built-in one (the offline fallback);

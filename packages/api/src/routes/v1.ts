@@ -4,6 +4,7 @@ import {
   dashboardStatsQuery,
   feedbackListQuery,
   feedbackUpdate,
+  releaseCreate,
   reviewRoundUpdate,
   roleCan,
 } from "@pinwren/core";
@@ -21,9 +22,11 @@ import { clientIp, isInternalRequest } from "../net";
 import { consume, exhausted } from "../rate-limit";
 import { audienceOf, isReadOnlyRole, readOnlyError } from "../permissions";
 import { assetResponse } from "../services/assets";
+import { listFieldsOfProject } from "../services/custom-fields";
 import { addTeamComment, getFeedbackDetail, listFeedback, updateFeedback } from "../services/feedback";
 import { agentBrief, reproTest } from "../services/handoff";
 import { reproductionContext } from "../services/reproduction";
+import { listReleases, recordRelease } from "../services/releases";
 import { getRound, listRounds, updateRound } from "../services/rounds";
 import { dashboardStats } from "../services/stats";
 import { listProjectLabels } from "./labels";
@@ -209,6 +212,17 @@ export const v1 = new Hono<{ Variables: TokenVars }>()
   )
   .get("/projects/:id/labels", scope("feedback:read"), async (c) =>
     c.json({ labels: await listProjectLabels(c.var.orgId, c.req.param("id")) }),
+  )
+  .get("/projects/:id/releases", scope("feedback:read"), async (c) =>
+    c.json({ releases: await listReleases(c.var.orgId, c.req.param("id")) }),
+  )
+  // CI: record a release when a deploy goes out. Re-posting the same version updates it (a re-run is safe).
+  .post("/projects/:id/releases", scope("releases:write"), zValidator("json", releaseCreate), async (c) => {
+    const out = await recordRelease(c.var.orgId, c.var.userId, c.req.param("id"), c.req.valid("json"));
+    return c.json(out, out.created ? 201 : 200);
+  })
+  .get("/projects/:id/custom-fields", scope("feedback:read"), async (c) =>
+    c.json({ fields: await listFieldsOfProject(c.var.orgId, c.req.param("id")) }),
   )
   .get("/views", scope("feedback:read"), async (c) =>
     c.json({ views: await listViews(c.var.orgId, c.var.userId) }),

@@ -167,6 +167,46 @@ describe("Pinwren MCP server", () => {
     expect(invalid.isError).toBe(true);
   });
 
+  it("lists and records releases, and resolves with the release that fixed the item", async () => {
+    const id = "0192f0c4-4f6e-7c1a-8d55-9a3e2b1c4d5e";
+    const { mcp, calls, text } = await connect((url, init) => {
+      if (url.pathname.endsWith("/releases") && init.method === "POST")
+        return json(
+          { release: { id: "r1", version: "v1.4.0", deployedAt: "now" }, created: true, adopted: 2 },
+          201,
+        );
+      if (url.pathname.endsWith("/releases"))
+        return json({
+          releases: [
+            {
+              id: "r1",
+              version: "v1.4.0",
+              commit: null,
+              deployedAt: "now",
+              fixedCount: 3,
+              regressionCount: 1,
+            },
+          ],
+        });
+      return json({ feedback: { id: "f1", number: 7, status: "resolved", fixedInReleaseId: "r1" } });
+    });
+    const listed = JSON.parse(
+      text(await mcp.callTool({ name: "list_releases", arguments: { projectId: id } })),
+    ) as {
+      version: string;
+      regressionCount: number;
+    }[];
+    expect(listed[0]).toMatchObject({ version: "v1.4.0", regressionCount: 1 });
+    const made = JSON.parse(
+      text(await mcp.callTool({ name: "create_release", arguments: { projectId: id, version: "v1.4.0" } })),
+    ) as Record<string, unknown>;
+    expect(made).toMatchObject({ created: true, adopted: 2 });
+    const rid = "0192f0c4-4f6e-7c1a-8d55-9a3e2b1c4d60";
+    const fixed = await mcp.callTool({ name: "resolve_feedback", arguments: { id, fixedInReleaseId: rid } });
+    expect(JSON.parse(text(fixed))).toMatchObject({ status: "resolved", fixedInReleaseId: "r1" });
+    expect(calls.at(-1)?.body).toEqual({ status: "resolved", fixedInReleaseId: rid });
+  });
+
   it("serves the agent brief and the draft repro test with their caveats", async () => {
     const id = "0192f0c4-4f6e-7c1a-8d55-9a3e2b1c4d5e";
     const { mcp, calls, text } = await connect((url) =>
@@ -230,6 +270,55 @@ describe("Pinwren MCP server", () => {
     ]);
     const bad = await mcp.callTool({ name: "get_stats", arguments: { days: 5 } });
     expect(bad.isError).toBe(true);
+  });
+
+  it("lists custom fields, filters by one and sets answers through the public API", async () => {
+    const id = "0192f0c4-4f6e-7c1a-8d55-9a3e2b1c4d5e";
+    const { mcp, calls, text } = await connect((url, init) => {
+      if (url.pathname.endsWith("/custom-fields"))
+        return json({
+          fields: [
+            {
+              key: "plan",
+              label: "Plan",
+              type: "select",
+              required: false,
+              audience: "reporter",
+              kinds: ["bug"],
+              options: [{ value: "pro", label: "Pro" }],
+              pii: true,
+              strings: {},
+            },
+          ],
+        });
+      if (init.method === "PATCH")
+        return json({ feedback: { id, number: 1, status: "open", priority: "none", title: null } });
+      return json({ items: [], nextCursor: null });
+    });
+    expect(
+      JSON.parse(text(await mcp.callTool({ name: "list_custom_fields", arguments: { projectId: id } }))),
+    ).toEqual([
+      {
+        key: "plan",
+        label: "Plan",
+        type: "select",
+        required: false,
+        audience: "reporter",
+        kinds: ["bug"],
+        options: [{ value: "pro", label: "Pro" }],
+      },
+    ]);
+    await mcp.callTool({ name: "search_feedback", arguments: { customField: "plan:pro" } });
+    await mcp.callTool({
+      name: "update_feedback",
+      arguments: { id, customFields: { plan: "pro", owner: null } },
+    });
+    expect(calls.map((c) => c.path)).toEqual([
+      `/api/v1/projects/${id}/custom-fields`,
+      "/api/v1/feedback?cf=plan%3Apro&limit=20",
+      `/api/v1/feedback/${id}`,
+    ]);
+    expect(calls[2]?.body).toEqual({ customFields: { plan: "pro", owner: null } });
   });
 
   it("lists asset metadata and sends an image to a model only when asked", async () => {

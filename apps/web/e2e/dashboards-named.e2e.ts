@@ -2,7 +2,7 @@ import type { APIRequestContext, Browser, Page } from "@playwright/test";
 import { seed, shoot } from "./env";
 import { expect, test } from "./fixtures";
 
-// ADR 0033: named dashboards (create, switch, rename, duplicate, default, delete), layouts kept on the
+// ADR 0037: named dashboards (create, switch, rename, duplicate, default, delete), layouts kept on the
 // account, the one-time import of the old browser layout, sharing with the workspace (read-only for others,
 // "Duplicate to my dashboards"), the dashboard-wide filter bar in the URL, pinned projects, the start page
 // and the session-expired redirect.

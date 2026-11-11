@@ -1,5 +1,5 @@
 // Strings for: named and shared dashboards (dashboard-switcher.tsx), the dashboard filter bar
-// (filter-bar.tsx), pinned projects in the sidebar, and the session-expired notice (ADR 0033).
+// (filter-bar.tsx), pinned projects in the sidebar, and the session-expired notice (ADR 0037).
 export const dashx = {
   "dashx.aTeammate": "a teammate",
   "dashx.allLabels": "All labels",

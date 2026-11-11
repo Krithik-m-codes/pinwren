@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { doctor, status } from "./checks";
 import { briefFor, formatList, listFeedback, reproFor } from "./feedback";
+import { createRelease, formatReleases, listReleases } from "./release";
 import {
   assertProjectKey,
   detectFramework,
@@ -188,5 +189,69 @@ describe("feedback commands", () => {
       "pinwren-12-x.spec.ts",
     );
     expect(paths).toEqual(["/api/v1/feedback/abc/brief", "/api/v1/feedback/abc/repro-test"]);
+  });
+});
+
+describe("release commands", () => {
+  const projects = [{ id: "p1", name: "Shop", slug: "shop", openCount: 0 }];
+  const seen: { method: string; path: string; body: unknown }[] = [];
+  const api: typeof fetch = (input, init = {}) => {
+    const u = new URL(input instanceof Request ? input.url : input.toString());
+    seen.push({
+      method: init.method ?? "GET",
+      path: u.pathname,
+      body: typeof init.body === "string" ? init.body : null,
+    });
+    const body = u.pathname.endsWith("/projects")
+      ? { projects }
+      : init.method === "POST"
+        ? { release: { id: "r1", version: "v1.4.0" }, created: true, adopted: 0 }
+        : {
+            releases: [
+              {
+                id: "r1",
+                version: "v1.4.0",
+                deployedAt: "2026-11-01T10:00:00Z",
+                fixedCount: 2,
+                regressionCount: 1,
+                commit: "9f2c1abcdef",
+              },
+            ],
+          };
+    return Promise.resolve(
+      new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } }),
+    );
+  };
+
+  it("records a release for a project given by slug", async () => {
+    seen.length = 0;
+    const out = await createRelease(
+      "https://fb.example.com",
+      "pwt_x",
+      { project: "shop", version: "v1.4.0", commit: "9f2c1ab" },
+      api,
+    );
+    expect(out.project).toEqual({ id: "p1", name: "Shop" });
+    expect(out.created).toBe(true);
+    expect(seen.map((c) => `${c.method} ${c.path}`)).toEqual([
+      "GET /api/v1/projects",
+      "POST /api/v1/projects/p1/releases",
+    ]);
+    expect(JSON.parse(seen[1]?.body as string)).toEqual({ version: "v1.4.0", commit: "9f2c1ab" });
+  });
+
+  it("names the projects the token can see when the slug is wrong", async () => {
+    await expect(
+      createRelease("https://fb.example.com", "pwt_x", { project: "nope", version: "1" }, api),
+    ).rejects.toThrow(/No project "nope".*shop/);
+  });
+
+  it("lists releases as a table", async () => {
+    const { releases } = await listReleases("https://fb.example.com", "pwt_x", "p1", api);
+    const text = formatReleases(releases);
+    expect(text).toContain("v1.4.0");
+    expect(text).toContain("2 fixed");
+    expect(text).toContain("1 regressions");
+    expect(formatReleases([])).toBe("No releases yet.");
   });
 });

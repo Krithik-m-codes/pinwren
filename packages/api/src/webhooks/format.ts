@@ -19,9 +19,18 @@ export type FeedbackPayload = {
   /** The review link's label when the item came in through one (older payloads leave it out). */
   reviewLink?: string | null;
   assigneeIds: string[];
+  /** The release the report came from (`data-release` / `setMetadata({ release })`), if it said (ADR 0036). */
+  release?: string | null;
+  /** The release that fixed it; `fixedInNextRelease` while the fix is promised but not shipped. */
+  fixedInRelease?: string | null;
+  fixedInNextRelease?: boolean;
+  /** Set when the report looks like a resolved item coming back. */
+  regressionOf?: { id: string; number: number; confidence: string | null; fixedIn: string | null } | null;
   createdAt: string;
   updatedAt: string;
   url: string;
+  /** Answers to the project's custom fields by key (ADR 0032); absent in payloads from before they existed. */
+  customFields?: Record<string, unknown>;
 };
 
 /** "via review link “Client round 2”" for chat messages, or null. */
@@ -67,7 +76,7 @@ export function signBody(secret: string, timestamp: number, body: string): strin
   return `v1=${hmacSha256Hex(secret, `${timestamp}.${body}`)}`;
 }
 
-const truncate = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+export const truncate = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 // --- Slack ---------------------------------------------------------------------------------------------
 // Slack parses `<…>` as links/mentions (`<!channel>`, `<@U123>`) and *_~` as formatting in mrkdwn.
@@ -75,14 +84,14 @@ const truncate = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}
 // its formatting characters are also broken with a zero-width space. Bodies go in plain_text blocks,
 // which Slack never formats.
 
-const slackEntities = (s: string) =>
+export const slackEntities = (s: string) =>
   s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
 export function slackEscape(s: string): string {
   return slackEntities(s).replace(/([*_~`|])/g, "\u200b$1\u200b");
 }
 
-const plain = (s: string) => ({ type: "plain_text", text: slackEntities(s), emoji: false });
+export const plain = (s: string) => ({ type: "plain_text", text: slackEntities(s), emoji: false });
 
 export const EVENT_TITLES: Record<string, string> = {
   "feedback.created": "New feedback",
@@ -96,6 +105,7 @@ export const EVENT_TITLES: Record<string, string> = {
   "comment.updated": "Comment edited",
   "comment.deleted": "Comment deleted",
   "round.signoff": "Round sign-off",
+  "feedback.regression_detected": "Possible regression",
   ping: "Test delivery",
 };
 
@@ -105,6 +115,8 @@ export function eventTitle(p: WebhookPayload): string {
   let extra = "";
   if (p.event === "feedback.status_changed" && c?.status) extra = ` → ${String(c.status.to)}`;
   if (p.event === "feedback.priority_changed" && c?.priority) extra = ` → ${String(c.priority.to)}`;
+  const of = p.data.feedback.regressionOf;
+  if (p.event === "feedback.regression_detected" && of) extra = ` of #${of.number}`;
   return `${EVENT_TITLES[p.event] ?? p.event}${extra}`;
 }
 
@@ -120,7 +132,7 @@ function headline(p: WebhookPayload): string {
   return `${eventTitle(p)}: ${f.projectName} #${f.number} ${what}`;
 }
 
-const httpLink = (url: string) => (/^https?:\/\//.test(url) ? url : null);
+export const httpLink = (url: string) => (/^https?:\/\//.test(url) ? url : null);
 
 export function slackBody(p: WebhookPayload): object {
   const f = p.data.feedback;

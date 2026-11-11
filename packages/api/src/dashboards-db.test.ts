@@ -8,7 +8,7 @@ import { createCloudFixture } from "./test-helpers/cloud-fixture";
 
 /**
  * Named and shared dashboards, per-person state and the dashboard-wide stats filters against a real database
- * with row security (ADR 0033): visibility, publishing, role defaults, validation, and that nothing crosses
+ * with row security (ADR 0037): visibility, publishing, role defaults, validation, and that nothing crosses
  * the workspace boundary.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- the cases read parsed JSON responses and SQL rows */

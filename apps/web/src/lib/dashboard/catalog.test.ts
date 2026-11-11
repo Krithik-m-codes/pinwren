@@ -120,3 +120,15 @@ describe("parseStored", () => {
     expect(parseStored(null, "home", "admin")).toEqual(defaultLayout("home", "admin"));
   });
 });
+
+describe("release widgets (ADR 0036)", () => {
+  it("offers Regressions and Fixed per release on every screen, but not by default", () => {
+    for (const id of ["list.regressions", "list.fixedPerRelease"] as const) {
+      expect(WIDGET_IDS).toContain(id);
+      for (const scope of SCOPES) {
+        expect(widgetsFor(scope).map((w) => w.id)).toContain(id);
+        expect(defaultLayout(scope, "admin").slots.map((s) => s.id)).not.toContain(id);
+      }
+    }
+  });
+});

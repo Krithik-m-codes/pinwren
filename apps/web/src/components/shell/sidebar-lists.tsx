@@ -146,7 +146,7 @@ function ProjectsGroup() {
   // Creating projects is an Admin permission (projects.manage, wave-5 §3.7).
   const { isAdmin } = useViewer();
   const current = pathname === "/inbox" ? params.get("project") : null;
-  // Pinned projects come first (per person and workspace, ADR 0033); viewers may pin too.
+  // Pinned projects come first (per person and workspace, ADR 0037); viewers may pin too.
   const prefs = useWorkspacePreferencesQuery(undefined);
   const [savePrefs] = useUpdateWorkspacePreferencesMutation();
   const pinnedIds = prefs.data?.preferences.pinnedProjectIds ?? [];

@@ -160,6 +160,10 @@ async function reportView(p: Project, link: Link, feedbackId: string): Promise<S
       body: feedback.body,
       environment: feedback.environment,
       createdAt: feedback.createdAt,
+      fixedInVersion: sql<
+        string | null
+      >`(select r.version from project_release r where r.id = ${feedback.fixedInReleaseId} and r.org_id = ${feedback.orgId})`,
+      fixedInNextRelease: feedback.fixedInNextRelease,
       pageUrl: page.url,
     })
     .from(feedback)
@@ -229,6 +233,8 @@ async function reportView(p: Project, link: Link, feedbackId: string): Promise<S
       browser: typeof env.browser === "string" ? env.browser : null,
       os: typeof env.os === "string" ? env.os : null,
       createdAt: row.createdAt.toISOString(),
+      fixedInVersion: row.fixedInVersion,
+      fixedInNextRelease: row.fixedInNextRelease,
       screenshot: shot ? { id: shot.id, kind: shot.kind, contentType: shot.contentType } : null,
       replay: replay ? { id: replay.id, kind: replay.kind, contentType: replay.contentType } : null,
       diagnostics: summarizeDiagnostics(diag),
@@ -255,6 +261,10 @@ async function roundView(p: Project, link: Link, roundId: string): Promise<Share
         title: feedback.title,
         body: feedback.body,
         pageUrl: page.url,
+        fixedInVersion: sql<
+          string | null
+        >`(select r.version from project_release r where r.id = ${feedback.fixedInReleaseId} and r.org_id = ${feedback.orgId})`,
+        fixedInNextRelease: feedback.fixedInNextRelease,
       })
       .from(feedback)
       .leftJoin(page, and(eq(page.id, feedback.pageId), eq(page.orgId, feedback.orgId)))

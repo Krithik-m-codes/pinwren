@@ -47,6 +47,14 @@ describe("inbox filters in the URL", () => {
     expect(extraFilterCount({ labelId: L, reporter: "x", sort: "updated" })).toBe(2);
   });
 
+  it("reads one custom field filter and counts it as a narrowing filter", () => {
+    expect(filtersFromParams(sp("cf=plan%3Apro"))).toEqual({ cf: "plan:pro" });
+    expect(filtersFromParams(sp("cf=nokey"))).toEqual({});
+    expect(extraFilterCount({ cf: "plan:pro" })).toBe(1);
+    expect(paramsForFilters({ cf: "plan:pro" }).get("cf")).toBe("plan:pro");
+    expect(sameFilters({ cf: "a:b" }, { cf: "a:c" })).toBe(false);
+  });
+
   it("builds export URLs from the list query, or for a selection", () => {
     const args = inboxArgsFromParams(sp(`project=${P}&priority=high`));
     expect(exportUrl(args, "csv")).toBe(
@@ -81,5 +89,23 @@ describe("review link filter (wave 5)", () => {
     expect(paramsForFilters(f).get("review")).toBe(P);
     expect(filtersFromParams(sp("review=not-a-uuid"))).toEqual({});
     expect(inboxArgsFromParams(sp(`review=${P}`)).reviewLinkId).toBe(P);
+  });
+});
+
+describe("release filters (ADR 0036)", () => {
+  it("round-trips the regression and fixed-in filters and counts them", () => {
+    const filters = filtersFromParams(sp(`regression=true&fixedIn=${P}&status=all`));
+    expect(filters).toEqual({ regression: "true", fixedInReleaseId: P, status: "all" });
+    expect(paramsForFilters(filters).get("regression")).toBe("true");
+    expect(paramsForFilters(filters).get("fixedIn")).toBe(P);
+    expect(extraFilterCount(filters)).toBe(2);
+    // The list request carries them under the API's names.
+    expect(listQueryString(inboxArgsFromParams(sp(`regression=true&fixedIn=${P}`)))).toBe(
+      `fixedInReleaseId=${P}&limit=50&regression=true&status=active`,
+    );
+  });
+
+  it("drops a regression filter that is not true and a fixed-in that is not an id", () => {
+    expect(filtersFromParams(sp("regression=false&fixedIn=nope"))).toEqual({});
   });
 });

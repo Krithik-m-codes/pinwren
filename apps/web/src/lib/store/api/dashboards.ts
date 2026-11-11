@@ -10,7 +10,7 @@ import type {
 } from "@pinwren/core";
 import { baseApi, LIST } from "./base";
 
-// Server-stored dashboards (ADR 0033): named layouts per screen, the workspace-shared ones, the default and
+// Server-stored dashboards (ADR 0037): named layouts per screen, the workspace-shared ones, the default and
 // pinned projects per workspace, and the account-wide interface state (start page, dismissed prompts).
 // Injected into the base API on its own so the domain chain in ./index stays untouched.
 

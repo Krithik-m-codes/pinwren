@@ -39,7 +39,9 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
       integrationId = id(),
       roundId = id(),
       shareLinkId = id(),
-      ruleId = id();
+      ruleId = id(),
+      releaseId = id(),
+      slackWorkspaceId = id();
     const userId = `user-${org}`;
     await admin`insert into organization (id, name, slug) values (${org}, ${org}, ${org})`;
     await admin`insert into "user" (id, name, email) values (${userId}, ${userId}, ${`${org}@test.invalid`})`;
@@ -47,6 +49,7 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
       project: { id: projectId, org_id: org, name: org, slug: org, public_key: org },
       page: { id: id(), org_id: org, project_id: projectId, url: "https://example.invalid/" },
       review_round: { id: roundId, org_id: org, project_id: projectId, name: org },
+      project_release: { id: releaseId, org_id: org, project_id: projectId, version: org },
       review_link: { id: id(), org_id: org, project_id: projectId, label: org, token_hash: org },
       feedback: {
         id: feedbackId,
@@ -151,6 +154,15 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
         trigger: admin.json({ event: "feedback_created", toStatuses: [], labelId: null }),
         actions: admin.json([{ type: "set_priority", priority: "high" }]),
       },
+      custom_field: {
+        id: id(),
+        org_id: org,
+        project_id: projectId,
+        key: "tier",
+        type: "text",
+        label: org,
+        position: 0,
+      },
       automation_run: {
         id: id(),
         org_id: org,
@@ -170,6 +182,37 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
         layout: admin.json({ v: 1, slots: [], days: 14 }),
       },
       workspace_preference: { org_id: org, user_id: userId },
+      slack_workspace: {
+        id: slackWorkspaceId,
+        org_id: org,
+        team_id: `T${slackWorkspaceId.replaceAll("-", "").slice(0, 10).toUpperCase()}`,
+        team_name: org,
+        signing_secret: "v1.x.y.z",
+        bot_token: "v1.x.y.z",
+        token_hint: "test",
+      },
+      slack_route: {
+        id: id(),
+        org_id: org,
+        workspace_id: slackWorkspaceId,
+        project_id: projectId,
+        channel_id: "C0123456789",
+      },
+      slack_user_link: {
+        id: id(),
+        org_id: org,
+        workspace_id: slackWorkspaceId,
+        slack_user_id: "U0123456789",
+        user_id: userId,
+      },
+      slack_message: {
+        id: id(),
+        org_id: org,
+        workspace_id: slackWorkspaceId,
+        feedback_id: feedbackId,
+        channel_id: "C0123456789",
+        ts: "1700000000.000100",
+      },
     };
     for (const [table, row] of Object.entries(rows)) await admin`insert into ${admin(table)} ${admin(row)}`;
     fixture[org] = rows;
@@ -229,7 +272,7 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
     const rows = await admin<
       { name: string; valid: boolean }[]
     >`select conname as name, convalidated as valid from pg_constraint where connamespace = 'public'::regnamespace and conname like '%_tenant_fk'`;
-    expect(rows).toHaveLength(32);
+    expect(rows).toHaveLength(41);
     expect(rows.every((row) => row.valid)).toBe(true);
   });
 

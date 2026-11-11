@@ -182,7 +182,8 @@
     <script>
       // Query parameters become script-tag attributes, like a site would set them:
       // ?locale=fr → data-locale, ?urlPattern=… → data-url-pattern, ?forceShow → data-force-show,
-      // ?allowReplay → data-allow-replay-in-privacy-mode, ?noAuto → no script tag (the test loads the widget).
+      // ?allowReplay → data-allow-replay-in-privacy-mode, ?release=1.4.2 → data-release,
+      // ?noAuto → no script tag (the test loads the widget).
       const params = new URLSearchParams(location.search);
       if (!params.has("noAuto")) {
         const w = document.createElement("script");
@@ -195,6 +196,8 @@
         if (pattern) w.dataset.urlPattern = pattern;
         if (params.has("forceShow")) w.dataset.forceShow = "";
         if (params.has("allowReplay")) w.dataset.allowReplayInPrivacyMode = "";
+        const release = params.get("release");
+        if (release) w.dataset.release = release;
         document.body.append(w);
       }
     </script>

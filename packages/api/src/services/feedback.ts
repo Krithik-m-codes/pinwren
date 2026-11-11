@@ -1,14 +1,19 @@
 import {
   type FeedbackListQuery,
   type FeedbackUpdate,
+  formatValue,
   isClosedStatus,
+  parseCustomFieldFilter,
   parseWidgetConfig,
   panelActionsFor,
   PRIORITIES,
+  reportedRelease,
+  resolvePatchValues,
 } from "@pinwren/core";
 import {
   activity,
   comment,
+  customField,
   diagnostics,
   feedback,
   feedbackAi,
@@ -23,6 +28,7 @@ import {
   member,
   page,
   project,
+  projectRelease,
   reviewLink,
   user,
 } from "@pinwren/db";
@@ -45,11 +51,13 @@ import { ApiError, notFound } from "../errors";
 import { emit, updateEvents } from "../events";
 import { purgeFeedback } from "../jobs/maintenance";
 import { publishDeleted, publishRestored } from "../realtime/publish";
+import { invalidFields, listFields, outboundAnswersOf } from "./custom-fields";
 import { assertRoundFor } from "./rounds";
 
 export const ACTIVE_STATUSES = ["open", "in_progress", "in_review"] as const;
 
-export type Actor = { kind: "user" | "api"; userId: string };
+/** `via` names the surface a person acted from when it isn't the dashboard (the timeline shows "via Slack"). */
+export type Actor = { kind: "user" | "api"; userId: string; via?: "slack" };
 
 /** A list cursor: the sort key of the last row, opaque to callers (base64url JSON). */
 type CursorKey = { v?: string; t: string; id: string };
@@ -109,6 +117,27 @@ export function numberOf(text: string): number | null {
 
 export type ItemLabel = { id: string; name: string; color: string };
 
+/**
+ * `cf=key:value` (ADR 0032). What "matches" depends on the field's type in the item's own project: text fields
+ * by substring, choices by membership, numbers and checkboxes by equality, dates by day. `*` is any answer and
+ * `!` no answer. Unknown keys and values that don't fit the type match nothing, rather than erroring.
+ */
+export function customFieldPredicate(cf: string): SQL {
+  const { key, value } = parseCustomFieldFilter(cf);
+  const answers = sql`${feedback.customFields}`;
+  if (value === "*") return sql`${answers} ? ${key}`;
+  if (value === "!") return sql`not (${answers} ? ${key})`;
+  const num = value.trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
+  const bool = value === "true" || value === "false" ? value : null;
+  return sql`exists(select 1 from ${customField} cf where cf.project_id = ${feedback.projectId} and cf.key = ${key}
+    and case
+      when cf.type in ('text', 'textarea', 'url', 'email') then ${answers}->>${key} ilike ${likePattern(value)}
+      when cf.type in ('select', 'multiselect', 'date') then ${answers}->${key} @> to_jsonb(${value}::text)
+      when cf.type = 'number' then ${num}::numeric is not null and (${answers}->>${key})::numeric = ${num}::numeric
+      when cf.type = 'checkbox' then ${bool}::text is not null and ${answers}->>${key} = ${bool}::text
+      else false end)`;
+}
+
 export type ListOptions = {
   /** Only these items (export of a selection). */
   ids?: string[];
@@ -144,7 +173,12 @@ export async function listFeedback(orgId: string, q: FeedbackListQuery, opts: Li
         or exists(select 1 from ${user} u where u.id = ${feedback.reporterId} and (u.name ilike ${like} or u.email ilike ${like})))`,
     );
   }
+  if (q.regression !== undefined) {
+    where.push(q.regression ? isNotNull(feedback.regressionOfId) : isNull(feedback.regressionOfId));
+  }
+  if (q.fixedInReleaseId) where.push(eq(feedback.fixedInReleaseId, q.fixedInReleaseId));
   if (q.browser) where.push(sql`${feedback.environment}->>'browser' ilike ${likePattern(q.browser)}`);
+  if (q.cf) where.push(customFieldPredicate(q.cf));
   if (q.hasReplay !== undefined) {
     const replay = sql`exists(select 1 from ${feedbackAsset} a where a.feedback_id = ${feedback.id} and a.kind = 'replay')`;
     where.push(q.hasReplay ? replay : sql`not ${replay}`);
@@ -208,6 +242,19 @@ export async function listFeedback(orgId: string, q: FeedbackListQuery, opts: Li
         projectName: project.name,
         pageUrl: page.url,
         roundId: feedback.roundId,
+        // Releases and regressions (ADR 0036): the badge, the "fixed in" chip and the filters read these.
+        release: sql<string | null>`nullif(trim(${feedback.metadata}->>'release'), '')`,
+        fixedInReleaseId: feedback.fixedInReleaseId,
+        fixedInVersion: sql<
+          string | null
+        >`(select r.version from ${projectRelease} r where r.id = ${feedback.fixedInReleaseId} and r.org_id = ${feedback.orgId})`,
+        fixedInNextRelease: feedback.fixedInNextRelease,
+        regressionOfId: feedback.regressionOfId,
+        regressionOfNumber: sql<
+          number | null
+        >`(select o.number from ${feedback} o where o.id = ${feedback.regressionOfId} and o.org_id = ${feedback.orgId})`,
+        regressionConfidence: feedback.regressionConfidence,
+        customFields: feedback.customFields,
         hasReplay: sql<boolean>`exists(select 1 from ${feedbackAsset} a where a.feedback_id = ${feedback.id} and a.kind = 'replay')`,
         hasScreenshot: sql<boolean>`exists(select 1 from ${feedbackAsset} a where a.feedback_id = ${feedback.id} and a.kind in ('screenshot', 'screenshot_annotated'))`,
         // The card thumbnail (annotated first), so the board never fetches a detail for it.
@@ -466,10 +513,71 @@ export async function getFeedbackDetail(
     return e;
   });
 
+  // Releases and regressions (ADR 0036).
+  const [fixedInRow, regressionOfRow, regressionRows] = await Promise.all([
+    row.f.fixedInReleaseId
+      ? db
+          .select({
+            id: projectRelease.id,
+            version: projectRelease.version,
+            deployedAt: projectRelease.deployedAt,
+          })
+          .from(projectRelease)
+          .where(and(eq(projectRelease.id, row.f.fixedInReleaseId), eq(projectRelease.orgId, orgId)))
+          .then((r) => r[0] ?? null)
+      : Promise.resolve(null),
+    row.f.regressionOfId
+      ? db
+          .select({
+            id: feedback.id,
+            number: feedback.number,
+            title: feedback.title,
+            body: feedback.body,
+            status: feedback.status,
+          })
+          .from(feedback)
+          .where(
+            and(eq(feedback.id, row.f.regressionOfId), eq(feedback.orgId, orgId), isNull(feedback.deletedAt)),
+          )
+          .then((r) => r[0] ?? null)
+      : Promise.resolve(null),
+    db
+      .select({
+        id: feedback.id,
+        number: feedback.number,
+        title: feedback.title,
+        body: feedback.body,
+        status: feedback.status,
+        confidence: feedback.regressionConfidence,
+      })
+      .from(feedback)
+      .where(and(eq(feedback.regressionOfId, id), eq(feedback.orgId, orgId), isNull(feedback.deletedAt)))
+      .orderBy(desc(feedback.createdAt))
+      .limit(20),
+  ]);
+  const signals = (row.f.regressionSignals ?? {}) as { signals?: unknown; score?: unknown };
+
   const { reporterTokenHash: _hidden, ...f } = row.f;
   return {
+    /** Items flagged as possible regressions of this one, newest first. */
+    regressions: regressionRows.map(({ body, ...r }) => ({
+      ...r,
+      title: r.title?.trim() || body.split("\n")[0]?.slice(0, 120) || "",
+    })),
     feedback: {
       ...f,
+      fixedInRelease: fixedInRow ? { ...fixedInRow, deployedAt: fixedInRow.deployedAt.toISOString() } : null,
+      release: reportedRelease(row.f.metadata),
+      regressionOf: regressionOfRow
+        ? {
+            id: regressionOfRow.id,
+            number: regressionOfRow.number,
+            title: regressionOfRow.title?.trim() || regressionOfRow.body.split("\n")[0]?.slice(0, 120) || "",
+            status: regressionOfRow.status,
+            signals: Array.isArray(signals.signals) ? signals.signals.map(String) : [],
+            score: typeof signals.score === "number" ? signals.score : null,
+          }
+        : null,
       projectName: row.projectName,
       projectSlug: row.projectSlug,
       pageUrl: row.pageUrl,
@@ -536,8 +644,16 @@ export async function updateFeedback(orgId: string, actor: Actor, id: string, pa
     }
     patch = { ...patch, assigneeIds: unique };
   }
-  const { labelIds, dueAt, kind, ...columns } = patch;
-  const { before, after, labels } = await db.transaction(async (tx) => {
+  const {
+    labelIds,
+    dueAt,
+    kind,
+    fixedInReleaseId,
+    fixedInNextRelease,
+    customFields: answers,
+    ...columns
+  } = patch;
+  const { before, after, labels, fixedIn } = await db.transaction(async (tx) => {
     const [before] = await tx
       .select()
       .from(feedback)
@@ -549,54 +665,200 @@ export async function updateFeedback(orgId: string, actor: Actor, id: string, pa
 
     const set: Partial<typeof feedback.$inferInsert> = { ...columns };
     if (kind) set.kind = kind;
+    // Custom field answers (ADR 0032): merged into the stored map, validated against the project's fields
+    // for the item's (possibly new) kind; each change is its own timeline entry.
+    let answerChanges: {
+      key: string;
+      label: string;
+      from: unknown;
+      to: unknown;
+      fromText: string;
+      toText: string;
+    }[] = [];
+    if (answers && Object.keys(answers).length) {
+      const fields = await listFields(orgId, before.projectId);
+      const r = resolvePatchValues(fields, before.customFields, answers, kind ?? before.kind);
+      if (r.problems.length) throw invalidFields(r.problems);
+      if (r.changed.length) {
+        set.customFields = r.values;
+        answerChanges = r.changed.flatMap((key) => {
+          const def = fields.find((x) => x.key === key);
+          if (!def) return [];
+          return [
+            {
+              key,
+              label: def.label,
+              from: before.customFields[key] ?? null,
+              to: r.values[key] ?? null,
+              fromText: formatValue(def, before.customFields[key]),
+              toText: formatValue(def, r.values[key]),
+            },
+          ];
+        });
+      }
+    }
     if (dueAt !== undefined) set.dueAt = dueAt === null ? null : new Date(dueAt);
     if (patch.status && patch.status !== before.status) {
       set.resolvedAt = isClosedStatus(patch.status) ? new Date() : null;
     }
+    // "Fixed in" belongs to a resolved item: leaving resolved drops it; asking for it on anything else is refused.
+    const fixedInChange = await applyFixedIn(tx, orgId, before, set, patch.status, {
+      releaseId: fixedInReleaseId,
+      next: fixedInNextRelease,
+    });
     // A labels-only patch changes no feedback column; bump updatedAt so lists still re-sort.
     if (!Object.keys(set).length) set.updatedAt = new Date();
     const [after] = await tx.update(feedback).set(set).where(eq(feedback.id, id)).returning();
     if (!after) throw notFound("Feedback");
 
     const fields = Object.keys(set).filter(
-      (k) => k !== "resolvedAt" && k !== "updatedAt",
+      (k) =>
+        k !== "resolvedAt" &&
+        k !== "updatedAt" &&
+        k !== "customFields" &&
+        k !== "fixedInReleaseId" &&
+        k !== "fixedInNextRelease",
     ) as (keyof typeof after)[];
-    const entries: { field: string; from: unknown; to: unknown }[] = fields
+    const entries: { field: string; from: unknown; to: unknown; extra?: Record<string, unknown> }[] = fields
       .filter((k) => JSON.stringify(before[k] ?? null) !== JSON.stringify(after[k] ?? null))
       .map((k) => ({ field: k, from: before[k] ?? null, to: after[k] ?? null }));
     const labels = labelIds ? await replaceLabels(tx, before, labelIds) : null;
     if (labels && !sameSet(labels.from, labels.to)) entries.push({ field: "labelIds", ...labels });
+    if (fixedInChange?.explicit) {
+      entries.push({ field: "fixedIn", from: fixedInChange.from, to: fixedInChange.to });
+    }
+    // One entry per answer, named by field key; the timeline resolves the label from the project's fields.
+    for (const c of answerChanges)
+      entries.push({
+        field: "customField",
+        from: c.from,
+        to: c.to,
+        extra: { key: c.key, label: c.label, fromText: c.fromText, toText: c.toText },
+      });
 
     if (entries.length) {
       await tx.insert(activity).values(
-        entries.map(({ field, from, to }) => ({
+        entries.map(({ field, from, to, extra }) => ({
           orgId,
           feedbackId: id,
           actorId: actor.userId,
           // A token acts as its owner; the timeline shows the person either way.
           actorKind: "user",
           type: `${field}_changed`,
-          data: { from, to, ...(actor.kind === "api" ? { via: "api" } : {}) },
+          data: {
+            ...extra,
+            from,
+            to,
+            ...(actor.kind === "api" ? { via: "api" } : actor.via ? { via: actor.via } : {}),
+          },
         })),
       );
     }
-    return { before, after, labels };
+    return { before, after, labels, fixedIn: fixedInChange };
   });
+  // Outbound events carry the answers as a webhook may see them (PII fields redacted in privacy mode).
+  const answered = answers && JSON.stringify(before.customFields) !== JSON.stringify(after.customFields);
+  const [maskedBefore, maskedAfter] = answered
+    ? await Promise.all([
+        outboundAnswersOf(orgId, before.projectId, before.customFields),
+        outboundAnswersOf(orgId, before.projectId, after.customFields),
+      ])
+    : [before.customFields, after.customFields];
   emit(
     ...updateEvents(
       { orgId, feedbackId: id, actor: { kind: actor.kind, id: actor.userId } },
-      { ...before, labelIds: labels?.from },
-      { ...after, labelIds: labels?.to },
+      { ...before, labelIds: labels?.from, customFields: maskedBefore },
+      { ...after, labelIds: labels?.to, customFields: maskedAfter },
       [
         ...Object.keys(columns),
         ...(kind ? ["kind"] : []),
         ...(dueAt !== undefined ? ["dueAt"] : []),
         ...(labels ? ["labelIds"] : []),
+        ...(fixedIn ? ["fixedInReleaseId", "fixedInNextRelease"] : []),
+        ...(answers ? ["customFields"] : []),
       ],
     ),
   );
   const { reporterTokenHash: _hidden, ...out } = after;
   return { ...out, ...(labels ? { labelIds: labels.to } : {}) };
+}
+
+type FixedInState = { version: string | null; next: boolean };
+
+/**
+ * Work out the "fixed in" columns for an update. Returns null when nothing about it changes. `explicit` is true
+ * when the caller asked for the change (it gets a timeline row); false when reopening dropped it.
+ */
+async function applyFixedIn(
+  tx: Tx,
+  orgId: string,
+  before: FeedbackRow,
+  set: Partial<typeof feedback.$inferInsert>,
+  status: FeedbackRow["status"] | undefined,
+  ask: { releaseId: string | null | undefined; next: boolean | undefined },
+): Promise<{ explicit: boolean; from: FixedInState; to: FixedInState } | null> {
+  const nextStatus = status ?? before.status;
+  const asked = ask.releaseId !== undefined || ask.next !== undefined;
+  const wantsFix = !!ask.releaseId || ask.next === true;
+  if (wantsFix && nextStatus !== "resolved") {
+    throw new ApiError(
+      400,
+      "FIXED_IN_NEEDS_RESOLVED",
+      "Only a resolved item can be marked fixed in a release",
+    );
+  }
+  if (ask.releaseId && ask.next === true) {
+    throw new ApiError(400, "INVALID_FIXED_IN", 'Pick a release or "next release", not both');
+  }
+  const versionOf = async (id: string | null) => {
+    if (!id) return null;
+    const [r] = await tx
+      .select({ version: projectRelease.version })
+      .from(projectRelease)
+      .where(and(eq(projectRelease.id, id), eq(projectRelease.orgId, orgId)));
+    return r?.version ?? null;
+  };
+  const from: FixedInState = {
+    version: await versionOf(before.fixedInReleaseId),
+    next: before.fixedInNextRelease,
+  };
+  let releaseId = before.fixedInReleaseId;
+  let next = before.fixedInNextRelease;
+  if (nextStatus !== "resolved") {
+    releaseId = null;
+    next = false;
+  } else if (asked) {
+    if (ask.releaseId) {
+      await assertReleaseOf(tx, orgId, before.projectId, ask.releaseId);
+      releaseId = ask.releaseId;
+      next = false;
+    } else if (ask.next === true) {
+      releaseId = null;
+      next = true;
+    } else {
+      if (ask.releaseId === null) releaseId = null;
+      if (ask.next === false) next = false;
+    }
+  }
+  if (releaseId === before.fixedInReleaseId && next === before.fixedInNextRelease) return null;
+  set.fixedInReleaseId = releaseId;
+  set.fixedInNextRelease = next;
+  return { explicit: asked, from, to: { version: await versionOf(releaseId), next } };
+}
+
+/** A release of the item's own project; a release id from anywhere else is a plain 400. */
+async function assertReleaseOf(tx: Tx, orgId: string, projectId: string, releaseId: string) {
+  const [r] = await tx
+    .select({ id: projectRelease.id })
+    .from(projectRelease)
+    .where(
+      and(
+        eq(projectRelease.id, releaseId),
+        eq(projectRelease.orgId, orgId),
+        eq(projectRelease.projectId, projectId),
+      ),
+    );
+  if (!r) throw new ApiError(400, "INVALID_RELEASE", "Pick a release of this item's project");
 }
 
 type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];

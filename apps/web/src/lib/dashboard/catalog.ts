@@ -35,6 +35,8 @@ export const WIDGET_IDS = [
   "list.pages",
   "list.rounds",
   "list.reporters",
+  "list.regressions",
+  "list.fixedPerRelease",
 ] as const;
 export type WidgetId = (typeof WIDGET_IDS)[number];
 
@@ -111,6 +113,8 @@ export const WIDGETS: Record<WidgetId, WidgetDef> = {
   "list.pages": def("list.pages", "list", "pages", 6, 3, [4, 6, 8, 12], ALL),
   "list.rounds": def("list.rounds", "list", "rounds", 6, 3, [4, 6, 8, 12], ALL),
   "list.reporters": def("list.reporters", "list", "reporters", 4, 3, [4, 6, 8, 12], ALL),
+  "list.regressions": def("list.regressions", "list", "regressions", 4, 3, [4, 6, 8, 12], ALL),
+  "list.fixedPerRelease": def("list.fixedPerRelease", "list", "fixedPerRelease", 4, 3, [4, 6, 8, 12], ALL),
 };
 
 /** Widgets that may appear on a screen. */

@@ -1,3 +1,4 @@
+import { reportedRelease } from "@pinwren/core";
 import {
   comment,
   diagnostics,
@@ -9,8 +10,9 @@ import {
   reviewLink,
   user,
 } from "@pinwren/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { env } from "../env";
+import { outboundAnswers } from "./custom-fields";
 import type { CommentPayload, FeedbackPayload } from "../webhooks/format";
 
 /**
@@ -19,6 +21,12 @@ import type { CommentPayload, FeedbackPayload } from "../webhooks/format";
  */
 export const feedbackLink = (orgId: string, id: string) =>
   `${env().PINWREN_URL.replace(/\/$/, "")}/inbox?status=all&org=${encodeURIComponent(orgId)}&item=${encodeURIComponent(id)}`;
+
+/** The release that fixed the original at the time a regression was flagged (kept in the signals). */
+const fixedInOf = (signals: unknown): string | null => {
+  const v = (signals as { fixedInVersion?: unknown } | null)?.fixedInVersion;
+  return typeof v === "string" ? v : null;
+};
 
 /** Notifications › General and › Reporter of the item's project (wave-5 contract §3.2). */
 export type ProjectNotifySettings = {
@@ -62,6 +70,13 @@ export async function loadFeedbackContext(feedbackId: string): Promise<FeedbackC
       },
       pageUrl: page.url,
       reviewLink: reviewLink.label,
+      fixedInVersion: sql<
+        string | null
+      >`(select r.version from project_release r where r.id = ${feedback.fixedInReleaseId} and r.org_id = ${feedback.orgId})`,
+      regressionOfNumber: sql<
+        number | null
+      >`(select o.number from feedback o where o.id = ${feedback.regressionOfId} and o.org_id = ${feedback.orgId})`,
+      widgetConfig: project.widgetConfig,
     })
     .from(feedback)
     .innerJoin(project, eq(project.id, feedback.projectId))
@@ -81,6 +96,8 @@ export async function loadFeedbackContext(feedbackId: string): Promise<FeedbackC
     reporterName ??= u?.name ?? null;
     reporterEmail ??= u?.email ?? null;
   }
+  // Answers to the project's custom fields (ADR 0032); PII fields are redacted in a privacy-mode project.
+  const customFields = await outboundAnswers(f.orgId, f.projectId, f.customFields, row.widgetConfig);
   return {
     orgId: f.orgId,
     projectKey: row.projectKey,
@@ -103,9 +120,22 @@ export async function loadFeedbackContext(feedbackId: string): Promise<FeedbackC
       reporterName,
       reviewLink: row.reviewLink ?? null,
       assigneeIds: f.assigneeIds,
+      release: reportedRelease(f.metadata),
+      fixedInRelease: row.fixedInVersion,
+      fixedInNextRelease: f.fixedInNextRelease,
+      regressionOf:
+        f.regressionOfId && row.regressionOfNumber !== null
+          ? {
+              id: f.regressionOfId,
+              number: row.regressionOfNumber,
+              confidence: f.regressionConfidence,
+              fixedIn: fixedInOf(f.regressionSignals),
+            }
+          : null,
       createdAt: f.createdAt.toISOString(),
       updatedAt: f.updatedAt.toISOString(),
       url: feedbackLink(f.orgId, f.id),
+      customFields,
     },
   };
 }

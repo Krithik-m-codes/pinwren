@@ -25,7 +25,14 @@ import {
   errorMessage,
   useTestAutomationRuleMutation,
 } from "@/lib/store/api";
-import { ACTION_LABEL, BROWSERS, CONDITION_LABEL, EVENT_LABEL, useRuleOptions } from "./automation-builder";
+import {
+  ACTION_LABEL,
+  BROWSERS,
+  CONDITION_LABEL,
+  CUSTOM_FIELD_OP_LABEL,
+  EVENT_LABEL,
+  useRuleOptions,
+} from "./automation-builder";
 
 type Sample = {
   kind: (typeof FEEDBACK_KINDS)[number];
@@ -83,6 +90,7 @@ export function RuleTester({
               labelIds: [],
               hasAttachment: sample.hasAttachment,
               hasReplay: sample.hasReplay,
+              customFields: {},
               toStatus: rule.trigger.toStatuses[0] ?? null,
               addedLabelId: rule.trigger.labelId,
             },
@@ -111,6 +119,8 @@ export function RuleTester({
       case "hasAttachment":
       case "hasReplay":
         return c.value ? t("automation.yes") : t("automation.no");
+      case "customField":
+        return `${options.fields.find((f) => f.key === c.key)?.label ?? c.key} ${t(CUSTOM_FIELD_OP_LABEL[c.op])}${c.value ? ` ${c.value}` : ""}`;
     }
   };
 
@@ -221,7 +231,7 @@ export function RuleTester({
             />
             {rule.conditions.map((c, i) => (
               <Row
-                key={c.field}
+                key={`${c.field}-${i}`}
                 ok={result.conditions[i] ?? false}
                 text={`${t(CONDITION_LABEL[c.field])}: ${describe(c)}`}
               />

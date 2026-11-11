@@ -6,7 +6,7 @@ import { useUiStateQuery, useUpdateUiStateMutation } from "@/lib/store/api/dashb
 
 /**
  * Keeps the start-page cookie (which `/` reads on the server) equal to the account's choice, and moves a
- * choice made on this device before it was stored on the account (ADR 0033) up to the account.
+ * choice made on this device before it was stored on the account (ADR 0037) up to the account.
  */
 export function UiStateSync() {
   const { data } = useUiStateQuery(undefined);

@@ -170,6 +170,8 @@ export const shareReportResponse = z.object({
     browser: z.string().nullable(),
     os: z.string().nullable(),
     createdAt: z.string(),
+    fixedInVersion: z.string().nullable().default(null),
+    fixedInNextRelease: z.boolean().default(false),
     screenshot: shareAsset.nullable(),
     replay: shareAsset.nullable(),
     diagnostics: diagnosticsSummary,
@@ -199,6 +201,8 @@ export const shareRoundResponse = z.object({
       title: z.string().nullable(),
       body: z.string(),
       pageUrl: z.string().nullable(),
+      fixedInVersion: z.string().nullable().default(null),
+      fixedInNextRelease: z.boolean().default(false),
     }),
   ),
   /** Newest first; the reviewers' addresses stay in the dashboard. */

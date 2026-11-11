@@ -38,6 +38,9 @@ export const guestFeedback = z.object({
   createdAt: z.string(),
   pageUrl: z.string().nullable(),
   replyCount: z.number().int(),
+  /** The release that fixed it, shown as “Fixed in v1.4”; `fixedInNextRelease` while the fix is promised. */
+  fixedInVersion: z.string().nullable().default(null),
+  fixedInNextRelease: z.boolean().default(false),
 });
 export type GuestFeedback = z.infer<typeof guestFeedback>;
 

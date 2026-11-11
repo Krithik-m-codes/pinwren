@@ -17,7 +17,7 @@ const LABELS: Record<Landing, Key> = {
 };
 
 /**
- * Settings › Profile › Appearance › Start page: which screen `/` opens. It follows the account (ADR 0033); the
+ * Settings › Profile › Appearance › Start page: which screen `/` opens. It follows the account (ADR 0037); the
  * cookie is the copy the server reads to redirect `/` before anything loads (`UiStateSync` keeps it current).
  */
 export function LandingRow() {

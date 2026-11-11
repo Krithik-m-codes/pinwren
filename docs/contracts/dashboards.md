@@ -1,6 +1,6 @@
 # Dashboards API contract
 
-Design: [ADR 0033](../adr/0033-server-dashboards-named-shared.md). All routes are dashboard-session routes under
+Design: [ADR 0037](../adr/0037-server-dashboards-named-shared.md). All routes are dashboard-session routes under
 `/api` (not `/api/v1`), mounted behind the session and viewer guards. Errors are problem details (`code`, `title`).
 
 ## Dashboards

@@ -9,6 +9,7 @@ import { beforeAll, afterAll, beforeEach, describe, it, expect, vi } from "vites
 import { getRuntimeDb } from "../../db/src/connection";
 import { closeIdentityDatabase } from "../../db/src/identity";
 import { createCloudFixture } from "./test-helpers/cloud-fixture";
+import { fakeSlackApi } from "./test-helpers/slack-fake";
 import { snapshotOrganization } from "./test-helpers/tenant-snapshot";
 import { coverageGaps, expectedCheck, inventoryRoutes } from "./test-helpers/route-inventory";
 
@@ -90,6 +91,9 @@ const resourceOf: Record<string, string> = {
   integrations: "integrationB",
   labels: "labelB",
   automations: "automationB",
+  releases: "releaseB",
+  routes: "slackRouteB",
+  links: "slackLinkB",
   "review-links": "reviewLinkB",
   "share-links": "shareLinkB",
   rounds: "roundB",
@@ -129,6 +133,19 @@ const publicCase = (spec: Partial<Spec> = {}): Spec => ({ kind: "public", ...spe
 const dataUrl =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jHnQAAAAASUVORK5CYII=";
 
+/** Connect workspace A to a fake Slack team so the Slack settings routes have something to act on. */
+async function connectSlackA(ctx: Context, api = fakeSlackApi({})) {
+  const { setSlackApiFactory } = await import("./slack/workspace");
+  setSlackApiFactory(() => api);
+  const response = await ctx.send({
+    method: "PUT",
+    path: "/api/slack",
+    body: { signingSecret: "a".repeat(32), botToken: `xoxb-${"1".repeat(30)}` },
+  });
+  expect([200, 201], await response.clone().text()).toContain(response.status);
+  return api;
+}
+
 /** One entry per inventory key. Defaults: body `{}` for writes; ids come from workspace B. */
 const cases: Record<string, Spec> = {
   // --- tenant: resource ids from workspace B -------------------------------------------------------
@@ -164,6 +181,7 @@ const cases: Record<string, Spec> = {
   "DELETE /api/integrations/:id": foreign(),
   "DELETE /api/labels/:id": foreign(),
   "DELETE /api/members/:userId": foreign(),
+  "DELETE /api/releases/:id": foreign(),
   "DELETE /api/review-links/:id": foreign(),
   "DELETE /api/rounds/:id": foreign(),
   "DELETE /api/share-links/:id": foreign(),
@@ -223,8 +241,10 @@ const cases: Record<string, Spec> = {
   "GET /api/feedback/:id/ai/labels": foreign(),
   "GET /api/projects/:id/automation-runs": foreign(),
   "GET /api/projects/:id/automations": foreign(),
+  "GET /api/projects/:id/custom-fields": foreign(),
   "GET /api/projects/:id/labels": foreign(),
   "GET /api/projects/:id/notifications": foreign(),
+  "GET /api/projects/:id/releases": foreign(),
   "GET /api/projects/:id/review-links": foreign(),
   "GET /api/feedback/:id/share-links": foreign(),
   "GET /api/rounds/:id/share-links": foreign(),
@@ -243,7 +263,9 @@ const cases: Record<string, Spec> = {
   "GET /api/v1/feedback/:id/brief": foreign(),
   "GET /api/v1/feedback/:id/repro-test": foreign(),
   "GET /api/v1/projects": scoped(),
+  "GET /api/v1/projects/:id/custom-fields": foreign(),
   "GET /api/v1/projects/:id/labels": foreign(),
+  "GET /api/v1/projects/:id/releases": foreign(),
   "GET /api/v1/stats": scoped(),
   "GET /api/v1/views": scoped(),
   "GET /api/v1/projects/:id/rounds": foreign(),
@@ -283,6 +305,7 @@ const cases: Record<string, Spec> = {
   "PATCH /api/projects/:id": foreign({ body: () => ({ name: "foreign edit" }) }),
   "PATCH /api/projects/:id/ai": foreign({ body: () => ({ enabled: true }) }),
   "PATCH /api/projects/:id/notifications": foreign({ body: () => ({ emails: ["foreign@test.invalid"] }) }),
+  "PATCH /api/releases/:id": foreign({ body: () => ({ notes: "foreign edit" }) }),
   "PATCH /api/rounds/:id": foreign({ body: () => ({ name: "foreign edit" }) }),
   "PATCH /api/v1/feedback/:id": foreign({ body: () => ({ title: "foreign edit" }) }),
   "PATCH /api/v1/rounds/:id": foreign({ body: () => ({ name: "foreign edit" }) }),
@@ -311,6 +334,10 @@ const cases: Record<string, Spec> = {
       actions: [{ type: "set_priority", priority: "high" }],
     }),
   }),
+  // Releases (ADR 0036): workspace A names workspace B's project or release. The v1 call carries a token with the
+  // releases:write scope so the refusal is the tenant check, not the scope check.
+  "POST /api/projects/:id/releases": foreign({ body: () => ({ version: "9.9.9" }) }),
+  "POST /api/v1/projects/:id/releases": foreign({ body: () => ({ version: "9.9.9" }) }),
   "POST /api/feedback/:id/actions/:actionId": foreign(),
   "POST /api/feedback/:id/ai/apply": foreign({ body: () => ({ applyTitle: true }) }),
   "POST /api/feedback/:id/ai/translate": foreign({ body: () => ({ targetLocale: "fr" }) }),
@@ -375,6 +402,9 @@ const cases: Record<string, Spec> = {
     body: (ids) => ({ userId: ids.userB }),
     status: [400, 403, 404],
   }),
+  "PUT /api/projects/:id/custom-fields": foreign({
+    body: () => ({ fields: [{ key: "foreign", type: "text", label: "Foreign field" }] }),
+  }),
   "PUT /api/email-templates/:key": scoped({ body: () => ({ subject: "Scoped A", body: "Scoped A body" }) }),
   "PUT /api/notification-preferences": foreign({
     body: (ids) => ({ projectId: ids.projectB, email: false }),
@@ -413,6 +443,126 @@ const cases: Record<string, Spec> = {
     body: () => ({ to: "a@test.invalid" }),
   }),
   "POST /api/admin/update-check": authorization({ status: [403] }),
+
+  // --- Interactive Slack: workspace B has a connection, a route, a mapped member and a posted card -----
+  "GET /api/slack": scoped(),
+  "DELETE /api/slack": scoped(),
+  "GET /api/slack/channels": scoped({ status: [409] }),
+  "PUT /api/slack": scoped({
+    run: async (ctx) => {
+      const before = await ctx.snapshot();
+      // A's token authenticates as B's Slack team: the team is already connected to another workspace.
+      const api = fakeSlackApi({
+        authTest: vi.fn(() =>
+          Promise.resolve({
+            ok: true as const,
+            data: { teamId: ctx.ids.slackTeamB ?? "", teamName: "Stolen", teamUrl: null, botUserId: null },
+          }),
+        ),
+      });
+      const { setSlackApiFactory } = await import("./slack/workspace");
+      setSlackApiFactory(() => api);
+      const response = await ctx.send({
+        method: "PUT",
+        path: "/api/slack",
+        body: { signingSecret: "a".repeat(32), botToken: `xoxb-${"1".repeat(30)}` },
+      });
+      expect(response.status, await response.clone().text()).toBe(409);
+      expect(
+        await ctx.database()`select 1 from slack_workspace where org_id=${ctx.ids.orgA ?? ""}`,
+      ).toHaveLength(0);
+      expect(await ctx.snapshot()).toBe(before);
+    },
+  }),
+  "POST /api/slack/routes": scoped({
+    run: async (ctx) => {
+      await connectSlackA(ctx);
+      const before = await ctx.snapshot();
+      const response = await ctx.send({
+        method: "POST",
+        path: "/api/slack/routes",
+        body: { projectId: ctx.ids.projectB, channelId: "C0123456789", events: ["feedback.created"] },
+      });
+      expect(response.status, await response.clone().text()).toBe(404);
+      expect(await ctx.snapshot()).toBe(before);
+    },
+  }),
+  "PATCH /api/slack/routes/:id": foreign({ body: () => ({ channelId: "C0123456789" }) }),
+  "DELETE /api/slack/routes/:id": foreign(),
+  "DELETE /api/slack/links/:id": foreign(),
+  "POST /api/slack/test": scoped({
+    run: async (ctx) => {
+      const api = await connectSlackA(ctx);
+      const before = await ctx.snapshot();
+      const response = await ctx.send({
+        method: "POST",
+        path: "/api/slack/test",
+        body: { routeId: ctx.ids.slackRouteB },
+      });
+      expect(response.status, await response.clone().text()).toBe(404);
+      expect(api.postMessage).not.toHaveBeenCalled();
+      expect(await ctx.snapshot()).toBe(before);
+    },
+  }),
+  "POST /api/slack/sync-members": scoped({
+    run: async (ctx) => {
+      // Slack lists a person whose email is workspace B's member: A's sync must not map them.
+      const api = await connectSlackA(
+        ctx,
+        fakeSlackApi({
+          listUsers: vi.fn(() =>
+            Promise.resolve({
+              ok: true as const,
+              data: [
+                {
+                  id: "U0CCCCCCCC",
+                  name: "B member",
+                  email: `${ctx.ids.userB ?? ""}@test.invalid`,
+                  isBot: false,
+                  isRestricted: false,
+                  deleted: false,
+                },
+              ],
+            }),
+          ),
+        }),
+      );
+      const before = await ctx.snapshot();
+      const response = await ctx.send({ method: "POST", path: "/api/slack/sync-members" });
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(await response.json()).toMatchObject({ linked: 0 });
+      expect(api.listUsers).toHaveBeenCalled();
+      expect(
+        await ctx.database()`select 1 from slack_user_link where slack_user_id='U0CCCCCCCC'`,
+      ).toHaveLength(0);
+      expect(await ctx.snapshot()).toBe(before);
+    },
+  }),
+  "POST /api/slack/link": scoped({
+    run: async (ctx) => {
+      await connectSlackA(ctx);
+      const { slackLinkToken } = await import("./slack/link-token");
+      const before = await ctx.snapshot();
+      // A token minted for workspace B's Slack connection, accepted by a member of workspace A.
+      const foreignToken = slackLinkToken(ctx.ids.slackWsB ?? "", "U0DDDDDDDD");
+      const response = await ctx.send({
+        method: "POST",
+        path: "/api/slack/link",
+        body: { token: foreignToken },
+      });
+      expect(response.status, await response.clone().text()).toBe(409);
+      const forged = await ctx.send({
+        method: "POST",
+        path: "/api/slack/link",
+        body: { token: `${foreignToken}x` },
+      });
+      expect(forged.status).toBe(400);
+      expect(
+        await ctx.database()`select 1 from slack_user_link where slack_user_id='U0DDDDDDDD'`,
+      ).toHaveLength(0);
+      expect(await ctx.snapshot()).toBe(before);
+    },
+  }),
 
   // --- identity: the signed-in account, never the active workspace ---------------------------------
   "DELETE /api/me/avatar": authorization({
@@ -746,11 +896,17 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
         mail: randomUUID(),
         rule: randomUUID(),
         dashboard: randomUUID(),
+        release: randomUUID(),
+        slackRoute: "",
+        slackLink: "",
       };
       await db`insert into comment (id,org_id,feedback_id,body) values (${row.comment},${org ?? ""},${feedbackId},${mark})`;
       await db`insert into label (id,org_id,project_id,name,color) values (${row.label},${org ?? ""},${projectId},${mark},'#112233')`;
       await db`insert into automation_rule (id,org_id,project_id,name,trigger,conditions,actions) values (${row.rule},${org ?? ""},${projectId},${mark},${db.json({ event: "feedback_created", toStatuses: [], labelId: null })},${db.json([])},${db.json([{ type: "set_priority", priority: "high" }])})`;
+      await db`insert into custom_field (org_id,project_id,key,type,label,position) values (${org ?? ""},${projectId},'marker','text',${mark},0)`;
       await db`insert into automation_run (org_id,rule_id,project_id,feedback_id,event,status) values (${org ?? ""},${row.rule},${projectId},${feedbackId},'feedback_created','success')`;
+      await db`insert into project_release (id,org_id,project_id,version,notes) values (${row.release},${org ?? ""},${projectId},${mark},${mark})`;
+      await db`update feedback set status='resolved', fixed_in_release_id=${row.release} where id=${feedbackId}`;
       await db`insert into label_suggestion (org_id,feedback_id,label_id,name) values (${org ?? ""},${feedbackId},${row.label},${mark})`;
       await db`insert into review_round (id,org_id,project_id,name) values (${row.round},${org ?? ""},${projectId},${mark})`;
       await db`insert into review_link (id,org_id,project_id,label,token_hash) values (${row.reviewLink},${org ?? ""},${projectId},${mark},${randomUUID()})`;
@@ -774,7 +930,19 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
       await db`insert into email_template (org_id,key,subject,body) values (${org ?? ""},'reporter_received',${mark},${mark})`;
       await db`insert into brand_asset (org_id,storage_key,content_type,bytes) values (${org ?? ""},${row.asset},'text/plain',1)`;
       await db`insert into email_delivery (id,org_id,to_address,template_key,subject,status,payload) values (${row.mail},${org ?? ""},${`${mark}@test.invalid`},'test',${mark},'sent',${db.json({})})`;
-      await db`insert into api_token (id,org_id,user_id,name,prefix,hash,scopes) values (${row.token},${org ?? ""},${user ?? ""},${mark},${token.slice(0, 12)},${await hashToken(token)},${db.array(["feedback:read", "feedback:write"])})`;
+      await db`insert into api_token (id,org_id,user_id,name,prefix,hash,scopes) values (${row.token},${org ?? ""},${user ?? ""},${mark},${token.slice(0, 12)},${await hashToken(token)},${db.array(["feedback:read", "feedback:write", "releases:write"])})`;
+      if (key === "B") {
+        // A connected Slack workspace with a route, a mapped member and a posted card.
+        const ws = randomUUID();
+        const team = `T${ws.replaceAll("-", "").slice(0, 10).toUpperCase()}`;
+        await db`insert into slack_workspace (id,org_id,team_id,team_name,signing_secret,bot_token,token_hint) values (${ws},${org ?? ""},${team},${mark},${encryptSecret("b".repeat(32))},${encryptSecret("xoxb-" + "2".repeat(30))},'2222')`;
+        row.slackRoute = randomUUID();
+        row.slackLink = randomUUID();
+        await db`insert into slack_route (id,org_id,workspace_id,project_id,channel_id,events) values (${row.slackRoute},${org ?? ""},${ws},${projectId},'C0BBBBBBBB',${db.array(["feedback.created"])})`;
+        await db`insert into slack_user_link (id,org_id,workspace_id,slack_user_id,user_id) values (${row.slackLink},${org ?? ""},${ws},'U0BBBBBBBB',${user ?? ""})`;
+        await db`insert into slack_message (org_id,workspace_id,feedback_id,channel_id,ts) values (${org ?? ""},${ws},${feedbackId},'C0BBBBBBBB','1700000000.000100')`;
+        Object.assign(ids, { slackWsB: ws, slackTeamB: team });
+      }
       if (key === "A") {
         ids.tokenA = token;
         ids.projectA = projectId;
@@ -785,6 +953,9 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
           commentB: row.comment,
           labelB: row.label,
           automationB: row.rule,
+          releaseB: row.release,
+          slackRouteB: row.slackRoute,
+          slackLinkB: row.slackLink,
           roundB: row.round,
           reviewLinkB: row.reviewLink,
           shareLinkB: row.shareLink,

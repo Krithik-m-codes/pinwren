@@ -260,6 +260,32 @@ export const captureGeometry = z.object({
 });
 export type CaptureGeometry = z.infer<typeof captureGeometry>;
 
+// --- Custom fields (ADR 0032): the wire pieces other schemas mention; the rest is in custom-fields.ts ----------
+
+export const MAX_CUSTOM_FIELDS = 20;
+/** Largest set of answers one item may carry, as serialised JSON. */
+export const MAX_CUSTOM_VALUES_BYTES = 32_768;
+/** The `key` is the stable identity of a field: answers, API payloads and automation rules refer to it. */
+export const CUSTOM_FIELD_KEY = /^[a-z][a-z0-9_]{0,39}$/;
+export const customFieldKey = z
+  .string()
+  .regex(CUSTOM_FIELD_KEY, "Use lower-case letters, digits and underscores, starting with a letter");
+/**
+ * The answers sent with a report or an edit, `{ key: value }`. Shape and size only: what each value may be is
+ * decided against the project's field definitions on the server (`resolveNewValues` / `resolvePatchValues`).
+ */
+export const customFieldValues = z
+  .record(customFieldKey, z.unknown())
+  .refine((v) => Object.keys(v).length <= MAX_CUSTOM_FIELDS, { message: "Too many fields" })
+  .refine((v) => JSON.stringify(v).length <= MAX_CUSTOM_VALUES_BYTES * 2, {
+    message: "Answers are too large",
+  });
+/** List filter on one custom field: `key:value`; value `*` = any answer, `!` = no answer. */
+export const customFieldFilter = z
+  .string()
+  .max(240)
+  .regex(/^[a-z][a-z0-9_]{0,39}:[\s\S]+$/, "Use key:value");
+
 // --- Widget: create feedback (blueprint 04 §2) ------------------------------------------------------
 
 /** Largest `metadata` object a report may carry, as serialised JSON. */
@@ -327,6 +353,8 @@ export const widgetFeedbackCreate = z.object({
   annotations: annotationLayer.optional(),
   /** The viewport `screenshot` was taken in. Stored on the screenshot asset. */
   capture: captureGeometry.optional(),
+  /** Answers to the project's custom fields (ADR 0032), by field key. Validated server-side against the definitions. */
+  customFields: customFieldValues.optional(),
 });
 export type WidgetFeedbackCreate = z.infer<typeof widgetFeedbackCreate>;
 
@@ -354,6 +382,10 @@ export const projectUpdate = z.object({
   notifyReporter: z.boolean().optional(),
   /** Widget reports + replies per IP per minute. null uses the instance default. */
   widgetRateLimitPerMin: z.number().int().min(1).max(1000).nullable().optional(),
+  /** Flag new reports that look like a resolved item (ADR 0036). */
+  detectRegressions: z.boolean().optional(),
+  /** Reopen the resolved original when a regression is flagged. */
+  autoReopenRegressions: z.boolean().optional(),
   /** Archive (true) or restore (false). Archived projects leave lists and their widget key stops working. */
   archived: z.boolean().optional(),
 });
@@ -397,6 +429,15 @@ export const feedbackUpdate = z.object({
   duplicateOfId: z.uuid().nullable().optional(),
   /** Convert between comment / bug / idea / question. */
   kind: feedbackKind.optional(),
+  /**
+   * The release that fixed a resolved item (same project). Needs the item to be resolved (now or in the same
+   * request); null clears it. Reopening an item clears it too.
+   */
+  fixedInReleaseId: z.uuid().nullable().optional(),
+  /** Resolved, fix ships in the next release: becomes the next release the project records. */
+  fixedInNextRelease: z.boolean().optional(),
+  /** Custom field answers to set by key; `null` clears one (ADR 0032). Other fields keep their answer. */
+  customFields: customFieldValues.optional(),
 });
 export type FeedbackUpdate = z.infer<typeof feedbackUpdate>;
 
@@ -430,8 +471,14 @@ export const feedbackListQuery = z.object({
   reporter: z.string().trim().max(254).optional(),
   /** Only items with (true) or without (false) a session replay. */
   hasReplay: queryBool.optional(),
+  /** Only possible regressions (true) or only items that are not (false). */
+  regression: queryBool.optional(),
+  /** Only items marked fixed in this release. */
+  fixedInReleaseId: z.uuid().optional(),
   /** Browser name contains this text (from the captured environment), e.g. `Safari`. */
   browser: z.string().trim().max(60).optional(),
+  /** One custom field: `key:value` (`*` any answer, `!` none). Text fields match by substring (ADR 0032). */
+  cf: customFieldFilter.optional(),
   /** Deleted items (the trash) instead of live ones. Org admins only; others get 403. */
   trash: queryBool.optional(),
   sort: z.enum(FEEDBACK_SORTS).default("created"),
@@ -497,6 +544,8 @@ export const NOTIFICATION_TYPES = [
   "comment.mentioned",
   "webhook.disabled",
   "round.signoff",
+  /** A new report looks like a resolved item coming back (ADR 0036). */
+  "feedback.regression_detected",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -610,6 +659,8 @@ export const WEBHOOK_EVENTS = [
   "comment.updated",
   "comment.deleted",
   "round.signoff",
+  /** A new report looks like a resolved item coming back (ADR 0036). */
+  "feedback.regression_detected",
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 /**
@@ -693,7 +744,12 @@ export type WebhookUpdate = z.infer<typeof webhookUpdate>;
 
 // --- API tokens + public API ----------------------------------------------------------------------------
 
-export const API_TOKEN_SCOPES = ["feedback:read", "feedback:write", "comments:write"] as const;
+export const API_TOKEN_SCOPES = [
+  "feedback:read",
+  "feedback:write",
+  "comments:write",
+  "releases:write",
+] as const;
 export type ApiTokenScope = (typeof API_TOKEN_SCOPES)[number];
 
 export const apiTokenCreate = z.object({
@@ -754,6 +810,7 @@ export const EMAIL_TEMPLATE_KEYS = [
   "reporter_assigned",
   "webhook_disabled",
   "round_signoff",
+  "regression_detected",
 ] as const;
 export type EmailTemplateKey = (typeof EMAIL_TEMPLATE_KEYS)[number];
 
