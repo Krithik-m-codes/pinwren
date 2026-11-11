@@ -3398,7 +3398,6 @@
   "dashx.unassigned": "未分配",
   "dashx.unpinProject": "取消固定 {name}",
   "dashx.unpublished": "已停止与工作区共享",
-  "dash.localOnly": "您的布局保存在此浏览器中。",
   "trackers.descTrello": "为每条反馈在你的看板上创建一张卡片。把卡片移到“已完成”列表（或归档）会将该条目标记为已解决；解决该条目时，卡片也会移到该列表。",
   "trackers.descAsana": "为每条反馈在你的项目中创建一个任务。完成任务会将该条目标记为已解决；解决该条目时，任务也会被完成。",
   "trackers.descClickup": "为每条反馈在你的列表中创建一个任务。把任务移到已关闭状态会将该条目标记为已解决；解决该条目时，会设置该状态。",

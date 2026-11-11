@@ -3398,7 +3398,6 @@
   "dashx.unassigned": "Non assegnato",
   "dashx.unpinProject": "Rimuovi {name} dai fissati",
   "dashx.unpublished": "Non è più condivisa con lo spazio di lavoro",
-  "dash.localOnly": "Il tuo layout è salvato in questo browser.",
   "trackers.descTrello": "Crea una scheda sulla tua bacheca per ogni feedback. Spostando la scheda nell'elenco dei completati (o archiviandola) l'elemento viene risolto, e risolvendo l'elemento la scheda si sposta lì.",
   "trackers.descAsana": "Crea un'attività nel tuo progetto per ogni feedback. Completando l'attività l'elemento viene risolto, e risolvendo l'elemento l'attività viene completata.",
   "trackers.descClickup": "Crea un'attività nella tua lista per ogni feedback. Spostando l'attività in uno stato chiuso l'elemento viene risolto, e risolvendo l'elemento viene impostato quello stato.",

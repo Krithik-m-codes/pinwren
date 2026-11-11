@@ -3398,7 +3398,6 @@
   "dashx.unassigned": "Nicht zugewiesen",
   "dashx.unpinProject": "{name} lösen",
   "dashx.unpublished": "Nicht mehr mit dem Arbeitsbereich geteilt",
-  "dash.localOnly": "Dein Layout wird in diesem Browser gespeichert.",
   "trackers.descTrello": "Legt für jedes Feedback eine Karte auf Ihrem Board an. Wird die Karte in die Erledigt-Liste verschoben (oder archiviert), gilt der Eintrag als gelöst – und wird der Eintrag gelöst, wandert die Karte dorthin.",
   "trackers.descAsana": "Legt für jedes Feedback eine Aufgabe in Ihrem Projekt an. Wird die Aufgabe abgeschlossen, gilt der Eintrag als gelöst – und umgekehrt.",
   "trackers.descClickup": "Legt für jedes Feedback eine Aufgabe in Ihrer Liste an. Wird die Aufgabe in einen geschlossenen Status verschoben, gilt der Eintrag als gelöst – und wird er gelöst, setzt Pinwren diesen Status.",

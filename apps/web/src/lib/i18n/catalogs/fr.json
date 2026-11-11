@@ -3398,7 +3398,6 @@
   "dashx.unassigned": "Non assigné",
   "dashx.unpinProject": "Désépingler {name}",
   "dashx.unpublished": "N'est plus partagé avec l'espace de travail",
-  "dash.localOnly": "Votre disposition est enregistrée dans ce navigateur.",
   "trackers.descTrello": "Crée une carte sur votre tableau pour chaque retour. Déplacer la carte dans la liste « terminé » (ou l'archiver) résout l'élément, et résoudre l'élément y déplace la carte.",
   "trackers.descAsana": "Crée une tâche dans votre projet pour chaque retour. Terminer la tâche résout l'élément, et résoudre l'élément termine la tâche.",
   "trackers.descClickup": "Crée une tâche dans votre liste pour chaque retour. Passer la tâche à un statut fermé résout l'élément, et résoudre l'élément applique ce statut.",

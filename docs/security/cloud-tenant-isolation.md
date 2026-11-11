@@ -242,7 +242,7 @@ unknown and expired ids answer 404 and that the streaming read holds no transact
 address; token authentication, scope and membership are covered in `cloud-api-db.test.ts`.
 
 Verified on PostgreSQL 16.15: `node scripts/tenant-isolation.mjs` passes 14 files / 368 tests (151 + 25 new). With
-automation, Slack, custom fields and releases the runner covers 19 files; the last full run on PostgreSQL 17 passed 530 tests.
+automation, Slack, custom fields and releases the runner covers 19 files (21 with the tracker boards and dashboards); the last full run on PostgreSQL 17 passed 530 tests.
 
 ## Cloud sign-up
 

@@ -3398,7 +3398,6 @@
   "dashx.unassigned": "Niet toegewezen",
   "dashx.unpinProject": "{name} losmaken",
   "dashx.unpublished": "Niet meer gedeeld met de werkruimte",
-  "dash.localOnly": "Je indeling wordt opgeslagen in deze browser.",
   "trackers.descTrello": "Maakt voor elke feedback een kaart op je bord. Verplaats je de kaart naar de lijst Klaar (of archiveer je hem), dan wordt het item opgelost; los je het item op, dan gaat de kaart daarheen.",
   "trackers.descAsana": "Maakt voor elke feedback een taak in je project. Rond je de taak af, dan wordt het item opgelost; los je het item op, dan wordt de taak afgerond.",
   "trackers.descClickup": "Maakt voor elke feedback een taak in je lijst. Zet je de taak op een gesloten status, dan wordt het item opgelost; los je het item op, dan krijgt de taak die status.",

@@ -3398,7 +3398,6 @@
   "dashx.unassigned": "Sem responsável",
   "dashx.unpinProject": "Desafixar {name}",
   "dashx.unpublished": "Não está mais compartilhado com o workspace",
-  "dash.localOnly": "Seu layout é salvo neste navegador.",
   "trackers.descTrello": "Cria um cartão no seu quadro para cada feedback. Mover o cartão para a lista de concluídos (ou arquivá-lo) resolve o item, e resolver o item move o cartão para lá.",
   "trackers.descAsana": "Cria uma tarefa no seu projeto para cada feedback. Concluir a tarefa resolve o item, e resolver o item conclui a tarefa.",
   "trackers.descClickup": "Cria uma tarefa na sua lista para cada feedback. Mover a tarefa para um status fechado resolve o item, e resolver o item define esse status.",
