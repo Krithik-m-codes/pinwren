@@ -16,7 +16,7 @@ export type StorageDriver = {
 
 // `<projectId>/<uuid>.<ext>` — random, generated server-side; never derived from user input.
 // `.zip`: project data exports (services/project-export.ts).
-const KEY_PATTERN = /^[a-z0-9-]+\/[a-z0-9-]+\.(png|jpe?g|webp|gif|pdf|gz|zip)$/;
+const KEY_PATTERN = /^[a-z0-9-]+\/[a-z0-9-]+\.(png|jpe?g|webp|gif|pdf|gz|zip|webm|mp4)$/;
 function assertKey(key: string) {
   if (!KEY_PATTERN.test(key)) throw new Error(`refusing storage key ${key}`);
 }
@@ -134,6 +134,9 @@ const MAGIC: Record<string, (b: Uint8Array) => boolean> = {
     b[0] === 0x52 && b[1] === 0x49 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50,
   "image/gif": (b) => b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38,
   "application/pdf": (b) => b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46 && b[4] === 0x2d,
+  // Screen recordings (ADR 0029): the EBML header of Matroska/WebM, and an ISO base media `ftyp` box.
+  "video/webm": (b) => b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3,
+  "video/mp4": (b) => b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70,
   // Session replays (F-007): gzip (RFC 1952) magic plus the deflate method byte.
   "application/gzip": (b) => b[0] === 0x1f && b[1] === 0x8b && b[2] === 0x08,
 };
@@ -145,6 +148,8 @@ export const EXTENSIONS: Record<string, string> = {
   "image/gif": "gif",
   "application/pdf": "pdf",
   "application/gzip": "gz",
+  "video/webm": "webm",
+  "video/mp4": "mp4",
 };
 
 /**

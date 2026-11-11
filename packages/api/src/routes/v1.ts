@@ -218,7 +218,9 @@ export const v1 = new Hono<{ Variables: TokenVars }>()
     c.json({ views: await listViews(c.var.orgId, c.var.userId) }),
   )
 
-  .get("/assets/:id", scope("feedback:read"), (c) => assetResponse(c.var.orgId, c.req.param("id")))
+  .get("/assets/:id", scope("feedback:read"), (c) =>
+    assetResponse(c.var.orgId, c.req.param("id"), c.req.header("range")),
+  )
 
   .get("/projects/:id/rounds", scope("feedback:read"), async (c) =>
     c.json({ rounds: await listRounds(c.var.orgId, c.req.param("id")) }),

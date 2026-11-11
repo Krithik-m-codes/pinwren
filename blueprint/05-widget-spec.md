@@ -32,6 +32,7 @@ or React: `<Pinwren projectKey="…" />` from `@pinwren/react`.
 | fields (custom questions of the report form, ADR 0029)         | 5 KB                                    |
 | capture (SnapDOM + glue)                                       | 40 KB                                   |
 | replay (rrweb record)                                          | 60 KB                                   |
+| record (screen + voice recording, ADR 0029)                    | 14 KB                                   |
 | Main-thread work on page load (loader + core idle init)        | < 5 ms on 4× CPU throttle               |
 | Memory at idle                                                 | < 3 MB (replay off), < 8 MB (replay on) |
 

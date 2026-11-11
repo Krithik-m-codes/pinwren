@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { captureConfig, mergeConfig, parseCaptureConfig, parseWidgetConfig, widgetConfig } from "./config";
-import { orgBrandingUpdate, widgetFeedbackCreate } from "./schemas";
+import {
+  captureConfig,
+  MAX_RECORDING_SECONDS,
+  mergeConfig,
+  parseCaptureConfig,
+  parseWidgetConfig,
+  publicWidgetConfig,
+  recordingEnabled,
+  widgetConfig,
+} from "./config";
+import { orgBrandingUpdate, widgetFeedbackCreate, widgetRecording } from "./schemas";
 
 describe("widget config", () => {
   it("fills every default from an empty object", () => {
@@ -87,6 +96,7 @@ describe("capture config", () => {
       screenshotOnComment: false,
       maskSelectors: [],
       replay: { enabled: false, seconds: 60 },
+      recording: { enabled: null, maxSeconds: 120, microphone: true },
     });
   });
   it("takes a screenshot quality and nothing else", () => {
@@ -267,5 +277,49 @@ describe("widget report metadata cap", () => {
     expect(widgetFeedbackCreate.safeParse({ ...base, metadata: { plan: "pro" } }).success).toBe(true);
     const big = { pad: "x".repeat(MAX_METADATA_BYTES) };
     expect(widgetFeedbackCreate.safeParse({ ...base, metadata: big }).success).toBe(false);
+  });
+});
+
+describe("screen recording config", () => {
+  const widget = (patch: object = {}) => parseWidgetConfig(patch);
+  const capture = (patch: object = {}) => parseCaptureConfig({ recording: patch });
+
+  it("is on unless the project says otherwise, and off by default in privacy mode", () => {
+    expect(recordingEnabled(widget(), capture())).toBe(true);
+    expect(recordingEnabled(widget({ privacyMode: true }), capture())).toBe(false);
+    expect(recordingEnabled(widget(), capture({ enabled: false }))).toBe(false);
+  });
+  it("lets an admin turn it on deliberately in privacy mode, and never on a read-only project", () => {
+    expect(recordingEnabled(widget({ privacyMode: true }), capture({ enabled: true }))).toBe(true);
+    expect(recordingEnabled(widget({ readOnly: true }), capture({ enabled: true }))).toBe(false);
+  });
+  it("hands the widget the resolved value", () => {
+    const privacy = publicWidgetConfig(widget({ privacyMode: true }), capture());
+    expect(privacy.capture.recording.enabled).toBe(false);
+    expect(publicWidgetConfig(widget(), capture()).capture.recording.enabled).toBe(true);
+  });
+  it("bounds the length at the hard cap", () => {
+    expect(captureConfig.safeParse({ recording: { maxSeconds: MAX_RECORDING_SECONDS } }).success).toBe(true);
+    expect(captureConfig.safeParse({ recording: { maxSeconds: MAX_RECORDING_SECONDS + 1 } }).success).toBe(
+      false,
+    );
+    expect(captureConfig.safeParse({ recording: { maxSeconds: 1 } }).success).toBe(false);
+    // A stored value that no longer validates falls back to the default instead of breaking the widget.
+    expect(parseCaptureConfig({ recording: { maxSeconds: 9999 } }).recording.maxSeconds).toBe(120);
+  });
+});
+
+describe("recording payload", () => {
+  const ok = { dataUrl: "data:video/webm;base64,GkXfow==", durationMs: 5000, audio: true };
+  it("accepts webm and mp4 and nothing else", () => {
+    expect(widgetRecording.safeParse(ok).success).toBe(true);
+    expect(widgetRecording.safeParse({ ...ok, dataUrl: "data:video/mp4;base64,AAAA" }).success).toBe(true);
+    expect(widgetRecording.safeParse({ ...ok, dataUrl: "data:video/x-flv;base64,AAAA" }).success).toBe(false);
+    expect(widgetRecording.safeParse({ ...ok, dataUrl: "data:text/html;base64,AAAA" }).success).toBe(false);
+  });
+  it("caps the duration", () => {
+    expect(widgetRecording.safeParse({ ...ok, durationMs: MAX_RECORDING_SECONDS * 1000 + 1 }).success).toBe(
+      false,
+    );
   });
 });

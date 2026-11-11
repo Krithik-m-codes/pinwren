@@ -307,3 +307,101 @@ describe("data URL decoding", () => {
     expect(() => decodeDataUrl(fake, ["application/pdf"], 100)).toThrow(/do not match/);
   });
 });
+
+describe("screen recording files", () => {
+  const url = (type: string, bytes: number[]) =>
+    `data:${type};base64,${Buffer.from(bytes).toString("base64")}`;
+  const WEBM = [0x1a, 0x45, 0xdf, 0xa3, 0x01, 0x00];
+  const MP4 = [0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d];
+
+  it("accepts WebM and MP4 by their signatures", async () => {
+    const { decodeDataUrl, EXTENSIONS } = await import("./storage");
+    const { RECORDING_CONTENT_TYPES } = await import("@pinwren/core");
+    expect(decodeDataUrl(url("video/webm", WEBM), RECORDING_CONTENT_TYPES, 100).contentType).toBe(
+      "video/webm",
+    );
+    expect(decodeDataUrl(url("video/mp4", MP4), RECORDING_CONTENT_TYPES, 100).contentType).toBe("video/mp4");
+    expect(EXTENSIONS["video/webm"]).toBe("webm");
+    expect(EXTENSIONS["video/mp4"]).toBe("mp4");
+  });
+  it("refuses a file whose bytes are not the declared video type", async () => {
+    const { decodeDataUrl } = await import("./storage");
+    const { RECORDING_CONTENT_TYPES } = await import("@pinwren/core");
+    const html = [...Buffer.from("<html><script>alert(1)</script>")];
+    expect(() => decodeDataUrl(url("video/webm", html), RECORDING_CONTENT_TYPES, 100)).toThrow(
+      /do not match/,
+    );
+    expect(() => decodeDataUrl(url("video/mp4", html), RECORDING_CONTENT_TYPES, 100)).toThrow(/do not match/);
+    // A WebM declared as MP4 (and the reverse) is just as wrong.
+    expect(() => decodeDataUrl(url("video/mp4", WEBM), RECORDING_CONTENT_TYPES, 100)).toThrow(/do not match/);
+    expect(() => decodeDataUrl(url("video/webm", MP4), RECORDING_CONTENT_TYPES, 100)).toThrow(/do not match/);
+  });
+  it("keeps the type out of images and attachments", async () => {
+    const { decodeDataUrl } = await import("./storage");
+    const { ATTACHMENT_CONTENT_TYPES } = await import("@pinwren/core");
+    expect(() => decodeDataUrl(url("video/webm", WEBM), ATTACHMENT_CONTENT_TYPES, 100)).toThrow(
+      /not allowed/,
+    );
+  });
+  it("refuses an oversized clip and an empty one", async () => {
+    const { decodeDataUrl } = await import("./storage");
+    expect(() => decodeDataUrl(url("video/webm", [...WEBM, ...WEBM]), ["video/webm"], 4)).toThrow(
+      /too large/,
+    );
+    expect(() => decodeDataUrl("data:video/webm;base64,", ["video/webm"], 4)).toThrow();
+  });
+  it("lets a .webm and .mp4 key through the storage key check, and still refuses other extensions", async () => {
+    const { s3Driver } = await import("./storage");
+    const fake = (() => Promise.resolve(new Response("ok", { status: 200 }))) as unknown as typeof fetch;
+    const d = s3Driver(
+      {
+        endpoint: "https://s3.example.com",
+        bucket: "b",
+        region: "r",
+        accessKeyId: "k",
+        secretAccessKey: "s",
+        forcePathStyle: true,
+      },
+      fake,
+    );
+    await expect(d.put("p1/abc.webm", new Uint8Array([1]), "video/webm")).resolves.toBeUndefined();
+    await expect(d.put("p1/abc.mp4", new Uint8Array([1]), "video/mp4")).resolves.toBeUndefined();
+    await expect(d.put("p1/abc.exe", new Uint8Array([1]), "video/mp4")).rejects.toThrow();
+  });
+});
+
+describe("byte ranges for playback", () => {
+  it("parses single ranges", async () => {
+    const { parseRange } = await import("./services/assets");
+    expect(parseRange("bytes=0-99", 1000)).toEqual({ start: 0, end: 99 });
+    expect(parseRange("bytes=900-", 1000)).toEqual({ start: 900, end: 999 });
+    expect(parseRange("bytes=-100", 1000)).toEqual({ start: 900, end: 999 });
+    expect(parseRange("bytes=0-99999", 1000)).toEqual({ start: 0, end: 999 });
+  });
+  it("serves everything when there is no usable range, and refuses an impossible one", async () => {
+    const { parseRange } = await import("./services/assets");
+    expect(parseRange(undefined, 1000)).toBeNull();
+    expect(parseRange("items=0-1", 1000)).toBeNull();
+    expect(parseRange("bytes=0-1,5-6", 1000)).toBeNull();
+    expect(parseRange("bytes=-", 1000)).toBeNull();
+    expect(parseRange("bytes=1000-", 1000)).toBe("unsatisfiable");
+    expect(parseRange("bytes=500-100", 1000)).toBe("unsatisfiable");
+    expect(parseRange("bytes=-0", 1000)).toBe("unsatisfiable");
+  });
+  it("cuts a stream to the requested bytes across chunk boundaries", async () => {
+    const { sliceStream } = await import("./services/assets");
+    const chunks = [new Uint8Array([0, 1, 2, 3]), new Uint8Array([4, 5, 6, 7]), new Uint8Array([8, 9])];
+    const make = () =>
+      new ReadableStream({
+        start(c) {
+          for (const x of chunks) c.enqueue(x);
+          c.close();
+        },
+      });
+    const read = async (s: ReadableStream) => [...new Uint8Array(await new Response(s).arrayBuffer())];
+    expect(await read(sliceStream(make(), 2, 5))).toEqual([2, 3, 4, 5]);
+    expect(await read(sliceStream(make(), 0, 9))).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(await read(sliceStream(make(), 8, 9))).toEqual([8, 9]);
+    expect(await read(sliceStream(make(), 4, 4))).toEqual([4]);
+  });
+});

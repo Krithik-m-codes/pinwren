@@ -241,7 +241,7 @@ All AI features are **off by default**, require an explicit provider configurati
 
 ## G. Explicit non-features for v1
 
-Native mobile SDKs, public roadmaps/voting, heat maps, analytics, video recording of the screen (use replay instead), proxy-rendering third-party sites without a script, on-premise AI model hosting.
+Native mobile SDKs, public roadmaps/voting, heat maps, analytics, ~~video recording of the screen (use replay instead)~~ (superseded by [ADR 0029](../docs/adr/0029-widget-screen-recording.md): reporter-initiated screen recording with optional voice, off by default in privacy mode), proxy-rendering third-party sites without a script, on-premise AI model hosting.
 
 ---
 

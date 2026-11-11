@@ -10,6 +10,7 @@
 //   widget-flows.<hash>.js     composer attachments, re-pin mode (wave 5)
 //   widget-fields.<hash>.js    custom questions of the report form (ADR 0029)
 //   widget-shots.<hash>.js     "Add screenshot" menu, attachment thumbnails + lightbox, annotate dialog
+//   widget-record.<hash>.js    "Record screen": getDisplayMedia + MediaRecorder, review dialog (ADR 0029)
 //   widget-i18n-<code>.<hash>.js
 //
 // File names are content-hashed so CDNs can cache them forever; build.mjs inlines the name map into
@@ -22,7 +23,7 @@
 declare const __PINWREN_MANIFEST__: Record<string, string> | undefined;
 
 export type ChunkName =
-  "capture" | "editor" | "report" | "panel" | "replay" | "flows" | "shots" | "errors" | "fields";
+  "capture" | "editor" | "report" | "panel" | "replay" | "flows" | "shots" | "errors" | "record" | "fields";
 
 /** The window global a chunk registers itself on: `__pinwren` + the capitalised name. */
 const globalOf = (name: ChunkName) => `__pinwren${name.charAt(0).toUpperCase()}${name.slice(1)}`;

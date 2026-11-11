@@ -16,6 +16,10 @@ export const VISIBILITY_MODES = ["always", "identified", "queryParam", "urlPatte
 export type VisibilityMode = (typeof VISIBILITY_MODES)[number];
 export const MIN_REPLAY_SECONDS = 30;
 export const MAX_REPLAY_SECONDS = 120;
+/** Screen recording (ADR 0029): the project's longest clip, and the cap no setting can exceed. */
+export const DEFAULT_RECORDING_SECONDS = 120;
+export const MIN_RECORDING_SECONDS = 10;
+export const MAX_RECORDING_SECONDS = 300;
 
 // --- Panel actions (F-016, wave-3 contract §1) -----------------------------------------------------
 
@@ -248,6 +252,23 @@ export const captureConfig = z.object({
       seconds: z.number().int().min(MIN_REPLAY_SECONDS).max(MAX_REPLAY_SECONDS).default(60),
     })
     .prefault({}),
+  /**
+   * Screen recording with optional voice narration (ADR 0029). `enabled` is tri-state: null follows the
+   * project (on, but off in privacy mode); an explicit value always wins. `microphone` only decides whether
+   * the reporter is offered narration; the browser asks them and they can still decline.
+   */
+  recording: z
+    .object({
+      enabled: z.boolean().nullable().default(null),
+      maxSeconds: z
+        .number()
+        .int()
+        .min(MIN_RECORDING_SECONDS)
+        .max(MAX_RECORDING_SECONDS)
+        .default(DEFAULT_RECORDING_SECONDS),
+      microphone: z.boolean().default(true),
+    })
+    .prefault({}),
 });
 export type CaptureConfig = z.infer<typeof captureConfig>;
 export type CaptureConfigInput = z.input<typeof captureConfig>;
@@ -268,6 +289,11 @@ export const widgetBranding = z.object({
 export type WidgetBranding = z.infer<typeof widgetBranding>;
 export type WidgetBrandingInput = z.input<typeof widgetBranding>;
 
+/** Whether the project takes screen recordings: the explicit setting, else on unless privacy mode is. */
+export function recordingEnabled(widget: WidgetConfig, capture: CaptureConfig): boolean {
+  return !widget.readOnly && (capture.recording.enabled ?? !widget.privacyMode);
+}
+
 const CONSOLE_RANK = { off: 0, errors: 1, warnings: 2, all: 3 } as const;
 
 /**
@@ -282,7 +308,10 @@ export function publicWidgetConfig(
     ...widget,
     panelActions: widget.panelActions.filter((a) => a.visibleTo === "everyone" && a.kind === "link"),
   };
-  const c: CaptureConfig = { ...capture };
+  const c: CaptureConfig = {
+    ...capture,
+    recording: { ...capture.recording, enabled: recordingEnabled(widget, capture) },
+  };
   if (widget.privacyMode) {
     w.consent = { ...w.consent, enabled: true };
     w.errorPrompt = false; // no error text or stack leaves the page in privacy mode

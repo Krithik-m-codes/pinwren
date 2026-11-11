@@ -66,3 +66,16 @@ export const chevron = svg('<path d="m6 9 6 6 6-6"/>');
 export const sort = svg('<path d="M3 6h10M3 12h7M3 18h4M17 4v16M14 17l3 3 3-3"/>');
 export const user = svg('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>');
 export const plus = svg('<path d="M12 5v14M5 12h14"/>');
+
+// Screen recording (widget-record.js).
+export const rec = /* @__PURE__ */ svg(
+  '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/>',
+);
+export const mic = /* @__PURE__ */ svg(
+  '<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+);
+export const pause = /* @__PURE__ */ svg('<path d="M8 5v14M16 5v14"/>');
+export const play = /* @__PURE__ */ svg('<path d="m7 4 13 8-13 8Z" fill="currentColor"/>');
+export const stop = /* @__PURE__ */ svg(
+  '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>',
+);
