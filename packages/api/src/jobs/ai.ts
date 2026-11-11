@@ -305,7 +305,7 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
         }),
     );
 
-    // 6a. The AI thinks this is a copy of a resolved bug: that is a regression signal (ADR 0029), so flag it
+    // 6a. The AI thinks this is a copy of a resolved bug: that is a regression signal (ADR 0033), so flag it
     // the same way the signature detector does. Never lets a failure here lose the enrichment just recorded.
     if (duplicateId) {
       try {

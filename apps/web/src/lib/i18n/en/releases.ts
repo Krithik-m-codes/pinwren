@@ -1,4 +1,4 @@
-// Strings for releases, "fixed in" and regression detection (ADR 0029): projects/[id]/releases-tab.tsx,
+// Strings for releases, "fixed in" and regression detection (ADR 0033): projects/[id]/releases-tab.tsx,
 // inbox/release-ui.tsx, the timeline sentences, the "Regressions" and "Fixed per release" dashboard widgets,
 // and the places that name the new webhook event, notification and automation trigger.
 export const releases = {

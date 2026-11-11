@@ -354,7 +354,7 @@ export const projectUpdate = z.object({
   notifyReporter: z.boolean().optional(),
   /** Widget reports + replies per IP per minute. null uses the instance default. */
   widgetRateLimitPerMin: z.number().int().min(1).max(1000).nullable().optional(),
-  /** Flag new reports that look like a resolved item (ADR 0029). */
+  /** Flag new reports that look like a resolved item (ADR 0033). */
   detectRegressions: z.boolean().optional(),
   /** Reopen the resolved original when a regression is flagged. */
   autoReopenRegressions: z.boolean().optional(),
@@ -512,7 +512,7 @@ export const NOTIFICATION_TYPES = [
   "comment.mentioned",
   "webhook.disabled",
   "round.signoff",
-  /** A new report looks like a resolved item coming back (ADR 0029). */
+  /** A new report looks like a resolved item coming back (ADR 0033). */
   "feedback.regression_detected",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -627,7 +627,7 @@ export const WEBHOOK_EVENTS = [
   "comment.updated",
   "comment.deleted",
   "round.signoff",
-  /** A new report looks like a resolved item coming back (ADR 0029). */
+  /** A new report looks like a resolved item coming back (ADR 0033). */
   "feedback.regression_detected",
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];

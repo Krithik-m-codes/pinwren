@@ -103,7 +103,7 @@ export const dashboardStats = z.object({
     }),
   ),
   /**
-   * Possible regressions: new reports that look like a resolved item (ADR 0029). `total` is the ones filed in the
+   * Possible regressions: new reports that look like a resolved item (ADR 0033). `total` is the ones filed in the
    * range, `open` those still being worked on; `items` the newest.
    */
   regressions: z.object({

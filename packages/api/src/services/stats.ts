@@ -182,7 +182,7 @@ export async function dashboardStats(
   };
 }
 
-/** The "Regressions" and "Fixed per release" widgets (ADR 0029); every query is filtered by the org id. */
+/** The "Regressions" and "Fixed per release" widgets (ADR 0033); every query is filtered by the org id. */
 async function releaseStats(
   orgId: string,
   projectId: string | undefined,

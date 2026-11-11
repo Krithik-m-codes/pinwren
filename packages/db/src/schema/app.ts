@@ -146,7 +146,7 @@ export const project = pgTable(
       autoLabels: true,
       autoApplyLabels: false,
     }),
-    /** Flag a new report that looks like a resolved item as a possible regression (ADR 0029). */
+    /** Flag a new report that looks like a resolved item as a possible regression (ADR 0033). */
     detectRegressions: boolean("detect_regressions").notNull().default(true),
     /** Reopen the resolved original when a regression is flagged. Off unless a project turns it on. */
     autoReopenRegressions: boolean("auto_reopen_regressions").notNull().default(false),
@@ -187,7 +187,7 @@ export type ReporterGuest = {
   verified?: boolean | undefined;
 };
 
-/** A version a project shipped (ADR 0029): recorded by a person, the dashboard or CI. Items can be fixed in one. */
+/** A version a project shipped (ADR 0033): recorded by a person, the dashboard or CI. Items can be fixed in one. */
 export const projectRelease = pgTable(
   "project_release",
   {
@@ -277,7 +277,7 @@ export const feedback = pgTable(
     duplicateOfId: uuid("duplicate_of_id").references((): AnyPgColumn => feedback.id, {
       onDelete: "set null",
     }),
-    /** The release that fixed this resolved item (ADR 0029). Cleared when the item is reopened. */
+    /** The release that fixed this resolved item (ADR 0033). Cleared when the item is reopened. */
     fixedInReleaseId: uuid("fixed_in_release_id").references((): AnyPgColumn => projectRelease.id, {
       onDelete: "set null",
     }),

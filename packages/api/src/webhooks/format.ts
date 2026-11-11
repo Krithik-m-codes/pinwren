@@ -19,7 +19,7 @@ export type FeedbackPayload = {
   /** The review link's label when the item came in through one (older payloads leave it out). */
   reviewLink?: string | null;
   assigneeIds: string[];
-  /** The release the report came from (`data-release` / `setMetadata({ release })`), if it said (ADR 0029). */
+  /** The release the report came from (`data-release` / `setMetadata({ release })`), if it said (ADR 0033). */
   release?: string | null;
   /** The release that fixed it; `fixedInNextRelease` while the fix is promised but not shipped. */
   fixedInRelease?: string | null;

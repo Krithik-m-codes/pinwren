@@ -140,7 +140,7 @@ export type {
   LabelSuggestion,
 } from "./automation";
 
-// Releases and regressions (ADR 0029). Injected into the same API; its hooks are exported from its own module.
+// Releases and regressions (ADR 0033). Injected into the same API; its hooks are exported from its own module.
 export {
   useDeleteReleaseMutation,
   useRecordReleaseMutation,

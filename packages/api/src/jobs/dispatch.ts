@@ -472,7 +472,7 @@ export async function dispatchEvent(e: DomainEvent): Promise<void> {
       await syncIssueState(e.feedbackId, newStatus(e, ctx));
     }
     await notifications(e, ctx, commentInfo);
-    // A new bug report is compared with the resolved ones (ADR 0029). It only flags; a failure here must never
+    // A new bug report is compared with the resolved ones (ADR 0033). It only flags; a failure here must never
     // hold back the automation and AI jobs below, and the flag it sets reaches people through its own event.
     if (e.type === "feedback.created" && ctx.payload.kind === "bug") {
       try {

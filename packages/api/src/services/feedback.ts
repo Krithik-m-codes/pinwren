@@ -214,7 +214,7 @@ export async function listFeedback(orgId: string, q: FeedbackListQuery, opts: Li
         projectName: project.name,
         pageUrl: page.url,
         roundId: feedback.roundId,
-        // Releases and regressions (ADR 0029): the badge, the "fixed in" chip and the filters read these.
+        // Releases and regressions (ADR 0033): the badge, the "fixed in" chip and the filters read these.
         release: sql<string | null>`nullif(trim(${feedback.metadata}->>'release'), '')`,
         fixedInReleaseId: feedback.fixedInReleaseId,
         fixedInVersion: sql<
@@ -484,7 +484,7 @@ export async function getFeedbackDetail(
     return e;
   });
 
-  // Releases and regressions (ADR 0029).
+  // Releases and regressions (ADR 0033).
   const [fixedInRow, regressionOfRow, regressionRows] = await Promise.all([
     row.f.fixedInReleaseId
       ? db

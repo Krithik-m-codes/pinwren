@@ -84,7 +84,7 @@ describe("review link filter (wave 5)", () => {
   });
 });
 
-describe("release filters (ADR 0029)", () => {
+describe("release filters (ADR 0033)", () => {
   it("round-trips the regression and fixed-in filters and counts them", () => {
     const filters = filtersFromParams(sp(`regression=true&fixedIn=${P}&status=all`));
     expect(filters).toEqual({ regression: "true", fixedInReleaseId: P, status: "all" });

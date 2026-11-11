@@ -1,4 +1,4 @@
-# ADR 0029 — Releases, "fixed in" and regression detection
+# ADR 0033 — Releases, "fixed in" and regression detection
 
 **Status:** accepted
 

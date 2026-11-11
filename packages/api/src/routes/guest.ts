@@ -33,7 +33,7 @@ const columns = {
   title: feedback.title,
   body: feedback.body,
   createdAt: feedback.createdAt,
-  // The release that fixed it (ADR 0029): only the version, never the notes, commit or ids.
+  // The release that fixed it (ADR 0033): only the version, never the notes, commit or ids.
   fixedInVersion: sql<
     string | null
   >`(select r.version from project_release r where r.id = ${feedback.fixedInReleaseId} and r.org_id = ${feedback.orgId})`,

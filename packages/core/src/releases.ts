@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Releases and regressions (ADR 0029). A project records the versions it ships; a resolved item can say which
+// Releases and regressions (ADR 0033). A project records the versions it ships; a resolved item can say which
 // release fixed it; a new report that looks like a resolved one is flagged as a possible regression. Everything
 // here is pure so the API, the dashboard and the tests share one definition of "looks like".
 

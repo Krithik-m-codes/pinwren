@@ -1,6 +1,6 @@
 # Releases, "fixed in" and regressions: API contract
 
-Design: `docs/adr/0029-releases-fixed-in-and-regressions.md`. Schemas: `packages/core/src/releases.ts` (releases,
+Design: `docs/adr/0033-releases-fixed-in-and-regressions.md`. Schemas: `packages/core/src/releases.ts` (releases,
 version ordering, regression signals and scoring), `schemas.ts` (`feedbackUpdate`, `feedbackListQuery`,
 `projectUpdate`, the new webhook event and token scope), `api-types.ts` and `dashboard-stats.ts`.
 
@@ -68,7 +68,7 @@ release."). Webhook payloads carry `release`, `fixedInRelease`, `fixedInNextRele
 
 ## Regressions
 
-A new `bug` report is compared with the project's resolved bugs after it is saved (ADR 0029 §4–5). `PATCH
+A new `bug` report is compared with the project's resolved bugs after it is saved (ADR 0033 §4–5). `PATCH
 /api/projects/:id` takes `detectRegressions` (default `true`) and `autoReopenRegressions` (default `false`).
 
 A flag sets `regressionOfId`, `regressionConfidence` (`possible` or `likely`) and `regressionSignals`, writes

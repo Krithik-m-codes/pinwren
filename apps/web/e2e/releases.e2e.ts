@@ -3,7 +3,7 @@ import type { APIRequestContext } from "@playwright/test";
 import { seed, shoot, SITE_ORIGIN } from "./env";
 import { expect, test } from "./fixtures";
 
-// Releases, "fixed in" and regression detection (ADR 0029): record a release in project settings, resolve an
+// Releases, "fixed in" and regression detection (ADR 0033): record a release in project settings, resolve an
 // item as fixed in it, file a report that looks like it coming back and see it flagged (banner, inbox filter,
 // dashboard widget), then reopen the original from the banner. Everything the test creates is removed again.
 

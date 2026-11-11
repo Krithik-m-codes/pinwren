@@ -304,7 +304,7 @@ const cases: Record<string, Spec> = {
       actions: [{ type: "set_priority", priority: "high" }],
     }),
   }),
-  // Releases (ADR 0029): workspace A names workspace B's project or release. The v1 call carries a token with the
+  // Releases (ADR 0033): workspace A names workspace B's project or release. The v1 call carries a token with the
   // releases:write scope so the refusal is the tenant check, not the scope check.
   "POST /api/projects/:id/releases": foreign({ body: () => ({ version: "9.9.9" }) }),
   "POST /api/v1/projects/:id/releases": foreign({ body: () => ({ version: "9.9.9" }) }),

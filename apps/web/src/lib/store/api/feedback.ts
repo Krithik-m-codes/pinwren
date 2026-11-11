@@ -17,7 +17,7 @@ export type FeedbackPatch = Partial<{
   dueAt: string | null;
   duplicateOfId: string | null;
   kind: FeedbackKind;
-  /** The release that fixed a resolved item, or "the next release" (ADR 0029). */
+  /** The release that fixed a resolved item, or "the next release" (ADR 0033). */
   fixedInReleaseId: string | null;
   fixedInNextRelease: boolean;
 }>;

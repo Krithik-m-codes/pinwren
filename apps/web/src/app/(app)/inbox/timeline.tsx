@@ -110,7 +110,7 @@ function actorOf(e: ActivityEvent, t: TFn): string {
   if (e.actorKind === "rule")
     return t("automation.ruleActor", { name: str(e.data.ruleName, t("automation.aRule")) });
   if (e.actorKind === "ai") return t("automation.aiActor");
-  // Regression detection and the release landing write the timeline themselves (ADR 0029).
+  // Regression detection and the release landing write the timeline themselves (ADR 0033).
   if (e.actorKind === "system") return t("releases.systemActor");
   if (e.actorKind === "guest")
     return e.data.via === "reporter" ? t("inbox2.theReporter") : t("inbox2.visitor");

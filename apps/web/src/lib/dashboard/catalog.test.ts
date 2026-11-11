@@ -121,7 +121,7 @@ describe("parseStored", () => {
   });
 });
 
-describe("release widgets (ADR 0029)", () => {
+describe("release widgets (ADR 0033)", () => {
   it("offers Regressions and Fixed per release on every screen, but not by default", () => {
     for (const id of ["list.regressions", "list.fixedPerRelease"] as const) {
       expect(WIDGET_IDS).toContain(id);

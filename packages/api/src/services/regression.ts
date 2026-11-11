@@ -13,7 +13,7 @@ import { activity, diagnostics, feedback, getDb, page, project, projectRelease }
 import { and, desc, eq, isNull, ne, or, type SQL, sql } from "drizzle-orm";
 import { emit, updateEvents } from "../events";
 
-// Regression detection (ADR 0029). A new bug report is compared with the project's resolved bugs on the signals
+// Regression detection (ADR 0033). A new bug report is compared with the project's resolved bugs on the signals
 // the dashboard already captures: the same element on the same page, or the same console error. A match is only
 // a flag (badge, timeline rows, notification, automation event); reopening the original is a per-project
 // opt-in. Nothing here runs in the request that filed the report: the dispatcher calls it after commit.

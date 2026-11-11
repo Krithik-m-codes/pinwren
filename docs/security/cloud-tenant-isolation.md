@@ -305,7 +305,7 @@ three direct-ownership tables, each with the `pinwren_tenant` policy and composi
 
 ## Releases and regressions
 
-Design: `docs/adr/0029-releases-fixed-in-and-regressions.md`; API: `docs/contracts/releases.md`. Migration `0016` adds one
+Design: `docs/adr/0033-releases-fixed-in-and-regressions.md`; API: `docs/contracts/releases.md`. Migration `0016` adds one
 direct-ownership table and tenant-checked columns on `feedback`, all in `tenant-inventory.ts`:
 
 | Object                         | Parents           | Notes                                                                                         |
