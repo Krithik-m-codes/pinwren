@@ -11,12 +11,13 @@ and the run log.
 
 ## When
 
-| Event                    | Fires                                                                       |
-| ------------------------ | --------------------------------------------------------------------------- |
-| **A new report arrives** | Once per report, after it is saved                                          |
-| **The status changes**   | On every status change; optionally only when the new status is one you pick |
-| **A label is added**     | When a label is added to a report; optionally only for one label            |
-| **A comment is added**   | On every new comment (team replies and reporter replies)                    |
+| Event                        | Fires                                                                                                    |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **A new report arrives**     | Once per report, after it is saved                                                                       |
+| **The status changes**       | On every status change; optionally only when the new status is one you pick                              |
+| **A label is added**         | When a label is added to a report; optionally only for one label                                         |
+| **A comment is added**       | On every new comment (team replies and reporter replies)                                                 |
+| **A regression is detected** | When a new bug report is flagged as a [possible regression](/docs/dashboard/releases) of a resolved item |
 
 ## And (conditions)
 

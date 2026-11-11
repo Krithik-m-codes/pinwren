@@ -14,7 +14,7 @@ that is listed under "Remaining WP-21 work". The approved design and implementat
 
 ## Database inventory
 
-`packages/db/src/tenant-inventory.ts` classifies all 48 exported tables. The inventory test compares
+`packages/db/src/tenant-inventory.ts` classifies all 49 exported tables. The inventory test compares
 against actual Drizzle schema exports and tenant foreign keys, so a new table or relationship must be
 classified. Direct ownership means a protected `org_id`; parent ownership means a child derives its
 organization through all declared protected parents. Identity tables serve users across memberships;
@@ -23,7 +23,7 @@ system tables serve explicitly authorized instance operations.
 Cloud also protects organization, membership and invitation rows by their organization identifier.
 Tenant reads of user profiles expose only `id`, `name`, `email` and `image`, and only for members or
 contributors linked to that organization's feedback, comments, activity or watcher rows. Private account
-flags remain available only through the authenticated account repository. There are 38 protected tables.
+flags remain available only through the authenticated account repository. There are 39 protected tables.
 
 Better Auth uses a separate, stable identity pool. Its service role has identity/system grants and a
 fixed eight-column token-verification projection; it cannot read tenant feedback or token display names.
@@ -50,7 +50,7 @@ required.
 
 ## HTTP entry points
 
-`packages/api/src/tenant-route-inventory.json` records all 207 mounted endpoint signatures, including
+`packages/api/src/tenant-route-inventory.json` records all 213 mounted endpoint signatures, including
 the ALL-method `/mcp` handler. Each record names its authorization boundary, whether its handler needs
 special treatment for streaming/external work, and its required authorization test case. These names
 are planned coverage identifiers, not claims that the corresponding integration test already passes.
@@ -205,14 +205,14 @@ selfhost unit runs and exercised by the integration runner.
 
 ### Route-wide acceptance evidence (Task 8)
 
-Every entry of `packages/api/src/tenant-route-inventory.json` (207 routes) has one executable case, and the
+Every entry of `packages/api/src/tenant-route-inventory.json` (213 routes) has one executable case, and the
 inventory and the case registries are compared in both directions, so an added, renamed or reclassified
 route without a case fails. Both suites run against real PostgreSQL with the restricted runtime role, in a
 fixture holding two workspaces (A and B) with a project, report, comment, label, round, review link, saved view,
 webhook endpoint and delivery, tracker integration, asset, notification, template, brand asset, email delivery
 and API token each.
 
-- `cloud-routes-db.test.ts` covers the 145 `tenant`, 10 `identity`, 17 `system` and 5 `public` routes.
+- `cloud-routes-db.test.ts` covers the 151 `tenant`, 10 `identity`, 17 `system` and 5 `public` routes.
   Signed in (cookie or API token) to workspace A, each id-bearing tenant route names workspace B's resource and must
   answer 404 or 403; routes with no id (lists, creates, singleton settings) run as A and must return nothing of B's.
   Every case also hashes all of workspace B's rows (direct tables, parent-owned tables, workspace, members,
@@ -238,7 +238,8 @@ unknown and expired ids answer 404 and that the streaming read holds no transact
 `/api/v1/*` and `/mcp` skip the unauthenticated 401 sweep because the failed-token rate limit is shared per
 address; token authentication, scope and membership are covered in `cloud-api-db.test.ts`.
 
-Verified on PostgreSQL 16.15: `node scripts/tenant-isolation.mjs` passes 14 files / 368 tests (151 + 25 new).
+Verified on PostgreSQL 16.15: `node scripts/tenant-isolation.mjs` passes 14 files / 368 tests (151 + 25 new). With
+automation and releases (below) the runner is 16 files; the last full run on PostgreSQL 17 passed 447 tests.
 
 ## Cloud sign-up
 
@@ -301,3 +302,29 @@ three direct-ownership tables, each with the `pinwren_tenant` policy and composi
   after commit. `automation-db.test.ts` runs it against PostgreSQL with the restricted runtime role: rules naming
   another workspace's label or member are refused when saved, workspace B's identical rule never fires for A's event,
   and loop protection, idempotent retries and partial failures are asserted.
+
+## Releases and regressions
+
+Design: `docs/adr/0029-releases-fixed-in-and-regressions.md`; API: `docs/contracts/releases.md`. Migration `0016` adds one
+direct-ownership table and tenant-checked columns on `feedback`, all in `tenant-inventory.ts`:
+
+| Object                         | Parents           | Notes                                                                                         |
+| ------------------------------ | ----------------- | --------------------------------------------------------------------------------------------- |
+| `project_release`              | `project`         | `pinwren_tenant` policy; composite `(id, org_id)` key; unique per project on `lower(version)` |
+| `feedback.fixed_in_release_id` | `project_release` | single-column FK (`on delete set null`) plus the composite `(fixed_in_release_id, org_id)` FK |
+| `feedback.regression_of_id`    | `feedback`        | like `duplicate_of_id`: a regression can only point at an item of the same workspace          |
+
+- 6 new `tenant` routes (release list, create, update, delete; the `/api/v1` list and create), each with a
+  `foreign tenant` case in `cloud-routes-db.test.ts`. Workspace B's release is part of the fixture and its resolved item
+  is fixed in it, so the before/after hash proves a foreign call changes nothing. The `/api/v1` create case uses a token
+  that holds `releases:write`, so the refusal is the tenant check and not the scope check.
+- A project of another workspace answers 404 to every release route; a release id from another project or workspace is
+  refused as `INVALID_RELEASE` when marking an item fixed in it (`releases-db.test.ts`).
+- Regression detection runs in the dispatch job inside one `withOrg` scope, in a savepoint. Its candidate query filters
+  on the report's `org_id` and project; `releases-db.test.ts` seeds an identical resolved item in workspace B and shows
+  it is never a candidate, and that `GET /api/stats` never counts the other workspace's releases or regressions.
+- The widget key cannot create a release: `data-release` / `setMetadata({ release })` only lands in the report's
+  `metadata`, which is read back as plain text.
+- The team notification for a regression resolves its recipients through `membersWanting`, which still reads the
+  identity table `user_preference` outside the tenant role (listed under "Remaining WP-21 work"); the DB test stands in
+  for that one query.

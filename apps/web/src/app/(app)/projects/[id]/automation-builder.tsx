@@ -50,6 +50,7 @@ export const EVENT_LABEL = {
   status_changed: "automation.eventStatus",
   label_added: "automation.eventLabel",
   comment_added: "automation.eventComment",
+  regression_detected: "releases.automationEvent",
 } as const satisfies Record<AutomationEvent, Key>;
 
 export const CONDITION_LABEL = {

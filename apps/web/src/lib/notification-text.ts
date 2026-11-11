@@ -51,6 +51,8 @@ export function notificationText(n: Notice, t: TFn = tEn): string {
       return t(n.data.decision === "approved" ? "share.notifApproved" : "share.notifChanges", {
         who: n.data.reviewerName?.trim() || someone,
       });
+    case "feedback.regression_detected":
+      return t("releases.notifRegression", { number: n.data.originalNumber ?? "?" });
     case "webhook.disabled":
       return t("other1.notifWebhookDisabled", { name: n.data.name ?? t("other1.unnamed") });
     default:

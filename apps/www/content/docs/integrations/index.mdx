@@ -65,18 +65,19 @@ and email, in that order, so a broken mail server never holds back a webhook.
 
 ## Events
 
-| Event                       | When                                                            |
-| --------------------------- | --------------------------------------------------------------- |
-| `feedback.created`          | A comment or bug report arrives                                 |
-| `feedback.updated`          | Status, priority, title, assignees, labels, due date or round   |
-| `feedback.status_changed`   | The status changes (sent alongside `feedback.updated`)          |
-| `feedback.assigned`         | The assignees change (sent alongside `feedback.updated`)        |
-| `feedback.priority_changed` | The priority changes (sent alongside `feedback.updated`)        |
-| `feedback.labels_changed`   | Labels are added or removed (sent alongside `feedback.updated`) |
-| `feedback.deleted`          | An item is moved to the trash                                   |
-| `comment.created`           | Someone comments — a visitor, a teammate or the API             |
-| `comment.updated`           | A comment is edited                                             |
-| `comment.deleted`           | A comment is deleted                                            |
+| Event                          | When                                                            |
+| ------------------------------ | --------------------------------------------------------------- |
+| `feedback.created`             | A comment or bug report arrives                                 |
+| `feedback.updated`             | Status, priority, title, assignees, labels, due date or round   |
+| `feedback.status_changed`      | The status changes (sent alongside `feedback.updated`)          |
+| `feedback.assigned`            | The assignees change (sent alongside `feedback.updated`)        |
+| `feedback.priority_changed`    | The priority changes (sent alongside `feedback.updated`)        |
+| `feedback.labels_changed`      | Labels are added or removed (sent alongside `feedback.updated`) |
+| `feedback.deleted`             | An item is moved to the trash                                   |
+| `feedback.regression_detected` | A new bug report looks like a resolved item coming back         |
+| `comment.created`              | Someone comments — a visitor, a teammate or the API             |
+| `comment.updated`              | A comment is edited                                             |
+| `comment.deleted`              | A comment is deleted                                            |
 
 Webhooks and chat channels (Slack, Discord, Teams, Telegram, ntfy) subscribe to any of these, for every project or
 for one. Each event has one `id`, shared by every endpoint and every retry, so receivers can de-duplicate on it.

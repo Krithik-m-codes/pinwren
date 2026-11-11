@@ -21,7 +21,7 @@ export const releaseVersion = z
   .max(MAX_RELEASE_VERSION)
   .regex(/^[\w][\w.+\-/@~]*$/, "Use letters, digits and . - _ + / @ ~ (no spaces)");
 
-const commitSha = z
+export const releaseCommit = z
   .string()
   .trim()
   .max(64)
@@ -30,7 +30,7 @@ const commitSha = z
 export const releaseCreate = z.object({
   version: releaseVersion,
   /** The commit (or ref) the release was built from. */
-  commit: commitSha.nullable().optional(),
+  commit: releaseCommit.nullable().optional(),
   /** When it went live; omitted = now. */
   deployedAt: z.iso.datetime({ offset: true }).nullable().optional(),
   notes: z.string().trim().max(MAX_RELEASE_NOTES).nullable().optional(),
@@ -39,7 +39,7 @@ export type ReleaseCreate = z.infer<typeof releaseCreate>;
 
 /** The version is the release's identity; everything else can be corrected. */
 export const releaseUpdate = z.object({
-  commit: commitSha.nullable().optional(),
+  commit: releaseCommit.nullable().optional(),
   deployedAt: z.iso.datetime({ offset: true }).optional(),
   notes: z.string().trim().max(MAX_RELEASE_NOTES).nullable().optional(),
 });

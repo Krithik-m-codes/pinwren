@@ -131,17 +131,18 @@ whether an origin was refused because it is not under Allowed sites.
 
 ## Script attributes
 
-| Attribute                           | Required | What it does                                                                                                                                              |
-| ----------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `data-project`                      | Yes      | The project's public key (`pk_…`). Without it the script loads but does nothing, so you can start the widget yourself with `Pinwren.init()`.              |
-| `data-endpoint`                     | No       | Your Pinwren server's origin, e.g. `https://feedback.example.com`. Defaults to the origin the script was loaded from.                                     |
-| `data-accent`                       | No       | Launcher colour as a hex value (`#d63a1c`). Overrides the project's accent on this page only; anything that isn't a plain hex colour is ignored.          |
-| `data-locale`                       | No       | UI language, e.g. `fr` or `pt-BR`. Otherwise the visitor's browser languages decide — see [Languages](/docs/widget/i18n).                                 |
-| `data-force-show`                   | No       | Show the widget even where the project's [visibility rules](/docs/widget/visibility) would hide it.                                                       |
-| `data-url-pattern`                  | No       | Group this page's pins with every page that matches a pattern such as `/product/:id` — see [Visibility & page scope](/docs/widget/visibility#page-scope). |
-| `data-nonce`                        | No       | A CSP nonce the widget copies onto the chunk and locale scripts it adds (the script's own `nonce` works too).                                             |
-| `data-allow-replay-in-privacy-mode` | No       | Keep [session replay](/docs/widget/bug-reports#session-replay) on for a project in privacy mode; you take care of consent.                                |
-| `data-theme`                        | No       | `light` or `dark` to force the widget's theme; otherwise it follows the visitor's system setting.                                                         |
+| Attribute                           | Required | What it does                                                                                                                                                                                                |
+| ----------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `data-project`                      | Yes      | The project's public key (`pk_…`). Without it the script loads but does nothing, so you can start the widget yourself with `Pinwren.init()`.                                                                |
+| `data-endpoint`                     | No       | Your Pinwren server's origin, e.g. `https://feedback.example.com`. Defaults to the origin the script was loaded from.                                                                                       |
+| `data-accent`                       | No       | Launcher colour as a hex value (`#d63a1c`). Overrides the project's accent on this page only; anything that isn't a plain hex colour is ignored.                                                            |
+| `data-locale`                       | No       | UI language, e.g. `fr` or `pt-BR`. Otherwise the visitor's browser languages decide — see [Languages](/docs/widget/i18n).                                                                                   |
+| `data-force-show`                   | No       | Show the widget even where the project's [visibility rules](/docs/widget/visibility) would hide it.                                                                                                         |
+| `data-url-pattern`                  | No       | Group this page's pins with every page that matches a pattern such as `/product/:id` — see [Visibility & page scope](/docs/widget/visibility#page-scope).                                                   |
+| `data-nonce`                        | No       | A CSP nonce the widget copies onto the chunk and locale scripts it adds (the script's own `nonce` works too).                                                                                               |
+| `data-allow-replay-in-privacy-mode` | No       | Keep [session replay](/docs/widget/bug-reports#session-replay) on for a project in privacy mode; you take care of consent.                                                                                  |
+| `data-release`                      | No       | The version of your site (`1.4.2`). Bug reports carry it as `metadata.release`, so the dashboard shows which release they came from and flags [regressions](/docs/dashboard/releases) with more confidence. |
+| `data-theme`                        | No       | `light` or `dark` to force the widget's theme; otherwise it follows the visitor's system setting.                                                                                                           |
 
 ## Content Security Policy
 

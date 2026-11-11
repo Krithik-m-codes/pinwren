@@ -76,6 +76,7 @@ const EVENT_LABELS: Record<WebhookEvent, Key> = {
   "comment.updated": "settings1.eventCommentUpdated",
   "comment.deleted": "settings1.eventCommentDeleted",
   "round.signoff": "share.eventSignoff",
+  "feedback.regression_detected": "releases.eventRegression",
 };
 const KIND_LABELS: Record<WebhookKind, Key> = {
   generic: "settings1.kindWebhook",

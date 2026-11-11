@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -62,6 +63,7 @@ import {
 import {
   errorMessage,
   useLabelsQuery,
+  useReleasesQuery,
   useRoundsQuery,
   useUpdateViewMutation,
   useViewsQuery,
@@ -124,6 +126,9 @@ export function InboxToolbar({
   const labels = useLabelsQuery(filters.projectId ?? "", { skip: !filters.projectId });
   // Review links are project settings (Admins); others still get the chip from a shared URL.
   const reviewLinks = useReviewLinksQuery(filters.projectId ?? "", { skip: !filters.projectId || !isAdmin });
+  const releases = useReleasesQuery(filters.projectId ?? "", {
+    skip: !filters.projectId || !filters.fixedInReleaseId,
+  });
   const views = useViewsQuery(undefined);
   const [updateView, viewUpdate] = useUpdateViewMutation();
   const [saving, setSaving] = useState(false);
@@ -170,6 +175,14 @@ export function InboxToolbar({
     chips.push({
       param: "review",
       label: l ? t("inbox1.chipReviewLink", { name: l.label }) : t("inbox1.chipFromReviewLink"),
+    });
+  }
+  if (filters.regression) chips.push({ param: "regression", label: t("releases.chipRegressions") });
+  if (filters.fixedInReleaseId) {
+    const r = releases.data?.releases.find((x) => x.id === filters.fixedInReleaseId);
+    chips.push({
+      param: "fixedIn",
+      label: t("releases.fixedInBadge", { version: r?.version ?? "…" }),
     });
   }
   if (filters.reporter)
@@ -387,6 +400,13 @@ export function InboxToolbar({
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
             )}
+            <DropdownMenuCheckboxItem
+              data-testid="regression-filter"
+              checked={!!filters.regression}
+              onCheckedChange={(on) => set("regression", on ? "true" : null)}
+            >
+              {t("releases.filterRegressions")}
+            </DropdownMenuCheckboxItem>
             <DropdownMenuItem data-testid="reporter-filter" onClick={() => setTextFilters(true)}>
               <AtSign /> {t("inbox1.reporterOrPage")}
             </DropdownMenuItem>

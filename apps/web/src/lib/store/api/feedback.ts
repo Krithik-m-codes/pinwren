@@ -17,6 +17,9 @@ export type FeedbackPatch = Partial<{
   dueAt: string | null;
   duplicateOfId: string | null;
   kind: FeedbackKind;
+  /** The release that fixed a resolved item, or "the next release" (ADR 0029). */
+  fixedInReleaseId: string | null;
+  fixedInNextRelease: boolean;
 }>;
 
 /** Fields of a list row / detail the cache may patch in place (from a PATCH or a stream event). */

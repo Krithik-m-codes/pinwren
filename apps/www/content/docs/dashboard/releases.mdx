@@ -1,0 +1,80 @@
+---
+title: Releases and regressions
+description: Record the versions you ship, mark items as fixed in a release, and get told when a new report looks like a fix coming undone.
+---
+
+Pinwren remembers which release fixed what. You record your releases (by hand or from CI), say which release fixed a
+resolved item, and Pinwren compares every new bug report with the items you already resolved. When one looks like a
+bug coming back, it is flagged as a **possible regression** and the people who fixed it hear about it.
+
+## Record releases
+
+Open **Project → Releases**. Workspace admins add a release with a version (`v1.4.0`, `2026.11.10`, a git SHA), an
+optional commit and notes; everyone else can read the list. Each row shows when it was deployed, how many items were
+fixed in it and how many regressions were reported from it. Deleting a release leaves its items resolved but no
+longer naming it.
+
+From CI, after each deploy, with an [API token](/docs/api#authentication) that has the **Record releases from CI**
+(`releases:write`) scope:
+
+```bash
+curl -X POST https://feedback.example.com/api/v1/projects/$PROJECT_ID/releases \
+  -H "Authorization: Bearer $PINWREN_TOKEN" -H "Content-Type: application/json" \
+  -d "{\"version\":\"$VERSION\",\"commit\":\"$GIT_SHA\"}"
+
+npx @pinwren/cli release create "$VERSION" --project my-site --commit "$GIT_SHA" --url https://feedback.example.com
+```
+
+Running it again for the same version updates it, so a retried job is safe. The [SDK](/docs/api/sdk) has
+`releases.create()` and the [MCP server](/docs/api/mcp) `create_release`.
+
+## Tell reports which release they came from
+
+Add `data-release` to the widget script tag, or call `Pinwren.setMetadata({ release })`. Bug reports then carry the
+version, shown on the item as **Reported in v1.4.1**. The widget never creates a release by itself.
+
+```html
+<script src="https://feedback.example.com/widget.js" data-project="pk_…" data-release="1.4.1" async></script>
+```
+
+## Fixed in a release
+
+When an item is **Resolved**, a **Fixed in** picker appears next to the status. Pick a recorded release, or **Next
+release** when the fix has not shipped yet: the next release you record takes over those items (the timeline says
+so). Reopening the item, or closing it as _Won't fix_, clears the choice.
+
+The release is shown as **Fixed in v1.4** on the item and its row in the inbox, in the
+[guest portal](/docs/widget/guest-portal), on [share links](/docs/dashboard/share-links), and in the status email to
+the reporter. Customised reporter status emails add it with `{{fixedIn}}`. The inbox can list the items fixed in a
+release (the count in the release list links there).
+
+## Regressions
+
+When a new **bug** report arrives, Pinwren looks at the project's resolved bugs and flags it when:
+
+- it is about **the same element on the same page** (the page path plus the element's `data-pinwren-anchor`, test id,
+  id or selector), or
+- it has **the same console error** (the first line of the error with URLs, line numbers, ids and numbers ignored).
+
+A report from the fixing release or a later one is flagged with more confidence (**likely** instead of **possible**);
+one from an earlier release, which is probably a visitor on old code, needs stronger evidence. If AI triage is on, its
+duplicate check also feeds the flag when it matches a resolved bug.
+
+A flagged report shows a **Regression** badge in the inbox, a banner with the reasons, **View** and **Reopen** buttons,
+and a timeline row on both items; the original lists the reports flagged against it. Use **Filter → Possible
+regressions only** in the inbox. The people following the original (or everyone who wants status changes) get a bell
+notification and an email, `feedback.regression_detected` is sent to [webhooks](/docs/integrations/webhooks), and
+[automation rules](/docs/dashboard/automation) can trigger on **A regression is detected**.
+
+Two switches in **Project → Releases** control it:
+
+| Setting                       | Default | Does                                                                                          |
+| ----------------------------- | ------- | --------------------------------------------------------------------------------------------- |
+| **Flag possible regressions** | On      | Compares new bug reports with resolved ones. It only adds the flag, notes and notification    |
+| **Reopen the resolved item**  | Off     | Also sets the original back to Open (attributed to "Pinwren") and clears its fixed-in release |
+
+## Dashboard widgets
+
+**Regressions** (the newest flagged reports and what they may be a regression of) and **Fixed per release** (the
+items fixed in each recent release, and the regressions reported from it) are in the widget catalogue; add them with
+**Customise → Add widget** on any [dashboard](/docs/dashboard/dashboards).

@@ -18,6 +18,7 @@ import {
   MoreHorizontal,
   Pencil,
   PencilLine,
+  Rocket,
   Trash2,
   UserRound,
   Workflow,
@@ -109,6 +110,8 @@ function actorOf(e: ActivityEvent, t: TFn): string {
   if (e.actorKind === "rule")
     return t("automation.ruleActor", { name: str(e.data.ruleName, t("automation.aRule")) });
   if (e.actorKind === "ai") return t("automation.aiActor");
+  // Regression detection and the release landing write the timeline themselves (ADR 0029).
+  if (e.actorKind === "system") return t("releases.systemActor");
   if (e.actorKind === "guest")
     return e.data.via === "reporter" ? t("inbox2.theReporter") : t("inbox2.visitor");
   if (e.actorKind === "integration") return trackerName(e.data.via) ?? t("inbox2.anIntegration");
@@ -144,6 +147,16 @@ const RULE_ACTION_KEY: Record<string, Key> = {
   add_to_round: "automation.evAddToRound",
 };
 
+const asItem = (v: unknown): { number: number } | null =>
+  v && typeof v === "object" && "number" in v && typeof v.number === "number" ? { number: v.number } : null;
+const asFix = (v: unknown): { version: string | null; next: boolean } | null =>
+  v && typeof v === "object" && "next" in v
+    ? {
+        version: "version" in v && typeof v.version === "string" ? v.version : null,
+        next: v.next === true,
+      }
+    : null;
+
 /** One line per activity row: who did what, with the before → after values. */
 function EventLine({ event: e }: { event: ActivityEvent }) {
   const t = useT();
@@ -165,7 +178,12 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
         <span className="text-foreground">{t(STATUS_META[to].labelKey)}</span>
       </>
     );
-    body = (
+    const regression = e.data.via === "regression" ? asItem(e.data.by) : null;
+    body = regression ? (
+      rich(t("releases.evReopenedByRegression"), {
+        item: <span className="text-foreground">#{regression.number}</span>,
+      })
+    ) : (
       <>
         {rich(t("inbox2.evStatusChanged"), { who, change })}
         {e.data.via === "api" && <> {t("inbox2.viaApi")}</>}
@@ -311,6 +329,30 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
             ),
           })
         : rich(t("inbox2.evNotDuplicate"), { who });
+  } else if (e.type === "fixedIn_changed") {
+    icon = <Rocket className="size-3.5" />;
+    const next = asFix(e.data.to)?.next ?? false;
+    const version = asFix(e.data.to)?.version ?? null;
+    const release = <span className="text-foreground">{version}</span>;
+    body =
+      e.data.via === "release" && version
+        ? rich(t("releases.evFixedInLanded"), { release })
+        : version
+          ? rich(t("releases.evFixedIn"), { who, release })
+          : next
+            ? rich(t("releases.evFixedInNext"), { who })
+            : rich(t("releases.evFixedInCleared"), { who });
+  } else if (e.type === "regression_detected" || e.type === "regression_reported") {
+    icon = <TriangleAlert className="size-3.5" />;
+    const detected = e.type === "regression_detected";
+    const ref = asItem(detected ? e.data.of : e.data.by);
+    const item = <span className="text-foreground">{ref ? `#${ref.number}` : t("inbox2.anotherItem")}</span>;
+    body = rich(
+      detected
+        ? t(e.data.confidence === "likely" ? "releases.evRegressionLikely" : "releases.evRegression")
+        : t("releases.evRegressionReported"),
+      { who, item },
+    );
   } else if (e.type === "rule_action") {
     icon = <Workflow className="size-3.5" />;
     body = rich(t(RULE_ACTION_KEY[str(e.data.action)] ?? "automation.evRuleGeneric"), {

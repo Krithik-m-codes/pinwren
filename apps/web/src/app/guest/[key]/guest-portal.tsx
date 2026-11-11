@@ -52,6 +52,19 @@ function useGuestAccess(projectKey: string) {
   return useSyncExternalStore(subscribe, () => snapshots.get(projectKey), serverSnapshot);
 }
 
+/** "Fixed in v1.4" once the team names the release; a promise of the next one before that (ADR 0029). */
+const fixedLine = (
+  t: ReturnType<typeof useT>,
+  i: { status: string; fixedInVersion?: string | null; fixedInNextRelease?: boolean },
+): string | null =>
+  i.status !== "resolved"
+    ? null
+    : i.fixedInVersion
+      ? t("releases.guestFixedIn", { version: i.fixedInVersion })
+      : i.fixedInNextRelease
+        ? t("releases.guestFixedInNext")
+        : null;
+
 const denied = (error: unknown) => isApiError(error) && (error.status === 401 || error.status === 403);
 
 export function GuestPortal({ projectKey }: { projectKey: string }) {
@@ -184,6 +197,11 @@ export function GuestPortal({ projectKey }: { projectKey: string }) {
                     <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                       <span>#{item.number}</span>
                       <span>{t(STATUS_META[item.status].labelKey)}</span>
+                      {fixedLine(t, item) && (
+                        <span className="text-emerald-700 dark:text-emerald-400" data-testid="guest-fixed-in">
+                          {fixedLine(t, item)}
+                        </span>
+                      )}
                       <RelativeTime iso={item.createdAt} />
                     </div>
                   </button>
@@ -277,6 +295,15 @@ function GuestThread({
           <StatusIcon status={item.status} />
           {t(STATUS_META[item.status].labelKey)}
         </Badge>
+        {fixedLine(t, item) && (
+          <Badge
+            variant="outline"
+            className="text-emerald-700 dark:text-emerald-400"
+            data-testid="guest-fixed-in"
+          >
+            {fixedLine(t, item)}
+          </Badge>
+        )}
       </div>
       <h2 className="text-xl font-semibold tracking-tight break-words">
         {item.title || t("guest.reportFallback", { number: item.number })}
