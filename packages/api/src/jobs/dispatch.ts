@@ -243,13 +243,15 @@ async function onStatus(e: DomainEvent, ctx: Ctx, by: string | null) {
 
 /**
  * A new report looks like a resolved item coming back. The people who followed the original (whoever fixed it)
- * and anyone on the new report hear first; with nobody involved, everyone who wants status changes does.
+ * and anyone on the new report are told. With nobody involved there is no bell: the team already heard about the
+ * new report itself, and the flag, the inbox filter and the dashboard widget show the rest.
  */
 async function onRegression(e: DomainEvent, ctx: Ctx) {
   const of = ctx.payload.regressionOf;
   if (!of) return;
   const original = await loadFeedbackContext(of.id);
   const people = [...new Set([...(await involved(ctx)), ...(original ? await involved(original) : [])])];
+  if (!people.length) return;
   const vars = {
     ...feedbackVars(summary(ctx, await loadFeedbackFacts(ctx.payload.id))),
     originalNumber: String(of.number),
@@ -264,12 +266,7 @@ async function onRegression(e: DomainEvent, ctx: Ctx) {
     feedbackId: ctx.payload.id,
     actorId: null,
     projectId: ctx.payload.projectId,
-    recipients: await membersWanting(
-      e.orgId,
-      ctx.payload.projectId,
-      "statusChanges",
-      people.length ? people : undefined,
-    ),
+    recipients: await membersWanting(e.orgId, ctx.payload.projectId, "statusChanges", people),
     data: rowData(ctx, {
       actorName: null,
       originalNumber: of.number,

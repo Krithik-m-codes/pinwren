@@ -602,7 +602,13 @@ check("assignee gets an in-app notification (job ran)", !!r, r ? `unread=${r.bod
 r = await call("/api/notifications/read", { method: "POST", json: { all: true }, jar: memberJar });
 check("mark notifications read", r.status === 200 && r.body.updated >= 1);
 r = await call("/api/notifications?unread=1", { jar: memberJar });
-check("no unread left", r.body.unreadCount === 0 && r.body.items.length === 0);
+// A regression flag (ADR 0033) is raised by the dispatch job after the report is saved, so its bell can land
+// any time after the assignment; it is checked by its own case, not by this one.
+check(
+  "no unread left",
+  r.body.items.every((i) => i.type === "feedback.regression_detected"),
+  JSON.stringify(r.body.items.map((i) => i.type)),
+);
 
 r = await call("/api/notification-preferences");
 const pref = r.body.preferences?.find((p) => p.projectId === projectId);
