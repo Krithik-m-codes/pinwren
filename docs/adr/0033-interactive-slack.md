@@ -1,4 +1,4 @@
-# ADR 0029 — Interactive Slack
+# ADR 0033 — Interactive Slack
 
 **Status:** accepted
 

@@ -1,6 +1,6 @@
 # Interactive Slack (F-071)
 
-Design: `docs/adr/0029-interactive-slack.md`. User docs: `apps/www/content/docs/integrations/slack.mdx`.
+Design: `docs/adr/0033-interactive-slack.md`. User docs: `apps/www/content/docs/integrations/slack.mdx`.
 
 ## Routes
 

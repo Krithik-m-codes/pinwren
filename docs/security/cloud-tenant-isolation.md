@@ -304,7 +304,7 @@ three direct-ownership tables, each with the `pinwren_tenant` policy and composi
 
 ## Interactive Slack
 
-Design: `docs/adr/0029-interactive-slack.md`; routes: `docs/contracts/slack.md`. Migration `0014` adds four
+Design: `docs/adr/0033-interactive-slack.md`; routes: `docs/contracts/slack.md`. Migration `0014` adds four
 direct-ownership tables with the `pinwren_tenant` policy and composite `(id, org_id)` foreign keys, all in
 `tenant-inventory.ts`:
 
