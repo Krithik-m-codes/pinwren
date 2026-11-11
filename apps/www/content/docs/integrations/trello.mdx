@@ -1,0 +1,69 @@
+---
+title: Trello
+description: Create a Trello card for each feedback item and keep it in sync with the done list — in every edition.
+---
+
+Pinwren opens one card per feedback item on a list of your board. Moving the card to the **done list** (or archiving it,
+when no done list is set) resolves the item; resolving the item moves the card there; reopening moves it back. Trello is
+available in every edition.
+
+## Connect a project
+
+<Steps>
+<Step>
+
+**Create a Power-Up** at **trello.com/power-ups/admin** and generate its **API key**. Then authorise a **token** for
+that key with read and write access. Cards are created as the member who authorised the token.
+
+</Step>
+<Step>
+
+**Connect.** As a workspace Admin, open the Pinwren project's **Issue trackers** tab and connect Trello:
+
+| Field               | Notes                                                                                                |
+| ------------------- | ---------------------------------------------------------------------------------------------------- |
+| **API key**         | The Power-Up's key                                                                                   |
+| **Token**           | Stored encrypted together with the key; only its last four characters are ever shown                 |
+| **Board id**        | Add `.json` to the board's address: the first `id` in the file. The 8-character short link works too |
+| **New cards go to** | The list id for new cards (required)                                                                 |
+| **Done list**       | Optional. Without one, archiving the card closes the item                                            |
+| **Priority: …**     | Optional. The name of a label on the board to add for that priority                                  |
+| **Labels**          | Comma-separated names of existing board labels added to every card                                   |
+| **Open cards for**  | **Manually**, **Bugs** or **Everything**                                                             |
+
+**Test connection** checks the board and that both lists are on it, and swaps a short link for the board's long id.
+
+</Step>
+<Step>
+
+**Register the webhook.** Trello signs every delivery with the Power-Up's **app secret** (Power-Up admin › API key ›
+Secret). Paste it into **Two-way status**, then press **Register webhook**. Pinwren creates the webhook on your board
+for you.
+
+</Step>
+</Steps>
+
+## What the card contains
+
+The title is `#12 …` (the report's number and text). The description quotes the report as escaped Markdown and lists
+project, kind, page, browser, viewport and reporter, with a link to the item in the dashboard (sign-in required).
+Screenshots and diagnostics are never embedded, and reporter emails are never included.
+
+## Two-way state
+
+| You do                                         | Pinwren does                                       |
+| ---------------------------------------------- | -------------------------------------------------- |
+| Resolve, close or mark an item won't fix       | Moves the card to the done list (or archives it)   |
+| Reopen the item                                | Moves the card back to the list (or unarchives it) |
+| Move the card to the done list (or archive it) | Moves an open item to **Resolved**                 |
+| Move it out of the done list (or unarchive it) | Moves a closed item back to **Open**               |
+
+## Reliability and security
+
+- Card creation and moves are retried background jobs; a Trello outage never blocks a report. Requests that Trello
+  rate limits (`429`) are retried after the wait it asks for, and the job queue retries longer waits.
+- A create that was interrupted before Pinwren saved the link is not repeated: Pinwren looks for a card with the same
+  title on the list first.
+- Deliveries are verified with `X-Trello-Webhook` (base64 HMAC-SHA1 of the body and the callback URL, keyed by the app
+  secret), checked against this integration's secret only, and each action is acted on once.
+- Until the app secret is pasted, deliveries are refused.

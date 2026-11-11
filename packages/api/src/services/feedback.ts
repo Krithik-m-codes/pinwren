@@ -434,6 +434,7 @@ export async function getFeedbackDetail(
           integrationId: issueLink.integrationId,
           provider: issueLink.provider,
           number: issueLink.number,
+          externalId: issueLink.externalId,
           url: issueLink.url,
           state: issueLink.state,
         })

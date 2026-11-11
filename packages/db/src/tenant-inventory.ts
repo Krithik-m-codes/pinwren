@@ -77,7 +77,16 @@ export const tenantInventory: readonly TenantTable[] = [
     table: "issue_integration",
     ownership: "direct",
     parents: ["project"],
-    bootstrapColumns: ["id", "org_id", "project_id", "provider", "repo", "webhook_secret", "active"],
+    bootstrapColumns: [
+      "id",
+      "org_id",
+      "project_id",
+      "provider",
+      "repo",
+      "webhook_secret",
+      "active",
+      "webhook_pending",
+    ],
   },
   {
     table: "issue_link",

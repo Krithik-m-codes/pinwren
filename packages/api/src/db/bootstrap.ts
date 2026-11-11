@@ -86,6 +86,39 @@ export async function integrationSignatureCandidates(
     );
 }
 
+/**
+ * The board trackers (Trello, Asana, ClickUp, Notion) put the integration id in their webhook URL, so a
+ * delivery names one integration. Only the id (an unguessable capability) resolves it; the signature, checked
+ * by the route against this integration's own secret, is what authorises the delivery.
+ */
+export async function integrationSignatureCandidateById(
+  provider: typeof issueIntegration.$inferSelect.provider,
+  id: unknown,
+) {
+  if (typeof id !== "string" || !uuid.test(id)) return undefined;
+  const [row] = await identityDatabase()
+    .select({
+      id: issueIntegration.id,
+      orgId: issueIntegration.orgId,
+      projectId: issueIntegration.projectId,
+      provider: issueIntegration.provider,
+      repo: issueIntegration.repo,
+      webhookSecret: issueIntegration.webhookSecret,
+      active: issueIntegration.active,
+      webhookPending: issueIntegration.webhookPending,
+    })
+    .from(issueIntegration)
+    .where(
+      and(
+        eq(issueIntegration.id, id),
+        eq(issueIntegration.provider, provider),
+        eq(issueIntegration.active, true),
+      ),
+    )
+    .limit(1);
+  return row;
+}
+
 /** Resolve only the tenant owner for a queue-held delivery capability. */
 export async function webhookDeliveryOwner(id: string) {
   if (!uuid.test(id)) return undefined;

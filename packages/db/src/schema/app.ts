@@ -852,8 +852,10 @@ export const emailTemplate = pgTable(
 export const issueProviderEnum = pgEnum("issue_provider", ISSUE_PROVIDERS);
 
 /**
- * GitHub / GitLab / Linear / Jira issue sync for one project, authenticated by an access token (ADR 0015).
- * `repo` is the repository path, Linear team key or Jira project key; Jira stores `email:apiToken` in `token`.
+ * GitHub / GitLab / Linear / Jira / Trello / Asana / ClickUp / Notion issue sync for one project,
+ * authenticated by an access token (ADR 0015, ADR 0035). `repo` is the repository path, Linear team key, Jira
+ * project key, Trello board id, Asana project gid, ClickUp list id or Notion database id; Jira stores
+ * `email:apiToken` and Trello `apiKey:token` in `token`.
  */
 export const issueIntegration = pgTable(
   "issue_integration",
@@ -880,6 +882,12 @@ export const issueIntegration = pgTable(
     webhookSecret: text("webhook_secret").notNull(),
     active: boolean("active").notNull().default(true),
     lastError: text("last_error"),
+    /** Board providers: target list, done state, priority mapping (non-secret; keys in core's TRACKER_SETTING_KEYS). */
+    settings: jsonb("settings").$type<Record<string, string>>().notNull().default({}),
+    /** The webhook Pinwren registered at the tracker (Trello / Asana / ClickUp), so it can be replaced or removed. */
+    webhookRef: text("webhook_ref"),
+    /** Waiting for the tracker's one-time handshake to hand over the signing secret (Asana, Notion). */
+    webhookPending: boolean("webhook_pending").notNull().default(false),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     ...timestamps,
   },
@@ -904,8 +912,13 @@ export const issueLink = pgTable(
       .notNull()
       .references(() => issueIntegration.id, { onDelete: "cascade" }),
     provider: issueProviderEnum("provider").notNull(),
-    /** GitHub issue number / GitLab issue iid / the number in a Linear or Jira key (`ENG-12` → 12). */
-    number: integer("number").notNull(),
+    /**
+     * GitHub issue number / GitLab issue iid / the number in a Linear or Jira key (`ENG-12` → 12) / a Trello card's
+     * short id. Null for Asana, ClickUp and Notion, which only have `externalId`.
+     */
+    number: integer("number"),
+    /** The tracker's own id of the item (Trello card id, Asana task gid, ClickUp task id, Notion page id). */
+    externalId: text("external_id"),
     url: text("url").notNull(),
     state: text("state", { enum: ["open", "closed"] })
       .notNull()
@@ -915,6 +928,7 @@ export const issueLink = pgTable(
   (t) => [
     uniqueIndex("issue_link_feedback_integration_uq").on(t.feedbackId, t.integrationId),
     index("issue_link_integration_number_idx").on(t.integrationId, t.number),
+    index("issue_link_integration_external_idx").on(t.integrationId, t.externalId),
     tenantReference("issue_link_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
     tenantReference(
       "issue_link_integration_tenant_fk",

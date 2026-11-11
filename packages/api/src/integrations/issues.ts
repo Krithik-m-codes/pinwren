@@ -1,5 +1,11 @@
 import { withOrg, afterOrgCommit } from "@pinwren/db";
-import { CLOSED_STATUSES, type FeedbackStatus, isClosedStatus, kindLabel } from "@pinwren/core";
+import {
+  CLOSED_STATUSES,
+  type FeedbackStatus,
+  isBoardProvider,
+  isClosedStatus,
+  kindLabel,
+} from "@pinwren/core";
 import { activity, feedback, getDb, issueIntegration, issueLink } from "@pinwren/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { decryptSecret } from "../crypto";
@@ -14,6 +20,8 @@ import { issueIntegrationOwner, issueLinkOwner } from "../db/bootstrap";
 import {
   adfText,
   createIssue,
+  findExistingIssue,
+  type IssueSource,
   mdEscape,
   PROVIDER_NAMES,
   setIssueState,
@@ -21,7 +29,8 @@ import {
   TrackerError,
 } from "./trackers";
 
-// Issue sync (F-076 GitHub, F-077 GitLab, F-078 Linear, F-079 Jira Cloud). Creating an issue and pushing a
+// Issue sync (F-076 GitHub, F-077 GitLab, F-078 Linear, F-079 Jira Cloud; ADR 0035: Trello, Asana, ClickUp,
+// Notion). The per-tracker API calls live in `adapters/`; this file is the tracker-independent half. Creating an issue and pushing a
 // state change are jobs (retried with backoff) — a tracker outage never blocks ingest or triage. The
 // inbound side lives in `routes/inbound.ts`. Jira is an Enterprise feature (blueprint 07): without the
 // `jira` licence feature a Jira integration can't be added and an existing one does nothing.
@@ -43,6 +52,13 @@ export function splitJiraCredential(stored: string): { email: string; token: str
   return at < 0 ? { email: "", token: stored } : { email: stored.slice(0, at), token: stored.slice(at + 1) };
 }
 
+/** Trello stores `apiKey:token` the same way (neither part holds a colon). */
+export const trelloCredential = (apiKey: string, token: string) => `${apiKey}:${token}`;
+export function splitTrelloCredential(stored: string): { apiKey: string; token: string } {
+  const c = splitJiraCredential(stored);
+  return { apiKey: c.email, token: c.token };
+}
+
 export function trackerConfig(i: Integration): TrackerConfig {
   let token: string;
   try {
@@ -57,7 +73,24 @@ export function trackerConfig(i: Integration): TrackerConfig {
     const c = splitJiraCredential(token);
     return { provider: i.provider, token: c.token, email: c.email, repo: i.repo, apiUrl: i.apiUrl };
   }
-  return { provider: i.provider, token, repo: i.repo, apiUrl: i.apiUrl };
+  if (i.provider === "trello") {
+    const c = splitTrelloCredential(token);
+    return {
+      provider: i.provider,
+      token: c.token,
+      apiKey: c.apiKey,
+      repo: i.repo,
+      apiUrl: null,
+      settings: i.settings,
+    };
+  }
+  return {
+    provider: i.provider,
+    token,
+    repo: i.repo,
+    apiUrl: i.apiUrl,
+    ...(isBoardProvider(i.provider) ? { settings: i.settings } : {}),
+  };
 }
 
 /** Jira without the licence feature: kept configured, but inert (ADR 0019). */
@@ -65,8 +98,15 @@ export async function providerLicensed(provider: Integration["provider"]): Promi
   return provider !== "jira" || (await hasFeature("jira"));
 }
 
-export const webhookUrlFor = (provider: Integration["provider"]) =>
-  `${env().PINWREN_URL.replace(/\/$/, "")}/api/integrations/${provider}/webhook`;
+/**
+ * Where the tracker posts. GitHub, GitLab, Linear and Jira find the integration by repository, so one URL
+ * serves the instance. The board trackers carry the integration id (`?i=`), which the tracker echoes back: a
+ * delivery names exactly one integration and its signature is checked against that integration's secret alone.
+ */
+export const webhookUrlFor = (provider: Integration["provider"], integrationId?: string) => {
+  const base = `${env().PINWREN_URL.replace(/\/$/, "")}/api/integrations/${provider}/webhook`;
+  return isBoardProvider(provider) && integrationId ? `${base}?i=${integrationId}` : base;
+};
 
 const truncate = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
@@ -79,6 +119,7 @@ export function issueTitle(f: { number: number; title: string | null; body: stri
 export type IssueBodyInput = {
   number: number;
   kind: string;
+  priority?: string;
   projectName: string;
   body: string;
   pageUrl: string | null;
@@ -138,6 +179,17 @@ export function issueBody(f: IssueBodyInput, flavor: "github" | "linear" = "gith
   ].join("\n");
 }
 
+/** The structured source board trackers (Asana, Notion) build their own rich text from. */
+export function issueSource(f: IssueBodyInput): IssueSource {
+  return {
+    number: f.number,
+    quote: truncate(f.body, 6000),
+    facts: issueFacts(f),
+    link: f.link,
+    productName: f.productName,
+  };
+}
+
 const adfPara = (...content: object[]) => ({ type: "paragraph", content });
 const adfStr = (text: string, marks?: object[]) => ({ type: "text", text, ...(marks ? { marks } : {}) });
 
@@ -193,6 +245,20 @@ async function recordError(i: Integration, err: unknown) {
 }
 
 /**
+ * Look for the item an interrupted create already made. A tracker error that says "retry later" (rate limit,
+ * outage) propagates so the job retries; a refusal of the search itself (permissions) must not block creating.
+ */
+async function existingItem(cfg: TrackerConfig, issue: Parameters<typeof findExistingIssue>[1]) {
+  try {
+    return await findExistingIssue(cfg, issue);
+  } catch (err) {
+    const status = err instanceof TrackerError ? err.status : null;
+    if (status !== null && status >= 400 && status < 500 && status !== 429) return null;
+    throw err;
+  }
+}
+
+/**
  * Create the issue for one feedback item (idempotent: an existing link is returned). Throws
  * `TrackerError` on tracker failures so the job retries and the "Send to …" button can say why.
  */
@@ -242,13 +308,22 @@ export async function createIssueFor(
   };
   let ref: Awaited<ReturnType<typeof createIssue>>;
   try {
-    ref = await createIssue(trackerConfig(i), {
+    const cfg = trackerConfig(i);
+    const issue = {
       title: issueTitle(f),
-      body: issueBody(input, i.provider === "linear" ? "linear" : "github"),
+      body: issueBody(
+        input,
+        i.provider === "github" || i.provider === "gitlab" || i.provider === "jira" ? "github" : "linear",
+      ),
       labels: i.labels,
       kind: f.kind,
+      priority: f.priority,
       ...(i.provider === "jira" ? { adf: issueAdf(input) } : {}),
-    });
+      ...(isBoardProvider(i.provider) ? { source: issueSource(input) } : {}),
+    };
+    // A create that died after the tracker answered left an item without a link: adopt it, don't duplicate it.
+    const earlier = isBoardProvider(i.provider) ? await existingItem(cfg, issue) : null;
+    ref = earlier ?? (await createIssue(cfg, issue));
   } catch (err) {
     await withOrg(i.orgId, () => recordError(i, err));
     throw err;
@@ -262,6 +337,7 @@ export async function createIssueFor(
         integrationId: i.id,
         provider: i.provider,
         number: ref.number,
+        externalId: ref.externalId ?? null,
         url: ref.url,
         state: "open",
       })
@@ -290,6 +366,7 @@ export async function createIssueFor(
         url: ref.url,
         via: i.provider,
         ...(ref.key ? { key: ref.key } : {}),
+        ...(ref.externalId ? { externalId: ref.externalId } : {}),
       },
     });
     // Already closed in Pinwren (e.g. sent after resolving): close the new issue too.
@@ -371,7 +448,11 @@ export async function runIssueJob(job: IssueJob): Promise<void> {
   );
   if (!row?.i.active || row.l.state === job.state || !(await providerLicensed(row.i.provider))) return;
   try {
-    await setIssueState(trackerConfig(row.i), row.l.number, job.state);
+    await setIssueState(
+      trackerConfig(row.i),
+      { number: row.l.number, externalId: row.l.externalId },
+      job.state,
+    );
   } catch (err) {
     await withOrg(owner.orgId, () => recordError(row.i, err));
     throw err;
@@ -388,14 +469,23 @@ export async function runIssueJob(job: IssueJob): Promise<void> {
  */
 export async function applyInboundState(
   i: Integration,
-  number: number,
+  /** The issue number (GitHub, GitLab, Linear, Jira), or the item as the board tracker names it. */
+  target: number | { number: number | null; externalId: string | null },
   state: "open" | "closed",
 ): Promise<{ feedbackId: string; status: string } | null> {
   const db = getDb();
+  const ref = typeof target === "number" ? { number: target, externalId: null } : target;
+  const which =
+    ref.externalId !== null
+      ? eq(issueLink.externalId, ref.externalId)
+      : ref.number !== null
+        ? eq(issueLink.number, ref.number)
+        : undefined;
+  if (!which) return null;
   const [link] = await db
     .select()
     .from(issueLink)
-    .where(and(eq(issueLink.integrationId, i.id), eq(issueLink.number, number)));
+    .where(and(eq(issueLink.integrationId, i.id), which));
   if (!link) return null;
   const [f] = await db
     .select({
@@ -425,7 +515,7 @@ export async function applyInboundState(
     ), act as (
       insert into ${activity} (org_id, feedback_id, actor_kind, type, data)
       select ${f.orgId}, u.id, 'integration', 'status_changed',
-        ${JSON.stringify({ from: f.status, to, via: i.provider, issue: number })}::jsonb
+        ${JSON.stringify({ from: f.status, to, via: i.provider, issue: ref.number ?? ref.externalId })}::jsonb
       from u
     )
     select id from u

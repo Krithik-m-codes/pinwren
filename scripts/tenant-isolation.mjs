@@ -41,6 +41,7 @@ const result = spawnSync(
     "src/releases-db.test.ts",
     "src/custom-fields-db.test.ts",
     "src/slack-db.test.ts",
+    "src/tracker-boards-db.test.ts",
   ],
   {
     cwd: root,

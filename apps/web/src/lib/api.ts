@@ -369,7 +369,10 @@ export type IssueLink = {
   id: string;
   integrationId: string;
   provider: IssueProvider;
-  number: number;
+  /** Null for Asana, ClickUp and Notion items, which have no number. */
+  number: number | null;
+  /** The tracker's own id of the item (board trackers). */
+  externalId?: string | null;
   url: string;
   state: "open" | "closed";
 };
@@ -382,12 +385,20 @@ export type IssueIntegration = {
   apiUrl: string | null;
   /** Jira: the Atlassian account email. */
   email: string | null;
+  /** Trello: the API key. */
+  apiKey: string | null;
   labels: string[];
   autoCreate: (typeof ISSUE_AUTO_CREATE)[number];
   active: boolean;
   tokenHint: string;
   lastError: string | null;
+  /** Board trackers: target list / status / priority mapping. */
+  settings: Record<string, string>;
   webhookUrl: string;
+  /** Pinwren registered a webhook at the tracker (Trello, Asana, ClickUp). */
+  webhookRegistered: boolean;
+  /** The signing secret hasn't arrived (Asana, Notion) or been pasted (Trello) yet. */
+  webhookPending: boolean;
   createdAt: string;
   updatedAt: string;
 };

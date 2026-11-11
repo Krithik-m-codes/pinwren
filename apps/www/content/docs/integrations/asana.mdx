@@ -1,0 +1,67 @@
+---
+title: Asana
+description: Create an Asana task for each feedback item and keep completion in sync — in every edition.
+---
+
+Pinwren opens one task per feedback item in an Asana project. Completing the task resolves the item; resolving the item
+completes the task; unchecking it reopens the item. Asana is available in every edition.
+
+## Connect a project
+
+<Steps>
+<Step>
+
+**Create a personal access token** in Asana › **My settings › Apps › Developer apps**. Tasks are created as that
+person.
+
+</Step>
+<Step>
+
+**Connect.** As a workspace Admin, open the Pinwren project's **Issue trackers** tab and connect Asana:
+
+| Field                     | Notes                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| **Personal access token** | Stored encrypted; only its last four characters are ever shown                |
+| **Project id**            | The number after `/project/` (or `/0/`) in the project's address              |
+| **Section**               | Optional. New tasks are added to this section                                 |
+| **Priority field**        | Optional. A custom field of the project, with the option id for each priority |
+| **Labels**                | Comma-separated names of existing tags in the project's workspace             |
+| **Open tasks for**        | **Manually**, **Bugs** or **Everything**                                      |
+
+**Test connection** checks the project and that the section belongs to it.
+
+</Step>
+<Step>
+
+**Register the webhook.** Press **Register webhook** under **Two-way status**. Asana calls Pinwren once to hand over the
+signing secret (the integration shows _Waiting for the signing secret_ until it arrives), and then reports tasks that are
+completed or reopened. Pinwren needs a public HTTPS `PINWREN_URL` for this.
+
+</Step>
+</Steps>
+
+## What the task contains
+
+The title is `#12 …`. The notes are plain text: the report quoted verbatim, the project, kind, page, browser, viewport
+and reporter, and a link to the item in the dashboard (sign-in required). Asana does not read markup in plain notes, so
+text from reports can't format or mention anyone.
+
+## Two-way state
+
+| You do                                   | Pinwren does                         |
+| ---------------------------------------- | ------------------------------------ |
+| Resolve, close or mark an item won't fix | Completes the task                   |
+| Reopen the item                          | Marks the task incomplete            |
+| Complete the task in Asana               | Moves an open item to **Resolved**   |
+| Mark it incomplete                       | Moves a closed item back to **Open** |
+
+## Reliability and security
+
+- Task creation and completion are retried background jobs. Asana's rate limit (`429`, `Retry-After`) is honoured; a
+  longer wait is left to the job queue.
+- Asana's webhook events carry ids, not values, so Pinwren reads each changed task (at most twenty per delivery) before
+  acting. If Asana can't be reached then, Pinwren answers `503` and Asana redelivers.
+- Deliveries are verified with `X-Hook-Signature` (HMAC-SHA256 of the body, keyed by the secret from the handshake).
+  The handshake is accepted only while the integration is waiting for it, and only the first one counts.
+- A create that was interrupted before the link was saved is not repeated: Pinwren looks for a task with the same title
+  in the project first.

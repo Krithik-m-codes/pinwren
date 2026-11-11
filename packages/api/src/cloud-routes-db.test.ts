@@ -350,6 +350,7 @@ const cases: Record<string, Spec> = {
   "POST /api/feedback/:id/page-link": foreign({ body: () => ({}) }),
   "POST /api/feedback/:id/restore": foreign(),
   "POST /api/feedback/:id/watch": foreign(),
+  "POST /api/integrations/:id/register-webhook": foreign(),
   "POST /api/integrations/:id/rotate-webhook-secret": foreign(),
   "POST /api/integrations/:id/test": foreign(),
   "POST /api/members": scoped({

@@ -77,8 +77,8 @@ in a keyboard-first triage inbox you run yourself.
   extra addresses), **Reporter** (confirmation, status, priority and assignment emails to the person who
   reported) and **Email templates**; a live bell, a notifications page, desktop notifications and
   hourly/daily digests.
-- **Integrations** — two-way GitHub, GitLab and Linear issue sync (GitHub Enterprise and self-managed GitLab
-  included; Jira Cloud with an Enterprise licence), Slack, Discord, Microsoft Teams, Telegram and ntfy
+- **Integrations** — two-way GitHub, GitLab, Linear, Trello, Asana, ClickUp and Notion sync (GitHub Enterprise and
+  self-managed GitLab included; Jira Cloud with an Enterprise licence), Slack, Discord, Microsoft Teams, Telegram and ntfy
   channels, signed webhooks with a delivery log, scoped API tokens for `/api/v1`, and custom panel actions
   such as "Send to agent".
 - **Accounts** — the first account is the admin; **Users › Add user** with Admin, Editor or Viewer roles, or

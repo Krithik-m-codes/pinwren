@@ -1,0 +1,75 @@
+---
+title: Notion
+description: Use a Notion database as your tracker — a page per feedback item, status kept in sync — in every edition.
+---
+
+Pinwren adds one page to a Notion database for each feedback item. Setting the page's status to your _done_ value (or
+ticking its checkbox) resolves the item; resolving the item sets it; reopening sets the open value. Notion is available
+in every edition.
+
+## Connect a project
+
+<Steps>
+<Step>
+
+**Create an internal integration** at **notion.so/profile/integrations** with read, update and insert content
+capabilities, and copy its **secret**. Then open the database, choose **••• › Connections** and add the integration.
+
+</Step>
+<Step>
+
+**Connect.** As a workspace Admin, open the Pinwren project's **Issue trackers** tab and connect Notion:
+
+| Field                  | Notes                                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------- |
+| **Integration secret** | Stored encrypted; only its last four characters are ever shown                        |
+| **Database id**        | The 32-character id in the database's address, before `?v=`                           |
+| **Status property**    | A **Status**, **Select** or **Checkbox** property. Default: the first Status property |
+| **Open / done value**  | Option names. Defaults: `Not started` and `Done` (ignored for a Checkbox)             |
+| **Priority property**  | Optional. A **Select** or **Status** property, with the option name for each priority |
+| **Labels**             | Added to a multi-select called `Labels` or `Tags`, when the database has one          |
+| **Open pages for**     | **Manually**, **Bugs** or **Everything**                                              |
+
+**Test connection** checks that Pinwren can read the database, that it has a title property and that the status
+property you named exists.
+
+</Step>
+<Step>
+
+**Add the webhook.** Notion has no API for this, so create it by hand: in the integration's **Webhooks** tab add a
+subscription for **page properties updated**, with the URL shown under **Two-way status**
+(`https://feedback.example.com/api/integrations/notion/webhook?i=…`). Notion immediately posts a **verification token**
+to it; Pinwren keeps the token (the integration shows _Waiting for Notion's verification token_ until then) and uses it
+to verify every later delivery. Press **Reveal webhook secret** and paste the token into Notion's verification dialog to
+finish the subscription.
+
+Use **Wait for a new token** to forget the token and have Notion send another (**Resend token** in Notion).
+
+</Step>
+</Steps>
+
+## What the page contains
+
+The title property is `#12 …`. The page body quotes the report as plain text, lists project, kind, page, browser,
+viewport and reporter, and links to the item in the dashboard (sign-in required). Text from reports is only ever a
+plain text run: it can't link, mention or format.
+
+## Two-way state
+
+| You do                                   | Pinwren does                                 |
+| ---------------------------------------- | -------------------------------------------- |
+| Resolve, close or mark an item won't fix | Sets the done value (or ticks the checkbox)  |
+| Reopen the item                          | Sets the open value (or clears the checkbox) |
+| Set the done value in Notion             | Moves an open item to **Resolved**           |
+| Set any other value                      | Moves a closed item back to **Open**         |
+
+## Reliability and security
+
+- Page creation and status changes are retried background jobs; Notion's rate limit (`429`, `Retry-After`) is honoured
+  and longer waits are left to the job queue.
+- Notion's events carry the page id, so Pinwren reads the page before acting, and ignores pages of other databases. If
+  Notion can't be reached then, Pinwren answers `503` so the delivery is retried.
+- Deliveries are verified with `X-Notion-Signature` (`sha256=` HMAC of the body, keyed by the verification token) and
+  each event id is acted on once. The verification token is taken once, while the integration is waiting for it.
+- A create that was interrupted before the link was saved is not repeated: Pinwren queries the database for a page with
+  the same title first.

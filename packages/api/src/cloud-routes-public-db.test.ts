@@ -1,8 +1,9 @@
 import type * as ApiModule from "./index";
 import type * as BossModule from "./jobs/boss";
 import type * as BusModule from "./realtime/bus";
+import type * as SafeFetchModule from "./outbound/safe-fetch";
 import type * as StorageModule from "./storage";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { beforeAll, afterAll, beforeEach, describe, it, expect, vi } from "vitest";
 import { getRuntimeDb } from "../../db/src/connection";
 import { closeIdentityDatabase } from "../../db/src/identity";
@@ -25,6 +26,12 @@ const effects = vi.hoisted(() => ({
   get: vi.fn(),
   put: vi.fn<(...args: unknown[]) => Promise<void>>(),
   remove: vi.fn<(...args: unknown[]) => Promise<void>>(),
+  /** The tracker APIs Asana / Notion deliveries are read back from (the webhooks carry ids, not values). */
+  fetch: vi.fn<(url: string) => Promise<Response>>(),
+}));
+vi.mock("./outbound/safe-fetch", async (original) => ({
+  ...(await original<typeof SafeFetchModule>()),
+  safeFetch: effects.fetch,
 }));
 vi.mock("./jobs/boss", async (original) => ({
   ...(await original<typeof BossModule>()),
@@ -72,6 +79,15 @@ type Helpers = {
 
 const origin = "https://customer.test";
 const WEBHOOK_KEY = `whsec_${Buffer.from("fixture-dodo-webhook-key-0123456789").toString("base64")}`;
+/** Board trackers: every workspace's integration shares the same board / project / list / database id. */
+const BOARD_REPO = {
+  trello: "5f1a2b3c4d5e6f7a8b9c0d1e",
+  asana: "1200000001",
+  clickup: "9001",
+  notion: "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f",
+} as const;
+type BoardProvider = keyof typeof BOARD_REPO;
+const BOARD_PROVIDERS = Object.keys(BOARD_REPO) as BoardProvider[];
 const dataUrlBody = (clientId = randomUUID()) => ({
   clientId,
   kind: "bug",
@@ -163,6 +179,110 @@ const webhookCase = (provider: "github" | "gitlab" | "linear" | "jira"): Spec =>
     expect(await db()`select status from feedback where id=${ids[`item_${provider}_A`] ?? ""}`).toMatchObject(
       [provider === "jira" ? { status: "open" } : { status: "resolved" }],
     );
+    expect(await snapshot()).toBe(before);
+  },
+});
+
+/**
+ * Inbound webhooks of the board trackers. The URL names an integration (`?i=`), so the capability is that id plus
+ * the integration's own signing secret. Workspace A's secret must not act on workspace B's integration, an
+ * unknown id looks like any bad signature, a one-time handshake is refused unless the integration is waiting
+ * for it, and a verified delivery resolves only the delivering integration's own linked item — even though
+ * both workspaces' items carry the same tracker id.
+ */
+const boardWebhookCase = (provider: BoardProvider): Spec => ({
+  status: [200, 401],
+  run: async (ids, { request, db, snapshot }) => {
+    const before = await snapshot();
+    const base = "http://localhost:3100/api/integrations/" + provider + "/webhook";
+    const send = (integration: string, secret: string) => {
+      const external = "ext-" + provider;
+      let body: Record<string, unknown>;
+      let headers: Record<string, string>;
+      if (provider === "trello") {
+        body = {
+          action: {
+            id: randomUUID(),
+            type: "updateCard",
+            data: { card: { id: external, idShort: 1 }, listAfter: { id: "done" }, listBefore: { id: "l1" } },
+          },
+        };
+        const raw = JSON.stringify(body);
+        const sig = createHmac("sha1", secret)
+          .update(raw)
+          .update(base + "?i=" + integration)
+          .digest("base64");
+        headers = { "x-trello-webhook": sig };
+      } else if (provider === "clickup") {
+        body = {
+          webhook_id: "wh",
+          event: "taskStatusUpdated",
+          task_id: external,
+          history_items: [
+            { id: randomUUID(), field: "status", after: { status: "complete", type: "closed" } },
+          ],
+        };
+        headers = { "x-signature": createHmac("sha256", secret).update(JSON.stringify(body)).digest("hex") };
+      } else if (provider === "asana") {
+        body = {
+          events: [
+            {
+              action: "changed",
+              resource: { gid: external, resource_type: "task" },
+              change: { field: "completed", action: "changed" },
+              user: randomUUID(),
+            },
+          ],
+        };
+        headers = {
+          "x-hook-signature": createHmac("sha256", secret).update(JSON.stringify(body)).digest("hex"),
+        };
+      } else {
+        body = {
+          id: randomUUID(),
+          type: "page.properties_updated",
+          entity: { id: external, type: "page" },
+          data: { parent: { id: BOARD_REPO.notion, type: "database" } },
+        };
+        headers = {
+          "x-notion-signature":
+            "sha256=" + createHmac("sha256", secret).update(JSON.stringify(body)).digest("hex"),
+        };
+      }
+      return request({
+        method: "POST",
+        path: "/api/integrations/" + provider + "/webhook?i=" + integration,
+        headers: { ...headers, "content-type": "application/json" },
+        body,
+      });
+    };
+    const mine = ids["integration_" + provider + "_A"] ?? "";
+    const theirs = ids["integration_" + provider + "_B"] ?? "";
+    const secret = ids["secret_" + provider + "_A"] ?? "";
+    // No integration has this id; a bad secret; and workspace A's secret against workspace B's integration.
+    expect((await send(randomUUID(), secret)).status).toBe(401);
+    expect((await send(mine, "not-a-secret")).status).toBe(401);
+    expect((await send(theirs, secret)).status).toBe(401);
+    expect(await snapshot()).toBe(before);
+    // The handshake is only taken while the integration is waiting for it.
+    if (provider === "notion" || provider === "asana") {
+      const hello = await request({
+        method: "POST",
+        path: "/api/integrations/" + provider + "/webhook?i=" + mine,
+        headers: provider === "asana" ? { "x-hook-secret": "attacker-chosen-secret" } : {},
+        body: provider === "notion" ? { verification_token: "attacker-chosen-secret" } : {},
+      });
+      expect(hello.status).toBe(401);
+      expect(
+        await db()`select count(*)::int as n from issue_integration where id=${mine} and webhook_pending`,
+      ).toMatchObject([{ n: 0 }]);
+    }
+    // Workspace A's own integration resolves A's linked item, once; B's is untouched.
+    const response = await send(mine, secret);
+    expect(response.status).toBe(200);
+    expect(
+      await db()`select status from feedback where id=${ids["item_" + provider + "_A"] ?? ""}`,
+    ).toMatchObject([{ status: "resolved" }]);
     expect(await snapshot()).toBe(before);
   },
 });
@@ -505,6 +625,15 @@ const cases: Record<string, Spec> = {
   "POST /api/integrations/gitlab/webhook": webhookCase("gitlab"),
   "POST /api/integrations/jira/webhook": webhookCase("jira"),
   "POST /api/integrations/linear/webhook": webhookCase("linear"),
+  "POST /api/integrations/trello/webhook": boardWebhookCase("trello"),
+  "POST /api/integrations/asana/webhook": boardWebhookCase("asana"),
+  "POST /api/integrations/clickup/webhook": boardWebhookCase("clickup"),
+  "POST /api/integrations/notion/webhook": boardWebhookCase("notion"),
+  "GET /api/integrations/trello/webhook": {
+    // Trello probes the URL with HEAD when a webhook is created: it answers, and says nothing about anyone.
+    status: [200],
+    request: () => ({ method: "GET", path: "/api/integrations/trello/webhook" }),
+  },
   "POST /api/slack/commands": slackCase("commands"),
   "POST /api/slack/interactivity": slackCase("interactivity"),
   "POST /api/unsubscribe": {
@@ -681,7 +810,21 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)(
           [`slackWs${side}`]: slackWs,
           [`email${side}`]: `${slackUser}@test.invalid`,
         });
-        await database`update project set feedback_counter=5 where id=${projectId}`;
+        // The board trackers: same repository / tracker id in both workspaces, own integration id and secret.
+        for (const provider of BOARD_PROVIDERS) {
+          const secret = randomUUID(),
+            integration = randomUUID(),
+            linked = randomUUID();
+          await database`insert into feedback (id,org_id,project_id,number,kind,body,client_id) values (${linked},${org ?? ""},${projectId},${6 + BOARD_PROVIDERS.indexOf(provider)},'bug',${`linked ${provider} ${mark}`},${randomUUID()})`;
+          await database`insert into issue_integration (id,org_id,project_id,provider,token,token_hint,repo,webhook_secret,settings) values (${integration},${org ?? ""},${projectId},${provider},${encryptSecret(randomUUID())},'test',${BOARD_REPO[provider]},${encryptSecret(secret)},${database.json({ listId: "l1", doneListId: "done", statusProperty: "Status" })})`;
+          await database`insert into issue_link (org_id,feedback_id,integration_id,provider,number,external_id,url,state) values (${org ?? ""},${linked},${integration},${provider},null,${"ext-" + provider},'https://example.test/1','open')`;
+          Object.assign(ids, {
+            [`secret_${provider}_${side}`]: secret,
+            [`item_${provider}_${side}`]: linked,
+            [`integration_${provider}_${side}`]: integration,
+          });
+        }
+        await database`update project set feedback_counter=9 where id=${projectId}`;
       }
       api = (await import("./index")).app;
     }, 120_000);
@@ -691,6 +834,21 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)(
       effects.put.mockReset().mockResolvedValue(undefined);
       effects.remove.mockReset().mockResolvedValue(undefined);
       effects.get.mockReset().mockResolvedValue(null);
+      // Asana reports a completed task, Notion a page whose status is Done.
+      effects.fetch
+        .mockReset()
+        .mockImplementation((url) =>
+          Promise.resolve(
+            new Response(
+              JSON.stringify(
+                new URL(url).hostname === "app.asana.com"
+                  ? { data: { completed: true } }
+                  : { properties: { Status: { type: "status", status: { name: "Done" } } } },
+              ),
+              { status: 200 },
+            ),
+          ),
+        );
     });
     afterAll(async () => {
       if (fixture) {
@@ -708,6 +866,41 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)(
       expect(coverageGaps(["capability"], checks)).toEqual({ missing: [], stale: [], mismatched: [] });
       expect(Object.keys(inventoryRoutes("capability"))).toHaveLength(Object.keys(cases).length);
     });
+
+    it.each([
+      ["asana", "x-hook-secret", {}],
+      ["notion", "", { verification_token: "secret_handshake_token_1" }],
+    ] as const)(
+      "takes the %s handshake secret once, while the integration is waiting for it",
+      async (provider, header, body) => {
+        const { encryptSecret } = await import("./crypto");
+        const id = ids[`integration_${provider}_A`] ?? "";
+        const original = ids[`secret_${provider}_A`] ?? "";
+        const token = provider === "asana" ? "asana-handshake-secret-1" : body.verification_token;
+        const post = (secret: string) =>
+          request({
+            method: "POST",
+            path: `/api/integrations/${provider}/webhook?i=${id}`,
+            headers: provider === "asana" ? { [header]: secret } : {},
+            body: provider === "asana" ? {} : { verification_token: secret },
+          });
+        try {
+          await db()`update issue_integration set webhook_pending=true where id=${id}`;
+          const first = await post(token);
+          expect(first.status).toBe(200);
+          if (provider === "asana") expect(first.headers.get("x-hook-secret")).toBe(token);
+          // First write wins: the integration is no longer waiting, so a second token is refused.
+          expect((await post("attacker-chosen-secret-2")).status).toBe(401);
+          const [row] = await db()<{ secret: string; pending: boolean }[]>`
+            select webhook_secret as secret, webhook_pending as pending from issue_integration where id=${id}`;
+          expect(row?.pending).toBe(false);
+          const { decryptSecret } = await import("./crypto");
+          expect(decryptSecret(row?.secret ?? "")).toBe(token);
+        } finally {
+          await db()`update issue_integration set webhook_pending=false, webhook_secret=${encryptSecret(original)} where id=${id}`;
+        }
+      },
+    );
 
     describe.each(Object.entries(cases))("%s", (key, spec) => {
       it("refuses the foreign capability and leaves workspace B untouched", async () => {

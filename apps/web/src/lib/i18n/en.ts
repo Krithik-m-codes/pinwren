@@ -24,6 +24,7 @@ import { global } from "./en/global";
 import { handoff } from "./en/handoff";
 import { recording } from "./en/recording";
 import { share } from "./en/share";
+import { trackers } from "./en/trackers";
 import { releases } from "./en/releases";
 import { slack } from "./en/slack";
 
@@ -60,6 +61,7 @@ export const en = {
   ...handoff,
   ...recording,
   ...share,
+  ...trackers,
   ...releases,
   ...slack,
 } as const;

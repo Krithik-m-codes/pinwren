@@ -1,5 +1,6 @@
 import {
   API_TOKEN_SCOPES,
+  cleanTrackerSettings,
   apiTokenCreate,
   cutAt,
   emailSettingsUpdate,
@@ -13,6 +14,7 @@ import {
   TELEGRAM_BOT_TOKEN,
   TELEGRAM_CHAT_ID,
   trackerRepoError,
+  trackerSettingsError,
   WEBHOOK_EVENTS,
   WEBHOOK_KINDS,
   webhookCreate,
@@ -161,9 +163,12 @@ export const trackerForm = z
     repo: z.string().trim(),
     apiUrl: blankOr(z.url({ protocol: /^https?$/ }), "Enter a full URL, like https://…"),
     email: blankOr(z.email(), "Enter an email address"),
+    apiKey: z.string().trim().max(200),
     labels: z.string().max(600),
     autoCreate: issueIntegrationCreate.shape.autoCreate,
     webhookSecret: blankOr(z.string().min(16).max(200), "Paste the whole signing secret"),
+    // Board trackers: target list / status / priority mapping (core's TRACKER_SETTING_KEYS).
+    settings: z.record(z.string(), z.string().trim().max(200)),
   })
   .superRefine((v, ctx) => {
     const repoError = v.repo ? trackerRepoError(v.provider, v.repo) : "Fill this in";
@@ -173,6 +178,11 @@ export const trackerForm = z
       if (!v.email)
         ctx.addIssue({ code: "custom", path: ["email"], message: "Enter the Atlassian account email" });
     }
+    if (v.provider === "trello" && !v.apiKey) {
+      ctx.addIssue({ code: "custom", path: ["apiKey"], message: "Enter the Trello API key" });
+    }
+    const settingsError = trackerSettingsError(v.provider, cleanTrackerSettings(v.settings));
+    if (settingsError) ctx.addIssue({ code: "custom", path: ["settings"], message: settingsError });
   });
 
 export const emailSettingsForm = z.object({

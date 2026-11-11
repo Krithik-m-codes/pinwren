@@ -4,14 +4,14 @@ All endpoints are defined with `@hono/zod-openapi`; the OpenAPI 3.1 document is 
 
 ## 1. Surfaces
 
-| Prefix                                | Caller                                      | Auth                                                                                                            | CORS                         |
-| ------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| `/w/*`                                | Widget in a visitor's browser               | Public project key (`X-Pinwren-Key`) + `Origin` allowlist, optional review-link token, optional signed identity | Reflect allowed origins only |
-| `/api/*`                              | Dashboard SPA                               | Session cookie (`HttpOnly`, `SameSite=Lax`, `Secure`) + CSRF token header for mutations                         | Same-origin only             |
-| `/api/v1/*`                           | Public REST API, SDK, MCP                   | `Authorization: Bearer pwt_…` scoped API token                                                                  | None (server-to-server)      |
-| `/mcp`                                | AI agents (Streamable HTTP MCP)             | Bearer API token                                                                                                | None                         |
-| `/api/integrations/:provider/webhook` | GitHub, GitLab, Linear, Jira, Slack, Stripe | Provider signature                                                                                              | None                         |
-| `/healthz`, `/readyz`, `/metrics`     | Ops                                         | none / none / bearer `PINWREN_METRICS_TOKEN`                                                                    | —                            |
+| Prefix                                | Caller                                                                      | Auth                                                                                                            | CORS                         |
+| ------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `/w/*`                                | Widget in a visitor's browser                                               | Public project key (`X-Pinwren-Key`) + `Origin` allowlist, optional review-link token, optional signed identity | Reflect allowed origins only |
+| `/api/*`                              | Dashboard SPA                                                               | Session cookie (`HttpOnly`, `SameSite=Lax`, `Secure`) + CSRF token header for mutations                         | Same-origin only             |
+| `/api/v1/*`                           | Public REST API, SDK, MCP                                                   | `Authorization: Bearer pwt_…` scoped API token                                                                  | None (server-to-server)      |
+| `/mcp`                                | AI agents (Streamable HTTP MCP)                                             | Bearer API token                                                                                                | None                         |
+| `/api/integrations/:provider/webhook` | GitHub, GitLab, Linear, Jira, Trello, Asana, ClickUp, Notion, Slack, Stripe | Provider signature (board trackers: `?i=<integration id>`, ADR 0035)                                            | None                         |
+| `/healthz`, `/readyz`, `/metrics`     | Ops                                                                         | none / none / bearer `PINWREN_METRICS_TOKEN`                                                                    | —                            |
 
 Error format everywhere (RFC 9457 problem details):
 

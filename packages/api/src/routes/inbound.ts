@@ -1,11 +1,23 @@
 import { withOrg } from "@pinwren/db";
-import { brandAssetOwner, integrationSignatureCandidates } from "../db/bootstrap";
+import {
+  brandAssetOwner,
+  integrationSignatureCandidateById,
+  integrationSignatureCandidates,
+} from "../db/bootstrap";
+import type { BoardProvider } from "@pinwren/core";
 import { brandAsset, issueIntegration } from "@pinwren/db";
 import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { createMiddleware } from "hono/factory";
-import { decryptSecret, hmacSha256Hex, sha256Hex, safeEqualStr as timingSafeEqualStr } from "../crypto";
+import type { Context } from "hono";
+import {
+  decryptSecret,
+  encryptSecret,
+  hmacSha256Hex,
+  sha256Hex,
+  safeEqualStr as timingSafeEqualStr,
+} from "../crypto";
 import { ApiError, notFound } from "../errors";
 import {
   jiraIssueEvent,
@@ -14,7 +26,10 @@ import {
   verifyJiraSignature,
   verifyLinearSignature,
 } from "../integrations/inbound";
-import { applyInboundState } from "../integrations/issues";
+import { applyInboundState, trackerConfig, webhookUrlFor } from "../integrations/issues";
+import { adapterFor, TrackerError } from "../integrations/trackers";
+import type { InboundEvent } from "../integrations/sdk/types";
+import { safeFetch } from "../outbound/safe-fetch";
 import { hasFeature } from "../license";
 import { clientIp } from "../net";
 import { consume } from "../rate-limit";
@@ -29,7 +44,11 @@ type Integration = typeof issueIntegration.$inferSelect;
 const MAX_BODY = 1024 * 1024;
 
 type SignatureCandidate = Awaited<ReturnType<typeof integrationSignatureCandidates>>[number];
-async function applyVerifiedInbound(i: SignatureCandidate, number: number, state: "open" | "closed") {
+async function applyVerifiedInbound(
+  i: SignatureCandidate,
+  target: number | Pick<InboundEvent, "number" | "externalId">,
+  state: "open" | "closed",
+) {
   return withOrg(i.orgId, async (db) => {
     const [current] = await db
       .select()
@@ -45,7 +64,27 @@ async function applyVerifiedInbound(i: SignatureCandidate, number: number, state
         ),
       );
     if (!current) throw invalidSignature();
-    return applyInboundState(current, number, state);
+    return applyInboundState(current, target, state);
+  });
+}
+
+/** The full integration row of a candidate whose signature has verified (same predicate as applying a state). */
+function loadVerified(i: SignatureCandidate) {
+  return withOrg(i.orgId, async (db) => {
+    const [current] = await db
+      .select()
+      .from(issueIntegration)
+      .where(
+        and(
+          eq(issueIntegration.id, i.id),
+          eq(issueIntegration.projectId, i.projectId),
+          eq(issueIntegration.provider, i.provider),
+          eq(issueIntegration.active, true),
+          eq(issueIntegration.webhookSecret, i.webhookSecret),
+        ),
+      );
+    if (!current) throw invalidSignature();
+    return current;
   });
 }
 
@@ -101,6 +140,77 @@ const obj = (v: unknown): Record<string, unknown> =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 
 const invalidSignature = () => new ApiError(401, "INVALID_SIGNATURE", "Signature verification failed");
+
+/**
+ * Webhook of a board tracker (Trello, Asana, ClickUp, Notion; ADR 0035). The URL names the integration
+ * (`?i=`), so there is nothing to search for: the delivery is checked against that one integration's secret,
+ * then read by the tracker's adapter. Order matters: size and rate limits (the guard) → the one-time secret
+ * handshake, accepted only while the integration is waiting for it → signature → replay check → events.
+ */
+function boardWebhook(provider: BoardProvider) {
+  return async (c: Context) => {
+    const hooks = adapterFor(provider).webhooks;
+    if (!hooks) throw notFound("Webhook");
+    const raw = await c.req.text();
+    const candidate = await integrationSignatureCandidateById(provider, c.req.query("i"));
+    // An unknown id looks like a bad signature: nothing tells a caller which ids exist.
+    if (!candidate) throw invalidSignature();
+    const body = raw.trim() ? parse(raw) : {};
+    const req = {
+      raw,
+      headers: c.req.raw.headers,
+      body,
+      callbackUrl: webhookUrlFor(provider, candidate.id),
+    };
+
+    const handshake = candidate.webhookPending ? hooks.handshake?.(req) : null;
+    if (handshake) {
+      // First write wins: the secret is taken once, while the admin has the integration waiting for it.
+      const taken = await withOrg(candidate.orgId, (db) =>
+        db
+          .update(issueIntegration)
+          .set({ webhookSecret: encryptSecret(handshake.secret), webhookPending: false, lastError: null })
+          .where(
+            and(
+              eq(issueIntegration.id, candidate.id),
+              eq(issueIntegration.webhookPending, true),
+              eq(issueIntegration.active, true),
+            ),
+          )
+          .returning({ id: issueIntegration.id }),
+      );
+      if (!taken[0]) throw invalidSignature();
+      return c.json({ ok: true, handshake: true }, 200, handshake.reply ?? {});
+    }
+
+    const secret = secretOf(candidate);
+    if (candidate.webhookPending || !secret || !hooks.verify(secret, req)) throw invalidSignature();
+    if (!(await firstDelivery(provider, candidate.id, hooks.deliveryId(req), raw))) {
+      return c.json({ ok: true, duplicate: true });
+    }
+    const current = await loadVerified(candidate);
+    let events: InboundEvent[];
+    try {
+      events = await hooks.events(trackerConfig(current), req, safeFetch);
+    } catch (err) {
+      // Asana / Notion send ids and we read the values: if the tracker can't be reached, ask for a redelivery.
+      throw new ApiError(
+        503,
+        "TRACKER_UNAVAILABLE",
+        err instanceof TrackerError ? err.message : "Could not read the change from the tracker",
+      );
+    }
+    const applied: { feedbackId: string; status: string }[] = [];
+    for (const ev of events.slice(0, 20)) {
+      const result = await applyVerifiedInbound(candidate, ev, ev.state);
+      if (result) applied.push(result);
+    }
+    return c.json({
+      ok: true,
+      ...(applied[0] ? { feedback: applied[0], applied: applied.length } : { ignored: true }),
+    });
+  };
+}
 
 export const inbound = new Hono()
   /** Logos for branding. Random ids; images only (never SVG), sandboxed, cacheable. */
@@ -244,4 +354,19 @@ export const inbound = new Hono()
     if (!ev) return c.json({ ok: true, ignored: true });
     const result = await applyVerifiedInbound(match, ev.number, ev.state);
     return c.json({ ok: true, ...(result ? { feedback: result } : { ignored: true }) });
-  });
+  })
+
+  /** Trello checks that a new webhook's URL answers `HEAD` (Hono serves `HEAD` from this route). */
+  .get("/integrations/trello/webhook", (c) => c.body(null, 200))
+
+  /** Trello: `X-Trello-Webhook` = base64 HMAC-SHA1 of the body + callback URL with the Power-Up's app secret. */
+  .post("/integrations/trello/webhook", ...inboundGuard, boardWebhook("trello"))
+
+  /** Asana: a one-time `X-Hook-Secret` handshake, then `X-Hook-Signature` (hex HMAC-SHA256 of the body). */
+  .post("/integrations/asana/webhook", ...inboundGuard, boardWebhook("asana"))
+
+  /** ClickUp: `X-Signature` (hex HMAC-SHA256 of the body) with the secret returned when the webhook was made. */
+  .post("/integrations/clickup/webhook", ...inboundGuard, boardWebhook("clickup"))
+
+  /** Notion: a one-time `verification_token` post, then `X-Notion-Signature: sha256=…` keyed by that token. */
+  .post("/integrations/notion/webhook", ...inboundGuard, boardWebhook("notion"));

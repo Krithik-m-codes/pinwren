@@ -50,7 +50,7 @@ required.
 
 ## HTTP entry points
 
-`packages/api/src/tenant-route-inventory.json` records all 238 mounted endpoint signatures, including
+`packages/api/src/tenant-route-inventory.json` records all 244 mounted endpoint signatures, including
 the ALL-method `/mcp` handler. Each record names its authorization boundary, whether its handler needs
 special treatment for streaming/external work, and its required authorization test case. These names
 are planned coverage identifiers, not claims that the corresponding integration test already passes.
@@ -205,7 +205,7 @@ selfhost unit runs and exercised by the integration runner.
 
 ### Route-wide acceptance evidence (Task 8)
 
-Every entry of `packages/api/src/tenant-route-inventory.json` (238 routes) has one executable case, and the
+Every entry of `packages/api/src/tenant-route-inventory.json` (244 routes) has one executable case, and the
 inventory and the case registries are compared in both directions, so an added, renamed or reclassified
 route without a case fails. Both suites run against real PostgreSQL with the restricted runtime role, in a
 fixture holding two workspaces (A and B) with a project, report, comment, label, round, review link, saved view,
@@ -219,11 +219,14 @@ and API token each.
   invitations, member accounts and preferences) before and after and requires them unchanged. System routes
   require a 403 for a workspace owner who is not an instance administrator; identity routes touch only the
   signed-in account; every session-only route answers 401 without credentials.
-- `cloud-routes-public-db.test.ts` covers the 32 `capability` routes. The caller holds a valid capability for
+- `cloud-routes-public-db.test.ts` covers the 37 `capability` routes. The caller holds a valid capability for
   workspace A (project key, reporter token, page link, review link, signed claim, integration secret) and names
   workspace B's resource; the refusal, the absence of B content and B's unchanged rows are asserted. Inbound
   GitHub, GitLab, Linear and Jira webhooks sharing a repository or team key across both workspaces change only the
-  workspace whose secret signed the request.
+  workspace whose secret signed the request. The Trello, Asana, ClickUp and Notion webhooks name their integration
+  (`?i=`): workspace A's secret against workspace B's integration id, an unknown id and a handshake while the
+  integration is not waiting for one are all refused, and a verified delivery resolves only its own integration's
+  item even when both workspaces link the same tracker id.
 - Both registries were mutation-checked: pointing a case at workspace A's own resource makes it fail.
 
 The one real isolation inconsistency found: `GET /api/projects/:id/integrations` answered 200 with an empty
@@ -239,7 +242,7 @@ unknown and expired ids answer 404 and that the streaming read holds no transact
 address; token authentication, scope and membership are covered in `cloud-api-db.test.ts`.
 
 Verified on PostgreSQL 16.15: `node scripts/tenant-isolation.mjs` passes 14 files / 368 tests (151 + 25 new). With
-automation, Slack, custom fields and releases the runner covers 19 files; the last full run on PostgreSQL 17 passed 530 tests.
+automation, Slack, custom fields and releases the runner covers 19 files (21 with the tracker boards and dashboards); the last full run on PostgreSQL 17 passed 530 tests.
 
 ## Cloud sign-up
 
