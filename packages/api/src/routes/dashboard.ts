@@ -531,7 +531,7 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
   })
 
   // --- Assets (screenshots, attachments, replays: gzip JSON of rrweb events) ----------------------
-  .get("/assets/:id", (c) => assetResponse(c.var.orgId, c.req.param("id")))
+  .get("/assets/:id", (c) => assetResponse(c.var.orgId, c.req.param("id"), c.req.header("range")))
 
   .route("/", realtime)
   .route("/", notifications)

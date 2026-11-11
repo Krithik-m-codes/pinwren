@@ -3,17 +3,26 @@ import { en } from "./locales/en";
 import type { enPanel } from "./locales/en-panel";
 import type { enReport } from "./locales/en-report";
 import type { enErrors } from "./locales/en-errors";
+import type { enRecord } from "./locales/en-record";
 import type { enShots } from "./locales/en-shots";
 
 // Widget i18n (F-013). The core's English ships in widget.js and each lazy chunk brings its own English
 // (`addEnglish`); every other catalogue is a small separate file (`widget-i18n-<code>.js`, built next to
 // widget.js) that registers itself on `window.__pinwrenI18n`, so a visitor only downloads their own language.
 
-export type English = typeof en & typeof enPanel & typeof enReport & typeof enShots & typeof enErrors;
+export type English = typeof en &
+  typeof enPanel &
+  typeof enReport &
+  typeof enShots &
+  typeof enErrors &
+  typeof enRecord;
 export type Key = keyof English;
+/** Keys translated in a file of their own per language (`locales/<code>-record.ts`), merged in by build.mjs. */
+type SplitKey = keyof typeof enRecord;
+export type RecordCatalog = Record<SplitKey, string>;
 /** English plural forms are `_one`/`_other`; languages with more forms (Russian: 2–4 vs 5–20) add `_few`/`_many`. */
 type ExtraPlural = Record<`${string}_few` | `${string}_many`, string>;
-export type Catalog = Record<Key, string> & ExtraPlural;
+export type Catalog = Record<Exclude<Key, SplitKey>, string> & Partial<RecordCatalog> & ExtraPlural;
 type Vars = Record<string, string | number>;
 
 export const LOCALES = ["en", "es", "fr", "de", "pt-BR", "it", "ja", "hi", "nl", "zh", "ru"] as const;

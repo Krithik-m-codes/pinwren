@@ -184,6 +184,11 @@ turns replay off unless the page explicitly allows it with the `allowReplayInPri
 `data-allow-replay-in-privacy-mode`) — then
 all text is masked, and handling consent is up to you.
 
+## Screen recording
+
+The attachment area also has a **Record screen** button: the reporter records their tab, optionally with voice narration, reviews
+the clip and sends it with the report. See [Screen recording](/docs/widget/recording).
+
 ## Drafts
 
 An unsent report — text, severity, screenshot with its annotations, attachments — is saved in the browser's
@@ -245,10 +250,11 @@ The server checks each limit before it parses or stores anything:
 | Limit                                                                                               | Answer                        |
 | --------------------------------------------------------------------------------------------------- | ----------------------------- |
 | The report must declare its size with `Content-Length`                                              | `411 LENGTH_REQUIRED`         |
-| Whole report under 48 MB (the [proxy](/docs/self-hosting/reverse-proxy) must allow it too)          | `413 PAYLOAD_TOO_LARGE`       |
+| Whole report under 72 MB (the [proxy](/docs/self-hosting/reverse-proxy) must allow it too)          | `413 PAYLOAD_TOO_LARGE`       |
 | Replies and status changes up to 64 KB                                                              | `413 PAYLOAD_TOO_LARGE`       |
 | `page.url` must be `http://` or `https://`                                                          | `400` (validation)            |
 | Attachments: 3 files of up to 5 MB; replay: gzip, up to 10 MB                                       | `400`, `400 INVALID_REPLAY`   |
+| [Screen recording](/docs/widget/recording): WebM or MP4, up to 16 MB, within the project's length   | `400 INVALID_RECORDING`       |
 | Reports per minute from one address (`WIDGET_RATE_LIMIT_PER_MIN`, default 10, or the project's own) | `429 RATE_LIMITED`            |
 | Reports per minute to the project from everyone (`WIDGET_PROJECT_REPORTS_PER_MIN`, default 120)     | `429 PROJECT_RATE_LIMITED`    |
 | Stored files per project and hour (`WIDGET_PROJECT_MB_PER_HOUR`, default 500 MB)                    | `429 PROJECT_STORAGE_LIMITED` |
