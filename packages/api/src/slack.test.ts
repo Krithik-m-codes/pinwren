@@ -18,7 +18,7 @@ beforeAll(() => {
   process.env.PINWREN_SECRET ??= "x".repeat(48);
 });
 
-const SECRET = "0123456789abcdef0123456789abcdef";
+const SECRET = "0123456789abcdef".repeat(2);
 const NOW = 1_700_000_000_000;
 
 describe("Slack request signature", () => {

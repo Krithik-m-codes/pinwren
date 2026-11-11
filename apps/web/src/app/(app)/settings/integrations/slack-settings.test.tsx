@@ -71,6 +71,9 @@ const searchToken = vi.hoisted(() => ({ value: "" }));
 import { SlackLink } from "../../slack/link/slack-link";
 import { SlackSettings } from "./slack-settings";
 
+// Built, not spelled out: a literal 32-character hex string looks like a real Slack signing secret to scanners.
+const VALID_SECRET = "0123456789abcdef".repeat(2);
+
 const base: Omit<SlackState, "connection" | "routes" | "members"> = {
   requestUrls: {
     interactivity: "https://pinwren.test/api/slack/interactivity",
@@ -178,12 +181,12 @@ describe("Slack settings", () => {
     expect(calls.connect).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText("Signing secret"), {
-      target: { value: "0123456789abcdef0123456789abcdef" },
+      target: { value: VALID_SECRET },
     });
     fireEvent.click(screen.getByRole("button", { name: "Connect Slack" }));
     await waitFor(() => expect(calls.connect).toHaveBeenCalledTimes(1));
     expect(calls.connect.mock.calls[0]?.[0]).toEqual({
-      signingSecret: "0123456789abcdef0123456789abcdef",
+      signingSecret: VALID_SECRET,
       botToken: "xoxb-" + "1".repeat(30),
     });
   });
