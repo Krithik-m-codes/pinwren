@@ -1,4 +1,4 @@
-# ADR 0026 — Agent hand-off briefs and generated repro tests
+# ADR 0040 — Agent hand-off briefs and generated repro tests
 
 **Status:** accepted
 

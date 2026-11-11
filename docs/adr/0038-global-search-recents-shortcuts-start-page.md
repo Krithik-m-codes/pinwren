@@ -1,4 +1,4 @@
-# ADR 0025 — Palette search, recent items, global shortcuts and a start page
+# ADR 0038 — Palette search, recent items, global shortcuts and a start page
 
 **Status:** accepted
 

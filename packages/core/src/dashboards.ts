@@ -138,7 +138,7 @@ const isoString = z.string().max(40).nullable();
 
 /**
  * `PATCH /api/me/ui-state`: small account-wide interface state that follows a person between browsers: the
- * start page and the dismissals of the update strip and support card (ADR 0025). `user_preference.ui_state`.
+ * start page and the dismissals of the update strip and support card (start page: ADR 0038; update strip and support card: ADR 0025). `user_preference.ui_state`.
  */
 export const uiStateUpdate = z.object({
   startPage: z.enum(LANDINGS).optional(),
