@@ -2,6 +2,7 @@ import type {
   AgentBrief,
   CommentCreate,
   Comment,
+  CustomField,
   FeedbackDetail,
   FeedbackList,
   FeedbackListItem,
@@ -217,6 +218,13 @@ export class Pinwren {
     /** A project's labels, each with the number of live items carrying it. */
     list: async (projectId: string): Promise<Label[]> =>
       (await this.#json<{ labels: Label[] }>("GET", `/projects/${enc(projectId)}/labels`)).labels,
+  };
+
+  readonly customFields = {
+    /** A project's custom form fields in display order (key, type, options, rules, audience, kinds). */
+    list: async (projectId: string): Promise<CustomField[]> =>
+      (await this.#json<{ fields: CustomField[] }>("GET", `/projects/${enc(projectId)}/custom-fields`))
+        .fields,
   };
 
   readonly views = {

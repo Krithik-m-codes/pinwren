@@ -25,6 +25,7 @@ export const TOOL_NAMES = [
   "get_agent_brief",
   "get_repro_test",
   "list_labels",
+  "list_custom_fields",
   "list_rounds",
   "get_round",
   "list_saved_views",
@@ -92,6 +93,7 @@ export function summarizeDetail(d: FeedbackDetail, assetUrl: (id: string) => str
       : null,
     environment: f.environment,
     metadata: f.metadata,
+    customFields: f.customFields,
     thread: d.comments.map((c) => ({
       author: c.author?.name ?? c.authorGuest?.name ?? "visitor",
       team: c.author !== null,
@@ -166,6 +168,11 @@ export function createPinwrenMcpServer(client: Pinwren, options: ServerOptions =
         text: z.string().max(200).optional().describe("Full-text search in title and body"),
         page: z.string().max(2000).optional().describe("Part of the page URL"),
         since: z.iso.datetime({ offset: true }).optional(),
+        customField: z
+          .string()
+          .max(240)
+          .optional()
+          .describe("One custom field as key:value ('*' = any answer, '!' = none); see list_custom_fields"),
         limit: z.number().int().min(1).max(100).optional(),
         cursor: z.string().optional(),
       },
@@ -181,6 +188,7 @@ export function createPinwrenMcpServer(client: Pinwren, options: ServerOptions =
           assigneeId: a.assigneeId,
           roundId: a.roundId,
           q: a.text,
+          cf: a.customField,
           page: a.page,
           since: a.since,
           limit: a.limit ?? 20,
@@ -241,7 +249,9 @@ export function createPinwrenMcpServer(client: Pinwren, options: ServerOptions =
     "update_feedback",
     {
       title: "Update feedback",
-      description: "Change an item's status, priority, title, assignees (user ids) or review round.",
+      description:
+        "Change an item's status, priority, title, assignees (user ids), review round or custom field answers " +
+        "(customFields: { key: value }, null clears one; see list_custom_fields).",
       inputSchema: {
         id: z.uuid(),
         status: z.enum(STATUSES).optional(),
@@ -249,6 +259,9 @@ export function createPinwrenMcpServer(client: Pinwren, options: ServerOptions =
         title: z.string().max(200).nullable().optional(),
         assigneeIds: z.array(z.string().max(100)).max(20).optional(),
         roundId: z.uuid().nullable().optional(),
+        customFields: z
+          .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()]))
+          .optional(),
       },
       annotations: { ...write, idempotentHint: true },
     },
@@ -354,6 +367,32 @@ export function createPinwrenMcpServer(client: Pinwren, options: ServerOptions =
     ({ projectId }) =>
       run(async () =>
         json((await client.labels.list(projectId)).map((l) => ({ id: l.id, name: l.name, count: l.count }))),
+      ),
+  );
+
+  server.registerTool(
+    "list_custom_fields",
+    {
+      title: "List custom fields",
+      description:
+        "A project's custom form fields: key, label, type, options, audience (reporter or internal) and the " +
+        "feedback kinds each applies to. Answers live in an item's customFields by key.",
+      inputSchema: { projectId: z.uuid() },
+      annotations: read,
+    },
+    ({ projectId }) =>
+      run(async () =>
+        json(
+          (await client.customFields.list(projectId)).map((f) => ({
+            key: f.key,
+            label: f.label,
+            type: f.type,
+            required: f.required,
+            audience: f.audience,
+            kinds: f.kinds,
+            options: f.options,
+          })),
+        ),
       ),
   );
 
