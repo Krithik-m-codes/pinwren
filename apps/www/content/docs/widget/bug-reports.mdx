@@ -9,15 +9,16 @@ editor are separate chunks, fetched the moment someone hovers the launcher, so t
 
 ## The report
 
-| Field           | Notes                                                                                                                                            |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Screenshot      | Taken automatically when the dialog opens, then annotated in place.                                                                              |
-| Title           | Optional, up to 200 characters.                                                                                                                  |
-| Description     | Required.                                                                                                                                        |
-| Severity        | Low, Medium (default), High or Critical — stored as the item's priority (Critical → `urgent`).                                                   |
-| Attachments     | Up to 3 files.                                                                                                                                   |
-| Name and email  | Optional, remembered in the browser; collapsed to one line once the name is known (typed before, or from [`identify()`](/docs/widget/identity)). |
-| What we'll send | A summary of the diagnostics that go with the report.                                                                                            |
+| Field            | Notes                                                                                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Screenshot       | Taken automatically when the dialog opens, then annotated in place.                                                                                           |
+| Title            | Optional, up to 200 characters.                                                                                                                               |
+| Description      | Required.                                                                                                                                                     |
+| Severity         | Low, Medium (default), High or Critical — stored as the item's priority (Critical → `urgent`).                                                                |
+| Custom questions | Optional extra fields the project added in [Project → Form](/docs/dashboard/custom-fields), under "More details". Required ones block sending until answered. |
+| Attachments      | Up to 3 files.                                                                                                                                                |
+| Name and email   | Optional, remembered in the browser; collapsed to one line once the name is known (typed before, or from [`identify()`](/docs/widget/identity)).              |
+| What we'll send  | A summary of the diagnostics that go with the report.                                                                                                         |
 
 ## Capture modes
 
@@ -232,11 +233,23 @@ attempt, errors that won't fix themselves (a `400` or `403`) are shown in the di
     ]
   },
   "metadata": { "performance": { "ttfbMs": 120, "lcpMs": 1450 } },
+  "customFields": { "order_number": "ORD-9001", "plan": "pro" },
   "screenshot": "data:image/webp;base64,…"
 }
 ```
 
 The response is `201 { "feedback": { "id", "number", "reporterToken" } }`.
+
+### Custom questions
+
+If the project has [custom fields](/docs/dashboard/custom-fields) for bug reports, `GET /w/config` lists them under
+`widget.customFields` (reporter fields only; internal fields and personal-data flags never leave the server) and the
+report form asks them. They load in their own small chunk, `widget-fields.<hash>.js` (under 5 KB gzip), only when the
+project has questions, so the report chunk and `widget.js` stay as small as before. Answers are checked in the form
+(required, length, number range, option, email, `http(s)` link) and again by the server, which stores only the answers
+to fields that apply and rejects invalid ones with a `400` the form shows. Labels and options come from the project,
+translated per language by the project; the form's own messages are in all widget languages. Answers are kept in the
+draft and in the offline outbox like the rest of the report.
 
 ## Limits
 

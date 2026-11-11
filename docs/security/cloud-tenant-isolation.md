@@ -14,7 +14,7 @@ that is listed under "Remaining WP-21 work". The approved design and implementat
 
 ## Database inventory
 
-`packages/db/src/tenant-inventory.ts` classifies all 48 exported tables. The inventory test compares
+`packages/db/src/tenant-inventory.ts` classifies all 49 exported tables. The inventory test compares
 against actual Drizzle schema exports and tenant foreign keys, so a new table or relationship must be
 classified. Direct ownership means a protected `org_id`; parent ownership means a child derives its
 organization through all declared protected parents. Identity tables serve users across memberships;
@@ -23,7 +23,7 @@ system tables serve explicitly authorized instance operations.
 Cloud also protects organization, membership and invitation rows by their organization identifier.
 Tenant reads of user profiles expose only `id`, `name`, `email` and `image`, and only for members or
 contributors linked to that organization's feedback, comments, activity or watcher rows. Private account
-flags remain available only through the authenticated account repository. There are 38 protected tables.
+flags remain available only through the authenticated account repository. There are 39 protected tables.
 
 Better Auth uses a separate, stable identity pool. Its service role has identity/system grants and a
 fixed eight-column token-verification projection; it cannot read tenant feedback or token display names.
@@ -50,7 +50,7 @@ required.
 
 ## HTTP entry points
 
-`packages/api/src/tenant-route-inventory.json` records all 207 mounted endpoint signatures, including
+`packages/api/src/tenant-route-inventory.json` records all 210 mounted endpoint signatures, including
 the ALL-method `/mcp` handler. Each record names its authorization boundary, whether its handler needs
 special treatment for streaming/external work, and its required authorization test case. These names
 are planned coverage identifiers, not claims that the corresponding integration test already passes.
@@ -134,7 +134,7 @@ temporary databases. Never point it at customer data.
 The policy/context tranche passed 80 checks on local PostgreSQL 16 across inventory, context, real pooled connection
 reuse/rollback, row policies and migration failure tests. The original 27 content tables have scoped read and
 missing-context cases. All 23 direct ownership tables reject ownership changes and foreign
-UPDATE/DELETE RETURNING. Valid local CRUD succeeds. Thirty-two composite tenant foreign keys are
+UPDATE/DELETE RETURNING. Valid local CRUD succeeds. Thirty-three composite tenant foreign keys are
 validated. Foreign project references, duplicate links and cross-tenant label joins are rejected,
 including label inconsistencies introduced by privileged maintenance. Upgrade tests prove that
 inconsistent legacy page ownership and label joins abort the migration without changing rows or
@@ -205,7 +205,7 @@ selfhost unit runs and exercised by the integration runner.
 
 ### Route-wide acceptance evidence (Task 8)
 
-Every entry of `packages/api/src/tenant-route-inventory.json` (207 routes) has one executable case, and the
+Every entry of `packages/api/src/tenant-route-inventory.json` (210 routes) has one executable case, and the
 inventory and the case registries are compared in both directions, so an added, renamed or reclassified
 route without a case fails. Both suites run against real PostgreSQL with the restricted runtime role, in a
 fixture holding two workspaces (A and B) with a project, report, comment, label, round, review link, saved view,
@@ -301,3 +301,7 @@ three direct-ownership tables, each with the `pinwren_tenant` policy and composi
   after commit. `automation-db.test.ts` runs it against PostgreSQL with the restricted runtime role: rules naming
   another workspace's label or member are refused when saved, workspace B's identical rule never fires for A's event,
   and loop protection, idempotent retries and partial failures are asserted.
+
+### Custom fields (ADR 0029)
+
+Migration `0015` adds one direct-ownership table, `custom_field` (parent `project`), with the `pinwren_tenant` policy and a composite `(project_id, org_id)` foreign key (`custom_field_project_tenant_fk`), and the column `feedback.custom_fields` (covered by the existing `feedback` policy). Three `tenant` routes (`GET`/`PUT /api/projects/:id/custom-fields`, `GET /api/v1/projects/:id/custom-fields`) each have a foreign-workspace case in `cloud-routes-db.test.ts`; `custom-fields-db.test.ts` runs in the isolation runner and checks the form, widget ingest, edits, the inbox filter and exports against a real database with row security. The `cf` list filter reads `custom_field` through the caller's scope, so another workspace's field definitions are never matched.

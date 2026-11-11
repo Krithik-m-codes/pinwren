@@ -29,6 +29,7 @@ or React: `<Pinwren projectKey="…" />` from `@pinwren/react`.
 | core (launcher, comment mode, composer, API client, anchoring) | 35 KB                                   |
 | panel                                                          | 15 KB                                   |
 | editor                                                         | 30 KB                                   |
+| fields (custom questions of the report form, ADR 0029)         | 5 KB                                    |
 | capture (SnapDOM + glue)                                       | 40 KB                                   |
 | replay (rrweb record)                                          | 60 KB                                   |
 | Main-thread work on page load (loader + core idle init)        | < 5 ms on 4× CPU throttle               |
