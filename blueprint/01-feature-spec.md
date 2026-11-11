@@ -227,6 +227,14 @@ Strategies in order, first confident hit wins; each yields a confidence score:
 | F-113 | "Reproduction steps" draft from replay events + console/network | C, E, B, X    |
 | F-114 | Translate feedback to the team's language                       | C, E, P, B, X |
 
+### F-130 Custom fields — _C, E, P, B, X_
+
+- Per-project questions on the report form: short/long text, select, multi-select, checkbox, number, date, link, email; label, help text, placeholder, default, required, options, ordering, validation rules, per-type visibility, reporter-visible or internal. Answers are validated by the server, stored with the feedback, editable by the team, filterable, exported, sent in webhooks/API and usable in automation conditions (ADR 0032).
+
+### F-131 Form builder — _C, E, P, B, X_
+
+- Dashboard builder with drag/keyboard reordering, live preview, import/export of the form, limit of 20 fields; the widget renders it from `/w/config` in a lazy chunk.
+
 All AI features are **off by default**, require an explicit provider configuration (Anthropic, OpenAI-compatible, or local via Ollama), never send screenshots or replay unless the admin opts in, and log every call in the audit trail.
 
 ---

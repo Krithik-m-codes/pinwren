@@ -58,6 +58,8 @@ portals, health or finance apps, anything under GDPR scrutiny). It changes both 
 - the consent notice is forced on, and console capture is capped at errors;
 - reports from older or modified widgets are filtered again on arrival: non-error console entries and timing
   data are dropped and the user agent is reduced;
+- answers to [custom fields](/docs/dashboard/custom-fields) marked **Contains personal data** are replaced by
+  `[redacted]` in exports, webhooks and agent briefs (the stored answer stays visible to your team);
 - stored IP addresses are truncated (to /24 for IPv4, /48 for IPv6), and the instance's outbound update check
   is switched off;
 - turning it on shortens a “keep forever” retention to 90 days (unless you set a retention in the same change).

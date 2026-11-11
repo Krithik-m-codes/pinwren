@@ -3,6 +3,7 @@ import { type Catalog, LOCALES, pickLocale, setCatalog, t, tn } from "./i18n";
 import de from "./locales/de";
 import { en as enCore } from "./locales/en";
 import { enErrors } from "./locales/en-errors";
+import { enFields } from "./locales/en-fields";
 import { enRecord } from "./locales/en-record";
 import { enPanel } from "./locales/en-panel";
 import { enReport } from "./locales/en-report";
@@ -17,30 +18,40 @@ import ptBR from "./locales/pt-BR";
 import ru from "./locales/ru";
 import zh from "./locales/zh";
 import deRecord from "./locales/de-record";
+import deFields from "./locales/de-fields";
 import esRecord from "./locales/es-record";
+import esFields from "./locales/es-fields";
 import frRecord from "./locales/fr-record";
+import frFields from "./locales/fr-fields";
 import hiRecord from "./locales/hi-record";
+import hiFields from "./locales/hi-fields";
 import itRecord from "./locales/it-record";
+import itFields from "./locales/it-fields";
 import jaRecord from "./locales/ja-record";
+import jaFields from "./locales/ja-fields";
 import nlRecord from "./locales/nl-record";
+import nlFields from "./locales/nl-fields";
 import ptBRRecord from "./locales/pt-BR-record";
+import ptBRFields from "./locales/pt-BR-fields";
 import ruRecord from "./locales/ru-record";
+import ruFields from "./locales/ru-fields";
 import zhRecord from "./locales/zh-record";
+import zhFields from "./locales/zh-fields";
 
 // The full English catalogue: the core's strings plus each lazy chunk's.
-const en = { ...enCore, ...enPanel, ...enReport, ...enShots, ...enErrors, ...enRecord };
+const en = { ...enCore, ...enPanel, ...enReport, ...enShots, ...enErrors, ...enRecord, ...enFields };
 // Each language is its file plus the per-chunk files next to it; build.mjs merges them the same way.
 const CATALOGS: Record<string, Catalog> = {
-  de: { ...de, ...deRecord },
-  es: { ...es, ...esRecord },
-  fr: { ...fr, ...frRecord },
-  hi: { ...hi, ...hiRecord },
-  it: { ...it_, ...itRecord },
-  ja: { ...ja, ...jaRecord },
-  nl: { ...nl, ...nlRecord },
-  "pt-BR": { ...ptBR, ...ptBRRecord },
-  ru: { ...ru, ...ruRecord },
-  zh: { ...zh, ...zhRecord },
+  de: { ...de, ...deRecord, ...deFields },
+  es: { ...es, ...esRecord, ...esFields },
+  fr: { ...fr, ...frRecord, ...frFields },
+  hi: { ...hi, ...hiRecord, ...hiFields },
+  it: { ...it_, ...itRecord, ...itFields },
+  ja: { ...ja, ...jaRecord, ...jaFields },
+  nl: { ...nl, ...nlRecord, ...nlFields },
+  "pt-BR": { ...ptBR, ...ptBRRecord, ...ptBRFields },
+  ru: { ...ru, ...ruRecord, ...ruFields },
+  zh: { ...zh, ...zhRecord, ...zhFields },
 };
 
 describe("pickLocale", () => {

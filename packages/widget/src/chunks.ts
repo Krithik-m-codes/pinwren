@@ -8,12 +8,13 @@
 //   widget-capture.<hash>.js   SnapDOM (screenshot engine)
 //   widget-replay.<hash>.js    rrweb recorder (session replay)
 //   widget-flows.<hash>.js     composer attachments, re-pin mode (wave 5)
+//   widget-fields.<hash>.js    custom questions of the report form (ADR 0032)
 //   widget-shots.<hash>.js     "Add screenshot" menu, attachment thumbnails + lightbox, annotate dialog
 //   widget-record.<hash>.js    "Record screen": getDisplayMedia + MediaRecorder, review dialog (ADR 0029)
 //   widget-i18n-<code>.<hash>.js
 //
 // File names are content-hashed so CDNs can cache them forever; build.mjs inlines the name map into
-// widget.js as `__PINWREN_MANIFEST__` (widget.js itself stays un-hashed with a short cache). Without a
+// widget.js as `__PINWREN_MANIFEST__` (name → hash; widget.js itself stays un-hashed with a short cache). Without a
 // manifest (unit tests, an older build) the plain `widget-<name>.js` is requested.
 //
 // Chunks don't bundle their own copies of the shared modules (i18n state, diagnostics buffers, DOM helpers):
@@ -22,7 +23,7 @@
 declare const __PINWREN_MANIFEST__: Record<string, string> | undefined;
 
 export type ChunkName =
-  "capture" | "editor" | "report" | "panel" | "replay" | "flows" | "shots" | "errors" | "record";
+  "capture" | "editor" | "report" | "panel" | "replay" | "flows" | "shots" | "errors" | "record" | "fields";
 
 /** The window global a chunk registers itself on: `__pinwren` + the capitalised name. */
 const globalOf = (name: ChunkName) => `__pinwren${name.charAt(0).toUpperCase()}${name.slice(1)}`;
@@ -31,9 +32,10 @@ const MANIFEST: Record<string, string> = typeof __PINWREN_MANIFEST__ === "object
 
 /** URL of a chunk (`panel`, `i18n-fr`, …) under `base`, the directory widget.js was served from. */
 export function chunkUrl(base: string, name: string): string {
-  const file = MANIFEST[name];
-  // Only names the build produced reach the page: no path tricks via the manifest.
-  return `${base}/${file && /^widget-[\w-]+\.[\w-]+\.js$/.test(file) ? file : `widget-${name}.js`}`;
+  const hash = MANIFEST[name];
+  // The manifest holds only each file's content hash (smaller than whole names, so adding a chunk costs the core
+  // almost nothing); anything but plain word characters is ignored, so no path tricks via the manifest.
+  return `${base}/widget-${name}${hash && /^\w+$/.test(hash) ? `.${hash}` : ""}.js`;
 }
 
 let nonce = "";

@@ -73,7 +73,7 @@ export async function loadAutomationFacts(
 ): Promise<AutomationFacts> {
   const db = getDb();
   const id = ctx.payload.id;
-  const [facts, labels, attachment] = await Promise.all([
+  const [facts, labels, attachment, [answers]] = await Promise.all([
     loadFeedbackFacts(id),
     db.select({ id: feedbackLabel.labelId }).from(feedbackLabel).where(eq(feedbackLabel.feedbackId, id)),
     db
@@ -81,6 +81,8 @@ export async function loadAutomationFacts(
       .from(feedbackAsset)
       .where(and(eq(feedbackAsset.feedbackId, id), eq(feedbackAsset.kind, "attachment")))
       .limit(1),
+    // The stored answers, unmasked: a rule on a custom field decides on the real value (it sends nothing out).
+    db.select({ answers: feedback.customFields }).from(feedback).where(eq(feedback.id, id)),
   ]);
   return {
     event,
@@ -94,6 +96,7 @@ export async function loadAutomationFacts(
     labelIds: labels.map((l) => l.id),
     hasAttachment: attachment.length > 0,
     hasReplay: facts.hasReplay,
+    customFields: answers?.answers ?? {},
   };
 }
 

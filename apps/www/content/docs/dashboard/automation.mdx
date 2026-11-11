@@ -22,16 +22,17 @@ and the run log.
 
 Every condition must hold. With none, the rule runs for every matching event.
 
-| Condition                 | Matches                                                                                                                |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **Type**                  | The report type (Bug, Change, Question, Other), one or several                                                         |
-| **Priority**              | The current priority, one or several                                                                                   |
-| **Page URL pattern**      | The page path, written like a [page-scope pattern](/docs/dashboard/page-review): `/pricing`, `/product/:id`, `/docs/*` |
-| **Browser**               | Chrome, Safari, Firefox, Edge, Opera or Samsung Internet, from the captured environment                                |
-| **Reporter email domain** | The part after the `@` of the reporter's address, exact match (`acme.com` does not match `mail.acme.com`)              |
-| **Has label**             | At least one of the chosen labels is on the report                                                                     |
-| **Has an attachment**     | Yes or no                                                                                                              |
-| **Has a replay**          | Yes or no                                                                                                              |
+| Condition                 | Matches                                                                                                                                                    |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Type**                  | The report type (Bug, Change, Question, Other), one or several                                                                                             |
+| **Priority**              | The current priority, one or several                                                                                                                       |
+| **Page URL pattern**      | The page path, written like a [page-scope pattern](/docs/dashboard/page-review): `/pricing`, `/product/:id`, `/docs/*`                                     |
+| **Browser**               | Chrome, Safari, Firefox, Edge, Opera or Samsung Internet, from the captured environment                                                                    |
+| **Reporter email domain** | The part after the `@` of the reporter's address, exact match (`acme.com` does not match `mail.acme.com`)                                                  |
+| **Has label**             | At least one of the chosen labels is on the report                                                                                                         |
+| **Has an attachment**     | Yes or no                                                                                                                                                  |
+| **Has a replay**          | Yes or no                                                                                                                                                  |
+| **Custom field**          | An answer to one of the project's [custom fields](/docs/dashboard/custom-fields): is, is not, contains, greater or less than, has an answer, has no answer |
 
 ## Then (actions)
 

@@ -4,6 +4,12 @@ import {
   type AutomationCondition,
   type AutomationTrigger,
   type CaptureGeometry,
+  type CustomFieldOption,
+  type CustomFieldStrings,
+  type CustomFieldValidation,
+  type CustomFieldValues,
+  CUSTOM_FIELD_AUDIENCES,
+  CUSTOM_FIELD_TYPES,
   EMAIL_DELIVERY_STATUSES,
   EMAIL_DIGEST_FREQUENCIES,
   FEEDBACK_KINDS,
@@ -245,6 +251,8 @@ export const feedback = pgTable(
     anchor: jsonb("anchor"),
     environment: jsonb("environment"),
     metadata: jsonb("metadata"),
+    /** Answers to the project's custom fields (ADR 0032), `{ field key: value }`; empty answers are not stored. */
+    customFields: jsonb("custom_fields").$type<CustomFieldValues>().notNull().default({}),
     source: feedbackSourceEnum("source").notNull().default("widget"),
     roundId: uuid("round_id").references(() => reviewRound.id, { onDelete: "set null" }),
     /** The consent notice the reporter accepted (F-019): `{ version, acceptedAt }`. */
@@ -275,6 +283,7 @@ export const feedback = pgTable(
     index("feedback_search_idx").using("gin", t.search),
     index("feedback_duplicate_of_idx").on(t.duplicateOfId),
     index("feedback_review_link_idx").on(t.reviewLinkId),
+    index("feedback_custom_fields_idx").using("gin", sql`${t.customFields} jsonb_path_ops`),
     index("feedback_org_reporter_idx")
       .on(t.orgId, t.reporterId)
       .where(sql`${t.reporterId} is not null`),
@@ -1141,6 +1150,47 @@ export const automationRun = pgTable(
     ),
     tenantReference("automation_run_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
     tenantReference("automation_run_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
+  ],
+);
+
+/** A custom question a project asks on its report form (ADR 0032). Answers live on `feedback.custom_fields`. */
+export const customField = pgTable(
+  "custom_field",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    /** Stable identity: the key of the answer map, of API payloads and of automation conditions. Never edited. */
+    key: text("key").notNull(),
+    type: text("type", { enum: CUSTOM_FIELD_TYPES }).notNull(),
+    label: text("label").notNull(),
+    helpText: text("help_text").notNull().default(""),
+    placeholder: text("placeholder").notNull().default(""),
+    required: boolean("required").notNull().default(false),
+    /** `reporter` fields are asked in the widget; `internal` ones are filled in by the team. */
+    audience: text("audience", { enum: CUSTOM_FIELD_AUDIENCES }).notNull().default("reporter"),
+    /** Feedback kinds the field belongs to. */
+    kinds: text("kinds")
+      .array()
+      .notNull()
+      .default(sql`'{bug,idea,question}'::text[]`),
+    options: jsonb("options").$type<CustomFieldOption[]>().notNull().default([]),
+    defaultValue: jsonb("default_value"),
+    validation: jsonb("validation").$type<CustomFieldValidation>().notNull().default({}),
+    /** Personal data: masked from outbound channels in a project's privacy mode. */
+    pii: boolean("pii").notNull().default(false),
+    /** Translations of label, help text, placeholder and option labels, by widget locale. */
+    strings: jsonb("strings").$type<CustomFieldStrings>().notNull().default({}),
+    position: integer("position").notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("custom_field_project_key_uq").on(t.projectId, t.key),
+    index("custom_field_project_position_idx").on(t.projectId, t.position),
+    uniqueIndex("custom_field_id_org_uq").on(t.id, t.orgId),
+    tenantReference("custom_field_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
   ],
 );
 

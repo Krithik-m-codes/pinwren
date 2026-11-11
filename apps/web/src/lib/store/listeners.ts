@@ -23,7 +23,7 @@ import type { FeedbackListArgs } from "@/lib/inbox-filters";
 import type { StoreExtra } from "./api/base";
 import { type FeedbackFields, patchCachedFeedback, removeCachedFeedback } from "./api/feedback";
 import { onboardingApi } from "./api/onboarding";
-import { densityChanged, type InboxState } from "./slices/inbox";
+import { densityChanged, fieldColumnsChanged, type InboxState } from "./slices/inbox";
 import {
   eventIdSeen,
   followChanged,
@@ -360,16 +360,18 @@ export function createListeners(extra: StoreExtra, register = true) {
     },
   });
 
-  start({
-    actionCreator: densityChanged,
-    effect: (_a, l) => {
-      try {
-        localStorage.setItem(PREFS_KEY, JSON.stringify(l.getState().inbox.prefs));
-      } catch {
-        // storage blocked (private mode): the preference lasts for this visit
-      }
-    },
-  });
+  for (const actionCreator of [densityChanged, fieldColumnsChanged]) {
+    start({
+      actionCreator,
+      effect: (_a, l) => {
+        try {
+          localStorage.setItem(PREFS_KEY, JSON.stringify(l.getState().inbox.prefs));
+        } catch {
+          // storage blocked (private mode): the preference lasts for this visit
+        }
+      },
+    });
+  }
 
   return listener;
 }

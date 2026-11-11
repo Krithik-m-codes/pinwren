@@ -17,6 +17,8 @@ export type FeedbackPatch = Partial<{
   dueAt: string | null;
   duplicateOfId: string | null;
   kind: FeedbackKind;
+  /** Custom field answers by key; `null` clears one (ADR 0032). */
+  customFields: Record<string, unknown>;
 }>;
 
 /** Fields of a list row / detail the cache may patch in place (from a PATCH or a stream event). */

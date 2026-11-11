@@ -18,6 +18,8 @@ export const FILTER_PARAMS = {
   label: "labelId",
   reporter: "reporter",
   review: "reviewLinkId",
+  /** One custom field, `key:value` (ADR 0032). */
+  cf: "cf",
   sort: "sort",
   order: "order",
 } as const satisfies Record<string, keyof ViewFilters>;
@@ -36,6 +38,7 @@ export const NARROWING_PARAMS = [
   "label",
   "reporter",
   "review",
+  "cf",
   "q",
 ] as const satisfies readonly Param[];
 
@@ -143,6 +146,7 @@ export const extraFilterCount = (f: ViewFilters) =>
     f.labelId,
     f.reporter,
     f.reviewLinkId,
+    f.cf,
   ].filter(Boolean).length;
 
 /** URL changes that clear every narrowing filter (and search), keeping project, status and order. */
@@ -156,6 +160,7 @@ export const CLEAR_FILTERS: Record<(typeof NARROWING_PARAMS)[number] | "item", n
   label: null,
   reporter: null,
   review: null,
+  cf: null,
   q: null,
   item: null,
 };

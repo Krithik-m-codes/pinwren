@@ -15,6 +15,7 @@ import { validation } from "./en/validation";
 import { gallery } from "./en/gallery";
 import { guest } from "./en/guest";
 import { automation } from "./en/automation";
+import { customFields } from "./en/custom-fields";
 import { billing } from "./en/billing";
 import { cloud } from "./en/cloud";
 import { dashboard } from "./en/dashboard";
@@ -49,6 +50,7 @@ export const en = {
   ...gallery,
   ...billing,
   ...automation,
+  ...customFields,
   ...cloud,
   ...dashboard,
   ...global,
