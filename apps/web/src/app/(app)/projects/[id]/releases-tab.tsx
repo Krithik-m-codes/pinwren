@@ -47,6 +47,8 @@ export function ReleasesTab({ project }: { project: ProjectDetail }) {
   const t = useT();
   const { isAdmin } = useViewer();
   const releases = useReleasesQuery(project.id);
+  // A fresh form after each record: the live list re-renders around it, and a remount is the one clear that sticks.
+  const [formKey, setFormKey] = useState(0);
   const list = releases.data?.releases ?? [];
 
   return (
@@ -60,7 +62,9 @@ export function ReleasesTab({ project }: { project: ProjectDetail }) {
           <CardDescription>{t("releases.intro")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {isAdmin && <NewRelease projectId={project.id} />}
+          {isAdmin && (
+            <NewRelease key={formKey} projectId={project.id} onRecorded={() => setFormKey((k) => k + 1)} />
+          )}
           {releases.isLoading ? (
             <div className="space-y-2">
               <Skeleton className="h-9 w-full" />
@@ -143,7 +147,7 @@ function RegressionSettings({ project: p }: { project: ProjectDetail }) {
   );
 }
 
-function NewRelease({ projectId }: { projectId: string }) {
+function NewRelease({ projectId, onRecorded }: { projectId: string; onRecorded: () => void }) {
   const { t, tn } = useI18n();
   const [record] = useRecordReleaseMutation();
   const form = useZodForm(releaseForm, {
@@ -169,7 +173,7 @@ function NewRelease({ projectId }: { projectId: string }) {
             : {}),
         },
       );
-      form.reset({ version: "", commit: "", notes: "" });
+      onRecorded();
     } catch (e) {
       toast.error(t("releases.recordFailed"), { description: errorMessage(e) });
     }

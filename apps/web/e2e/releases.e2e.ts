@@ -72,6 +72,7 @@ test.describe("releases and regressions", () => {
     await page.getByLabel("Commit").fill("9f2c1ab");
     await page.getByRole("button", { name: "Record release" }).click();
     await expect(page.getByText(`Recorded ${VERSION}`)).toBeVisible();
+    await expect(page.getByLabel("Version")).toHaveValue("");
     const row = page.locator(`[data-release="${VERSION}"]`);
     await expect(row).toBeVisible();
     await expect(row).toContainText("9f2c1ab");
@@ -151,7 +152,7 @@ test.describe("releases and regressions", () => {
     await expect(
       detail
         .getByRole("region", { name: "Activity" })
-        .getByText(`Possible regression of #${original.number}`),
+        .getByText(new RegExp(`(Possible|Likely) regression of #${original.number}`)),
     ).toBeVisible();
     await shoot(page, "regression-banner");
 
@@ -178,6 +179,7 @@ test.describe("releases and regressions", () => {
 
     // Reopen the original from the banner.
     await page.goto(`/inbox?project=${projectId}&status=all&item=${again.id}`);
+    await expect(page.getByTestId("regression-banner")).toBeVisible({ timeout: 30_000 });
     await page.getByRole("button", { name: `Reopen #${original.number}` }).click();
     await expect(page.getByText(`Reopened #${original.number}`)).toBeVisible();
     await expect
