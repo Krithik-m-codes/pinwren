@@ -20,6 +20,7 @@ import { cloud } from "./en/cloud";
 import { dashboard } from "./en/dashboard";
 import { global } from "./en/global";
 import { handoff } from "./en/handoff";
+import { recording } from "./en/recording";
 import { share } from "./en/share";
 import { slack } from "./en/slack";
 
@@ -52,6 +53,7 @@ export const en = {
   ...dashboard,
   ...global,
   ...handoff,
+  ...recording,
   ...share,
   ...slack,
 } as const;

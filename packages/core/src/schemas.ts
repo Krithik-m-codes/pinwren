@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_RECORDING_SECONDS } from "./config";
 
 // Wire types shared by the API, the dashboard and the widget. Never hand-write a request or
 // response type elsewhere — derive it from these schemas (blueprint 04, "packages/core").
@@ -170,6 +171,31 @@ export const widgetReplay = z.object({
 });
 export type WidgetReplay = z.infer<typeof widgetReplay>;
 
+// --- Widget: screen recording with optional narration (ADR 0029) ---------------------------------------
+
+/** What `MediaRecorder` produces: WebM (Chrome, Firefox, Edge) or MP4 (Safari). The codec parameter is dropped. */
+export const RECORDING_CONTENT_TYPES = ["video/webm", "video/mp4"] as const;
+export const MAX_RECORDING_BYTES = 16 * 1024 * 1024;
+
+export const widgetRecording = z.object({
+  // base64 of 16 MB is ~22.4 M characters, plus the data-URL prefix.
+  dataUrl: z
+    .string()
+    .regex(/^data:video\/(webm|mp4);base64,/)
+    .max(22_400_100),
+  durationMs: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_RECORDING_SECONDS * 1000),
+  /** Whether the reporter's voice is on the recording. */
+  audio: z.boolean(),
+  /** Pixel size of the video, for the dashboard's player. */
+  width: z.number().int().min(1).max(8192).optional(),
+  height: z.number().int().min(1).max(8192).optional(),
+});
+export type WidgetRecording = z.infer<typeof widgetRecording>;
+
 // --- Widget: annotation layer + capture geometry (wave-5 contract §1) ---------------------------------
 
 export const ANNOTATION_TOOLS = [
@@ -295,6 +321,8 @@ export const widgetFeedbackCreate = z.object({
   consent: widgetConsent.optional(),
   /** Session replay (F-007): gzip of a JSON array of rrweb events, ≤ 10 MB decoded. */
   replay: widgetReplay.optional(),
+  /** Screen recording (ADR 0029), ≤ 16 MB decoded; stored as an attachment when the project allows recordings. */
+  recording: widgetRecording.optional(),
   /** Vector shapes over `screenshot` (which is then the unflattened capture). Stored on the screenshot asset. */
   annotations: annotationLayer.optional(),
   /** The viewport `screenshot` was taken in. Stored on the screenshot asset. */

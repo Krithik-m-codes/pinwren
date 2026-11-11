@@ -190,7 +190,7 @@ The rules run in the browser only; `data-force-show` overrides them. Details in
 
 ## Capture
 
-Set on the **Capture** tab: **Diagnostics** (including screenshot quality), **Session replay** and **Masked elements**.
+Set on the **Capture** tab: **Diagnostics** (including screenshot quality), **Session replay**, **Screen recording** and **Masked elements**.
 
 <TypeTable
   type={{
@@ -239,6 +239,22 @@ Set on the **Capture** tab: **Diagnostics** (including screenshot quality), **Se
       type: "number",
       description: "Length of the buffer, 30–120 seconds (the Length slider moves in 10 s steps).",
       default: "60",
+    },
+    "recording.enabled": {
+      type: "boolean | null",
+      description:
+        "Offer reporters Record screen in the bug report. null follows the project: on, but off in privacy mode; true or false is an explicit choice. See Screen recording.",
+      default: "null",
+    },
+    "recording.maxSeconds": {
+      type: "number",
+      description: "Longest recording, 10–300 seconds; it stops by itself at this length.",
+      default: "120",
+    },
+    "recording.microphone": {
+      type: "boolean",
+      description: "Offer voice narration (the browser still asks the reporter for the microphone).",
+      default: "true",
     },
   }}
 />

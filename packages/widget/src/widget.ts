@@ -10,6 +10,7 @@ import {
   type FeedbackPayload,
   mergeMetadata,
   readableOn,
+  resolveCapture,
   type WidgetConfig,
 } from "./config";
 import { installDiagnostics, snapshotDiagnostics, uninstallDiagnostics } from "./diagnostics";
@@ -167,15 +168,7 @@ export class PinwrenWidget {
   private recorder: Recorder | null = null;
   private replayMod: ReplayModule | null = null;
   private rightDown = { t: 0, x: 0, y: 0 };
-  private capture: CaptureCfg = {
-    console: "warnings",
-    network: "failures",
-    maskSelectors: [],
-    quality: "standard",
-    allowReduceQuality: true,
-    replay: { enabled: false, seconds: 60 },
-    screenshotOnComment: false,
-  };
+  private capture: CaptureCfg = resolveCapture(undefined);
   private outbox: Outbox<FeedbackPayload, Created> | null = null;
   private queued = 0;
   private draftWaiting = false;
