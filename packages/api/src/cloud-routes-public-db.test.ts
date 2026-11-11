@@ -724,7 +724,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)(
           Promise.resolve(
             new Response(
               JSON.stringify(
-                url.includes("asana.com")
+                new URL(url).hostname === "app.asana.com"
                   ? { data: { completed: true } }
                   : { properties: { Status: { type: "status", status: { name: "Done" } } } },
               ),

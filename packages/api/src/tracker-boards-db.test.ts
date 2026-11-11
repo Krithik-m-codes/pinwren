@@ -41,6 +41,7 @@ vi.mock("./outbound/safe-fetch", async (original) => ({
 
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- the cases read parsed JSON responses and SQL rows */
 type Json = Record<string, any>;
+const host = (url: string) => new URL(url).hostname;
 type Call = { url: string; method: string; body: any };
 
 const REPO = {
@@ -138,7 +139,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Board trackers", () =
   /** A tracker that is empty and accepts everything, answering each provider's create with a fresh id. */
   const friendly = (c: Call): { status?: number; json?: unknown } => {
     const u = c.url;
-    if (u.includes("trello.com")) {
+    if (host(u) === "api.trello.com") {
       if (c.method === "GET" && u.includes("/cards")) return { json: [] };
       if (u.endsWith("/cards"))
         return { json: { id: `card-${randomUUID()}`, idShort: 5, shortUrl: "https://trello.com/c/abc" } };
@@ -146,7 +147,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Board trackers", () =
       if (u.includes("/lists/")) return { json: { idBoard: REPO.trello } };
       return { json: { id: REPO.trello, name: "Roadmap" } };
     }
-    if (u.includes("asana.com")) {
+    if (host(u) === "app.asana.com") {
       if (u.endsWith("/tasks"))
         return {
           json: { data: { gid: `gid-${randomUUID()}`, permalink_url: "https://app.asana.com/0/1/2" } },
@@ -154,7 +155,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Board trackers", () =
       if (c.method === "GET" && u.includes("/tasks?")) return { json: { data: [] } };
       return { json: { data: { name: "Website", gid: "asana-hook" } } };
     }
-    if (u.includes("clickup.com")) {
+    if (host(u) === "api.clickup.com") {
       if (u.includes("/webhook"))
         return { json: { id: "cu-hook", webhook: { id: "cu-hook", secret: "clickup-signing-secret" } } };
       if (u.endsWith("/team")) return { json: { teams: [{ id: "333" }] } };
@@ -369,7 +370,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Board trackers", () =
   it("registers webhooks: Asana's handshake, ClickUp's secret, and Trello only once it has its app secret", async () => {
     // Asana calls the target while the registration request is open; here the mock plays Asana.
     answer = (c) => {
-      if (c.url.includes("asana.com") && c.url.endsWith("/webhooks") && c.method === "POST")
+      if (host(c.url) === "app.asana.com" && c.url.endsWith("/webhooks") && c.method === "POST")
         return { json: { data: { gid: "asana-hook" } } };
       return friendly(c);
     };
@@ -380,7 +381,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Board trackers", () =
         body: init?.body ? JSON.parse(init.body) : undefined,
       };
       calls.push(c);
-      if (c.url.includes("asana.com") && c.url.endsWith("/webhooks") && c.method === "POST") {
+      if (host(c.url) === "app.asana.com" && c.url.endsWith("/webhooks") && c.method === "POST") {
         const target = new URL(c.body.data.target as string);
         const hello = await request(`${target.pathname}${target.search}`, {
           method: "POST",
