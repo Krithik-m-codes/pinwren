@@ -8,6 +8,18 @@ From the first release on, release-please adds a section per version from the Co
 `main`; the widget's own changes are also listed in [`packages/widget/CHANGELOG.md`](packages/widget/CHANGELOG.md)
 once it is published.
 
+## [0.6.0](https://github.com/Krithik-m-codes/pinwren/compare/v0.5.0...v0.6.0) (2026-11-11)
+
+
+### Features
+
+* custom fields and form builder ([#63](https://github.com/Krithik-m-codes/pinwren/issues/63)) ([25a8640](https://github.com/Krithik-m-codes/pinwren/commit/25a86405c9aad827af11a3d2675a307c29451acd))
+* interactive slack with buttons, slash command and message capture ([#59](https://github.com/Krithik-m-codes/pinwren/issues/59)) ([40bc335](https://github.com/Krithik-m-codes/pinwren/commit/40bc335222c0aebba38c31b6caf5c6e23befe3ae))
+* release tracking, fixed-in and regression detection ([#64](https://github.com/Krithik-m-codes/pinwren/issues/64)) ([fa1e373](https://github.com/Krithik-m-codes/pinwren/commit/fa1e3737e27ed7360b6b0a339f4b66442ab39939))
+* server-side named and shared dashboards with filter bar ([#60](https://github.com/Krithik-m-codes/pinwren/issues/60)) ([7d36ea3](https://github.com/Krithik-m-codes/pinwren/commit/7d36ea3b28f6fe2abce7a5eb095075a4e7d6ead7))
+* tracker adapter sdk with trello, asana, clickup and notion ([#61](https://github.com/Krithik-m-codes/pinwren/issues/61)) ([8e1b514](https://github.com/Krithik-m-codes/pinwren/commit/8e1b514dcfc517b6e3a5dfa49f51785f5d1384ea))
+* **widget:** screen recording with optional voice narration ([#58](https://github.com/Krithik-m-codes/pinwren/issues/58)) ([900cd1a](https://github.com/Krithik-m-codes/pinwren/commit/900cd1a3b9193047242911c7895782df10fda953))
+
 ## [0.5.0](https://github.com/Krithik-m-codes/pinwren/compare/v0.4.0...v0.5.0) (2026-11-10)
 
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.0](https://github.com/Krithik-m-codes/pinwren/compare/mcp-v0.3.0...mcp-v0.4.0) (2026-11-11)
+
+
+### Features
+
+* custom fields and form builder ([#63](https://github.com/Krithik-m-codes/pinwren/issues/63)) ([25a8640](https://github.com/Krithik-m-codes/pinwren/commit/25a86405c9aad827af11a3d2675a307c29451acd))
+* release tracking, fixed-in and regression detection ([#64](https://github.com/Krithik-m-codes/pinwren/issues/64)) ([fa1e373](https://github.com/Krithik-m-codes/pinwren/commit/fa1e3737e27ed7360b6b0a339f4b66442ab39939))
+* server-side named and shared dashboards with filter bar ([#60](https://github.com/Krithik-m-codes/pinwren/issues/60)) ([7d36ea3](https://github.com/Krithik-m-codes/pinwren/commit/7d36ea3b28f6fe2abce7a5eb095075a4e7d6ead7))
+
 ## [0.3.0](https://github.com/Krithik-m-codes/pinwren/compare/mcp-v0.2.0...mcp-v0.3.0) (2026-11-10)
 
 
