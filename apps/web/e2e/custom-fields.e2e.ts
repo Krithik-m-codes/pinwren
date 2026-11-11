@@ -6,7 +6,11 @@ import { expect, test } from "./fixtures";
 // the widget API into the item (shown, edited), the inbox filter and the export; finally delete the fields.
 
 test.describe("custom fields and the form builder", () => {
+  // The workspace is shared with the other specs, which count its items: what a test files goes to the trash.
+  const filed: string[] = [];
+
   test.afterEach(async ({ request }) => {
+    for (const id of filed.splice(0)) await request.delete(`/api/feedback/${id}`);
     const { projectId } = seed();
     await request.put(`/api/projects/${projectId}/custom-fields`, { data: { fields: [] } });
   });
@@ -109,6 +113,7 @@ test.describe("custom fields and the form builder", () => {
     });
     expect(sent.status()).toBe(201);
     const { id } = ((await sent.json()) as { feedback: { id: string } }).feedback;
+    filed.push(id);
 
     await page.goto(`/inbox?project=${projectId}&status=all&item=${id}`);
     const card = page.getByTestId("custom-fields-card");
