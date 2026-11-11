@@ -29,7 +29,7 @@ import {
   TrackerError,
 } from "./trackers";
 
-// Issue sync (F-076 GitHub, F-077 GitLab, F-078 Linear, F-079 Jira Cloud; ADR 0029: Trello, Asana, ClickUp,
+// Issue sync (F-076 GitHub, F-077 GitLab, F-078 Linear, F-079 Jira Cloud; ADR 0032: Trello, Asana, ClickUp,
 // Notion). The per-tracker API calls live in `adapters/`; this file is the tracker-independent half. Creating an issue and pushing a
 // state change are jobs (retried with backoff) — a tracker outage never blocks ingest or triage. The
 // inbound side lives in `routes/inbound.ts`. Jira is an Enterprise feature (blueprint 07): without the

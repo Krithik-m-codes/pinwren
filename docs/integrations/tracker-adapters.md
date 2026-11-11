@@ -1,6 +1,6 @@
 # Writing a tracker adapter
 
-Issue-tracker sync (F-076–F-079 and, since [ADR 0029](../adr/0029-tracker-adapters-and-board-trackers.md), Trello,
+Issue-tracker sync (F-076–F-079 and, since [ADR 0032](../adr/0032-tracker-adapters-and-board-trackers.md), Trello,
 Asana, ClickUp and Notion) is built from **adapters**. An adapter is the only code that knows one tracker's API; the
 jobs, links, activity timeline, tenant checks, licence gates, rate limits and routes above it are the same for every
 tracker. Adding a tracker should not touch any of them.

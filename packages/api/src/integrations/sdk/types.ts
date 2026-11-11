@@ -1,7 +1,7 @@
 import type { IssueProvider } from "@pinwren/core";
 import type { OutboundFetch } from "../../outbound/safe-fetch";
 
-// The tracker adapter contract (ADR 0029). One adapter per issue tracker: it turns Pinwren's "create an item",
+// The tracker adapter contract (ADR 0032). One adapter per issue tracker: it turns Pinwren's "create an item",
 // "close / reopen it" and "can this token see the project?" into that tracker's API calls, and — when the
 // tracker can call us back — says how its webhooks are registered, verified and read. Everything above the
 // adapters (jobs, links, activity, tenant checks, licence gates, routes) is the same for every tracker; see

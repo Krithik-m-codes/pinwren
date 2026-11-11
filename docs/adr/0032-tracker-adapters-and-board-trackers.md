@@ -1,4 +1,4 @@
-# ADR 0029 — Tracker adapter SDK and the board trackers (Trello, Asana, ClickUp, Notion)
+# ADR 0032 — Tracker adapter SDK and the board trackers (Trello, Asana, ClickUp, Notion)
 
 **Status:** accepted (extends ADR 0015; no blueprint feature id — the blueprint names GitHub, GitLab, Linear and Jira)
 
@@ -20,7 +20,7 @@ webhooks are registered, handshaken or signed in four different ways.
 2. **A shared JSON client** (`sdk/http.ts`) with the tracker's own error text (never a raw body), the outbound guard,
    and opt-in rate-limit backoff: `429`/`503` (and transient read failures) are retried twice honouring `Retry-After`;
    a longer wait fails the job with `retryAfterMs` so the queue's own backoff takes over. Only the new adapters opt in.
-3. **Schema (migration 0014):** `issue_provider` gains `trello`, `asana`, `clickup`, `notion`; `issue_link.number`
+3. **Schema (migration 0018):** `issue_provider` gains `trello`, `asana`, `clickup`, `notion`; `issue_link.number`
    becomes nullable and gains `external_id` (the tracker's own id); `issue_integration` gains `settings jsonb`
    (non-secret mapping: target list, done state, priority), `webhook_ref` (the webhook Pinwren registered) and
    `webhook_pending` (waiting for the signing secret). `repo` holds the board id (Trello), project gid (Asana), list id

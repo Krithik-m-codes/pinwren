@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import { ISSUE_PROVIDERS } from "@pinwren/core";
 import { beforeAll, describe, expect, it } from "vitest";
 
-// The tracker adapter SDK and the Trello / Asana / ClickUp / Notion adapters (ADR 0029). Every outbound call
+// The tracker adapter SDK and the Trello / Asana / ClickUp / Notion adapters (ADR 0032). Every outbound call
 // goes through an injected fetch: nothing here touches the network or a database.
 
 beforeAll(() => {
