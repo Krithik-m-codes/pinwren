@@ -1,6 +1,6 @@
 import type { StatsArgs } from "@/lib/store/api/stats";
 
-// The dashboard-wide filter bar (ADR 0029): project, label, assignee and a date range, kept in the URL of the
+// The dashboard-wide filter bar (ADR 0033): project, label, assignee and a date range, kept in the URL of the
 // home dashboard so a filtered view can be linked. They narrow every widget through `/api/stats`.
 
 export type DashFilters = {

@@ -527,7 +527,7 @@ export const userPreference = pgTable("user_preference", {
   /** The dashboard language (`LOCALES` in core); null = follow the browser. */
   locale: text("locale"),
   lastDigestAt: timestamp("last_digest_at", { withTimezone: true }),
-  /** Interface state that follows the person between browsers: start page, dismissed prompts (ADR 0029). */
+  /** Interface state that follows the person between browsers: start page, dismissed prompts (ADR 0033). */
   uiState: jsonb("ui_state").$type<Record<string, unknown>>().notNull().default({}),
   /** Storage key of an uploaded avatar; `user.image` then points at `/api/avatars/:userId`. */
   avatarKey: text("avatar_key"),

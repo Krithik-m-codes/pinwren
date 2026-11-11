@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { APP_ROLES } from "./roles";
 
-// Server-stored dashboards (ADR 0029): named layouts per person and screen, optionally published to the
+// Server-stored dashboards (ADR 0033): named layouts per person and screen, optionally published to the
 // workspace, plus the small per-account and per-workspace preference bags that used to live in the browser.
 // The widget catalogue itself stays in the dashboard app (it carries translation keys); the server only
 // checks the shape of a layout and caps its size, so a release can add or retire a widget without a

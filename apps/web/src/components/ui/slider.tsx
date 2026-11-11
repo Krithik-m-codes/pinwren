@@ -9,8 +9,12 @@ function Slider({
   min = 0,
   max = 100,
   disabled,
+  getThumbAriaValueText,
   ...props
-}: SliderPrimitive.Root.Props) {
+}: SliderPrimitive.Root.Props & {
+  /** Spoken value of each thumb, for a slider whose raw number means little to a screen reader (a media position). */
+  getThumbAriaValueText?: (formattedValue: string, value: number, index: number) => string;
+}) {
   const readOnly = useReadOnly();
   const _values = Array.isArray(value) ? value : Array.isArray(defaultValue) ? defaultValue : [min, max];
 
@@ -40,6 +44,9 @@ function Slider({
           <SliderPrimitive.Thumb
             data-slot="slider-thumb"
             key={index}
+            // The label belongs on the focusable thumb (the range input), not only on the group around it.
+            aria-label={_values.length === 1 ? props["aria-label"] : undefined}
+            getAriaValueText={getThumbAriaValueText}
             className="relative block size-3 shrink-0 rounded-full border border-ring bg-white ring-ring/50 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 disabled:pointer-events-none disabled:opacity-50"
           />
         ))}

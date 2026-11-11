@@ -3,6 +3,7 @@ import { type Catalog, LOCALES, pickLocale, setCatalog, t, tn } from "./i18n";
 import de from "./locales/de";
 import { en as enCore } from "./locales/en";
 import { enErrors } from "./locales/en-errors";
+import { enRecord } from "./locales/en-record";
 import { enPanel } from "./locales/en-panel";
 import { enReport } from "./locales/en-report";
 import { enShots } from "./locales/en-shots";
@@ -15,10 +16,32 @@ import nl from "./locales/nl";
 import ptBR from "./locales/pt-BR";
 import ru from "./locales/ru";
 import zh from "./locales/zh";
+import deRecord from "./locales/de-record";
+import esRecord from "./locales/es-record";
+import frRecord from "./locales/fr-record";
+import hiRecord from "./locales/hi-record";
+import itRecord from "./locales/it-record";
+import jaRecord from "./locales/ja-record";
+import nlRecord from "./locales/nl-record";
+import ptBRRecord from "./locales/pt-BR-record";
+import ruRecord from "./locales/ru-record";
+import zhRecord from "./locales/zh-record";
 
 // The full English catalogue: the core's strings plus each lazy chunk's.
-const en = { ...enCore, ...enPanel, ...enReport, ...enShots, ...enErrors };
-const CATALOGS: Record<string, Catalog> = { de, es, fr, hi, it: it_, ja, nl, "pt-BR": ptBR, ru, zh };
+const en = { ...enCore, ...enPanel, ...enReport, ...enShots, ...enErrors, ...enRecord };
+// Each language is its file plus the per-chunk files next to it; build.mjs merges them the same way.
+const CATALOGS: Record<string, Catalog> = {
+  de: { ...de, ...deRecord },
+  es: { ...es, ...esRecord },
+  fr: { ...fr, ...frRecord },
+  hi: { ...hi, ...hiRecord },
+  it: { ...it_, ...itRecord },
+  ja: { ...ja, ...jaRecord },
+  nl: { ...nl, ...nlRecord },
+  "pt-BR": { ...ptBR, ...ptBRRecord },
+  ru: { ...ru, ...ruRecord },
+  zh: { ...zh, ...zhRecord },
+};
 
 describe("pickLocale", () => {
   it("prefers data-locale, then the browser's languages, then English", () => {

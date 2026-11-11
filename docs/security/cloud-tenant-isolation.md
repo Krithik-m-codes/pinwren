@@ -304,7 +304,7 @@ three direct-ownership tables, each with the `pinwren_tenant` policy and composi
 
 ## Dashboards and per-person state
 
-Design: `docs/adr/0029-server-dashboards-named-shared.md`. Migration `0017` adds two direct-ownership tables with the
+Design: `docs/adr/0033-server-dashboards-named-shared.md`. Migration `0017` adds two direct-ownership tables with the
 `pinwren_tenant` policy, both in `tenant-inventory.ts`, and one identity column:
 
 | Table / column             | Scope                          | Notes                                                                                                                 |

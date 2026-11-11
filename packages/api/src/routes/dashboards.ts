@@ -23,7 +23,7 @@ import {
   workspacePreferences,
 } from "../services/dashboards";
 
-// Named and shared dashboards (ADR 0029), plus the small per-person state that used to live in the browser.
+// Named and shared dashboards (ADR 0033), plus the small per-person state that used to live in the browser.
 // Mounted inside the dashboard router, so the session and the viewer guard apply; viewers keep personal
 // dashboards (see VIEWER_ALLOWED_MUTATIONS) but cannot publish.
 

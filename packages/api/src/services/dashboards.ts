@@ -22,7 +22,7 @@ import { env } from "../env";
 import { ApiError, forbidden, notFound } from "../errors";
 import { isReadOnlyRole, readOnlyError } from "../permissions";
 
-// Named, shareable dashboards (ADR 0029). Every query names the caller's organisation; a dashboard is visible
+// Named, shareable dashboards (ADR 0033). Every query names the caller's organisation; a dashboard is visible
 // to its owner and, when shared, to the whole workspace, but only its owner (or an Admin, for a shared one)
 // may change it.
 

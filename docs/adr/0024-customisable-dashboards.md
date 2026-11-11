@@ -1,6 +1,6 @@
 # ADR 0024 — Customisable dashboards (home page and overview strips)
 
-**Status:** accepted. Persistence (per browser) is superseded by [ADR 0029](0029-server-dashboards-named-shared.md).
+**Status:** accepted. Persistence (per browser) is superseded by [ADR 0033](0033-server-dashboards-named-shared.md).
 
 The dashboard grew a home page (`/dashboard`) and a collapsible overview strip on the inbox, projects, a project
 and notifications. The pattern comes from the DocuSigner v2 dashboard builder (see

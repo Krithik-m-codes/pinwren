@@ -21,6 +21,7 @@ import { dashboard } from "./en/dashboard";
 import { dashx } from "./en/dashx";
 import { global } from "./en/global";
 import { handoff } from "./en/handoff";
+import { recording } from "./en/recording";
 import { share } from "./en/share";
 
 // The dashboard's English strings: the source of every translation key. They are split by area (en/*.ts) so
@@ -53,6 +54,7 @@ export const en = {
   ...dashx,
   ...global,
   ...handoff,
+  ...recording,
   ...share,
 } as const;
 

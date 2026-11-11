@@ -15,7 +15,7 @@ import { defaultLayout, type Layout, normaliseLayout, sameLayout, type Scope } f
 import { canEditDashboard, resolveActive } from "./resolve";
 import { useLayoutCache, useLegacyLayout } from "./storage";
 
-// The dashboards of one screen for the signed-in person (ADR 0029): the server list (own and shared), which
+// The dashboards of one screen for the signed-in person (ADR 0033): the server list (own and shared), which
 // one is open, and the actions on it. Layout edits go straight to the server (optimistically); a screen the
 // server has not answered yet shows the last layout cached in the browser, and the pre-server localStorage
 // layout is imported once into the account.

@@ -6,7 +6,7 @@ import { serverApi } from "@/lib/server/api";
 
 /**
  * `/` opens the screen the person chose as their start page (Settings › Profile), the inbox by default. The
- * cookie answers at once; a browser that has none yet asks the account (the choice follows the person, ADR 0029).
+ * cookie answers at once; a browser that has none yet asks the account (the choice follows the person, ADR 0033).
  */
 export default function Home() {
   return (
