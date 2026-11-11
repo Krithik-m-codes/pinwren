@@ -47,9 +47,13 @@ export type TrackerCreate = {
   apiUrl: string | null;
   /** Jira: the account email. */
   email?: string;
+  /** Trello: the API key. */
+  apiKey?: string;
+  /** Board trackers: target list / status / priority mapping. */
+  settings?: Record<string, string>;
   labels: string[];
   autoCreate: IssueIntegration["autoCreate"];
-  /** Linear: the signing secret Linear shows for its webhook. */
+  /** Linear: the signing secret Linear shows for its webhook. Trello: the Power-Up's app secret. */
   webhookSecret?: string;
 };
 
@@ -187,9 +191,22 @@ export const projectsApi = accountApi.injectEndpoints({
       query: ({ id }) => ({ url: `/integrations/${id}/test`, method: "POST" }),
       invalidatesTags: (_r, _e, { projectId }) => [{ type: "Tracker", id: projectId }],
     }),
-    trackerWebhookSecret: build.query<{ secret: string; url: string }, string>({
+    trackerWebhookSecret: build.query<{ secret: string | null; url: string; pending: boolean }, string>({
       query: (id) => `/integrations/${id}/webhook-secret`,
       keepUnusedDataFor: 0,
+    }),
+    /** Trello / Asana / ClickUp: register (or re-register) the webhook at the tracker. */
+    registerTrackerWebhook: build.mutation<
+      { integration: IssueIntegration },
+      { id: string; projectId: string }
+    >({
+      query: ({ id }) => ({ url: `/integrations/${id}/register-webhook`, method: "POST" }),
+      invalidatesTags: (_r, _e, { projectId }) => [{ type: "Tracker", id: projectId }],
+    }),
+    /** Notion: forget the verification token and wait for the next one. */
+    restartTrackerHandshake: build.mutation<unknown, { id: string; projectId: string }>({
+      query: ({ id }) => ({ url: `/integrations/${id}/rotate-webhook-secret`, method: "POST" }),
+      invalidatesTags: (_r, _e, { projectId }) => [{ type: "Tracker", id: projectId }],
     }),
     deleteTracker: build.mutation<unknown, { id: string; projectId: string }>({
       query: ({ id }) => ({ url: `/integrations/${id}`, method: "DELETE" }),

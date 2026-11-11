@@ -1,0 +1,53 @@
+---
+title: Write a tracker adapter
+description: How Pinwren's issue-tracker sync is built, and how to connect another tracker to it.
+---
+
+Issue sync for GitHub, GitLab, Linear, Jira, Trello, Asana, ClickUp and Notion is built from **adapters**. An adapter is
+the only code that knows one tracker's API. Everything above it is shared: the background jobs and their retries, the
+link between an item and its issue, the activity timeline, tenant isolation, licence checks, the dashboard's _Send to …_
+button and the webhook routes. Adding a tracker doesn't touch any of them.
+
+The full guide, with the checklist, is in the repository at
+[`docs/integrations/tracker-adapters.md`](https://github.com/Krithik-m-codes/pinwren/blob/main/docs/integrations/tracker-adapters.md);
+this page is the short version.
+
+## The contract
+
+An adapter lives in `packages/api/src/integrations/adapters/<name>.ts` and implements `TrackerAdapter`
+(`integrations/sdk/types.ts`):
+
+| Method                                     | What it does                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `createIssue(cfg, issue, fetch)`           | Creates the card, task, page or issue and returns `{ number, url, externalId }`             |
+| `setIssueState(cfg, target, state, fetch)` | Closes or reopens the item `target` names (by number or by the tracker's own id)            |
+| `checkAccess(cfg, fetch)`                  | Powers **Test connection**: can this token see the project, board, list or database?        |
+| `findExisting(cfg, issue, fetch)`          | Optional. Finds an item an interrupted create already made, so a retry doesn't duplicate it |
+| `webhooks`                                 | Optional. Registers, verifies and reads the tracker's webhooks for two-way sync             |
+
+`cfg` is the decrypted integration (token, the id of the project, per-project mapping settings); `fetch` is Pinwren's
+outbound-guarded `fetch`, which is a plain fake in tests. Adapters never touch the database.
+
+## What the SDK gives you
+
+- **`trackerClient`** — a JSON client that turns an HTTP error into the tracker's own message (a raw response body is
+  never repeated), sends every request through the outbound guard, and, when you set `retries`, waits and retries on
+  `429`/`503` using `Retry-After` (or exponential backoff). Waits longer than a few seconds are left to the job queue.
+- **Idempotent creates** — an existing link is returned, and `findExisting` closes the gap where the job died after the
+  tracker answered.
+- **Safe bodies** — `issueBody()` escapes the reporter's text for Markdown trackers; trackers with plain-text or block
+  fields receive the raw quote and facts as `issue.source` and must keep them in text fields.
+- **Webhook plumbing** — for a `WebhookAdapter` you supply `verify`, `events` and, depending on the tracker, `register`
+  or a one-time `handshake`. The route checks the delivery against the one integration named in the URL, enforces rate
+  and size limits, accepts a handshake only while the integration is waiting for its secret, and acts on each delivery
+  once.
+
+## Checklist
+
+1. Add the provider to `ISSUE_PROVIDERS` in `packages/core` (and its repository-id rule and mapping keys).
+2. Write the adapter and register it in `adapters/index.ts`.
+3. Add a migration for the `issue_provider` enum, and for a webhook route the entry in `routes/inbound.ts`, the route
+   inventory and a case in `cloud-routes-public-db.test.ts`.
+4. Add the dashboard entry (icon, fields, strings in every catalogue) and a docs page.
+5. Test with a fake `fetch`: create, both state changes, test connection, errors, rate limiting, and every webhook path.
+   Tests must never call a real account.

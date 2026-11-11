@@ -134,6 +134,6 @@ Everyone manages their own profile, avatar, password and notification preference
 ## Next steps
 
 - Connect Slack, Discord, Microsoft Teams, Telegram or ntfy under **Settings › Integrations**, and GitHub, GitLab,
-  Linear or Jira in a project's **Issue trackers** tab.
+  Linear, Jira, Trello, Asana, ClickUp or Notion in a project's **Issue trackers** tab.
 - Back up the `pinwren-db` and `pinwren-data` volumes: [backups](../../apps/www/content/docs/self-hosting/backups.mdx).
 - Export a project (JSON + files) or erase everything one reporter sent from the project's **Privacy & data** tab.

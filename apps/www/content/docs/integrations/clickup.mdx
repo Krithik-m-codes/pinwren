@@ -1,0 +1,65 @@
+---
+title: ClickUp
+description: Create a ClickUp task for each feedback item and keep its status in sync — in every edition.
+---
+
+Pinwren opens one task per feedback item in a ClickUp list. Moving the task to a closed status resolves the item;
+resolving the item sets the list's closed status; reopening sets its first open status. ClickUp is available in every
+edition.
+
+## Connect a project
+
+<Steps>
+<Step>
+
+**Create a personal API token** in ClickUp › **Settings › Apps**. Tasks are created as that person.
+
+</Step>
+<Step>
+
+**Connect.** As a workspace Admin, open the Pinwren project's **Issue trackers** tab and connect ClickUp:
+
+| Field                    | Notes                                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| **API token**            | Stored encrypted; only its last four characters are ever shown                                           |
+| **List id**              | In the list's address, or ••• › Copy link: the number after `/v/li/`                                     |
+| **Workspace id**         | Optional. Found automatically when the token sees one workspace                                          |
+| **Open / closed status** | Optional. Default: the list's first _open_ status and its _closed_ (then _done_) status                  |
+| **Priority: …**          | Optional. ClickUp priorities from `1` (urgent) to `4` (low); defaults: urgent 1, high 2, medium 3, low 4 |
+| **Labels**               | Comma-separated tag names; a tag the space doesn't have is skipped                                       |
+| **Open tasks for**       | **Manually**, **Bugs** or **Everything**                                                                 |
+
+**Test connection** checks the list and that any status you named exists on it.
+
+</Step>
+<Step>
+
+**Register the webhook.** Press **Register webhook** under **Two-way status**. ClickUp returns the signing secret with
+the webhook, so there is nothing to paste. The webhook is created for the workspace and limited to this list.
+
+</Step>
+</Steps>
+
+## What the task contains
+
+The title is `#12 …`. The description quotes the report as escaped Markdown and lists project, kind, page, browser,
+viewport and reporter, with a link to the item in the dashboard (sign-in required). In the inbox the item shows a
+**ClickUp** link to the task.
+
+## Two-way state
+
+| You do                                   | Pinwren does                         |
+| ---------------------------------------- | ------------------------------------ |
+| Resolve, close or mark an item won't fix | Sets the closed status               |
+| Reopen the item                          | Sets the open status                 |
+| Move the task to a closed / done status  | Moves an open item to **Resolved**   |
+| Move it to any other status              | Moves a closed item back to **Open** |
+
+## Reliability and security
+
+- Task creation and status changes are retried background jobs; ClickUp's rate limit is honoured and longer waits are
+  left to the job queue.
+- Deliveries are verified with `X-Signature` (HMAC-SHA256 of the body, keyed by the secret ClickUp returned), checked
+  against this integration's secret only, and each history item is acted on once.
+- A create that was interrupted before the link was saved is not repeated: Pinwren looks for a task with the same title
+  in the list first.

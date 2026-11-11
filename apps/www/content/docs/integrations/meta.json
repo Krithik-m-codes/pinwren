@@ -12,6 +12,11 @@
     "github",
     "gitlab",
     "linear",
-    "jira"
+    "jira",
+    "trello",
+    "asana",
+    "clickup",
+    "notion",
+    "tracker-adapters"
   ]
 }

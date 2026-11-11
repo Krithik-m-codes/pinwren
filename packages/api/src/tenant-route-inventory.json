@@ -244,6 +244,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/integrations/:id/webhook-secret"
   },
+  "GET /api/integrations/trello/webhook": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/integrations/trello/webhook"
+  },
   "GET /api/invitations": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -804,6 +809,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: POST /api/guest/:key/feedback/:id/comments"
   },
+  "POST /api/integrations/:id/register-webhook": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/integrations/:id/register-webhook"
+  },
   "POST /api/integrations/:id/rotate-webhook-secret": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -813,6 +823,16 @@
     "boundary": "tenant",
     "databaseLifetime": "external",
     "check": "foreign tenant: POST /api/integrations/:id/test"
+  },
+  "POST /api/integrations/asana/webhook": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/integrations/asana/webhook"
+  },
+  "POST /api/integrations/clickup/webhook": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/integrations/clickup/webhook"
   },
   "POST /api/integrations/github/webhook": {
     "boundary": "capability",
@@ -833,6 +853,16 @@
     "boundary": "capability",
     "databaseLifetime": "finite",
     "check": "foreign tenant: POST /api/integrations/linear/webhook"
+  },
+  "POST /api/integrations/notion/webhook": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/integrations/notion/webhook"
+  },
+  "POST /api/integrations/trello/webhook": {
+    "boundary": "capability",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/integrations/trello/webhook"
   },
   "POST /api/me/avatar": {
     "boundary": "identity",

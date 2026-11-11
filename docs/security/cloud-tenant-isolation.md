@@ -223,7 +223,10 @@ and API token each.
   workspace A (project key, reporter token, page link, review link, signed claim, integration secret) and names
   workspace B's resource; the refusal, the absence of B content and B's unchanged rows are asserted. Inbound
   GitHub, GitLab, Linear and Jira webhooks sharing a repository or team key across both workspaces change only the
-  workspace whose secret signed the request.
+  workspace whose secret signed the request. The Trello, Asana, ClickUp and Notion webhooks name their integration
+  (`?i=`): workspace A's secret against workspace B's integration id, an unknown id and a handshake while the
+  integration is not waiting for one are all refused, and a verified delivery resolves only its own integration's
+  item even when both workspaces link the same tracker id.
 - Both registries were mutation-checked: pointing a case at workspace A's own resource makes it fail.
 
 The one real isolation inconsistency found: `GET /api/projects/:id/integrations` answered 200 with an empty

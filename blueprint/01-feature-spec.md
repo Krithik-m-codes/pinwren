@@ -172,6 +172,10 @@ Strategies in order, first confident hit wins; each yields a confidence score:
 | F-080 | MCP server (tools: list/search/get/update feedback, get replay summary, reply, resolve) | in            | All                     |
 | F-081 | Public REST API + personal/API tokens (scoped)                                          | in/out        | All (rate-limited on F) |
 | F-082 | Zapier / Make / n8n via webhooks + REST                                                 | —             | All                     |
+| F-083 | Trello (card per item; done list or archive; webhook)                                   | two-way       | All                     |
+| F-084 | Asana (task per item; completed; webhook)                                               | two-way       | All                     |
+| F-085 | ClickUp (task per item; closed/open status; webhook)                                    | two-way       | All                     |
+| F-086 | Notion (database as the tracker; Status/Select/Checkbox; webhook)                       | two-way       | All                     |
 
 **Acceptance (all integrations):** a failing integration never blocks report submission; every outbound delivery is logged with status and retry; secrets are encrypted at rest (F-042).
 

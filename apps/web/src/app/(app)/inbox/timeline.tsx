@@ -233,7 +233,7 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
       tracker: trackerName(e.data.provider) ?? t("inbox2.trackerFallback"),
       ref: issueRef({
         provider: str(e.data.provider),
-        number: Number(e.data.number),
+        number: typeof e.data.number === "number" ? e.data.number : null,
         url: str(e.data.url),
         key: e.data.key,
       }),

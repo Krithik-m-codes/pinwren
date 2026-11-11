@@ -42,6 +42,8 @@ export const {
   useCreateTrackerMutation,
   useUpdateTrackerMutation,
   useTestTrackerMutation,
+  useRegisterTrackerWebhookMutation,
+  useRestartTrackerHandshakeMutation,
   useLazyTrackerWebhookSecretQuery,
   useDeleteTrackerMutation,
   // feedback
