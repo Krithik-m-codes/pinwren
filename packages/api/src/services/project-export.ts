@@ -15,6 +15,7 @@ import {
 } from "@pinwren/db";
 import { and, asc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { ApiError, notFound } from "../errors";
+import { listFields } from "./custom-fields";
 import { EXTENSIONS, storage } from "../storage";
 import { buildZip, ZIP_MAX_ENTRIES, type ZipEntry } from "./zip";
 
@@ -221,9 +222,11 @@ export async function buildProjectArchive(
   orgId: string,
   projectId: string,
 ): Promise<{ zip: Uint8Array; items: number; assets: number; skipped: number }> {
-  const { p, labels } = await withOrg(orgId, async (db) => ({
+  const { p, labels, fields } = await withOrg(orgId, async (db) => ({
     p: await assertProject(orgId, projectId),
     labels: await db.select().from(label).where(eq(label.projectId, projectId)),
+    // The form builder's fields (ADR 0029); every item's answers are in its `customFields`.
+    fields: await listFields(orgId, projectId),
   }));
   const { actionSecret: _a, identitySecret: _i, rejectedOrigins: _r, ...projectData } = p;
 
@@ -334,6 +337,7 @@ export async function buildProjectArchive(
           "",
           "project.json   the project's settings (secrets left out)",
           "labels.json    the project's labels",
+          "custom-fields.json  the form's custom fields (answers are in each item's customFields)",
           "feedback.json  every item with its comments, activity and file list",
           "assets/        screenshots, attachments and replays, by item number",
           skipped ? `\n${skipped} file(s) were left out (missing, or past the export size cap).` : "",
@@ -342,6 +346,7 @@ export async function buildProjectArchive(
     },
     { name: "project.json", data: json(projectData), deflate: true },
     { name: "labels.json", data: json(labels), deflate: true },
+    { name: "custom-fields.json", data: json(fields), deflate: true },
     { name: "feedback.json", data: json(items), deflate: true },
     ...entries,
   ]);

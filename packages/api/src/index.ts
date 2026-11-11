@@ -24,6 +24,7 @@ import { teamUnsubscribe, unsubscribe } from "./routes/unsubscribe";
 import { v1 } from "./routes/v1";
 import { aiRoutes } from "./routes/ai";
 import { automationRoutes } from "./routes/automation";
+import { customFieldRoutes } from "./routes/custom-fields";
 import { widget } from "./routes/widget";
 import { guestPortal } from "./routes/guest";
 import { share } from "./routes/share";
@@ -153,6 +154,7 @@ export const app = new Hono()
   .route("/api", pageLinks)
   .route("/api", aiRoutes)
   .route("/api", automationRoutes)
+  .route("/api", customFieldRoutes)
   // After the dashboard: its session and viewer guards (`use` on /api/*) run for these routes too.
   .route("/api", projectData)
   .route("/api", reviewLinks)

@@ -319,6 +319,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/projects/:id/automations"
   },
+  "GET /api/projects/:id/custom-fields": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects/:id/custom-fields"
+  },
   "GET /api/projects/:id/export": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -468,6 +473,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/v1/projects"
+  },
+  "GET /api/v1/projects/:id/custom-fields": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/projects/:id/custom-fields"
   },
   "GET /api/v1/projects/:id/labels": {
     "boundary": "tenant",
@@ -1028,6 +1038,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: PUT /api/notification-preferences"
+  },
+  "PUT /api/projects/:id/custom-fields": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PUT /api/projects/:id/custom-fields"
   },
   "PUT /api/settings/ai": {
     "boundary": "tenant",

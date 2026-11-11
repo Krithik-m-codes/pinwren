@@ -221,6 +221,7 @@ const cases: Record<string, Spec> = {
   "GET /api/feedback/:id/ai/labels": foreign(),
   "GET /api/projects/:id/automation-runs": foreign(),
   "GET /api/projects/:id/automations": foreign(),
+  "GET /api/projects/:id/custom-fields": foreign(),
   "GET /api/projects/:id/labels": foreign(),
   "GET /api/projects/:id/notifications": foreign(),
   "GET /api/projects/:id/review-links": foreign(),
@@ -241,6 +242,7 @@ const cases: Record<string, Spec> = {
   "GET /api/v1/feedback/:id/brief": foreign(),
   "GET /api/v1/feedback/:id/repro-test": foreign(),
   "GET /api/v1/projects": scoped(),
+  "GET /api/v1/projects/:id/custom-fields": foreign(),
   "GET /api/v1/projects/:id/labels": foreign(),
   "GET /api/v1/stats": scoped(),
   "GET /api/v1/views": scoped(),
@@ -362,6 +364,9 @@ const cases: Record<string, Spec> = {
   "POST /api/workspace/transfer": foreign({
     body: (ids) => ({ userId: ids.userB }),
     status: [400, 403, 404],
+  }),
+  "PUT /api/projects/:id/custom-fields": foreign({
+    body: () => ({ fields: [{ key: "foreign", type: "text", label: "Foreign field" }] }),
   }),
   "PUT /api/email-templates/:key": scoped({ body: () => ({ subject: "Scoped A", body: "Scoped A body" }) }),
   "PUT /api/notification-preferences": foreign({
@@ -709,6 +714,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
       await db`insert into comment (id,org_id,feedback_id,body) values (${row.comment},${org ?? ""},${feedbackId},${mark})`;
       await db`insert into label (id,org_id,project_id,name,color) values (${row.label},${org ?? ""},${projectId},${mark},'#112233')`;
       await db`insert into automation_rule (id,org_id,project_id,name,trigger,conditions,actions) values (${row.rule},${org ?? ""},${projectId},${mark},${db.json({ event: "feedback_created", toStatuses: [], labelId: null })},${db.json([])},${db.json([{ type: "set_priority", priority: "high" }])})`;
+      await db`insert into custom_field (org_id,project_id,key,type,label,position) values (${org ?? ""},${projectId},'marker','text',${mark},0)`;
       await db`insert into automation_run (org_id,rule_id,project_id,feedback_id,event,status) values (${org ?? ""},${row.rule},${projectId},${feedbackId},'feedback_created','success')`;
       await db`insert into label_suggestion (org_id,feedback_id,label_id,name) values (${org ?? ""},${feedbackId},${row.label},${mark})`;
       await db`insert into review_round (id,org_id,project_id,name) values (${row.round},${org ?? ""},${projectId},${mark})`;

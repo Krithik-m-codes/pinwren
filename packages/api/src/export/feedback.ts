@@ -1,7 +1,15 @@
-import { type FeedbackStatus, feedbackListQuery, kindLabel } from "@pinwren/core";
+import {
+  type CustomFieldDef,
+  type FeedbackStatus,
+  feedbackListQuery,
+  formatValue,
+  kindLabel,
+  outboundValues,
+} from "@pinwren/core";
 import { getDb, member, project, user, withOrg } from "@pinwren/db";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { listFieldsByProject, privacyModeOf } from "../services/custom-fields";
 import { feedbackLink } from "../services/feedback-payload";
 import { listFeedback } from "../services/feedback";
 import { csvCell } from "./csv";
@@ -36,6 +44,7 @@ type Row = Awaited<ReturnType<typeof listFeedback>>["items"][number];
 export type ExportItem = {
   id: string;
   number: number;
+  projectId: string;
   project: string;
   kind: string;
   status: FeedbackStatus;
@@ -51,7 +60,36 @@ export type ExportItem = {
   updatedAt: string;
   dueAt: string | null;
   link: string;
+  /** Answers to the project's custom fields by key (ADR 0029); PII fields are redacted in a privacy-mode project. */
+  customFields: Record<string, unknown>;
 };
+
+/** What the export knows about custom fields: the projects' definitions, who is in privacy mode, and the CSV columns. */
+export type ExportFieldContext = {
+  fields: Map<string, CustomFieldDef[]>;
+  privacy: Map<string, boolean>;
+  /** One extra CSV column per field key, in the order the projects list them. */
+  columns: { key: string; label: string }[];
+};
+
+export async function exportFieldContext(orgId: string, projectId?: string): Promise<ExportFieldContext> {
+  const rows = await getDb()
+    .select({ id: project.id, widgetConfig: project.widgetConfig })
+    .from(project)
+    .where(and(eq(project.orgId, orgId), projectId ? eq(project.id, projectId) : undefined));
+  const fields = await listFieldsByProject(
+    orgId,
+    rows.map((r) => r.id),
+  );
+  const columns = new Map<string, string>();
+  for (const list of fields.values())
+    for (const f of list) if (!columns.has(f.key)) columns.set(f.key, f.label);
+  return {
+    fields,
+    privacy: new Map(rows.map((r) => [r.id, privacyModeOf(r.widgetConfig)])),
+    columns: [...columns].map(([key, label]) => ({ key, label })),
+  };
+}
 
 export const EXPORT_COLUMNS = [
   "number",
@@ -72,10 +110,16 @@ export const EXPORT_COLUMNS = [
   "link",
 ] as const;
 
-export function exportItem(orgId: string, f: Row, names: Map<string, string>): ExportItem {
+export function exportItem(
+  orgId: string,
+  f: Row,
+  names: Map<string, string>,
+  cf?: ExportFieldContext,
+): ExportItem {
   return {
     id: f.id,
     number: f.number,
+    projectId: f.projectId,
     project: f.projectName,
     kind: f.kind,
     status: f.status,
@@ -91,11 +135,25 @@ export function exportItem(orgId: string, f: Row, names: Map<string, string>): E
     updatedAt: f.updatedAt.toISOString(),
     dueAt: f.dueAt?.toISOString() ?? null,
     link: feedbackLink(orgId, f.id),
+    customFields: cf
+      ? outboundValues(cf.fields.get(f.projectId) ?? [], f.customFields, cf.privacy.get(f.projectId) ?? false)
+      : {},
   };
 }
 
+/** An answer as text for a spreadsheet cell or a PDF line (options by label, lists joined). */
+export function answerText(cf: ExportFieldContext, i: ExportItem, key: string): string {
+  const def = cf.fields.get(i.projectId)?.find((x) => x.key === key);
+  const v = i.customFields[key];
+  return def
+    ? formatValue(def, v)
+    : typeof v === "string" || typeof v === "number" || typeof v === "boolean"
+      ? String(v)
+      : "";
+}
+
 /** One CSV record (CRLF-terminated), in EXPORT_COLUMNS order, formula-safe (export/csv.ts). */
-export function csvLine(i: ExportItem): string {
+export function csvLine(i: ExportItem, cf?: ExportFieldContext): string {
   return `${[
     i.number,
     i.project,
@@ -113,6 +171,7 @@ export function csvLine(i: ExportItem): string {
     i.updatedAt,
     i.dueAt,
     i.link,
+    ...(cf?.columns.map((c) => answerText(cf, i, c.key)) ?? []),
   ]
     .map(csvCell)
     .join(",")}\r\n`;
@@ -170,7 +229,7 @@ const HEADERS = {
 } as const;
 
 export async function exportFeedback(orgId: string, q: FeedbackExportQuery): Promise<Response> {
-  const [names, projectName] = await withOrg(orgId, () =>
+  const [names, projectName, cf] = await withOrg(orgId, () =>
     Promise.all([
       memberNames(orgId),
       q.projectId
@@ -180,6 +239,7 @@ export async function exportFeedback(orgId: string, q: FeedbackExportQuery): Pro
             .where(and(eq(project.id, q.projectId), eq(project.orgId, orgId)))
             .then((r) => r[0]?.name ?? null)
         : Promise.resolve(null),
+      exportFieldContext(orgId, q.projectId),
     ]),
   );
   const day = new Date().toISOString().slice(0, 10);
@@ -194,7 +254,7 @@ export async function exportFeedback(orgId: string, q: FeedbackExportQuery): Pro
   if (q.format === "pdf") {
     const items: ExportItem[] = [];
     for await (const page of exportPages(orgId, q)) {
-      for (const f of page) if (items.length < MAX_PDF_ITEMS) items.push(exportItem(orgId, f, names));
+      for (const f of page) if (items.length < MAX_PDF_ITEMS) items.push(exportItem(orgId, f, names, cf));
       if (items.length >= MAX_PDF_ITEMS) break;
     }
     const capped = items.length >= MAX_PDF_ITEMS ? ` (first ${MAX_PDF_ITEMS}; use CSV for all)` : "";
@@ -228,7 +288,7 @@ export async function exportFeedback(orgId: string, q: FeedbackExportQuery): Pro
     start(controller) {
       const head =
         q.format === "csv"
-          ? `${BOM}${EXPORT_COLUMNS.join(",")}\r\n`
+          ? `${BOM}${[...EXPORT_COLUMNS, ...cf.columns.map((c) => c.label)].map(csvCell).join(",")}\r\n`
           : `{"exportedAt":${JSON.stringify(new Date().toISOString())},"items":[`;
       controller.enqueue(encoder.encode(head));
     },
@@ -240,11 +300,11 @@ export async function exportFeedback(orgId: string, q: FeedbackExportQuery): Pro
           controller.close();
           return;
         }
-        const items = next.value.map((f) => exportItem(orgId, f, names));
+        const items = next.value.map((f) => exportItem(orgId, f, names, cf));
         let chunk = "";
         for (const i of items) {
           if (q.format === "csv") {
-            chunk += csvLine(i);
+            chunk += csvLine(i, cf);
           } else {
             chunk += `${first ? "" : ","}${JSON.stringify(i)}`;
             first = false;

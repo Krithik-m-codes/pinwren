@@ -22,6 +22,8 @@ export type FeedbackPayload = {
   createdAt: string;
   updatedAt: string;
   url: string;
+  /** Answers to the project's custom fields by key (ADR 0029); absent in payloads from before they existed. */
+  customFields?: Record<string, unknown>;
 };
 
 /** "via review link “Client round 2”" for chat messages, or null. */

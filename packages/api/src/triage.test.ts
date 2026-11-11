@@ -111,6 +111,7 @@ describe("export", () => {
     projectName: "Site",
     pageUrl: "https://example.com/checkout",
     roundId: null,
+    customFields: {},
     hasReplay: false,
     hasScreenshot: true,
     screenshotAssetId: null,
