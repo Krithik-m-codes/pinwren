@@ -348,6 +348,8 @@ export type IssueLink = {
   provider: IssueProvider;
   /** Null for Asana, ClickUp and Notion items, which have no number. */
   number: number | null;
+  /** The tracker's own id of the item (board trackers). */
+  externalId?: string | null;
   url: string;
   state: "open" | "closed";
 };
