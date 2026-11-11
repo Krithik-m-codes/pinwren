@@ -101,9 +101,37 @@
       "breakpoints": true
     },
     {
+      "idx": 14,
+      "version": "7",
+      "when": 1794326017874,
+      "tag": "0014_interactive_slack",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1794379236154,
+      "tag": "0015_custom_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794380368544,
+      "tag": "0016_releases_and_regressions",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794383005964,
+      "tag": "0017_dashboards_and_preferences",
+      "breakpoints": true
+    },
+    {
       "idx": 18,
       "version": "7",
-      "when": 1794326043345,
+      "when": 1794384485503,
       "tag": "0018_tracker_boards",
       "breakpoints": true
     }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   changeRecorded,
   densityChanged,
+  fieldColumnsChanged,
   inboxSlice,
   initialInboxState,
   menuChanged,
@@ -73,6 +74,11 @@ describe("inbox slice", () => {
     );
     expect(s.lastChange?.each.map((c) => c.patch.status)).toEqual(["open", "in_review"]);
     expect(inbox(s, densityChanged("compact")).prefs.density).toBe("compact");
+  });
+
+  it("keeps at most three custom field columns, without repeats", () => {
+    const s = inbox(initialInboxState, fieldColumnsChanged(["a", "b", "a", "c", "d"]));
+    expect(s.prefs.fieldColumns).toEqual(["a", "b", "c"]);
   });
 });
 

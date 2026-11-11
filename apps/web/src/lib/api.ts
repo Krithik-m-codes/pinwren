@@ -52,6 +52,9 @@ export type ProjectDetail = Project & {
   hasIdentitySecret: boolean;
   archivedAt: string | null;
   updatedAt: string;
+  /** Regression detection switches (ADR 0036). */
+  detectRegressions?: boolean;
+  autoReopenRegressions?: boolean;
   /** Origins the widget refused for this project's key, newest first (wave-5 §1); "Allow" adds them. */
   rejectedOrigins: RejectedOrigin[];
   /** PINWREN_URL: the address install snippets point at (may differ from the browser's). */
@@ -87,6 +90,16 @@ export type FeedbackRow = {
   updatedAt: string;
   /** Set on items in the trash (`?trash=1`). */
   deletedAt: string | null;
+  /** Releases and regressions (ADR 0036). Absent on rows from before the feature. */
+  release?: string | null;
+  fixedInReleaseId?: string | null;
+  fixedInVersion?: string | null;
+  fixedInNextRelease?: boolean;
+  regressionOfId?: string | null;
+  regressionOfNumber?: number | null;
+  regressionConfidence?: "possible" | "likely" | null;
+  /** Answers to the project's custom fields by field key (ADR 0032). */
+  customFields: Record<string, unknown>;
 };
 
 /** `total`: every item matching the filters (all pages). */
@@ -175,7 +188,13 @@ export type FeedbackDetail = {
     projectSlug: string;
     resolvedAt: string | null;
     updatedAt: string;
+    /** The release that fixed it (ADR 0036). */
+    fixedInRelease?: { id: string; version: string; deployedAt: string } | null;
+    /** The resolved item this report may be a regression of, and why. */
+    regressionOf?: (ItemRef & { status: FeedbackStatus; signals: string[]; score: number | null }) | null;
   };
+  /** Reports flagged as possible regressions of this item. */
+  regressions?: (ItemRef & { status: FeedbackStatus; confidence: "possible" | "likely" | null })[];
   /** Items marked as duplicates of this one. */
   duplicates: ItemRef[];
   /** Whether the signed-in member follows the item. */
@@ -251,6 +270,10 @@ export type NotificationItem = {
     kind?: string;
     priority?: string;
     previousPriority?: string;
+    /** `feedback.regression_detected`: the resolved item it may be a regression of (ADR 0036). */
+    originalNumber?: number;
+    confidence?: "possible" | "likely";
+    fixedIn?: string | null;
     /** `round.signoff`: the round, the client's answer and who gave it. */
     roundId?: string;
     roundName?: string;

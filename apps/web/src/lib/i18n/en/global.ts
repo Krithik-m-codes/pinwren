@@ -19,7 +19,7 @@ export const global = {
   "palette.searchAll": "Search all feedback for “{q}”",
 
   "landing.label": "Start page",
-  "landing.description": "Where Pinwren opens when you visit the site. Saved on this device.",
+  "landing.description": "Where Pinwren opens when you visit the site. Saved in your account.",
   "landing.inbox": "Inbox",
   "landing.dashboard": "Dashboard",
   "landing.myWork": "My work",

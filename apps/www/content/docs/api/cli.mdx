@@ -22,6 +22,8 @@ pinwren feedback list  --url <instance> --token <pwt_…> [--project <id>] [--st
 pinwren feedback get   <id> --url <instance> --token <pwt_…> [--json]
 pinwren feedback brief <id> --url <instance> --token <pwt_…> [--json]
 pinwren repro <id>          --url <instance> --token <pwt_…> [--out <file.spec.ts>] [--json]
+pinwren release create <version> --project <id|slug> --url <instance> --token <pwt_…> [--commit <sha>] [--notes <text>] [--deployed-at <iso>] [--json]
+pinwren release list   --project <id|slug> --url <instance> --token <pwt_…> [--json]
 ```
 
 `-h` / `--help` prints the usage and `-v` / `--version` the version. The environment variables
@@ -136,3 +138,17 @@ The test opens the page, replays the interactions from the session replay when o
 the console errors, failing requests or pinned element in the report. It is generated without a model and is a
 starting point, not a verified test: the caveats are printed to stderr (and written in the file's header), so read,
 run and adjust it before you rely on it.
+
+## `pinwren release`
+
+Records the releases of a project, for a CI job to run after each deploy, with a token that has the
+`releases:write` scope. `--project` takes the project's id or slug (or set `PINWREN_PROJECT`):
+
+```bash
+pinwren release create v1.4.0 --project marketing-site --commit "$GIT_SHA" --url https://feedback.example.com
+pinwren release list --project marketing-site
+```
+
+`create` is safe to run twice: the same version updates the release. When items were resolved as "fixed in the next
+release", it says how many are now fixed in this one. `list` prints each release with the items fixed in it and the
+regressions reported from it. See [Releases and regressions](/docs/dashboard/releases).

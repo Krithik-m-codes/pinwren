@@ -16,6 +16,7 @@ import { GlobalShortcuts } from "./global-shortcuts";
 import { BillingBanner } from "./billing-banner";
 import { LicenseBanner } from "./license-banner";
 import { SupportNudge, UpdateStrip } from "./nudge-strips";
+import { UiStateSync } from "./ui-state-sync";
 import { RealtimeConnection } from "./realtime-connection";
 import { WorkspaceFromLink } from "./workspace-from-link";
 
@@ -55,6 +56,7 @@ export async function SessionBoundary({ children }: { children: React.ReactNode 
         <BrandingFavicon href={branding.faviconUrl} />
         <BrandTheme accent={branding.accent} />
         <RealtimeConnection />
+        <UiStateSync />
         <WorkspaceFromLink orgId={me.orgId} />
         <LicenseBanner />
         <UpdateStrip />

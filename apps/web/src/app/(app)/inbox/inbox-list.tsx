@@ -3,6 +3,7 @@
 import {
   FEEDBACK_STATUSES,
   type FeedbackStatus,
+  formatValue,
   isClosedStatus,
   PRIORITIES,
   type Priority,
@@ -60,7 +61,7 @@ import { type FeedbackRow, type ItemLabel, isForbidden, type Member, type Presen
 import { useI18n, useT } from "@/lib/i18n/provider";
 import { CLEAR_FILTERS, exportUrl, extraFilterCount, type FeedbackListArgs } from "@/lib/inbox-filters";
 import { toast } from "sonner";
-import { errorMessage, useBulkAiLabelsMutation, useRoundsQuery } from "@/lib/store/api";
+import { errorMessage, useBulkAiLabelsMutation, useCustomFieldsQuery, useRoundsQuery } from "@/lib/store/api";
 import type { FeedbackFields, FeedbackPatch, ItemChange } from "@/lib/store/api/feedback";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { selectionCleared } from "@/lib/store/slices/inbox";
@@ -70,6 +71,7 @@ import { useMounted } from "@/lib/use-synced-state";
 import { cn } from "@/lib/utils";
 import { useMembers, useViewer } from "@/lib/viewer";
 import { LabelChips, LabelPicker } from "./pickers";
+import { RegressionTag } from "./release-ui";
 
 /** The list as the inbox shows it: every loaded page, the total, and "load more". */
 export type Feed = {
@@ -151,6 +153,7 @@ export function InboxList({
   const { canWrite, isAdmin, userId } = useViewer();
   const selection = useAppSelector((s) => s.inbox.selection);
   const density = useAppSelector((s) => s.inbox.prefs.density);
+  const fieldColumns = useAppSelector((s) => s.inbox.prefs.fieldColumns);
   const follow = useAppSelector((s) => s.realtime.follow);
   const presence = useAppSelector((s) => s.realtime.presence);
   const fresh = useAppSelector((s) => s.realtime.fresh);
@@ -241,6 +244,7 @@ export function InboxList({
             selectable={trash ? isAdmin : canWrite}
             fresh={ready && fresh.includes(f.id)}
             compact={density === "compact"}
+            fieldColumns={fieldColumns}
             trash={trash}
             onFreshSeen={() => dispatch(freshCleared(f.id))}
             onCheck={(range) => onCheck(f.id, range)}
@@ -675,6 +679,7 @@ function FeedbackListRow({
   selectable,
   fresh,
   compact,
+  fieldColumns,
   trash,
   onFreshSeen,
   onCheck,
@@ -690,6 +695,7 @@ function FeedbackListRow({
   selectable: boolean;
   fresh: boolean;
   compact: boolean;
+  fieldColumns: string[];
   trash: boolean;
   onFreshSeen: () => void;
   onCheck: (range: boolean) => void;
@@ -777,9 +783,16 @@ function FeedbackListRow({
                   </span>
                 </span>
               )}
+              <RegressionTag item={item} />
               <LabelChips labels={item.labels} max={2} className="shrink" />
+              {item.status === "resolved" && item.fixedInVersion && (
+                <span className="shrink-0 text-emerald-700 dark:text-emerald-400" data-testid="fixed-in-tag">
+                  {t("releases.fixedInBadge", { version: item.fixedInVersion })}
+                </span>
+              )}
               {item.dueAt && <DueDate iso={item.dueAt} status={item.status} />}
               {item.pageUrl && <span className="min-w-0 truncate font-mono">{pathOf(item.pageUrl)}</span>}
+              <FieldChips item={item} keys={fieldColumns} />
             </div>
           )}
         </div>
@@ -911,5 +924,32 @@ function EmptyInbox({
         </ButtonLink>
       }
     />
+  );
+}
+
+/** The answers chosen as columns (Filter menu › Show fields), as small chips after the row's other facts. */
+function FieldChips({ item, keys }: { item: FeedbackRow; keys: string[] }) {
+  const { t } = useI18n();
+  const defs = useCustomFieldsQuery(item.projectId, { skip: keys.length === 0 });
+  const fields = defs.data?.fields;
+  if (!keys.length || !fields) return null;
+  const chips = keys.flatMap((key) => {
+    const def = fields.find((d) => d.key === key);
+    const value = item.customFields[key];
+    if (!def || value === undefined || value === null || value === "") return [];
+    return [{ key, label: def.label, text: formatValue(def, value, t("cfields.yes"), t("cfields.no")) }];
+  });
+  return (
+    <>
+      {chips.map((c) => (
+        <span
+          key={c.key}
+          className="max-w-40 shrink-0 truncate rounded bg-muted px-1.5 py-0.5 text-[11px]"
+          title={`${c.label}: ${c.text}`}
+        >
+          {c.label}: {c.text}
+        </span>
+      ))}
+    </>
   );
 }

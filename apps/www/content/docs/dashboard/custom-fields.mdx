@@ -1,0 +1,102 @@
+---
+title: Custom fields and the form builder
+description: Ask your own questions on the report form (order number, plan, account), validate the answers, and use them in the inbox, exports, webhooks, the API and automation rules.
+---
+
+Every project can add its own questions to the report form. A question is a **custom field**: a label, a type, help
+text, rules, and who fills it in. Build them in **Project → Form**; the widget asks them in the bug report form and
+the answers are stored with each report.
+
+Workspace admins build the form. Everyone else can read it, and editors can fill in or change the answers on a report.
+
+## Field types
+
+| Type             | Answer                                            | Rules you can set                      |
+| ---------------- | ------------------------------------------------- | -------------------------------------- |
+| **Short text**   | One line, up to 500 characters                    | minimum and maximum length             |
+| **Long text**    | Several lines, up to 2,000 characters             | minimum and maximum length             |
+| **Select**       | One of your options                               | the options                            |
+| **Multi-select** | Any of your options                               | the options, minimum and maximum picks |
+| **Checkbox**     | Yes or no (when required, it must be ticked)      |                                        |
+| **Number**       | A number, decimals allowed                        | minimum, maximum, whole numbers only   |
+| **Date**         | A calendar day                                    | earliest and latest date               |
+| **Link**         | An `http://` or `https://` address (nothing else) |                                        |
+| **Email**        | An email address                                  |                                        |
+
+Every field also has a **label**, **help text**, a **placeholder**, a **default value**, **Required**, and a stable
+**key**. The key (`order_number`) is generated from the label; it identifies the answers in exports, the API and
+automation rules, and cannot change once the field is saved.
+
+## Who sees a field
+
+- **Reporter** fields are asked in the widget. The team can still edit the answer on the report.
+- **Internal** fields are never sent to the widget. Your team fills them in on the report (a triage note, an account
+  tier). They cannot be required.
+- **Applies to** picks the report types (Bug, Idea, Question, Other) a field belongs to. The widget's report form asks
+  bug reports; for the other types the answer is filled in by your team. A report only shows and validates the fields
+  of its own type.
+
+## Build the form
+
+Open **Project → Form**.
+
+1. **Add field**, choose a type, give it a label. Options for selects are lists of label and value; the value is
+   generated from the label and can be edited.
+2. Reorder by dragging a row, or focus its handle and press the **up / down arrow** keys (Home and End jump to the
+   ends). Each row also has move buttons.
+3. The **live preview** on the right shows what the widget asks, for each report type and each language you have
+   translated. It is interactive: use **Check answers** to try the rules.
+4. **Save.** Nothing changes in the widget until you save. A form holds at most **20 fields**.
+
+Saving replaces the whole form. A field you removed, or whose type you changed (except between short and long text),
+is deleted **together with its answers**; the dashboard asks you to confirm first.
+
+**Export** downloads the form as JSON; **Import** takes that JSON (or just the list of fields) and replaces the draft,
+so a form can be copied between projects. Imports are checked with the same rules as a save.
+
+### Translations
+
+Each field can carry its own label, help text, placeholder and option labels per language. The widget shows the text
+for the visitor's language and falls back to the base text. Pinwren never machine-translates your questions; the
+widget's own messages ("This answer is required") are translated in all ten languages.
+
+## Answers on a report
+
+Open a report to see its **Custom fields** card: the reporter's answers and the internal ones, with an **Internal**
+mark on the latter. Editors choose **Edit**, change what they need and save; each change is a line in the timeline
+("Sam set Plan to Pro", was "Free"). Links are only clickable if they are `http(s)`; everything is shown as text.
+
+In the inbox, pick one project and use **Filter → Custom field…** to match one field (an option, Yes or No, a day, text
+that contains your search, **has any answer** or **has no answer**). **Show fields in the list** puts up to three
+fields on every row. The filter is part of the URL and of saved views.
+
+## Where the answers go
+
+- **Exports** (CSV, JSON, PDF) add one column per field (JSON: a `customFields` object keyed by field key).
+- **Webhooks** carry `data.feedback.customFields`; a change made by the team also appears in
+  `data.changes.customFields`.
+- **The API** returns `customFields` on feedback and accepts it on `PATCH /api/v1/feedback/:id`;
+  `GET /api/v1/projects/:id/custom-fields` lists the fields. The SDK has `customFields.list(projectId)` and the MCP
+  server `list_custom_fields`; `search_feedback` takes `customField` (`key:value`).
+- **Agent briefs and reproduction context** include the reporter's answers (never the internal ones).
+- **Project export** (zip) adds `custom-fields.json` and each item's `customFields`.
+
+### Personal data
+
+Mark a field **Contains personal data** (email fields start marked). In a project with **privacy mode** on, the answer
+is replaced by `[redacted]` in exports, webhooks, agent briefs and event payloads. It is still stored and your team
+still sees it on the report. AI triage never receives custom field answers.
+
+## Automation
+
+An [automation rule](/docs/dashboard/automation) can have a **Custom field** condition: pick a field, then **is**,
+**is not**, **contains**, **is greater / less than**, **has an answer** or **has no answer**. Several can be combined.
+A rule naming a field the project doesn't have is refused. The dry-run tester uses empty answers.
+
+## Limits and safety
+
+- At most 20 fields per project, 50 options per choice field, and 32 KB of answers per report.
+- The server validates every answer against the saved fields (never the widget's word for it). Answers to unknown,
+  internal or other-type fields in a widget submission are ignored; a missing required answer or an invalid one
+  returns a clear error the widget shows under the form.
+- Answers are plain text: labels, help text and answers are never rendered as HTML, in the widget or the dashboard.

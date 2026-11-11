@@ -14,7 +14,6 @@ export const dashboard = {
   "dash.range30": "Last 30 days",
   "dash.range90": "Last 90 days",
   "dash.lastDays": "Last {days} days",
-  "dash.localOnly": "Your layout is saved in this browser.",
   "dash.emptyTitle": "Nothing on this dashboard",
   "dash.emptyBody": "Add the numbers and charts you want to see here.",
   "dash.catalogHint": "Pick what to show. You can resize and reorder it afterwards.",

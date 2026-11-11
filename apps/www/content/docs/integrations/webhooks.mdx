@@ -35,19 +35,20 @@ in your receiver's secrets. **Rotate secret** issues a new one (shown once again
 
 ## Events
 
-| Event                       | Sent when                                                                              | `data` carries                    |
-| --------------------------- | -------------------------------------------------------------------------------------- | --------------------------------- |
-| `feedback.created`          | A comment or bug report arrives                                                        | `feedback`, `actor`               |
-| `feedback.updated`          | Any field changes: status, priority, title, assignees, labels, due date, round         | `feedback`, `changes`, `actor`    |
-| `feedback.status_changed`   | The status changes                                                                     | `feedback`, `changes.status`      |
-| `feedback.assigned`         | The assignees change                                                                   | `feedback`, `changes.assigneeIds` |
-| `feedback.priority_changed` | The priority changes                                                                   | `feedback`, `changes.priority`    |
-| `feedback.labels_changed`   | Labels are added or removed                                                            | `feedback`, `changes.labelIds`    |
-| `feedback.deleted`          | An item is moved to the trash                                                          | `feedback` (as it was), `actor`   |
-| `comment.created`           | A comment is added — by a visitor, a teammate or the API, **including internal notes** | `feedback`, `comment`, `actor`    |
-| `comment.updated`           | A comment is edited                                                                    | `feedback`, `comment`, `actor`    |
-| `comment.deleted`           | A comment is deleted                                                                   | `feedback`, `comment`, `actor`    |
-| `ping`                      | You press **Send test event**                                                          | a sample `feedback`               |
+| Event                          | Sent when                                                                              | `data` carries                                                    |
+| ------------------------------ | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `feedback.created`             | A comment or bug report arrives                                                        | `feedback`, `actor`                                               |
+| `feedback.updated`             | Any field changes: status, priority, title, assignees, labels, due date, round         | `feedback`, `changes`, `actor`                                    |
+| `feedback.status_changed`      | The status changes                                                                     | `feedback`, `changes.status`                                      |
+| `feedback.assigned`            | The assignees change                                                                   | `feedback`, `changes.assigneeIds`                                 |
+| `feedback.priority_changed`    | The priority changes                                                                   | `feedback`, `changes.priority`                                    |
+| `feedback.labels_changed`      | Labels are added or removed                                                            | `feedback`, `changes.labelIds`                                    |
+| `feedback.deleted`             | An item is moved to the trash                                                          | `feedback` (as it was), `actor`                                   |
+| `feedback.regression_detected` | A new bug report looks like a resolved item coming back                                | `feedback` (with `regressionOf`), `changes.regressionOf`, `actor` |
+| `comment.created`              | A comment is added — by a visitor, a teammate or the API, **including internal notes** | `feedback`, `comment`, `actor`                                    |
+| `comment.updated`              | A comment is edited                                                                    | `feedback`, `comment`, `actor`                                    |
+| `comment.deleted`              | A comment is deleted                                                                   | `feedback`, `comment`, `actor`                                    |
+| `ping`                         | You press **Send test event**                                                          | a sample `feedback`                                               |
 
 A status, assignee, priority or label change sends both `feedback.updated` and the specific event; subscribe to the
 one you need. Check `comment.visibility` before forwarding a comment anywhere public — internal notes are delivered
@@ -79,7 +80,8 @@ Every generic delivery has the same envelope:
       "assigneeIds": ["user_8f2k1"],
       "createdAt": "2026-11-02T16:05:44.000Z",
       "updatedAt": "2026-11-03T09:41:12.000Z",
-      "url": "https://feedback.example.com/inbox?status=all&item=0f9e2a4c-8d1b-4c3a-b6e5-1a2b3c4d5e6f"
+      "url": "https://feedback.example.com/inbox?status=all&item=0f9e2a4c-8d1b-4c3a-b6e5-1a2b3c4d5e6f",
+      "customFields": { "order_number": "ORD-9001", "plan": "pro" }
     },
     "changes": { "status": { "from": "in_review", "to": "resolved" } },
     "actor": { "kind": "user", "id": "user_8f2k1" }
@@ -87,15 +89,16 @@ Every generic delivery has the same envelope:
 }
 ```
 
-| Field                | Notes                                                                                                            |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `id`                 | The event's id: the same for every endpoint and every retry and redelivery of that event — **dedupe on `id`**    |
-| `apiVersion`         | `2026-11-01`. A breaking change to the payload gets a new version                                                |
-| `data.feedback.body` | Cut at 4,000 characters; fetch the item from the [API](/docs/api) for the full text                              |
-| `data.feedback.url`  | The item in the dashboard (sign-in required)                                                                     |
-| `data.comment`       | `comment.*` only: `{ id, body, visibility: "public" \| "internal", authorName, team, createdAt }`                |
-| `data.changes`       | Field → `{ from, to }` for update events                                                                         |
-| `data.actor`         | `{ kind: "user" \| "guest" \| "api" \| "integration", id }` — `guest` is a site visitor, `integration` a tracker |
+| Field                        | Notes                                                                                                                                            |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                         | The event's id: the same for every endpoint and every retry and redelivery of that event — **dedupe on `id`**                                    |
+| `apiVersion`                 | `2026-11-01`. A breaking change to the payload gets a new version                                                                                |
+| `data.feedback.body`         | Cut at 4,000 characters; fetch the item from the [API](/docs/api) for the full text                                                              |
+| `data.feedback.url`          | The item in the dashboard (sign-in required)                                                                                                     |
+| `data.feedback.customFields` | Answers to the project's [custom fields](/docs/dashboard/custom-fields) by key; fields marked as personal data read `[redacted]` in privacy mode |
+| `data.comment`               | `comment.*` only: `{ id, body, visibility: "public" \| "internal", authorName, team, createdAt }`                                                |
+| `data.changes`               | Field → `{ from, to }` for update events                                                                                                         |
+| `data.actor`                 | `{ kind: "user" \| "guest" \| "api" \| "integration", id }` — `guest` is a site visitor, `integration` a tracker                                 |
 
 Screenshots, attachments and diagnostics are not in the payload; they stay behind the dashboard's sign-in. Use
 `data.feedback.id` with the [REST API](/docs/api) to read them.

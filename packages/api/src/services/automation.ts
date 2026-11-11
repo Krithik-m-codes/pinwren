@@ -11,6 +11,7 @@ import {
 import {
   automationRule,
   automationRun,
+  customField,
   feedback,
   getDb,
   issueIntegration,
@@ -143,6 +144,18 @@ async function assertReferences(
       ),
     "issue tracker",
   );
+  // A condition on a custom field names one of this project's fields (ADR 0032).
+  const fieldKeys = new Set<string>();
+  for (const c of conditions) if (c.field === "customField") fieldKeys.add(c.key);
+  if (fieldKeys.size) {
+    const found = await db
+      .select({ key: customField.key })
+      .from(customField)
+      .where(and(eq(customField.orgId, orgId), eq(customField.projectId, projectId)));
+    const known = new Set(found.map((r) => r.key));
+    const unknown = [...fieldKeys].find((k) => !known.has(k));
+    if (unknown) throw invalid(`The custom field "${unknown}" in this rule does not exist for this project`);
+  }
 }
 
 export async function listRules(orgId: string, projectId: string) {
@@ -290,6 +303,7 @@ export async function testRule(orgId: string, id: string, request: AutomationTes
       labelIds: s.labelIds,
       hasAttachment: s.hasAttachment,
       hasReplay: s.hasReplay,
+      customFields: s.customFields,
     };
   }
   const triggered = triggerMatches(rule.trigger, facts);

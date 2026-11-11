@@ -13,9 +13,11 @@ import { AiTab } from "./ai-tab";
 import { AutomationTab } from "./automation-tab";
 import { CaptureTab } from "./capture-tab";
 import { DangerTab } from "./danger-tab";
+import { FormTab } from "./form-tab";
 import { InstallTab } from "./install-tab";
 import { LabelsTab } from "./labels-tab";
 import { PrivacyTab } from "./privacy-tab";
+import { ReleasesTab } from "./releases-tab";
 import { ReviewLinksTab } from "./review-links-tab";
 import { TrackersTab } from "./trackers-tab";
 import { useProject } from "./use-project";
@@ -29,12 +31,14 @@ import { useT } from "@/lib/i18n/provider";
 const TABS = [
   { value: "install", label: "projects2.tabInstall" },
   { value: "widget", label: "projects2.tabWidget" },
+  { value: "form", label: "cfields.tab" },
   { value: "review", label: "projects2.reviewLinks" },
   { value: "capture", label: "projects2.tabCapture" },
   { value: "actions", label: "projects2.tabActions" },
   { value: "trackers", label: "projects2.tabIssueTrackers" },
   { value: "labels", label: "projects2.labels" },
   { value: "automation", label: "automation.tab" },
+  { value: "releases", label: "releases.tab" },
   { value: "ai", label: "projects2.tabAiTriage" },
   { value: "privacy", label: "projects2.tabPrivacyData" },
   { value: "danger", label: "projects2.dangerZone" },
@@ -129,6 +133,9 @@ export function ProjectSettings({ id }: { id: string }) {
             <TabsContent value="widget" className="pt-3">
               <WidgetTab project={p} />
             </TabsContent>
+            <TabsContent value="form" className="pt-3">
+              <FormTab project={p} />
+            </TabsContent>
             <TabsContent value="capture" className="pt-3">
               <CaptureTab project={p} />
             </TabsContent>
@@ -140,6 +147,9 @@ export function ProjectSettings({ id }: { id: string }) {
             </TabsContent>
             <TabsContent value="automation" className="pt-3">
               <AutomationTab project={p} />
+            </TabsContent>
+            <TabsContent value="releases" className="pt-3">
+              <ReleasesTab project={p} />
             </TabsContent>
             <TabsContent value="ai" className="pt-3">
               <AiTab project={p} />

@@ -70,19 +70,22 @@ const test = await pinwren.feedback.reproTest(id);
 console.log(test.caveats, test.code);
 ```
 
-| Method                             | Returns                                                             | Scope            |
-| ---------------------------------- | ------------------------------------------------------------------- | ---------------- |
-| `feedback.list(query?)`            | `{ items, nextCursor }`                                             | `feedback:read`  |
-| `feedback.iterate(query?)`         | An async iterator over every matching item                          | `feedback:read`  |
-| `feedback.get(id)`                 | The item with comments, assets, activity, diagnostics               | `feedback:read`  |
-| `feedback.update(id, patch)`       | The updated item                                                    | `feedback:write` |
-| `feedback.resolve(id, note?)`      | The updated item                                                    | `feedback:write` |
-| `feedback.reproduction(id)`        | `{ feedbackId, markdown, steps, failingRequests, errors, replay }`  | `feedback:read`  |
-| `feedback.brief(id)`               | `{ markdown, hints, commands, links, privacy }`                     | `feedback:read`  |
-| `feedback.reproTest(id)`           | `{ filename, code, caveats, stats }` — a draft, not a verified test | `feedback:read`  |
-| `labels.list(projectId)`           | The project's labels with live item counts                          | `feedback:read`  |
-| `views.list()`                     | Saved inbox views you can use                                       | `feedback:read`  |
-| `stats.get({ days?, projectId? })` | Totals, breakdowns and a daily series                               | `feedback:read`  |
+| Method                              | Returns                                                                                                                       | Scope            |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `feedback.list(query?)`             | `{ items, nextCursor }`                                                                                                       | `feedback:read`  |
+| `feedback.iterate(query?)`          | An async iterator over every matching item                                                                                    | `feedback:read`  |
+| `feedback.get(id)`                  | The item with comments, assets, activity, diagnostics                                                                         | `feedback:read`  |
+| `feedback.update(id, patch)`        | The updated item                                                                                                              | `feedback:write` |
+| `feedback.resolve(id, note?, fix?)` | The updated item; `fix` is `{ releaseId }` or `{ nextRelease: true }`                                                         | `feedback:write` |
+| `feedback.reproduction(id)`         | `{ feedbackId, markdown, steps, failingRequests, errors, replay }`                                                            | `feedback:read`  |
+| `feedback.brief(id)`                | `{ markdown, hints, commands, links, privacy }`                                                                               | `feedback:read`  |
+| `feedback.reproTest(id)`            | `{ filename, code, caveats, stats }` — a draft, not a verified test                                                           | `feedback:read`  |
+| `labels.list(projectId)`            | The project's labels with live item counts                                                                                    | `feedback:read`  |
+| `releases.list(projectId)`          | The project's [releases](/docs/dashboard/releases) with fixed and regression counts                                           | `feedback:read`  |
+| `releases.create(projectId, r)`     | Record a release (`{ version, commit?, deployedAt?, notes? }`); the same version updates it → `{ release, created, adopted }` | `releases:write` |
+| `customFields.list(projectId)`      | The project's custom form fields (key, type, options, audience, kinds)                                                        | `feedback:read`  |
+| `views.list()`                      | Saved inbox views you can use                                                                                                 | `feedback:read`  |
+| `stats.get({ days?, projectId? })`  | Totals, breakdowns and a daily series                                                                                         | `feedback:read`  |
 
 `query` takes `projectId`, `status` (a status, `"active"` or `"all"`), `kind`, `priority`, `assigneeId`, `roundId`,
 `q` (full-text), `page` (part of the page URL), `since` (ISO 8601), `limit` (1–100) and `cursor`. `patch` takes

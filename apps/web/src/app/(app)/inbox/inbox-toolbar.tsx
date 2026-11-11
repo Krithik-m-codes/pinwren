@@ -7,7 +7,9 @@ import {
   Bookmark,
   BookmarkCheck,
   CalendarClock,
+  Columns3,
   Download,
+  FormInput,
   Link2,
   Filter,
   Flag,
@@ -24,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -61,16 +64,19 @@ import {
 } from "@/lib/inbox-filters";
 import {
   errorMessage,
+  useCustomFieldsQuery,
   useLabelsQuery,
+  useReleasesQuery,
   useRoundsQuery,
   useUpdateViewMutation,
   useViewsQuery,
 } from "@/lib/store/api";
 import { useReviewLinksQuery } from "@/lib/store/api/onboarding";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { type Density, densityChanged } from "@/lib/store/slices/inbox";
+import { type Density, densityChanged, fieldColumnsChanged } from "@/lib/store/slices/inbox";
 import { useUrlParams } from "@/lib/use-url-params";
 import { useMembers, useViewer } from "@/lib/viewer";
+import { CustomFieldFilterDialog, describeFilter } from "./custom-field-filter";
 import { download, EXPORT_FORMATS } from "./inbox-list";
 import { Kbd } from "./kbd";
 import { LabelDot } from "./pickers";
@@ -118,16 +124,24 @@ export function InboxToolbar({
   const { params, setParams } = useUrlParams();
   const dispatch = useAppDispatch();
   const density = useAppSelector((s) => s.inbox.prefs.density);
+  const fieldColumns = useAppSelector((s) => s.inbox.prefs.fieldColumns);
   const members = useMembers();
   const { canWrite, isAdmin, userId } = useViewer();
   const rounds = useRoundsQuery(filters.projectId ?? "", { skip: !filters.projectId });
   const labels = useLabelsQuery(filters.projectId ?? "", { skip: !filters.projectId });
+  // Custom fields are per project: the field filter and columns appear once one project is chosen (ADR 0032).
+  const customFields = useCustomFieldsQuery(filters.projectId ?? "", { skip: !filters.projectId });
+  const fieldDefs = customFields.data?.fields ?? [];
   // Review links are project settings (Admins); others still get the chip from a shared URL.
   const reviewLinks = useReviewLinksQuery(filters.projectId ?? "", { skip: !filters.projectId || !isAdmin });
+  const releases = useReleasesQuery(filters.projectId ?? "", {
+    skip: !filters.projectId || !filters.fixedInReleaseId,
+  });
   const views = useViewsQuery(undefined);
   const [updateView, viewUpdate] = useUpdateViewMutation();
   const [saving, setSaving] = useState(false);
   const [textFilters, setTextFilters] = useState(false);
+  const [fieldFilter, setFieldFilter] = useState(false);
   const savedId = params.get("saved");
   const saved = views.data?.views.find((v) => v.id === savedId);
   const changed = !!saved && (!sameFilters(saved.filters, filters) || saved.layout !== layout);
@@ -171,6 +185,23 @@ export function InboxToolbar({
       param: "review",
       label: l ? t("inbox1.chipReviewLink", { name: l.label }) : t("inbox1.chipFromReviewLink"),
     });
+  }
+  if (filters.regression) chips.push({ param: "regression", label: t("releases.chipRegressions") });
+  if (filters.fixedInReleaseId) {
+    const r = releases.data?.releases.find((x) => x.id === filters.fixedInReleaseId);
+    chips.push({
+      param: "fixedIn",
+      label: t("releases.fixedInBadge", { version: r?.version ?? "…" }),
+    });
+  }
+  if (filters.cf) {
+    const d = describeFilter(filters.cf, fieldDefs, {
+      yes: t("cfields.yes"),
+      no: t("cfields.no"),
+      any: t("cfields.filterAnyShort"),
+      none: t("cfields.filterNoneShort"),
+    });
+    chips.push({ param: "cf", label: t("cfields.chipField", { field: d.label, value: d.text }) });
   }
   if (filters.reporter)
     chips.push({ param: "reporter", label: t("inbox1.chipReporter", { name: filters.reporter }) });
@@ -387,6 +418,44 @@ export function InboxToolbar({
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
             )}
+            <DropdownMenuCheckboxItem
+              data-testid="regression-filter"
+              checked={!!filters.regression}
+              onCheckedChange={(on) => set("regression", on ? "true" : null)}
+            >
+              {t("releases.filterRegressions")}
+            </DropdownMenuCheckboxItem>
+            {filters.projectId && fieldDefs.length > 0 && (
+              <>
+                <DropdownMenuItem data-testid="field-filter" onClick={() => setFieldFilter(true)}>
+                  <FormInput /> {t("cfields.filterMenu")}
+                </DropdownMenuItem>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger data-testid="field-columns">
+                    <Columns3 /> {t("cfields.columnsMenu")}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-56">
+                    {fieldDefs.map((f) => (
+                      <DropdownMenuCheckboxItem
+                        key={f.key}
+                        checked={fieldColumns.includes(f.key)}
+                        disabled={!fieldColumns.includes(f.key) && fieldColumns.length >= 3}
+                        onCheckedChange={(on) =>
+                          dispatch(
+                            fieldColumnsChanged(
+                              on ? [...fieldColumns, f.key] : fieldColumns.filter((k) => k !== f.key),
+                            ),
+                          )
+                        }
+                      >
+                        <span className="truncate">{f.label}</span>
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                    <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("cfields.columnsHelp")}</p>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              </>
+            )}
             <DropdownMenuItem data-testid="reporter-filter" onClick={() => setTextFilters(true)}>
               <AtSign /> {t("inbox1.reporterOrPage")}
             </DropdownMenuItem>
@@ -425,6 +494,13 @@ export function InboxToolbar({
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+        <CustomFieldFilterDialog
+          open={fieldFilter}
+          onOpenChange={setFieldFilter}
+          fields={fieldDefs}
+          current={filters.cf}
+          onApply={(cf) => setParams({ cf, item: null })}
+        />
         <TextFiltersDialog
           open={textFilters}
           onOpenChange={setTextFilters}

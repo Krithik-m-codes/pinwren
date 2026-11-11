@@ -24,6 +24,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: DELETE /api/comments/:id"
   },
+  "DELETE /api/dashboards/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/dashboards/:id"
+  },
   "DELETE /api/email-templates/:key": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -64,6 +69,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: DELETE /api/members/:userId"
   },
+  "DELETE /api/releases/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/releases/:id"
+  },
   "DELETE /api/review-links/:id": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -78,6 +88,21 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: DELETE /api/share-links/:id"
+  },
+  "DELETE /api/slack": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/slack"
+  },
+  "DELETE /api/slack/links/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/slack/links/:id"
+  },
+  "DELETE /api/slack/routes/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/slack/routes/:id"
   },
   "DELETE /api/tokens/:id": {
     "boundary": "tenant",
@@ -168,6 +193,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/branding"
+  },
+  "GET /api/dashboards": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/dashboards"
   },
   "GET /api/email-assets/:token": {
     "boundary": "capability",
@@ -274,6 +304,16 @@
     "databaseLifetime": "finite",
     "check": "identity authorization: GET /api/me/preferences"
   },
+  "GET /api/me/ui-state": {
+    "boundary": "identity",
+    "databaseLifetime": "finite",
+    "check": "identity authorization: GET /api/me/ui-state"
+  },
+  "GET /api/me/workspace-preferences": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/me/workspace-preferences"
+  },
   "GET /api/members": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -324,6 +364,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/projects/:id/automations"
   },
+  "GET /api/projects/:id/custom-fields": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects/:id/custom-fields"
+  },
   "GET /api/projects/:id/export": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -353,6 +398,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/projects/:id/notifications"
+  },
+  "GET /api/projects/:id/releases": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/projects/:id/releases"
   },
   "GET /api/projects/:id/review-links": {
     "boundary": "tenant",
@@ -414,6 +464,16 @@
     "databaseLifetime": "finite",
     "check": "public authorization: GET /api/sign-in-methods"
   },
+  "GET /api/slack": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/slack"
+  },
+  "GET /api/slack/channels": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: GET /api/slack/channels"
+  },
   "GET /api/stats": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -474,10 +534,20 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/v1/projects"
   },
+  "GET /api/v1/projects/:id/custom-fields": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/projects/:id/custom-fields"
+  },
   "GET /api/v1/projects/:id/labels": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/v1/projects/:id/labels"
+  },
+  "GET /api/v1/projects/:id/releases": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/v1/projects/:id/releases"
   },
   "GET /api/v1/projects/:id/rounds": {
     "boundary": "tenant",
@@ -589,6 +659,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: PATCH /api/comments/:id"
   },
+  "PATCH /api/dashboards/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/dashboards/:id"
+  },
   "PATCH /api/feedback/:id": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -619,6 +694,16 @@
     "databaseLifetime": "finite",
     "check": "identity authorization: PATCH /api/me/profile"
   },
+  "PATCH /api/me/ui-state": {
+    "boundary": "identity",
+    "databaseLifetime": "finite",
+    "check": "identity authorization: PATCH /api/me/ui-state"
+  },
+  "PATCH /api/me/workspace-preferences": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/me/workspace-preferences"
+  },
   "PATCH /api/members/:userId": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -639,10 +724,20 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: PATCH /api/projects/:id/notifications"
   },
+  "PATCH /api/releases/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/releases/:id"
+  },
   "PATCH /api/rounds/:id": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: PATCH /api/rounds/:id"
+  },
+  "PATCH /api/slack/routes/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/slack/routes/:id"
   },
   "PATCH /api/v1/feedback/:id": {
     "boundary": "tenant",
@@ -743,6 +838,16 @@
     "boundary": "tenant",
     "databaseLifetime": "external",
     "check": "foreign tenant: POST /api/branding/assets"
+  },
+  "POST /api/dashboards": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/dashboards"
+  },
+  "POST /api/dashboards/:id/duplicate": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/dashboards/:id/duplicate"
   },
   "POST /api/email-templates/:key/preview": {
     "boundary": "tenant",
@@ -944,6 +1049,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: POST /api/projects/:id/pages/regroup"
   },
+  "POST /api/projects/:id/releases": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/projects/:id/releases"
+  },
   "POST /api/projects/:id/review-links": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -989,6 +1099,36 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: POST /api/share/:key/unlock"
   },
+  "POST /api/slack/commands": {
+    "boundary": "capability",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/slack/commands"
+  },
+  "POST /api/slack/interactivity": {
+    "boundary": "capability",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/slack/interactivity"
+  },
+  "POST /api/slack/link": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/slack/link"
+  },
+  "POST /api/slack/routes": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/slack/routes"
+  },
+  "POST /api/slack/sync-members": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/slack/sync-members"
+  },
+  "POST /api/slack/test": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/slack/test"
+  },
   "POST /api/tokens": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -1008,6 +1148,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: POST /api/v1/feedback/:id/comments"
+  },
+  "POST /api/v1/projects/:id/releases": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/v1/projects/:id/releases"
   },
   "POST /api/views": {
     "boundary": "tenant",
@@ -1059,9 +1204,19 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: PUT /api/notification-preferences"
   },
+  "PUT /api/projects/:id/custom-fields": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PUT /api/projects/:id/custom-fields"
+  },
   "PUT /api/settings/ai": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: PUT /api/settings/ai"
+  },
+  "PUT /api/slack": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: PUT /api/slack"
   }
 }

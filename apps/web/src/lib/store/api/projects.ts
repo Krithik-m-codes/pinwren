@@ -15,7 +15,14 @@ import { LIST, fulfilled } from "./base";
 export type ProjectPatch = Partial<
   Pick<
     ProjectDetail,
-    "name" | "allowedOrigins" | "publicRead" | "retentionDays" | "notifyReporter" | "widgetRateLimitPerMin"
+    | "name"
+    | "allowedOrigins"
+    | "publicRead"
+    | "retentionDays"
+    | "notifyReporter"
+    | "widgetRateLimitPerMin"
+    | "detectRegressions"
+    | "autoReopenRegressions"
   >
 > & {
   widgetConfig?: WidgetConfigInput;

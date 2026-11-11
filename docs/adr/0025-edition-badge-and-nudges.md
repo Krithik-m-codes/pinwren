@@ -1,6 +1,6 @@
 # ADR 0025 — Edition badge, update strip and support card
 
-**Status:** accepted
+**Status:** accepted. Dismissals (per browser) are superseded by [ADR 0037](0037-server-dashboards-named-shared.md).
 
 The dashboard shows which edition runs, tells instance admins when a release is out, and now and then asks them
 to star or sponsor the project.

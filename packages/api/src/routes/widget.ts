@@ -55,6 +55,7 @@ import { publishDeleted } from "../realtime/publish";
 import { clientIp, family } from "../net";
 import { hasFeature } from "../license";
 import { consume, consumeAmount } from "../rate-limit";
+import { answersForNewReport, widgetFields } from "../services/custom-fields";
 import { updateAnchor } from "../services/anchor";
 import { verifyIdentity } from "../services/identity";
 import { verifyPageLinkToken } from "../services/page-link";
@@ -404,12 +405,17 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       parseWidgetConfig(p.widgetConfig),
       parseCaptureConfig(p.captureConfig),
     );
-    const [activeRound, whiteLabel] = await Promise.all([activeRoundOf(p.id), hasFeature("white_label")]);
+    const [activeRound, whiteLabel, customFields] = await Promise.all([
+      activeRoundOf(p.id),
+      hasFeature("white_label"),
+      widgetFields(p.orgId, p.id),
+    ]);
     const branding = parseWidgetBranding(p.widgetBranding);
     return c.json({
       // slug fills `{projectSlug}` in panel-action links (wave-3 contract §1).
       project: { name: p.name, slug: p.slug, publicRead: p.publicRead },
-      widget: w,
+      // `customFields`: the form builder's reporter fields (ADR 0032); the widget's lazy chunk renders them.
+      widget: { ...w, customFields },
       capture,
       // Hiding "Powered by Pinwren" is Enterprise white-label: without the entitlement the stored
       // setting is kept but not applied (wave-4 contract §6).
@@ -554,6 +560,12 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       if (existing) return c.json({ feedback: existing }, 200);
       // Cloud plans cap reports per month (hard stop at 120%); a no-op without billing.
       await assertReportQuota(p.orgId);
+
+      // The answers to the project's custom fields, checked against the definitions (never the widget's word
+      // for it) before any file is written; a bad answer is a 400 the widget shows under its form.
+      const customFields = await withOrg(p.orgId, () =>
+        answersForNewReport(p.orgId, p.id, input.customFields, input.kind),
+      );
 
       // Decode and type-check every file before anything is written.
       const decoded: {
@@ -772,7 +784,7 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
           insert into ${feedback}
             (org_id, project_id, page_id, number, kind, title, body, priority, client_id,
              anchor, environment, metadata, reporter_guest, reporter_token_hash, consent, round_id,
-             review_link_id)
+             review_link_id, custom_fields)
           select ${p.orgId}, ${p.id}, ${pageId ?? null}, counter.n, ${input.kind}::feedback_kind,
              ${input.title ?? null}, ${input.body}, ${input.priority ?? "none"}::priority, ${input.clientId},
              ${json(input.anchor)}::jsonb, ${json(input.environment)}::jsonb, ${json(input.metadata)}::jsonb,
@@ -785,7 +797,8 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
                (select (array_agg(r.id))[1] from ${reviewRound} r
                   where r.project_id = ${p.id} and r.status = 'active' having count(*) = 1)
              ),
-             ${via?.id ?? null}::uuid
+             ${via?.id ?? null}::uuid,
+             ${JSON.stringify(customFields)}::jsonb
           from counter
           returning id, number
         ), a as (
@@ -879,6 +892,7 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
       with u as (
         update ${feedback} set status = ${status}::feedback_status,
           resolved_at = ${isClosedStatus(status) ? sql`now()` : sql`null`}, updated_at = now()
+          ${status === "resolved" ? sql`` : sql`, fixed_in_release_id = null, fixed_in_next_release = false`}
         where id = ${f.id} and status = ${f.status}::feedback_status
         returning id, status
       ), act as (

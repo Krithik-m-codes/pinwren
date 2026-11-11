@@ -121,6 +121,9 @@ const schema = z.object({
   GITHUB_API_URL: z.url().default("https://api.github.com"),
   GITLAB_URL: z.url().default("https://gitlab.com"),
 
+  // Interactive Slack (F-071): the Web API base. Only a mock or an enterprise proxy changes it.
+  SLACK_API_URL: z.url().default("https://slack.com/api"),
+
   // Email. Each variable set here overrides and locks the matching admin-UI field.
   SMTP_HOST: optionalString,
   SMTP_PORT: z.coerce.number().int().min(1).max(65535).optional(),

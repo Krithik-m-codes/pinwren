@@ -6,6 +6,7 @@ import { parseArgs } from "node:util";
 import { PinwrenError } from "@pinwren/sdk";
 import pkg from "../package.json" with { type: "json" };
 import { doctor, status } from "./checks";
+import { createRelease, formatReleases, listReleases } from "./release";
 import { briefFor, formatDetail, formatList, getFeedback, listFeedback, reproFor } from "./feedback";
 import {
   assertProjectKey,
@@ -33,6 +34,10 @@ Usage:
       Show one item.
   pinwren feedback brief <id> --url <instance> --token <pwt_…> [--json]
       Print the agent-ready brief (Markdown). Pipe it: pinwren feedback brief <id> | claude -p "Fix this"
+  pinwren release create <version> --project <id|slug> --url <instance> --token <pwt_…> [--commit <sha>] [--notes <text>] [--deployed-at <iso>] [--json]
+      Record a release (run it from CI after a deploy; needs a token with the releases:write scope). Safe to re-run.
+  pinwren release list --project <id|slug> --url <instance> --token <pwt_…> [--json]
+      List a project's releases with the items fixed in each and its regressions.
   pinwren repro <id> --url <instance> --token <pwt_…> [--out <file.spec.ts>] [--json]
       Print (or save) a DRAFT Playwright test for the report; the caveats go to stderr.
 
@@ -132,6 +137,9 @@ async function run(argv: string[]): Promise<number> {
       file: { type: "string" },
       write: { type: "boolean" },
       project: { type: "string" },
+      commit: { type: "string" },
+      notes: { type: "string" },
+      "deployed-at": { type: "string" },
       status: { type: "string" },
       kind: { type: "string" },
       text: { type: "string" },
@@ -245,6 +253,43 @@ async function run(argv: string[]): Promise<number> {
       return 0;
     }
     throw new Error("Usage: pinwren feedback list|get|brief, or pinwren repro <id>");
+  }
+
+  if (command === "release") {
+    const token = values.token ?? process.env.PINWREN_TOKEN;
+    if (!token)
+      throw new Error("--token (or PINWREN_TOKEN) is required: create one in Settings › API tokens");
+    const project = values.project ?? process.env.PINWREN_PROJECT;
+    if (!project) throw new Error("--project <id|slug> (or PINWREN_PROJECT) is required");
+    const [, sub, version] = positionals;
+    if (sub === "create") {
+      if (!version) throw new Error("Usage: pinwren release create <version> --project <id|slug>");
+      const out = await createRelease(url, token, {
+        project,
+        version,
+        commit: values.commit,
+        notes: values.notes,
+        deployedAt: values["deployed-at"],
+      });
+      if (values.json) console.log(JSON.stringify(out, null, 2));
+      else {
+        const fixed = out.adopted
+          ? `; ${out.adopted} item(s) promised for the next release are now fixed in it`
+          : "";
+        console.log(
+          ok(
+            `${out.created ? "Recorded" : "Updated"} release ${out.release.version} of ${out.project.name}${fixed}`,
+          ),
+        );
+      }
+      return 0;
+    }
+    if (sub === "list") {
+      const out = await listReleases(url, token, project);
+      console.log(values.json ? JSON.stringify(out, null, 2) : formatReleases(out.releases));
+      return 0;
+    }
+    throw new Error("Usage: pinwren release create <version>|list --project <id|slug>");
   }
 
   throw new Error(`Unknown command "${command}". Run pinwren --help.`);

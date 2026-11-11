@@ -50,6 +50,11 @@ export async function systemUpdateFeedback(
     if (patch.status && patch.status !== before.status) {
       set.status = patch.status;
       set.resolvedAt = isClosedStatus(patch.status) ? new Date() : null;
+      // A fix belongs to the resolution: reopening (or closing as won't fix) drops it.
+      if (patch.status !== "resolved") {
+        set.fixedInReleaseId = null;
+        set.fixedInNextRelease = false;
+      }
     }
     if (patch.priority && patch.priority !== before.priority) set.priority = patch.priority;
     if (patch.assigneeIds) {

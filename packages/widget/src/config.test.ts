@@ -26,6 +26,7 @@ describe("resolveConfig", () => {
       panelActions: [],
       privacyMode: false,
       errorPrompt: false,
+      customFields: [],
       visibility: {
         environments: "all",
         minViewportWidth: 0,

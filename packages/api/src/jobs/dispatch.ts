@@ -13,6 +13,7 @@ import {
   loadFeedbackContext,
   loadFeedbackFacts,
 } from "../services/feedback-payload";
+import { queueSlack } from "../slack/queue";
 import { enqueue, QUEUES } from "./boss";
 import { addWatchers, watcherIds } from "../services/watchers";
 import { queueDelivery } from "../webhooks/deliver";
@@ -20,6 +21,7 @@ import { WEBHOOK_API_VERSION, type WebhookPayload } from "../webhooks/format";
 import { enqueueOnce, membersWanting, notify, teamRenderOptions } from "./notify";
 import { reporterThreadUrl } from "./thread-url";
 import { wantsAutomation } from "../services/automation-engine";
+import { detectRegression, REGRESSION_ACTOR_ID } from "../services/regression";
 
 // Fan-out of one domain event (wave-5 contract §3.2, BugPin dispatch rules): webhooks and issue sync
 // first, then the bell, team emails and reporter emails.
@@ -118,6 +120,17 @@ async function sendReporter(
   );
 }
 
+/** "Fixed in v1.4." (or the promise of the next release) for reporter emails and chat; empty when not set. */
+export function fixedInSentence(p: {
+  status: string;
+  fixedInRelease?: string | null;
+  fixedInNextRelease?: boolean;
+}) {
+  if (p.status !== "resolved") return "";
+  if (p.fixedInRelease) return `Fixed in ${p.fixedInRelease}.`;
+  return p.fixedInNextRelease ? "The fix will ship in the next release." : "";
+}
+
 async function onCreated(e: DomainEvent, ctx: Ctx) {
   // The reporter follows their own report when they are a member (signed-in widget, dashboard).
   if (ctx.reporterId) await addWatchers(e.orgId, ctx.payload.id, [ctx.reporterId]);
@@ -200,7 +213,8 @@ async function onStatus(e: DomainEvent, ctx: Ctx, by: string | null) {
   // A visitor resolving or reopening an item nobody is involved in still reaches the team.
   const scope = people.length === 0 && e.actor.kind === "guest" ? undefined : people;
   const guest = e.actor.kind === "guest";
-  const actor = by ?? (e.actor.kind === "integration" ? "An issue tracker" : guest ? "A visitor" : "Someone");
+  const integrationName = e.actor.id === REGRESSION_ACTOR_ID ? "Regression detection" : "An issue tracker";
+  const actor = by ?? (e.actor.kind === "integration" ? integrationName : guest ? "A visitor" : "Someone");
   const vars = feedbackVars(summary(ctx));
   await notify({
     orgId: e.orgId,
@@ -220,7 +234,48 @@ async function onStatus(e: DomainEvent, ctx: Ctx, by: string | null) {
       ),
   });
   const reporter = reporterTo(e, ctx, ctx.notify.reporterStatus);
-  if (reporter) await sendReporter(e, ctx, reporter, "reporter_status", { status: statusLabel(to) });
+  if (reporter) {
+    await sendReporter(e, ctx, reporter, "reporter_status", {
+      status: statusLabel(to),
+      fixedIn: fixedInSentence({ ...ctx.payload, status: to }),
+    });
+  }
+}
+
+/**
+ * A new report looks like a resolved item coming back. The people who followed the original (whoever fixed it)
+ * and anyone on the new report are told. With nobody involved there is no bell: the team already heard about the
+ * new report itself, and the flag, the inbox filter and the dashboard widget show the rest.
+ */
+async function onRegression(e: DomainEvent, ctx: Ctx) {
+  const of = ctx.payload.regressionOf;
+  if (!of) return;
+  const original = await loadFeedbackContext(of.id);
+  const people = [...new Set([...(await involved(ctx)), ...(original ? await involved(original) : [])])];
+  if (!people.length) return;
+  const vars = {
+    ...feedbackVars(summary(ctx, await loadFeedbackFacts(ctx.payload.id))),
+    originalNumber: String(of.number),
+    confidence: of.confidence ?? "possible",
+    fixedIn: of.fixedIn ?? "",
+    release: ctx.payload.release ?? "",
+  };
+  await notify({
+    orgId: e.orgId,
+    eventId: e.id ?? null,
+    type: "feedback.regression_detected",
+    feedbackId: ctx.payload.id,
+    actorId: null,
+    projectId: ctx.payload.projectId,
+    recipients: await membersWanting(e.orgId, ctx.payload.projectId, "statusChanges", people),
+    data: rowData(ctx, {
+      actorName: null,
+      originalNumber: of.number,
+      confidence: of.confidence ?? "possible",
+      fixedIn: of.fixedIn,
+    }),
+    render: () => renderEmail(e.orgId, "regression_detected", vars, teamRenderOptions()),
+  });
 }
 
 async function onPriority(e: DomainEvent, ctx: Ctx, by: string | null) {
@@ -356,6 +411,8 @@ async function notifications(e: DomainEvent, ctx: Ctx, commentInfo: CommentInfo)
       return onPriority(e, ctx, by);
     case "feedback.deleted":
       return onDeleted(e, ctx, by);
+    case "feedback.regression_detected":
+      return onRegression(e, ctx);
     case "comment.created":
       if (commentInfo) await onComment(e, ctx, commentInfo);
       return;
@@ -413,6 +470,18 @@ export async function dispatchEvent(e: DomainEvent): Promise<void> {
       await syncIssueState(e.feedbackId, newStatus(e, ctx));
     }
     await notifications(e, ctx, commentInfo);
+    // A new bug report is compared with the resolved ones (ADR 0036). It only flags; a failure here must never
+    // hold back the automation and AI jobs below, and the flag it sets reaches people through its own event.
+    if (e.type === "feedback.created" && ctx.payload.kind === "bug") {
+      try {
+        // In a savepoint: a database error must not abort the dispatch transaction the rest of this job shares.
+        await getDb().transaction(() => detectRegression(e.orgId, e.feedbackId));
+      } catch (err) {
+        console.warn("[pinwren] regression detection failed", err);
+      }
+    }
+    // Slack cards run from their own job too: a Slack outage must not delay anything above.
+    await queueSlack(e);
     // Automation rules run from their own job, after the bell and emails, so a rule can never hold them back.
     if (wantsAutomation(e)) {
       await enqueue(

@@ -15,14 +15,18 @@ import { validation } from "./en/validation";
 import { gallery } from "./en/gallery";
 import { guest } from "./en/guest";
 import { automation } from "./en/automation";
+import { customFields } from "./en/custom-fields";
 import { billing } from "./en/billing";
 import { cloud } from "./en/cloud";
 import { dashboard } from "./en/dashboard";
+import { dashx } from "./en/dashx";
 import { global } from "./en/global";
 import { handoff } from "./en/handoff";
 import { recording } from "./en/recording";
 import { share } from "./en/share";
 import { trackers } from "./en/trackers";
+import { releases } from "./en/releases";
+import { slack } from "./en/slack";
 
 // The dashboard's English strings: the source of every translation key. They are split by area (en/*.ts) so
 // that work on one area never touches another. Keys are `area.name`; plural forms are `<stem>_one` and
@@ -49,13 +53,17 @@ export const en = {
   ...gallery,
   ...billing,
   ...automation,
+  ...customFields,
   ...cloud,
   ...dashboard,
+  ...dashx,
   ...global,
   ...handoff,
   ...recording,
   ...share,
   ...trackers,
+  ...releases,
+  ...slack,
 } as const;
 
 export type Key = keyof typeof en;

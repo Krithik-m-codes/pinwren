@@ -602,7 +602,13 @@ check("assignee gets an in-app notification (job ran)", !!r, r ? `unread=${r.bod
 r = await call("/api/notifications/read", { method: "POST", json: { all: true }, jar: memberJar });
 check("mark notifications read", r.status === 200 && r.body.updated >= 1);
 r = await call("/api/notifications?unread=1", { jar: memberJar });
-check("no unread left", r.body.unreadCount === 0 && r.body.items.length === 0);
+// A regression flag (ADR 0036) is raised by the dispatch job after the report is saved, so its bell can land
+// any time after the assignment; it is checked by its own case, not by this one.
+check(
+  "no unread left",
+  r.body.items.every((i) => i.type === "feedback.regression_detected"),
+  JSON.stringify(r.body.items.map((i) => i.type)),
+);
 
 r = await call("/api/notification-preferences");
 const pref = r.body.preferences?.find((p) => p.projectId === projectId);
@@ -2370,11 +2376,12 @@ if (process.env.SMOKE_SKIP_PACKAGES === "1") {
   );
   const tools = (await http.listTools()).tools.map((t) => t.name).sort();
   check(
-    "MCP (HTTP) exposes the 16 tools",
+    "MCP (HTTP) exposes the 19 tools",
     JSON.stringify(tools) ===
       JSON.stringify(
         [
           "add_comment",
+          "create_release",
           "get_agent_brief",
           "get_asset",
           "get_feedback",
@@ -2383,8 +2390,10 @@ if (process.env.SMOKE_SKIP_PACKAGES === "1") {
           "get_round",
           "get_stats",
           "list_assets",
+          "list_custom_fields",
           "list_labels",
           "list_projects",
+          "list_releases",
           "list_rounds",
           "list_saved_views",
           "resolve_feedback",
@@ -2458,7 +2467,7 @@ if (process.env.SMOKE_SKIP_PACKAGES === "1") {
       stderr: "ignore",
     }),
   );
-  check("MCP (stdio) lists the tools", (await stdio.listTools()).tools.length === 16);
+  check("MCP (stdio) lists the tools", (await stdio.listTools()).tools.length === 19);
   res = await stdio.callTool({ name: "search_feedback", arguments: { projectId, status: "all", limit: 3 } });
   check("MCP (stdio) search_feedback", JSON.parse(mcpText(res)).items.length === 3);
   await stdio.close();
@@ -3659,6 +3668,49 @@ console.log("\n— security (ADR 0021)");
       r.status === 200 && r.body.duplicate === true,
     );
     await call(`/api/integrations/${lin?.id}`, { method: "DELETE" });
+
+    // --- Interactive Slack: nothing is reachable without the app's signing secret -------------------------
+    const slackForm = new URLSearchParams({
+      payload: JSON.stringify({ type: "block_actions", team: { id: "T0SMOKE001" }, trigger_id: "smoke" }),
+    }).toString();
+    const slackTs = String(Math.floor(Date.now() / 1000));
+    const slackPost = (path, raw, headers = {}) =>
+      call(path, {
+        method: "POST",
+        rawBody: raw,
+        jar: { cookie: "" },
+        headers: { "content-type": "application/x-www-form-urlencoded", ...headers },
+      });
+    r = await slackPost("/api/slack/interactivity", slackForm);
+    check("Slack interactivity: unsigned request refused", r.status === 401, r.status);
+    r = await slackPost("/api/slack/interactivity", slackForm, {
+      "x-slack-request-timestamp": slackTs,
+      "x-slack-signature": `v0=${createHmac("sha256", "0123456789abcdef0123456789abcdef").update(`v0:${slackTs}:${slackForm}`).digest("hex")}`,
+    });
+    check(
+      "Slack interactivity: an unknown team and a wrong secret get the same refusal",
+      r.status === 401,
+      r.status,
+    );
+    r = await slackPost("/api/slack/commands", "team_id=T0SMOKE001&user_id=U0SMOKE001&text=help");
+    check("Slack command: unsigned request refused", r.status === 401, r.status);
+    r = await call("/api/slack", { jar: { cookie: "" } });
+    check("Slack settings need a session", r.status === 401, r.status);
+    r = await call("/api/slack");
+    check(
+      "Slack settings: not connected, with the URLs and manifest to paste",
+      r.status === 200 &&
+        r.body.connection === null &&
+        String(r.body.requestUrls?.interactivity).endsWith("/api/slack/interactivity") &&
+        typeof r.body.manifest === "string",
+      r.status,
+    );
+    r = await call("/api/slack", { method: "PUT", json: { signingSecret: "short", botToken: "xoxp-nope" } });
+    check(
+      "Slack settings: malformed credentials are refused before Slack is called",
+      r.status === 400,
+      r.status,
+    );
 
     // --- Jira (Enterprise) -----------------------------------------------------------------------------
     const jiraBody = {

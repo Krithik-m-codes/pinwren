@@ -4,6 +4,12 @@ import {
   type AutomationCondition,
   type AutomationTrigger,
   type CaptureGeometry,
+  type CustomFieldOption,
+  type CustomFieldStrings,
+  type CustomFieldValidation,
+  type CustomFieldValues,
+  CUSTOM_FIELD_AUDIENCES,
+  CUSTOM_FIELD_TYPES,
   EMAIL_DELIVERY_STATUSES,
   EMAIL_DIGEST_FREQUENCIES,
   FEEDBACK_KINDS,
@@ -14,6 +20,7 @@ import {
   type ProjectAiConfig,
   type RejectedOrigin,
   REVIEW_ROUND_STATUSES,
+  SLACK_LINK_SOURCES,
   SIGNOFF_DECISIONS,
   VIEW_LAYOUTS,
   type WidgetConsent,
@@ -45,7 +52,14 @@ export const feedbackKindEnum = pgEnum("feedback_kind", FEEDBACK_KINDS);
 export const feedbackStatusEnum = pgEnum("feedback_status", FEEDBACK_STATUSES);
 export const priorityEnum = pgEnum("priority", PRIORITIES);
 export const commentVisibilityEnum = pgEnum("comment_visibility", ["public", "internal"]);
-export const feedbackSourceEnum = pgEnum("feedback_source", ["widget", "extension", "api", "email", "mcp"]);
+export const feedbackSourceEnum = pgEnum("feedback_source", [
+  "widget",
+  "extension",
+  "api",
+  "email",
+  "mcp",
+  "slack",
+]);
 export const assetKindEnum = pgEnum("asset_kind", [
   "screenshot",
   "screenshot_annotated",
@@ -146,6 +160,10 @@ export const project = pgTable(
       autoLabels: true,
       autoApplyLabels: false,
     }),
+    /** Flag a new report that looks like a resolved item as a possible regression (ADR 0036). */
+    detectRegressions: boolean("detect_regressions").notNull().default(true),
+    /** Reopen the resolved original when a regression is flagged. Off unless a project turns it on. */
+    autoReopenRegressions: boolean("auto_reopen_regressions").notNull().default(false),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps,
   },
@@ -182,6 +200,31 @@ export type ReporterGuest = {
   /** The host app signed `externalId` with the project's identity secret (wave-4 contract §4). */
   verified?: boolean | undefined;
 };
+
+/** A version a project shipped (ADR 0036): recorded by a person, the dashboard or CI. Items can be fixed in one. */
+export const projectRelease = pgTable(
+  "project_release",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    /** As the build calls it (`1.4.0`, `v1.4.0-rc.1`, a SHA). Unique per project, ignoring case. */
+    version: text("version").notNull(),
+    commit: text("commit"),
+    notes: text("notes"),
+    deployedAt: timestamp("deployed_at", { withTimezone: true }).notNull().defaultNow(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("project_release_project_version_uq").on(t.projectId, sql`lower(${t.version})`),
+    index("project_release_project_deployed_idx").on(t.projectId, t.deployedAt),
+    uniqueIndex("project_release_id_org_uq").on(t.id, t.orgId),
+    tenantReference("project_release_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
+  ],
+);
 
 export const reviewRoundStatusEnum = pgEnum("review_round_status", REVIEW_ROUND_STATUSES);
 
@@ -237,6 +280,8 @@ export const feedback = pgTable(
     anchor: jsonb("anchor"),
     environment: jsonb("environment"),
     metadata: jsonb("metadata"),
+    /** Answers to the project's custom fields (ADR 0032), `{ field key: value }`; empty answers are not stored. */
+    customFields: jsonb("custom_fields").$type<CustomFieldValues>().notNull().default({}),
     source: feedbackSourceEnum("source").notNull().default("widget"),
     roundId: uuid("round_id").references(() => reviewRound.id, { onDelete: "set null" }),
     /** The consent notice the reporter accepted (F-019): `{ version, acceptedAt }`. */
@@ -248,6 +293,23 @@ export const feedback = pgTable(
     duplicateOfId: uuid("duplicate_of_id").references((): AnyPgColumn => feedback.id, {
       onDelete: "set null",
     }),
+    /** The release that fixed this resolved item (ADR 0036). Cleared when the item is reopened. */
+    fixedInReleaseId: uuid("fixed_in_release_id").references((): AnyPgColumn => projectRelease.id, {
+      onDelete: "set null",
+    }),
+    /** Resolved with the fix promised for the next release; the next recorded release takes its place. */
+    fixedInNextRelease: boolean("fixed_in_next_release").notNull().default(false),
+    /** Set when this report looks like a regression of that resolved item (same project). */
+    regressionOfId: uuid("regression_of_id").references((): AnyPgColumn => feedback.id, {
+      onDelete: "set null",
+    }),
+    regressionConfidence: text("regression_confidence", { enum: ["possible", "likely"] }),
+    /** Why: the signals that matched, the releases compared and the score (`regressionSignalsData`). */
+    regressionSignals: jsonb("regression_signals").$type<Record<string, unknown>>(),
+    /** What regression detection compares: page path, element key and error hashes. Set when first looked at. */
+    sigPath: text("sig_path"),
+    sigAnchor: text("sig_anchor"),
+    sigErrors: text("sig_errors").array(),
     /** The review link a guest came through (F-012), shown as the item's source and filterable in the inbox. */
     reviewLinkId: uuid("review_link_id").references((): AnyPgColumn => reviewLink.id, {
       onDelete: "set null",
@@ -267,6 +329,18 @@ export const feedback = pgTable(
     index("feedback_search_idx").using("gin", t.search),
     index("feedback_duplicate_of_idx").on(t.duplicateOfId),
     index("feedback_review_link_idx").on(t.reviewLinkId),
+    index("feedback_fixed_in_idx")
+      .on(t.fixedInReleaseId)
+      .where(sql`${t.fixedInReleaseId} is not null`),
+    index("feedback_regression_of_idx")
+      .on(t.regressionOfId)
+      .where(sql`${t.regressionOfId} is not null`),
+    // Regression detection: resolved bugs of a project by element and by error.
+    index("feedback_sig_anchor_idx")
+      .on(t.projectId, t.sigAnchor)
+      .where(sql`${t.sigAnchor} is not null`),
+    index("feedback_sig_errors_idx").using("gin", t.sigErrors),
+    index("feedback_custom_fields_idx").using("gin", sql`${t.customFields} jsonb_path_ops`),
     index("feedback_org_reporter_idx")
       .on(t.orgId, t.reporterId)
       .where(sql`${t.reporterId} is not null`),
@@ -275,6 +349,14 @@ export const feedback = pgTable(
     tenantReference("feedback_page_tenant_fk", t.pageId, t.orgId, page.id, page.orgId),
     tenantReference("feedback_round_tenant_fk", t.roundId, t.orgId, reviewRound.id, reviewRound.orgId),
     tenantReference("feedback_duplicate_tenant_fk", t.duplicateOfId, t.orgId, t.id, t.orgId),
+    tenantReference("feedback_regression_tenant_fk", t.regressionOfId, t.orgId, t.id, t.orgId),
+    tenantReference(
+      "feedback_fixed_in_tenant_fk",
+      t.fixedInReleaseId,
+      t.orgId,
+      projectRelease.id,
+      projectRelease.orgId,
+    ),
     tenantReference(
       "feedback_review_link_tenant_fk",
       t.reviewLinkId,
@@ -527,6 +609,8 @@ export const userPreference = pgTable("user_preference", {
   /** The dashboard language (`LOCALES` in core); null = follow the browser. */
   locale: text("locale"),
   lastDigestAt: timestamp("last_digest_at", { withTimezone: true }),
+  /** Interface state that follows the person between browsers: start page, dismissed prompts (ADR 0037). */
+  uiState: jsonb("ui_state").$type<Record<string, unknown>>().notNull().default({}),
   /** Storage key of an uploaded avatar; `user.image` then points at `/api/avatars/:userId`. */
   avatarKey: text("avatar_key"),
   ...timestamps,
@@ -1147,5 +1231,169 @@ export const automationRun = pgTable(
     ),
     tenantReference("automation_run_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
     tenantReference("automation_run_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
+  ],
+);
+
+/** A custom question a project asks on its report form (ADR 0032). Answers live on `feedback.custom_fields`. */
+export const customField = pgTable(
+  "custom_field",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    /** Stable identity: the key of the answer map, of API payloads and of automation conditions. Never edited. */
+    key: text("key").notNull(),
+    type: text("type", { enum: CUSTOM_FIELD_TYPES }).notNull(),
+    label: text("label").notNull(),
+    helpText: text("help_text").notNull().default(""),
+    placeholder: text("placeholder").notNull().default(""),
+    required: boolean("required").notNull().default(false),
+    /** `reporter` fields are asked in the widget; `internal` ones are filled in by the team. */
+    audience: text("audience", { enum: CUSTOM_FIELD_AUDIENCES }).notNull().default("reporter"),
+    /** Feedback kinds the field belongs to. */
+    kinds: text("kinds")
+      .array()
+      .notNull()
+      .default(sql`'{bug,idea,question}'::text[]`),
+    options: jsonb("options").$type<CustomFieldOption[]>().notNull().default([]),
+    defaultValue: jsonb("default_value"),
+    validation: jsonb("validation").$type<CustomFieldValidation>().notNull().default({}),
+    /** Personal data: masked from outbound channels in a project's privacy mode. */
+    pii: boolean("pii").notNull().default(false),
+    /** Translations of label, help text, placeholder and option labels, by widget locale. */
+    strings: jsonb("strings").$type<CustomFieldStrings>().notNull().default({}),
+    position: integer("position").notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("custom_field_project_key_uq").on(t.projectId, t.key),
+    index("custom_field_project_position_idx").on(t.projectId, t.position),
+    uniqueIndex("custom_field_id_org_uq").on(t.id, t.orgId),
+    tenantReference("custom_field_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
+  ],
+);
+
+// --- Interactive Slack (F-071) -------------------------------------------------------------------------
+// One Slack app per organisation: the admin pastes its signing secret and bot token. Inbound requests name
+// their workspace (team id), so `team_id` is unique across organisations; it is only ever written after
+// `auth.test` has proved the bot token belongs to that team.
+
+export const slackWorkspace = pgTable(
+  "slack_workspace",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    teamId: text("team_id").notNull(),
+    teamName: text("team_name").notNull(),
+    /** `https://acme.slack.com/`, from auth.test: builds message permalinks. */
+    teamUrl: text("team_url"),
+    botUserId: text("bot_user_id"),
+    /** AES-256-GCM ciphertext of the app's signing secret (verifies every inbound request). */
+    signingSecret: text("signing_secret").notNull(),
+    /** AES-256-GCM ciphertext of the bot token (xoxb-…). */
+    botToken: text("bot_token").notNull(),
+    /** Last 4 characters of the bot token, to recognise it in the UI. */
+    tokenHint: text("token_hint").notNull(),
+    active: boolean("active").notNull().default(true),
+    lastError: text("last_error"),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("slack_workspace_org_uq").on(t.orgId),
+    uniqueIndex("slack_workspace_team_uq").on(t.teamId),
+    uniqueIndex("slack_workspace_id_org_uq").on(t.id, t.orgId),
+  ],
+);
+
+/** Which events of which project go to which channel. A null project covers every project. */
+export const slackRoute = pgTable(
+  "slack_route",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => slackWorkspace.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").references(() => project.id, { onDelete: "cascade" }),
+    channelId: text("channel_id").notNull(),
+    channelName: text("channel_name"),
+    events: text("events")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    ...timestamps,
+  },
+  (t) => [
+    index("slack_route_workspace_idx").on(t.workspaceId),
+    uniqueIndex("slack_route_id_org_uq").on(t.id, t.orgId),
+    tenantReference(
+      "slack_route_workspace_tenant_fk",
+      t.workspaceId,
+      t.orgId,
+      slackWorkspace.id,
+      slackWorkspace.orgId,
+    ),
+    tenantReference("slack_route_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
+  ],
+);
+
+/** A Slack member mapped to a Pinwren member: by verified email, or confirmed by the member in the dashboard. */
+export const slackUserLink = pgTable(
+  "slack_user_link",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => slackWorkspace.id, { onDelete: "cascade" }),
+    slackUserId: text("slack_user_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    source: text("source", { enum: SLACK_LINK_SOURCES }).notNull().default("email"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("slack_user_link_slack_uq").on(t.workspaceId, t.slackUserId),
+    index("slack_user_link_user_idx").on(t.orgId, t.userId),
+    tenantReference(
+      "slack_user_link_workspace_tenant_fk",
+      t.workspaceId,
+      t.orgId,
+      slackWorkspace.id,
+      slackWorkspace.orgId,
+    ),
+  ],
+);
+
+/** The card posted for an item in a channel, so later changes update it in place. */
+export const slackMessage = pgTable(
+  "slack_message",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => slackWorkspace.id, { onDelete: "cascade" }),
+    feedbackId: uuid("feedback_id")
+      .notNull()
+      .references(() => feedback.id, { onDelete: "cascade" }),
+    channelId: text("channel_id").notNull(),
+    ts: text("ts").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("slack_message_feedback_channel_uq").on(t.feedbackId, t.channelId),
+    tenantReference(
+      "slack_message_workspace_tenant_fk",
+      t.workspaceId,
+      t.orgId,
+      slackWorkspace.id,
+      slackWorkspace.orgId,
+    ),
+    tenantReference("slack_message_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
   ],
 );

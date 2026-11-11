@@ -272,6 +272,17 @@ function ReportView({
           <StatusIcon status={r.status} />
           {t(STATUS_META[r.status].labelKey)}
         </Badge>
+        {r.status === "resolved" && (r.fixedInVersion || r.fixedInNextRelease) && (
+          <Badge
+            variant="outline"
+            className="text-emerald-700 dark:text-emerald-400"
+            data-testid="share-fixed-in"
+          >
+            {r.fixedInVersion
+              ? t("releases.guestFixedIn", { version: r.fixedInVersion })
+              : t("releases.guestFixedInNext")}
+          </Badge>
+        )}
         {r.priority !== "none" && <span>{t(PRIORITY_META[r.priority].labelKey)}</span>}
         <RelativeTime iso={r.createdAt} />
       </div>
@@ -517,6 +528,11 @@ function RoundView({
                 </span>
                 <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                   {t(STATUS_META[i.status].labelKey)}
+                  {i.status === "resolved" && i.fixedInVersion && (
+                    <span className="ml-1.5 text-emerald-700 dark:text-emerald-400">
+                      {t("releases.guestFixedIn", { version: i.fixedInVersion })}
+                    </span>
+                  )}
                 </span>
               </div>
             </li>

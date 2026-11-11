@@ -4,16 +4,58 @@ import { feedbackKind, feedbackStatus, priority } from "./schemas";
 /** Date ranges the dashboards offer (days back from now). */
 export const STATS_RANGES = [7, 14, 30, 90] as const;
 
-/** `GET /api/stats`: workspace-wide numbers for the dashboards, optionally for one project. */
-export const dashboardStatsQuery = z.object({
-  projectId: z.uuid().optional(),
-  days: z.coerce
-    .number()
-    .int()
-    .refine((n) => (STATS_RANGES as readonly number[]).includes(n), "Unsupported range")
-    .default(14),
-});
+/** Longest explicit date range (days). */
+export const MAX_STATS_DAYS = 366;
+
+const DAY_MS = 86_400_000;
+const day = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+  .refine((s) => !Number.isNaN(Date.parse(`${s}T00:00:00Z`)), "Not a date");
+
+/**
+ * `GET /api/stats`: workspace-wide numbers for the dashboards. The filters narrow every number at once: one
+ * project, one label, one assignee (`me`, `none` for unassigned, or a member id) and a date range, either the
+ * last `days` days or an explicit `from`..`to` span (UTC dates, inclusive; `to` defaults to today).
+ */
+export const dashboardStatsQuery = z
+  .object({
+    projectId: z.uuid().optional(),
+    labelId: z.uuid().optional(),
+    assigneeId: z.string().min(1).max(100).optional(),
+    days: z.coerce
+      .number()
+      .int()
+      .refine((n) => (STATS_RANGES as readonly number[]).includes(n), "Unsupported range")
+      .default(14),
+    from: day.optional(),
+    to: day.optional(),
+  })
+  .refine((q) => !q.to || !!q.from, { message: '"to" needs "from"', path: ["to"] })
+  .refine((q) => !q.from || !q.to || q.from <= q.to, {
+    message: "The range ends before it starts",
+    path: ["to"],
+  })
+  .refine(
+    (q) =>
+      !q.from ||
+      (Date.parse(`${q.to ?? q.from}T00:00:00Z`) - Date.parse(`${q.from}T00:00:00Z`)) / DAY_MS <
+        MAX_STATS_DAYS,
+    { message: `Pick at most ${MAX_STATS_DAYS} days`, path: ["to"] },
+  );
 export type DashboardStatsQuery = z.infer<typeof dashboardStatsQuery>;
+
+/**
+ * The window a query covers: `since` (inclusive) and `until` (exclusive, null = no upper bound, i.e. up to
+ * now), and its length in days. A `from` without `to` runs to now.
+ */
+export function statsWindow(q: Pick<DashboardStatsQuery, "days" | "from" | "to">, now: Date) {
+  if (!q.from) return { since: new Date(now.getTime() - q.days * DAY_MS), until: null, days: q.days };
+  const since = new Date(`${q.from}T00:00:00Z`);
+  const until = q.to ? new Date(Date.parse(`${q.to}T00:00:00Z`) + DAY_MS) : null;
+  const end = until ?? now;
+  return { since, until, days: Math.max(1, Math.ceil((end.getTime() - since.getTime()) / DAY_MS)) };
+}
 
 const count = z.number().int().nonnegative();
 
@@ -100,6 +142,41 @@ export const dashboardStats = z.object({
       closed: count,
       requireSignoff: z.boolean(),
       signoff: z.enum(["none", "approved", "changes_requested"]),
+    }),
+  ),
+  /**
+   * Possible regressions: new reports that look like a resolved item (ADR 0036). `total` is the ones filed in the
+   * range, `open` those still being worked on; `items` the newest.
+   */
+  regressions: z.object({
+    total: count,
+    open: count,
+    items: z.array(
+      z.object({
+        id: z.string(),
+        number: z.number().int(),
+        title: z.string().nullable(),
+        status: feedbackStatus,
+        projectId: z.string(),
+        projectName: z.string(),
+        confidence: z.enum(["possible", "likely"]),
+        /** The resolved item it may be a regression of. */
+        ofId: z.string(),
+        ofNumber: z.number().int(),
+        createdAt: z.string(),
+      }),
+    ),
+  }),
+  /** Releases with the items fixed in them and the regressions reported from them, newest release first. */
+  releases: z.array(
+    z.object({
+      id: z.string(),
+      version: z.string(),
+      projectId: z.string(),
+      projectName: z.string(),
+      deployedAt: z.string(),
+      fixed: count,
+      regressions: count,
     }),
   ),
   /** Who filed the most (items filed in the range). */

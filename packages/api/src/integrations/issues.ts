@@ -509,6 +509,7 @@ export async function applyInboundState(
     with u as (
       update ${feedback} set status = ${to}::feedback_status,
         resolved_at = ${to === "resolved" ? sql`now()` : sql`null`}, updated_at = now()
+        ${to === "resolved" ? sql`` : sql`, fixed_in_release_id = null, fixed_in_next_release = false`}
       where id = ${f.id} and status = ${f.status}::feedback_status
       returning id
     ), act as (

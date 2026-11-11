@@ -103,6 +103,7 @@ describe("agent hand-off, labels, views and stats", () => {
       json({ labels: [{ id: "l", name: "n", color: "#fff", count: 1 }] }),
       json({ views: [{ id: "v" }] }),
       json({ days: 30 }),
+      json({ fields: [{ key: "plan", type: "select" }] }),
     ]);
     const pw = new Pinwren({ url: "https://fb.example.com", token: "pwt_x", fetch: fetchImpl });
     expect((await pw.feedback.brief("a b")).markdown).toBe("# Fix");
@@ -110,12 +111,14 @@ describe("agent hand-off, labels, views and stats", () => {
     expect((await pw.labels.list("p")).at(0)?.count).toBe(1);
     expect(await pw.views.list()).toEqual([{ id: "v" }]);
     expect((await pw.stats.get({ days: 30 })).days).toBe(30);
+    expect((await pw.customFields.list("p")).at(0)?.key).toBe("plan");
     expect(calls.map((c) => c.url.replace("https://fb.example.com/api/v1", ""))).toEqual([
       "/feedback/a%20b/brief",
       "/feedback/a/repro-test",
       "/projects/p/labels",
       "/views",
       "/stats?days=30",
+      "/projects/p/custom-fields",
     ]);
   });
 });
@@ -149,5 +152,29 @@ describe("generated types", () => {
   it("are up to date with the Zod schemas (run `pnpm --filter @pinwren/sdk generate`)", async () => {
     const file = fileURLToPath(new URL("./types.generated.ts", import.meta.url));
     expect(await generate(SPECS, HEADER, file)).toBe(readFileSync(file, "utf8"));
+  });
+});
+
+describe("releases", () => {
+  it("lists releases, records one and resolves with a fix", async () => {
+    const release = { id: "r1", version: "v1.4.0", fixedCount: 2, regressionCount: 0 };
+    const { calls, fetchImpl } = fake([
+      json({ releases: [release] }),
+      json({ release, created: true, adopted: 1 }, 201),
+      json({ feedback: { id: "f", status: "resolved", fixedInReleaseId: "r1" } }),
+    ]);
+    const pw = new Pinwren({ url: "https://fb.example.com", token: "pwt_x", fetch: fetchImpl });
+    expect((await pw.releases.list("p 1")).at(0)?.version).toBe("v1.4.0");
+    const made = await pw.releases.create("p1", { version: "v1.4.0", commit: "9f2c1ab" });
+    expect(made).toMatchObject({ created: true, adopted: 1 });
+    await pw.feedback.resolve("f", undefined, { releaseId: "r1" });
+    expect(
+      calls.map((c) => `${c.init.method ?? ""} ${c.url.replace("https://fb.example.com/api/v1", "")}`),
+    ).toEqual(["GET /projects/p%201/releases", "POST /projects/p1/releases", "PATCH /feedback/f"]);
+    expect(JSON.parse(calls[1]?.init.body as string)).toEqual({ version: "v1.4.0", commit: "9f2c1ab" });
+    expect(JSON.parse(calls[2]?.init.body as string)).toEqual({
+      status: "resolved",
+      fixedInReleaseId: "r1",
+    });
   });
 });

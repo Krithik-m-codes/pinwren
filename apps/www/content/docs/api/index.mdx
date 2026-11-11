@@ -28,6 +28,7 @@ curl https://feedback.example.com/api/v1/feedback \
 | `feedback:read`  | List and read feedback                       |
 | `feedback:write` | Change status, priority, assignees and title |
 | `comments:write` | Post comments as you                         |
+| `releases:write` | Record releases (for example from CI)        |
 
 A token acts as the member who created it, in the workspace it was created in: changes show that person in the
 timeline, marked "via API". It stops working when it expires, when it is revoked, or when its owner leaves the
@@ -74,6 +75,8 @@ script or server. Use them for automation rather than replaying a browser sessio
 | `GET`   | `/api/v1/stats`                     | `feedback:read`  |
 | `GET`   | `/api/v1/projects/:id/labels`       | `feedback:read`  |
 | `GET`   | `/api/v1/views`                     | `feedback:read`  |
+| `GET`   | `/api/v1/projects/:id/releases`     | `feedback:read`  |
+| `POST`  | `/api/v1/projects/:id/releases`     | `releases:write` |
 | `PATCH` | `/api/v1/feedback/:id`              | `feedback:write` |
 | `POST`  | `/api/v1/feedback/:id/comments`     | `comments:write` |
 | `GET`   | `/api/v1/assets/:id`                | `feedback:read`  |

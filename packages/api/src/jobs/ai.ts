@@ -12,6 +12,7 @@ import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import { publishDomainEvent } from "../realtime/publish";
 import { getAiClientForOrg } from "../services/ai";
 import { autoApplySuggestions, recordSuggestions } from "../services/label-suggestions";
+import { flagFromDuplicateCandidate } from "../services/regression";
 
 export type AiEnrichJob = {
   feedbackId: string;
@@ -303,6 +304,18 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
           },
         }),
     );
+
+    // 6a. The AI thinks this is a copy of a resolved bug: that is a regression signal (ADR 0036), so flag it
+    // the same way the signature detector does. Never lets a failure here lose the enrichment just recorded.
+    if (duplicateId) {
+      try {
+        await withOrg(job.orgId, () =>
+          flagFromDuplicateCandidate(job.orgId, job.feedbackId, duplicateId, duplicate?.confidence),
+        );
+      } catch (err) {
+        console.warn("[pinwren] regression flag from AI failed", err);
+      }
+    }
 
     // 6b. Label suggestions. Separate from the tasks above: only the text and page URL are sent (no
     // screenshot, replay or captured logs), and a failure here never loses the enrichment just recorded.

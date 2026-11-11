@@ -7,6 +7,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Copy,
   GripVertical,
   LayoutDashboard,
   Plus,
@@ -15,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { type DragEvent, useState } from "react";
+import { toast } from "sonner";
 import { EmptyState, ErrorState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,11 +47,17 @@ import {
   widgetsFor,
   type WidgetId,
 } from "@/lib/dashboard/catalog";
-import { useDashboardLayout } from "@/lib/dashboard/storage";
+import { type DashFilters, filtersPatch, parseFilters, statsArgs } from "@/lib/dashboard/filters";
+import { useCollapsed } from "@/lib/dashboard/storage";
+import { useDashboards } from "@/lib/dashboard/use-dashboards";
 import { useI18n } from "@/lib/i18n/provider";
+import { errorMessage } from "@/lib/store/api";
 import { useDashboardStatsQuery } from "@/lib/store/api/stats";
+import { useUrlParams } from "@/lib/use-url-params";
 import { cn } from "@/lib/utils";
 import { useViewer } from "@/lib/viewer";
+import { DashboardSwitcher } from "./dashboard-switcher";
+import { FilterBar } from "./filter-bar";
 import { WidgetBody } from "./widgets";
 
 // One customisable dashboard surface, used full-page (`home`) and as the compact overview strip of other
@@ -87,32 +95,129 @@ export function Dashboard({
   className?: string;
   startEditing?: boolean;
 }) {
+  return scope === "home" ? (
+    <HomeDashboard className={className} startEditing={startEditing} />
+  ) : (
+    <LocalSelectionDashboard
+      scope={scope}
+      projectId={projectId}
+      className={className}
+      startEditing={startEditing}
+    />
+  );
+}
+
+/** The home page keeps the open dashboard and the filters in the URL, so a view can be linked. */
+function HomeDashboard({
+  className,
+  startEditing,
+}: {
+  className: string | undefined;
+  startEditing: boolean;
+}) {
+  const { params, setParams } = useUrlParams();
+  const filters = parseFilters(params);
+  return (
+    <DashboardBoard
+      scope="home"
+      projectId={undefined}
+      className={className}
+      startEditing={startEditing}
+      filters={filters}
+      onFilters={(patch) => setParams(filtersPatch(patch))}
+      selectedId={params.get("dash")}
+      onSelect={(id) => setParams({ dash: id })}
+    />
+  );
+}
+
+/** Overview strips: the open dashboard is a choice of this visit, and there is no filter bar. */
+function LocalSelectionDashboard({
+  scope,
+  projectId,
+  className,
+  startEditing,
+}: {
+  scope: Scope;
+  projectId: string | undefined;
+  className: string | undefined;
+  startEditing: boolean;
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  return (
+    <DashboardBoard
+      scope={scope}
+      projectId={projectId}
+      className={className}
+      startEditing={startEditing}
+      selectedId={selectedId}
+      onSelect={setSelectedId}
+    />
+  );
+}
+
+function DashboardBoard({
+  scope,
+  projectId,
+  className,
+  startEditing,
+  filters,
+  onFilters,
+  selectedId,
+  onSelect,
+}: {
+  scope: Scope;
+  projectId: string | undefined;
+  className: string | undefined;
+  startEditing: boolean;
+  /** Home only: the dashboard-wide filters from the URL, and how to change them. */
+  filters?: DashFilters;
+  onFilters?: (patch: { [K in keyof DashFilters]?: string | null }) => void;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
   const { t } = useI18n();
-  const { userId, role } = useViewer();
+  const { userId, role, isAdmin } = useViewer();
   const appRole = role ? appRoleOf(role) : undefined;
-  const {
-    layout,
-    save,
-    reset,
-    saved,
-    collapsed: folded,
-    setCollapsed,
-  } = useDashboardLayout(userId, scope, appRole);
+  const board = useDashboards({
+    scope,
+    userId,
+    role: appRole,
+    isAdmin,
+    selectedId,
+    defaultName: t("dashx.myDashboard"),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const { layout, editable } = board;
+  const { collapsed: folded, setCollapsed } = useCollapsed(userId, scope);
   const [editing, setEditing] = useState(startEditing);
   const [adding, setAdding] = useState(false);
   const [dragging, setDragging] = useState<WidgetId | null>(null);
   const home = scope === "home";
   const collapsed = !home && folded;
-  const stats = useDashboardStatsQuery(
-    { days: layout.days, ...(projectId ? { projectId } : {}) },
-    { skip: collapsed },
-  );
-  const edit = (next: Layout) => save(next);
+  const stats = useDashboardStatsQuery(statsArgs(layout.days, filters ?? {}, projectId), { skip: collapsed });
+  const edit = (next: Layout) => void board.save(next);
 
   const onDrop = (target: WidgetId) => (e: DragEvent) => {
     e.preventDefault();
     if (dragging) edit(moveWidget(layout, dragging, target));
     setDragging(null);
+  };
+
+  // A shared dashboard someone else owns is read-only: "Customise" copies it to the person's own first.
+  const customise = async () => {
+    if (!board.active || editable) {
+      setEditing(true);
+      return;
+    }
+    try {
+      const made = await board.duplicate(board.active.id);
+      onSelect(made.id);
+      toast.success(t("dashx.duplicated", { name: made.name }));
+      setEditing(true);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
   };
 
   return (
@@ -133,37 +238,29 @@ export function Dashboard({
             {t("dash.overview")}
           </button>
         )}
+        <div className={cn("flex flex-wrap items-center gap-1.5", collapsed && "hidden")}>
+          <DashboardSwitcher
+            board={board}
+            isAdmin={isAdmin}
+            onSelect={onSelect}
+            builtinName={t("dashx.builtin")}
+          />
+          {!home && (
+            <RangeMenu days={layout.days} onChange={(d) => edit(setRange(layout, d))} disabled={!editable} />
+          )}
+        </div>
         <div className={cn("ml-auto flex items-center gap-1.5", collapsed && "hidden")}>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button variant="outline" size="sm" aria-label={t("dash.range")}>
-                  {t(`dash.range${layout.days}` as "dash.range7")} <ChevronDown />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="end">
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>{t("dash.range")}</DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={String(layout.days)}
-                  onValueChange={(v) => edit(setRange(layout, Number(v) as Range))}
-                >
-                  {RANGES.map((d) => (
-                    <DropdownMenuRadioItem key={d} value={String(d)}>
-                      {t(`dash.range${d}` as "dash.range7")}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
           {editing ? (
             <>
               <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
                 <Plus /> {t("dash.addWidget")}
               </Button>
-              <Button variant="ghost" size="sm" disabled={!saved} onClick={reset}>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!board.customised}
+                onClick={() => void board.reset()}
+              >
                 <RotateCcw /> {t("dash.reset")}
               </Button>
               <Button size="sm" onClick={() => setEditing(false)}>
@@ -174,14 +271,38 @@ export function Dashboard({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setEditing(true)}
+              onClick={() => void customise()}
+              disabled={!board.ready}
               data-testid="dashboard-customise"
             >
-              <SlidersHorizontal /> {t("dash.customise")}
+              {editable ? <SlidersHorizontal /> : <Copy />}{" "}
+              {editable ? t("dash.customise") : t("dashx.duplicateToMine")}
             </Button>
           )}
         </div>
       </div>
+
+      {home && filters && onFilters && !collapsed && (
+        <FilterBar
+          filters={filters}
+          days={layout.days}
+          onChange={onFilters}
+          onDays={(d) => edit(setRange(layout, d))}
+        />
+      )}
+      {board.isError && !collapsed && (
+        <p role="status" className="text-xs text-muted-foreground" data-testid="dashboard-offline">
+          {t("dashx.offline")}{" "}
+          <button type="button" className="underline underline-offset-2" onClick={() => void board.refetch()}>
+            {t("dashx.retry")}
+          </button>
+        </p>
+      )}
+      {!collapsed && !editable && board.active && (
+        <p className="text-xs text-muted-foreground" data-testid="dashboard-readonly">
+          {t("dashx.readOnlyHint", { name: board.active.ownerName ?? t("dashx.aTeammate") })}
+        </p>
+      )}
 
       {collapsed ? null : stats.isError && !stats.data ? (
         <ErrorState error={stats.error} retry={() => void stats.refetch()} className="py-6" />
@@ -193,15 +314,17 @@ export function Dashboard({
             description={t("dash.emptyBody")}
             className="py-8"
             action={
-              <Button
-                size="sm"
-                onClick={() => {
-                  setEditing(true);
-                  setAdding(true);
-                }}
-              >
-                <Plus /> {t("dash.addWidget")}
-              </Button>
+              editable ? (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setEditing(true);
+                    setAdding(true);
+                  }}
+                >
+                  <Plus /> {t("dash.addWidget")}
+                </Button>
+              ) : undefined
             }
           />
         </div>
@@ -237,7 +360,7 @@ export function Dashboard({
             >
               {stats.data ? (
                 <div className={cn("h-full", editing && "pointer-events-none select-none")}>
-                  <WidgetBody id={slot.id} stats={stats.data} projectId={projectId} />
+                  <WidgetBody id={slot.id} stats={stats.data} projectId={projectId ?? filters?.projectId} />
                 </div>
               ) : (
                 <Skeleton className="size-full rounded-none" />
@@ -256,7 +379,9 @@ export function Dashboard({
           ))}
         </ul>
       )}
-      {editing && !collapsed && <p className="text-[11px] text-muted-foreground">{t("dash.localOnly")}</p>}
+      {editing && !collapsed && (
+        <p className="text-[11px] text-muted-foreground">{t("dashx.savedToAccount")}</p>
+      )}
 
       <WidgetCatalog
         open={adding}
@@ -266,6 +391,42 @@ export function Dashboard({
         onAdd={(id) => edit(addWidget(layout, id))}
       />
     </section>
+  );
+}
+
+/** The date range of an overview strip (the home page has it in the filter bar). */
+function RangeMenu({
+  days,
+  onChange,
+  disabled,
+}: {
+  days: Range;
+  onChange: (d: Range) => void;
+  disabled: boolean;
+}) {
+  const { t } = useI18n();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="outline" size="sm" aria-label={t("dash.range")} disabled={disabled}>
+            {t(`dash.range${days}` as "dash.range7")} <ChevronDown />
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="end">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{t("dash.range")}</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={String(days)} onValueChange={(v) => onChange(Number(v) as Range)}>
+            {RANGES.map((d) => (
+              <DropdownMenuRadioItem key={d} value={String(d)}>
+                {t(`dash.range${d}` as "dash.range7")}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
