@@ -4,6 +4,7 @@ export * from "./billing";
 export * from "./config";
 export * from "./custom-fields";
 export * from "./dashboard-stats";
+export * from "./dashboards";
 export * from "./guest";
 export * from "./license";
 export * from "./origins";

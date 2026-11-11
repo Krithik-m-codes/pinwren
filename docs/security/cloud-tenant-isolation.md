@@ -14,7 +14,7 @@ that is listed under "Remaining WP-21 work". The approved design and implementat
 
 ## Database inventory
 
-`packages/db/src/tenant-inventory.ts` classifies all 54 exported tables. The inventory test compares
+`packages/db/src/tenant-inventory.ts` classifies all 56 exported tables. The inventory test compares
 against actual Drizzle schema exports and tenant foreign keys, so a new table or relationship must be
 classified. Direct ownership means a protected `org_id`; parent ownership means a child derives its
 organization through all declared protected parents. Identity tables serve users across memberships;
@@ -23,7 +23,7 @@ system tables serve explicitly authorized instance operations.
 Cloud also protects organization, membership and invitation rows by their organization identifier.
 Tenant reads of user profiles expose only `id`, `name`, `email` and `image`, and only for members or
 contributors linked to that organization's feedback, comments, activity or watcher rows. Private account
-flags remain available only through the authenticated account repository. There are 44 protected tables.
+flags remain available only through the authenticated account repository. There are 46 protected tables.
 
 Better Auth uses a separate, stable identity pool. Its service role has identity/system grants and a
 fixed eight-column token-verification projection; it cannot read tenant feedback or token display names.
@@ -50,7 +50,7 @@ required.
 
 ## HTTP entry points
 
-`packages/api/src/tenant-route-inventory.json` records all 229 mounted endpoint signatures, including
+`packages/api/src/tenant-route-inventory.json` records all 238 mounted endpoint signatures, including
 the ALL-method `/mcp` handler. Each record names its authorization boundary, whether its handler needs
 special treatment for streaming/external work, and its required authorization test case. These names
 are planned coverage identifiers, not claims that the corresponding integration test already passes.
@@ -205,7 +205,7 @@ selfhost unit runs and exercised by the integration runner.
 
 ### Route-wide acceptance evidence (Task 8)
 
-Every entry of `packages/api/src/tenant-route-inventory.json` (229 routes) has one executable case, and the
+Every entry of `packages/api/src/tenant-route-inventory.json` (238 routes) has one executable case, and the
 inventory and the case registries are compared in both directions, so an added, renamed or reclassified
 route without a case fails. Both suites run against real PostgreSQL with the restricted runtime role, in a
 fixture holding two workspaces (A and B) with a project, report, comment, label, round, review link, saved view,
@@ -302,6 +302,26 @@ three direct-ownership tables, each with the `pinwren_tenant` policy and composi
   after commit. `automation-db.test.ts` runs it against PostgreSQL with the restricted runtime role: rules naming
   another workspace's label or member are refused when saved, workspace B's identical rule never fires for A's event,
   and loop protection, idempotent retries and partial failures are asserted.
+
+## Dashboards and per-person state
+
+Design: `docs/adr/0037-server-dashboards-named-shared.md`. Migration `0017` adds two direct-ownership tables with the
+`pinwren_tenant` policy, both in `tenant-inventory.ts`, and one identity column:
+
+| Table / column             | Scope                          | Notes                                                                                                                 |
+| -------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `dashboard`                | direct (`org_id`)              | Named layouts per screen; visible to the owner and, when `shared`, to the workspace; unique name per owner and screen |
+| `workspace_preference`     | direct (`org_id`, `user_id`)   | Default dashboard per screen and pinned projects of one member in one workspace                                       |
+| `user_preference.ui_state` | identity (one row per account) | Start page and dismissed prompts; follows the person across workspaces                                                |
+
+- No composite foreign keys: nothing references another tenant table. A stored default or pin that no longer points
+  at a visible dashboard or live project is ignored on read, and a write that names another workspace's dashboard or
+  project is a 404.
+- 9 new routes (5 dashboard, 2 workspace-preference, 2 ui-state), each with a case in `cloud-routes-db.test.ts`
+  (workspace B's shared dashboard and workspace preference rows are part of the fixture, so the before/after hash
+  proves a foreign call changes nothing); `dashboards-db.test.ts` covers visibility, publishing and role defaults
+  inside one workspace and that `/api/stats` ignores a foreign project or label.
+- `GET /api/stats` gained `labelId`, `assigneeId` and `from`/`to`; every query still names `org_id`.
 
 ## Interactive Slack
 

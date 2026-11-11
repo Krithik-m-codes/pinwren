@@ -120,6 +120,13 @@
       "when": 1794380368544,
       "tag": "0016_releases_and_regressions",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794383005964,
+      "tag": "0017_dashboards_and_preferences",
+      "breakpoints": true
     }
   ]
 }

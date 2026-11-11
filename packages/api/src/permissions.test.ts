@@ -76,6 +76,12 @@ describe("viewer role", () => {
         "PATCH /api/me/preferences",
         "POST /api/feedback/:id/watch",
         "DELETE /api/feedback/:id/watch",
+        "POST /api/dashboards",
+        "PATCH /api/dashboards/:id",
+        "DELETE /api/dashboards/:id",
+        "POST /api/dashboards/:id/duplicate",
+        "PATCH /api/me/workspace-preferences",
+        "PATCH /api/me/ui-state",
       ].sort(),
     );
     expect(refused).toContain("PATCH /api/feedback/:id");

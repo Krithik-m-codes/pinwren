@@ -526,14 +526,26 @@ export function createPinwrenMcpServer(client: Pinwren, options: ServerOptions =
       title: "Get stats",
       description:
         "Workspace numbers: active, created, resolved, overdue, unassigned, urgent, average resolution time, " +
-        "breakdowns by status/kind/priority/project and a daily series. Range: 7, 14, 30 or 90 days.",
+        "breakdowns by status/kind/priority/project and a daily series. Range: 7, 14, 30 or 90 days, or an explicit from/to (YYYY-MM-DD). " +
+        'Filters: project, label, assignee (a member id, "me" or "none").',
       inputSchema: {
         projectId: z.uuid().optional(),
+        labelId: z.uuid().optional(),
+        assigneeId: z.string().min(1).max(100).optional(),
         days: z.union([z.literal(7), z.literal(14), z.literal(30), z.literal(90)]).optional(),
+        from: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+        to: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
       },
       annotations: read,
     },
-    ({ projectId, days }) => run(async () => json(await client.stats.get({ projectId, days }))),
+    ({ projectId, labelId, assigneeId, days, from, to }) =>
+      run(async () => json(await client.stats.get({ projectId, labelId, assigneeId, days, from, to }))),
   );
 
   server.registerTool(

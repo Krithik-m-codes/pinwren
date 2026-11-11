@@ -19,6 +19,7 @@ import { customFields } from "./en/custom-fields";
 import { billing } from "./en/billing";
 import { cloud } from "./en/cloud";
 import { dashboard } from "./en/dashboard";
+import { dashx } from "./en/dashx";
 import { global } from "./en/global";
 import { handoff } from "./en/handoff";
 import { recording } from "./en/recording";
@@ -54,6 +55,7 @@ export const en = {
   ...customFields,
   ...cloud,
   ...dashboard,
+  ...dashx,
   ...global,
   ...handoff,
   ...recording,

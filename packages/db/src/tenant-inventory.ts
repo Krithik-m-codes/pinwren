@@ -106,6 +106,8 @@ export const tenantInventory: readonly TenantTable[] = [
   { table: "slack_message", ownership: "direct", parents: ["slack_workspace", "feedback"] },
   { table: "share_link", ownership: "direct", parents: ["project", "feedback", "review_round"] },
   { table: "round_signoff", ownership: "direct", parents: ["review_round", "share_link"] },
+  { table: "dashboard", ownership: "direct", parents: [] },
+  { table: "workspace_preference", ownership: "direct", parents: [] },
   {
     table: "user",
     ownership: "identity",

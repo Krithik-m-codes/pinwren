@@ -59,6 +59,7 @@ import { labels } from "./labels";
 import { notifications } from "./notifications";
 import { projectNotifications } from "./project-notifications";
 import { realtime } from "./realtime";
+import { dashboards } from "./dashboards";
 import { rounds } from "./rounds";
 import { tokens } from "./tokens";
 import { webhooks } from "./webhooks";
@@ -536,6 +537,7 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
   .route("/", realtime)
   .route("/", notifications)
   .route("/", projectNotifications)
+  .route("/", dashboards)
   .route("/", rounds)
   .route("/", labels)
   .route("/", webhooks)

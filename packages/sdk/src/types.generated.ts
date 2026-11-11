@@ -609,7 +609,11 @@ export type SavedView = {
 /** Filters for `stats.get`. */
 export type StatsQuery = {
   projectId?: string | undefined;
+  labelId?: string | undefined;
+  assigneeId?: string | undefined;
   days?: number | undefined;
+  from?: string | undefined;
+  to?: string | undefined;
 };
 
 /** Workspace numbers: totals, breakdowns and a daily series. */
