@@ -3,6 +3,7 @@ import { type Catalog, LOCALES, pickLocale, setCatalog, t, tn } from "./i18n";
 import de from "./locales/de";
 import { en as enCore } from "./locales/en";
 import { enErrors } from "./locales/en-errors";
+import { enFields } from "./locales/en-fields";
 import { enPanel } from "./locales/en-panel";
 import { enReport } from "./locales/en-report";
 import { enShots } from "./locales/en-shots";
@@ -17,7 +18,7 @@ import ru from "./locales/ru";
 import zh from "./locales/zh";
 
 // The full English catalogue: the core's strings plus each lazy chunk's.
-const en = { ...enCore, ...enPanel, ...enReport, ...enShots, ...enErrors };
+const en = { ...enCore, ...enPanel, ...enReport, ...enShots, ...enErrors, ...enFields };
 const CATALOGS: Record<string, Catalog> = { de, es, fr, hi, it: it_, ja, nl, "pt-BR": ptBR, ru, zh };
 
 describe("pickLocale", () => {

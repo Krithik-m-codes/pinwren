@@ -22,7 +22,7 @@ const pkgDir = fileURLToPath(new URL(".", import.meta.url));
 const dist = join(pkgDir, "dist");
 const outdirs = [dist, join(pkgDir, "..", "..", "apps", "web", "public")];
 const LOCALES = ["es", "fr", "de", "pt-BR", "it", "ja", "hi", "nl", "zh", "ru"];
-const CHUNKS = ["panel", "report", "editor", "capture", "replay", "flows", "shots", "errors"];
+const CHUNKS = ["panel", "report", "editor", "capture", "replay", "flows", "shots", "errors", "fields"];
 const src = join(pkgDir, "src");
 const pkg = JSON.parse(await readFile(join(pkgDir, "package.json"), "utf8"));
 
@@ -38,6 +38,7 @@ const BUDGET = {
   flows: 10,
   shots: 12,
   errors: 3,
+  fields: 5,
 };
 
 // Chunks share the core's modules through `window.__pinwrenLib` (src/lib.ts) instead of bundling copies:
@@ -140,7 +141,12 @@ async function buildAll() {
   const core = await bundle({
     entryPoints: ["src/index.ts"],
     plugins: [minifyCss],
-    define: { __PINWREN_MANIFEST__: JSON.stringify(chunks) },
+    // Name → content hash only: `chunkUrl` rebuilds `widget-<name>.<hash>.js`, which keeps the core small.
+    define: {
+      __PINWREN_MANIFEST__: JSON.stringify(
+        Object.fromEntries(Object.entries(chunks).map(([k, f]) => [k, f.split(".")[1]])),
+      ),
+    },
   });
   files.set("widget.js", core);
 

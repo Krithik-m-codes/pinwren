@@ -21,6 +21,7 @@ import { diagnosticsSummary, performanceTiming, snapshotDiagnostics } from "./di
 import { adoptStyle, h, ICONS, icon, trapFocus } from "./dom";
 import type { Editor, EditorModule } from "./editor";
 import { environment, errText, uuid } from "./env";
+import type { FieldSet, FieldsModule } from "./fields";
 import { cleanPageUrl } from "./export";
 import { withObservability } from "./observability";
 import { consentBlock, identityFields } from "./form";
@@ -89,6 +90,8 @@ type Draft = {
   screenshot: string | null;
   shapes: Shape[];
   attachments: Attachment[];
+  /** Answers to the project's custom questions (ADR 0029). */
+  fields?: Record<string, unknown> | undefined;
 };
 
 addEnglish(enReport);
@@ -152,6 +155,8 @@ async function readDraft(project: string): Promise<Draft | null> {
         : null,
     shapes: sanitizeShapes(d.shapes),
     attachments: sanitizeAttachments(d.attachments),
+    // Plain data again: fields.ts only reads the keys it asks for, and the server validates what is sent.
+    fields: typeof d.fields === "object" && !Array.isArray(d.fields) ? d.fields : undefined,
   };
 }
 
@@ -188,6 +193,10 @@ export class BugReport {
     maxlength: 10000,
     class: "desc",
   });
+  /** The project's custom questions (widget-fields.js, loaded when the form opens). */
+  private F: FieldSet | null = null;
+  private fieldsSlot = h("div");
+  private savedFields: Record<string, unknown> | undefined;
   private sevButtons: HTMLButtonElement[] = [];
   private severity: Severity = "medium";
   private clientId = uuid();
@@ -267,6 +276,21 @@ export class BugReport {
     return d;
   }
 
+  /** The project's custom questions, when it has any: their code loads only then (a failure just leaves them out). */
+  private async askFields() {
+    const raw = this.ctx.cfg.customFields;
+    if (!Array.isArray(raw) || !raw.length) return;
+    try {
+      const m = await loadChunk<FieldsModule>(this.ctx.assets, "fields");
+      if (this.closed) return;
+      this.F = m.fieldSet(this.ctx.root, raw, "bug");
+      if (this.F.el) this.fieldsSlot.append(this.F.el);
+      this.F.fill(this.savedFields);
+    } catch (err) {
+      console.warn("[pinwren]", err);
+    }
+  }
+
   /** Load the editor chunk; a failure leaves `Ed` null and the screenshot area offers the fallbacks. */
   private async loadEd() {
     try {
@@ -337,6 +361,7 @@ export class BugReport {
     this.body.value = d.body;
     this.severity = d.severity;
     this.attachments = d.attachments;
+    this.savedFields = d.fields;
     const editor = this.loadEd();
     const shots = this.loadShots();
     try {
@@ -430,7 +455,7 @@ export class BugReport {
         this.body.focus();
         return;
       }
-      const bad = ident.invalid();
+      const bad = this.F?.invalid() ?? ident.invalid();
       if (bad) {
         this.error.textContent = bad.message;
         bad.el.focus();
@@ -483,6 +508,7 @@ export class BugReport {
                   ...this.sevButtons,
                 ),
               ),
+              this.fieldsSlot,
               h(
                 "div",
                 { class: "field" },
@@ -574,6 +600,7 @@ export class BugReport {
     this.renderCapbar();
     this.renderFiles();
     this.setShot(this.state, shapes);
+    void this.askFields();
     ctx.root.append(modal);
     this.cleanup.unshift(trapFocus(modal, ctx.opener)); // first, so it runs while the modal is attached
     this.body.focus();
@@ -1131,6 +1158,7 @@ export class BugReport {
       screenshot: this.state === "ready" ? this.baseUrl : null,
       shapes: this.editor?.shapes ?? [],
       attachments: this.attachments,
+      fields: this.F?.read(),
     };
     await drafts.set(this.ctx.project, draft).catch(ignoreDraftError);
   }
@@ -1172,6 +1200,7 @@ export class BugReport {
       environment: environment(this.ctx.cfg.privacyMode),
       reporter,
       consent,
+      customFields: this.F?.read(),
       replay: replay ?? undefined,
       diagnostics: this.diagnostics(),
       // Privacy mode (wave-3 §3) sends no page-timing metadata.
