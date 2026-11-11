@@ -1,5 +1,5 @@
 // App-wide helpers that came from the DocuSigner review (docs/superpowers/specs/2026-11-02-global-features.md):
-// palette search and recents, the shortcuts overlay, and the start-page preference (ADR 0025).
+// palette search and recents, the shortcuts overlay, and the start-page preference (ADR 0038).
 export const global = {
   "shortcuts.description": "Keys that work on every screen, and the ones for the inbox. Press ? any time.",
   "shortcuts.groupGlobal": "Everywhere",
