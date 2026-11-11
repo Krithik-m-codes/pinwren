@@ -23,6 +23,7 @@ import { global } from "./en/global";
 import { handoff } from "./en/handoff";
 import { recording } from "./en/recording";
 import { share } from "./en/share";
+import { releases } from "./en/releases";
 import { slack } from "./en/slack";
 
 // The dashboard's English strings: the source of every translation key. They are split by area (en/*.ts) so
@@ -57,6 +58,7 @@ export const en = {
   ...handoff,
   ...recording,
   ...share,
+  ...releases,
   ...slack,
 } as const;
 

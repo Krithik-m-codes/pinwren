@@ -18,6 +18,8 @@ export const FILTER_PARAMS = {
   label: "labelId",
   reporter: "reporter",
   review: "reviewLinkId",
+  regression: "regression",
+  fixedIn: "fixedInReleaseId",
   /** One custom field, `key:value` (ADR 0032). */
   cf: "cf",
   sort: "sort",
@@ -38,6 +40,8 @@ export const NARROWING_PARAMS = [
   "label",
   "reporter",
   "review",
+  "regression",
+  "fixedIn",
   "cf",
   "q",
 ] as const satisfies readonly Param[];
@@ -146,6 +150,8 @@ export const extraFilterCount = (f: ViewFilters) =>
     f.labelId,
     f.reporter,
     f.reviewLinkId,
+    f.regression,
+    f.fixedInReleaseId,
     f.cf,
   ].filter(Boolean).length;
 
@@ -160,6 +166,8 @@ export const CLEAR_FILTERS: Record<(typeof NARROWING_PARAMS)[number] | "item", n
   label: null,
   reporter: null,
   review: null,
+  regression: null,
+  fixedIn: null,
   cf: null,
   q: null,
   item: null,

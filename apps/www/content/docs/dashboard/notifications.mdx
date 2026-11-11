@@ -123,5 +123,5 @@ Under `/api`, with a dashboard session:
 | `PATCH /api/projects/:id/notifications`   | Admins: any subset (`reporter` merges field by field); `400 INVALID_MEMBER` for someone outside the workspace                                      |
 
 Notification types: `feedback.created`, `feedback.assigned`, `feedback.status_changed`, `feedback.priority_changed`,
-`feedback.deleted`, `comment.created`, `comment.mentioned`, `webhook.disabled`. The real-time stream
+`feedback.deleted`, `comment.created`, `comment.mentioned`, `webhook.disabled`, `feedback.regression_detected`. The real-time stream
 (`GET /api/stream`) sends each new one to its recipient as a `notification.created` event.

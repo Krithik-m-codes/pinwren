@@ -71,6 +71,7 @@ import { useMounted } from "@/lib/use-synced-state";
 import { cn } from "@/lib/utils";
 import { useMembers, useViewer } from "@/lib/viewer";
 import { LabelChips, LabelPicker } from "./pickers";
+import { RegressionTag } from "./release-ui";
 
 /** The list as the inbox shows it: every loaded page, the total, and "load more". */
 export type Feed = {
@@ -782,7 +783,13 @@ function FeedbackListRow({
                   </span>
                 </span>
               )}
+              <RegressionTag item={item} />
               <LabelChips labels={item.labels} max={2} className="shrink" />
+              {item.status === "resolved" && item.fixedInVersion && (
+                <span className="shrink-0 text-emerald-700 dark:text-emerald-400" data-testid="fixed-in-tag">
+                  {t("releases.fixedInBadge", { version: item.fixedInVersion })}
+                </span>
+              )}
               {item.dueAt && <DueDate iso={item.dueAt} status={item.status} />}
               {item.pageUrl && <span className="min-w-0 truncate font-mono">{pathOf(item.pageUrl)}</span>}
               <FieldChips item={item} keys={fieldColumns} />

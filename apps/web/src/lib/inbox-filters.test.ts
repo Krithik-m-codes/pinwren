@@ -91,3 +91,21 @@ describe("review link filter (wave 5)", () => {
     expect(inboxArgsFromParams(sp(`review=${P}`)).reviewLinkId).toBe(P);
   });
 });
+
+describe("release filters (ADR 0036)", () => {
+  it("round-trips the regression and fixed-in filters and counts them", () => {
+    const filters = filtersFromParams(sp(`regression=true&fixedIn=${P}&status=all`));
+    expect(filters).toEqual({ regression: "true", fixedInReleaseId: P, status: "all" });
+    expect(paramsForFilters(filters).get("regression")).toBe("true");
+    expect(paramsForFilters(filters).get("fixedIn")).toBe(P);
+    expect(extraFilterCount(filters)).toBe(2);
+    // The list request carries them under the API's names.
+    expect(listQueryString(inboxArgsFromParams(sp(`regression=true&fixedIn=${P}`)))).toBe(
+      `fixedInReleaseId=${P}&limit=50&regression=true&status=active`,
+    );
+  });
+
+  it("drops a regression filter that is not true and a fixed-in that is not an id", () => {
+    expect(filtersFromParams(sp("regression=false&fixedIn=nope"))).toEqual({});
+  });
+});

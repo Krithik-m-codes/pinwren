@@ -10,6 +10,7 @@ import {
   apiFeedbackRow,
   apiLabel,
   apiProject,
+  apiRelease,
   apiReproduction,
   apiReproTest,
   apiRound,
@@ -22,6 +23,7 @@ import {
   feedbackStatus,
   feedbackUpdate,
   priority,
+  releaseCreate,
   reviewRoundUpdate,
 } from "@pinwren/core";
 import type { TypeSpec } from "./codegen";
@@ -87,6 +89,18 @@ export const SPECS: TypeSpec[] = [
     schema: apiReproTest,
     io: "output",
     doc: "A draft Playwright test for a report. Always show its caveats next to the code.",
+  },
+  {
+    name: "ReleaseCreate",
+    schema: releaseCreate,
+    io: "input",
+    doc: "A release to record: the version (required), its commit, when it went live and notes.",
+  },
+  {
+    name: "Release",
+    schema: apiRelease,
+    io: "output",
+    doc: "A release of a project, with the items fixed in it and the regressions reported from it.",
   },
   { name: "Label", schema: apiLabel, io: "output", doc: "A project label with its live item count." },
   { name: "SavedView", schema: apiSavedView, io: "output", doc: "A saved inbox view." },

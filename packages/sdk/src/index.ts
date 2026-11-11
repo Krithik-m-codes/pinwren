@@ -11,6 +11,8 @@ import type {
   FeedbackUpdate,
   Label,
   Project,
+  Release,
+  ReleaseCreate,
   Reproduction,
   ReproTest,
   Round,
@@ -172,10 +174,21 @@ export class Pinwren {
       (await this.#json<{ feedback: FeedbackRow }>("PATCH", `/feedback/${enc(id)}`, { body: patch }))
         .feedback,
 
-    /** Mark resolved, optionally with a note (e.g. the PR that fixed it) as an internal comment. */
-    resolve: async (id: string, note?: string): Promise<FeedbackRow> => {
+    /**
+     * Mark resolved, optionally with a note (e.g. the PR that fixed it) as an internal comment, and optionally
+     * the release that fixed it (`{ releaseId }`, from `releases.list`) or `{ nextRelease: true }`.
+     */
+    resolve: async (
+      id: string,
+      note?: string,
+      fix?: { releaseId?: string; nextRelease?: boolean },
+    ): Promise<FeedbackRow> => {
       if (note?.trim()) await this.comments.create(id, { body: note, visibility: "internal" });
-      return this.feedback.update(id, { status: "resolved" });
+      return this.feedback.update(id, {
+        status: "resolved",
+        ...(fix?.releaseId ? { fixedInReleaseId: fix.releaseId } : {}),
+        ...(fix?.nextRelease ? { fixedInNextRelease: true } : {}),
+      });
     },
 
     /** Steps, failing requests and console errors (plus a replay summary when one was recorded). */
@@ -212,6 +225,23 @@ export class Pinwren {
     /** Rename, reschedule or close a round. Needs `feedback:write`. */
     update: async (id: string, patch: RoundUpdate): Promise<Round> =>
       (await this.#json<{ round: Round }>("PATCH", `/rounds/${enc(id)}`, { body: patch })).round,
+  };
+
+  readonly releases = {
+    /** A project's releases, newest deploy first, with the items fixed in each and its regressions. */
+    list: async (projectId: string): Promise<Release[]> =>
+      (await this.#json<{ releases: Release[] }>("GET", `/projects/${enc(projectId)}/releases`)).releases,
+
+    /**
+     * Record a release, e.g. from CI after a deploy. Posting the same version again updates it, so a re-run is
+     * safe; `created` says which happened. Needs a token with the `releases:write` scope. Items resolved as
+     * "fixed in the next release" are fixed in this one.
+     */
+    create: (
+      projectId: string,
+      release: ReleaseCreate,
+    ): Promise<{ release: Release; created: boolean; adopted: number }> =>
+      this.#json("POST", `/projects/${enc(projectId)}/releases`, { body: release }),
   };
 
   readonly labels = {

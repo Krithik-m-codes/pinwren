@@ -10,6 +10,8 @@ export const AUTOMATION_EVENTS = [
   "status_changed",
   "label_added",
   "comment_added",
+  /** A new report looks like a resolved item coming back (ADR 0036). */
+  "regression_detected",
 ] as const;
 export type AutomationEvent = (typeof AUTOMATION_EVENTS)[number];
 

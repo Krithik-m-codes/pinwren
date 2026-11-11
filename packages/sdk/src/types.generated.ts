@@ -34,6 +34,8 @@ export type FeedbackListQuery = {
   reviewLinkId?: string | undefined;
   reporter?: string | undefined;
   hasReplay?: boolean | "0" | "1" | "true" | "false" | undefined;
+  regression?: boolean | "0" | "1" | "true" | "false" | undefined;
+  fixedInReleaseId?: string | undefined;
   browser?: string | undefined;
   cf?: string | undefined;
   trash?: boolean | "0" | "1" | "true" | "false" | undefined;
@@ -54,6 +56,8 @@ export type FeedbackUpdate = {
   dueAt?: string | null | undefined;
   duplicateOfId?: string | null | undefined;
   kind?: "comment" | "bug" | "idea" | "question" | undefined;
+  fixedInReleaseId?: string | null | undefined;
+  fixedInNextRelease?: boolean | undefined;
   customFields?: Record<string, unknown> | undefined;
 };
 
@@ -98,6 +102,13 @@ export type FeedbackListItem = {
   hasReplay: boolean;
   attachmentCount: number;
   commentCount: number;
+  release?: string | null | undefined;
+  fixedInReleaseId?: string | null | undefined;
+  fixedInVersion?: string | null | undefined;
+  fixedInNextRelease?: boolean | undefined;
+  regressionOfId?: string | null | undefined;
+  regressionOfNumber?: number | null | undefined;
+  regressionConfidence?: "possible" | "likely" | null | undefined;
   customFields: Record<string, unknown>;
   [key: string]: unknown;
 };
@@ -129,6 +140,13 @@ export type FeedbackList = {
     hasReplay: boolean;
     attachmentCount: number;
     commentCount: number;
+    release?: string | null | undefined;
+    fixedInReleaseId?: string | null | undefined;
+    fixedInVersion?: string | null | undefined;
+    fixedInNextRelease?: boolean | undefined;
+    regressionOfId?: string | null | undefined;
+    regressionOfNumber?: number | null | undefined;
+    regressionConfidence?: "possible" | "likely" | null | undefined;
     customFields: Record<string, unknown>;
     [key: string]: unknown;
   }[];
@@ -172,6 +190,10 @@ export type Feedback = {
   customFields: Record<string, unknown>;
   source: string;
   resolvedAt: string | null;
+  fixedInReleaseId?: string | null | undefined;
+  fixedInNextRelease?: boolean | undefined;
+  regressionOfId?: string | null | undefined;
+  regressionConfidence?: "possible" | "likely" | null | undefined;
   createdAt: string;
   updatedAt: string;
   [key: string]: unknown;
@@ -210,6 +232,10 @@ export type FeedbackRow = {
   customFields: Record<string, unknown>;
   source: string;
   resolvedAt: string | null;
+  fixedInReleaseId?: string | null | undefined;
+  fixedInNextRelease?: boolean | undefined;
+  regressionOfId?: string | null | undefined;
+  regressionConfidence?: "possible" | "likely" | null | undefined;
   createdAt: string;
   updatedAt: string;
   [key: string]: unknown;
@@ -253,10 +279,46 @@ export type FeedbackDetail = {
     customFields: Record<string, unknown>;
     source: string;
     resolvedAt: string | null;
+    fixedInReleaseId?: string | null | undefined;
+    fixedInNextRelease?: boolean | undefined;
+    regressionOfId?: string | null | undefined;
+    regressionConfidence?: "possible" | "likely" | null | undefined;
     createdAt: string;
     updatedAt: string;
+    fixedInRelease?:
+      | {
+          id: string;
+          version: string;
+          deployedAt: string;
+          [key: string]: unknown;
+        }
+      | null
+      | undefined;
+    release?: string | null | undefined;
+    regressionOf?:
+      | {
+          id: string;
+          number: number;
+          title: string | null;
+          status: "open" | "in_progress" | "in_review" | "resolved" | "wont_fix" | "duplicate";
+          signals: string[];
+          score: number | null;
+          [key: string]: unknown;
+        }
+      | null
+      | undefined;
     [key: string]: unknown;
   };
+  regressions?:
+    | {
+        id: string;
+        number: number;
+        title: string | null;
+        status: "open" | "in_progress" | "in_review" | "resolved" | "wont_fix" | "duplicate";
+        confidence: "possible" | "likely" | null;
+        [key: string]: unknown;
+      }[]
+    | undefined;
   assignees: {
     id: string;
     name: string;
@@ -499,6 +561,28 @@ export type ReproTest = {
   polished: boolean;
 };
 
+/** A release to record: the version (required), its commit, when it went live and notes. */
+export type ReleaseCreate = {
+  version: string;
+  commit?: string | null | undefined;
+  deployedAt?: string | null | undefined;
+  notes?: string | null | undefined;
+};
+
+/** A release of a project, with the items fixed in it and the regressions reported from it. */
+export type Release = {
+  id: string;
+  projectId: string;
+  version: string;
+  commit: string | null;
+  notes: string | null;
+  deployedAt: string;
+  createdAt: string;
+  fixedCount: number;
+  regressionCount: number;
+  [key: string]: unknown;
+};
+
 /** A project label with its live item count. */
 export type Label = {
   id: string;
@@ -609,6 +693,31 @@ export type Stats = {
     closed: number;
     requireSignoff: boolean;
     signoff: "none" | "approved" | "changes_requested";
+  }[];
+  regressions: {
+    total: number;
+    open: number;
+    items: {
+      id: string;
+      number: number;
+      title: string | null;
+      status: "open" | "in_progress" | "in_review" | "resolved" | "wont_fix" | "duplicate";
+      projectId: string;
+      projectName: string;
+      confidence: "possible" | "likely";
+      ofId: string;
+      ofNumber: number;
+      createdAt: string;
+    }[];
+  };
+  releases: {
+    id: string;
+    version: string;
+    projectId: string;
+    projectName: string;
+    deployedAt: string;
+    fixed: number;
+    regressions: number;
   }[];
   reporters: {
     id: string;

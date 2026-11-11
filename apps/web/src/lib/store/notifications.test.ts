@@ -122,3 +122,14 @@ describe("desktop notifications", () => {
     expect(() => showDesktopNotification({ id: "1", title: "t", body: "b", href: "/" })).not.toThrow();
   });
 });
+
+describe("regression notifications", () => {
+  it("names the resolved item the new report may be a regression of", () => {
+    expect(
+      notificationText({
+        type: "feedback.regression_detected",
+        data: { projectId: "p", projectName: "Site", number: 50, title: "Pay fails", originalNumber: 41 },
+      }),
+    ).toBe("Possible regression of #41");
+  });
+});

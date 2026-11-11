@@ -165,11 +165,12 @@ export const TEMPLATES: Record<EmailTemplateKey, TemplateDefinition> = {
       v("projectName", "Project name", "Marketing site"),
       v("title", "Their feedback, shortened", "Checkout button does nothing"),
       v("status", "The new status", "resolved"),
+      v("fixedIn", "“Fixed in v1.4.” when the fix names a release; empty otherwise", "Fixed in v1.4."),
       v("pageUrl", "Page the feedback was left on", "https://example.com/checkout"),
       THREAD,
     ],
     subject: "Your feedback on {{projectName}} is {{status}}",
-    body: "# Status update\n\nYour feedback “{{title}}” on {{projectName}} is now **{{status}}**.",
+    body: "# Status update\n\nYour feedback “{{title}}” on {{projectName}} is now **{{status}}**.\n\n{{fixedIn}}",
     cta: { label: "View your feedback", urlVariable: "threadUrl" },
   },
   password_reset: {
@@ -368,6 +369,24 @@ export const TEMPLATES: Record<EmailTemplateKey, TemplateDefinition> = {
     subject: "[{{projectName}}] {{reviewerName}}: {{decision}} on {{roundName}}",
     body: "# {{decision}}\n\n{{reviewerName}} ({{reviewerEmail}}) answered on the review round **{{roundName}}** in {{projectName}}.\n\n> {{note}}",
     cta: { label: "Open the round", urlVariable: "link" },
+  },
+  regression_detected: {
+    key: "regression_detected",
+    name: "Possible regression",
+    description:
+      "To the people following a resolved item (or the team) when a new report looks like it came back.",
+    variables: [
+      ...FEEDBACK,
+      ...FEEDBACK_DETAILS,
+      v("originalNumber", "Number of the resolved item it may be a regression of", "41"),
+      v("confidence", "possible or likely", "likely"),
+      v("fixedIn", "The release that fixed the original (may be empty)", "v1.4.0"),
+      v("release", "The release the new report came from (may be empty)", "v1.4.1"),
+    ],
+    subject: "[{{projectName}}] Possible regression: #{{number}} {{title}}",
+    body: "# Possible regression\n\n**#{{number}} {{title}}** in {{projectName}} looks like a {{confidence}} regression of **#{{originalNumber}}**, which was resolved.\n\n> {{body}}",
+    cta: { label: "Open in {{productName}}", urlVariable: "link" },
+    details: true,
   },
 };
 

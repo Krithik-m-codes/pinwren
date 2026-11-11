@@ -38,6 +38,16 @@ export const apiFeedbackListItem = z
     hasReplay: z.boolean(),
     attachmentCount: z.number().int(),
     commentCount: z.number().int(),
+    /** The release this report came from (`data-release` / `setMetadata({ release })`), if it said. */
+    release: z.string().nullable().optional(),
+    /** The release that fixed it, or null; `fixedInNextRelease` while the fix is promised but not shipped. */
+    fixedInReleaseId: z.string().nullable().optional(),
+    fixedInVersion: z.string().nullable().optional(),
+    fixedInNextRelease: z.boolean().optional(),
+    /** Set when the report looks like a resolved item coming back. */
+    regressionOfId: z.string().nullable().optional(),
+    regressionOfNumber: z.number().int().nullable().optional(),
+    regressionConfidence: z.enum(["possible", "likely"]).nullable().optional(),
     /** Answers to the project's custom fields, by field key (ADR 0032). */
     customFields: z.record(z.string(), z.unknown()),
   })
@@ -79,6 +89,10 @@ export const apiFeedback = z
     customFields: z.record(z.string(), z.unknown()),
     source: z.string(),
     resolvedAt: iso.nullable(),
+    fixedInReleaseId: z.string().nullable().optional(),
+    fixedInNextRelease: z.boolean().optional(),
+    regressionOfId: z.string().nullable().optional(),
+    regressionConfidence: z.enum(["possible", "likely"]).nullable().optional(),
     createdAt: iso,
     updatedAt: iso,
   })
@@ -124,9 +138,35 @@ const networkRow = z
   .object({ method: z.string(), url: z.string(), status: z.number(), durationMs: z.number(), at: z.number() })
   .loose();
 
+const itemRef = z.object({ id: z.string(), number: z.number().int(), title: z.string().nullable() }).loose();
+
 export const apiFeedbackDetail = z
   .object({
-    feedback: apiFeedback,
+    feedback: apiFeedback.extend({
+      /** The release that fixed it. */
+      fixedInRelease: z
+        .object({ id: z.string(), version: z.string(), deployedAt: iso })
+        .loose()
+        .nullable()
+        .optional(),
+      /** The release the report came from. */
+      release: z.string().nullable().optional(),
+      /** The resolved item this report may be a regression of, with why. */
+      regressionOf: itemRef
+        .extend({
+          status: feedbackStatus,
+          signals: z.array(z.string()),
+          score: z.number().int().nullable(),
+        })
+        .nullable()
+        .optional(),
+    }),
+    /** Reports flagged as possible regressions of this item. */
+    regressions: z
+      .array(
+        itemRef.extend({ status: feedbackStatus, confidence: z.enum(["possible", "likely"]).nullable() }),
+      )
+      .optional(),
     assignees: z.array(
       z.object({ id: z.string(), name: z.string(), email: z.string(), image: z.string().nullable() }).loose(),
     ),

@@ -142,3 +142,12 @@ export type {
   AutomationTestResult,
   LabelSuggestion,
 } from "./automation";
+
+// Releases and regressions (ADR 0036). Injected into the same API; its hooks are exported from its own module.
+export {
+  useDeleteReleaseMutation,
+  useRecordReleaseMutation,
+  useReleasesQuery,
+  useUpdateReleaseMutation,
+} from "./releases";
+export type { RecordedRelease, Release } from "./releases";

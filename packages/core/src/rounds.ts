@@ -57,6 +57,10 @@ export const viewFilters = z.object({
   reporter: z.string().trim().max(254).optional(),
   /** Wave 5: items sent through one review link (F-012). */
   reviewLinkId: z.uuid().optional(),
+  /** Only possible regressions (ADR 0036). The inbox URL and the list query both spell it `true`. */
+  regression: z.literal("true").optional(),
+  /** Only items fixed in this release (ADR 0036). */
+  fixedInReleaseId: z.uuid().optional(),
   /** One custom field, `key:value` (ADR 0032). */
   cf: customFieldFilter.optional(),
   sort: z.enum(FEEDBACK_SORTS).optional(),

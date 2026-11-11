@@ -40,6 +40,19 @@ import { COLORS, type Shape, type Size, sanitizeShapes, type Tool } from "./shap
 import type { Identity } from "./store";
 import { ago } from "./ui";
 
+/**
+ * `data-release` on the widget's script tag is the site's version: reports carry it as `metadata.release` so
+ * the dashboard shows which release they came from and can tell a regression from a visitor on old code. A
+ * release the host set with `Pinwren.setMetadata` wins. (Read here, in the report chunk, because the core
+ * script is at its size budget; the server drops anything that is not a short label.)
+ */
+function siteRelease(host: Record<string, unknown> | null): Record<string, unknown> | null {
+  const release = document
+    .querySelector<HTMLElement>("script[data-project][data-release]")
+    ?.dataset.release?.trim();
+  return release ? { release, ...host } : host;
+}
+
 // Bug report mode (F-003): capture → annotate → describe → send. This file is the lazy widget-report.js
 // chunk: the form, the capture orchestration, drafts (F-010, IndexedDB) and the hand-off to the offline
 // outbox. The heavy parts load alongside it: SnapDOM in widget-capture.js, the annotation editor in
@@ -1243,7 +1256,7 @@ export class BugReport {
       recording: recording ?? undefined,
       diagnostics: this.diagnostics(),
       // Privacy mode (wave-3 §3) sends no page-timing metadata.
-      metadata: mergeMetadata(withObservability(this.ctx.metadata(), this.ctx.cfg.privacyMode), {
+      metadata: mergeMetadata(withObservability(siteRelease(this.ctx.metadata()), this.ctx.cfg.privacyMode), {
         ...(this.ctx.cfg.privacyMode ? {} : { performance: performanceTiming() }),
         ...(this.ctx.fromError ? { error: this.ctx.fromError } : {}),
       }),

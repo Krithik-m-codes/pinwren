@@ -11,6 +11,7 @@ import {
   MailWarning,
   MessageSquare,
   Trash2,
+  TriangleAlert,
   UserPlus,
   WebhookOff,
   X,
@@ -34,6 +35,7 @@ const ICONS: Record<string, LucideIcon> = {
   "comment.mentioned": AtSign,
   "webhook.disabled": WebhookOff,
   "round.signoff": ClipboardCheck,
+  "feedback.regression_detected": TriangleAlert,
 };
 
 export function NotificationIcon({

@@ -41,6 +41,7 @@ const SCOPE_INFO: Record<(typeof API_TOKEN_SCOPES)[number], Key> = {
   "feedback:read": "settings1.scopeFeedbackRead",
   "feedback:write": "settings1.scopeFeedbackWrite",
   "comments:write": "settings1.scopeCommentsWrite",
+  "releases:write": "releases.scopeReleases",
 };
 const EXPIRY: { value: "30" | "90" | "365" | "never"; label: Key }[] = [
   { value: "30", label: "settings1.expiry30" },

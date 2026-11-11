@@ -32,6 +32,8 @@ export const TOOL_NAMES = [
   "get_stats",
   "list_assets",
   "get_asset",
+  "list_releases",
+  "create_release",
 ] as const;
 
 /** Largest screenshot `get_asset` will hand to a model, in bytes. */
@@ -83,6 +85,11 @@ export function summarizeDetail(d: FeedbackDetail, assetUrl: (id: string) => str
     assignees: d.assignees.map((a) => ({ id: a.id, name: a.name })),
     roundId: f.roundId,
     createdAt: f.createdAt,
+    release: f.release ?? null,
+    fixedIn: f.fixedInRelease?.version ?? (f.fixedInNextRelease ? "next release" : null),
+    regressionOf: f.regressionOf
+      ? { number: f.regressionOf.number, signals: f.regressionOf.signals, score: f.regressionOf.score }
+      : null,
     anchor: anchor
       ? {
           css: pick("css") ?? null,
@@ -157,7 +164,8 @@ export function createPinwrenMcpServer(client: Pinwren, options: ServerOptions =
       title: "Search feedback",
       description:
         "Find feedback items. Filters: project, status (or 'active' = open/in progress/in review, 'all'), kind, " +
-        "priority, assignee, review round, full-text query, page URL substring, created since. Returns compact rows.",
+        "priority, assignee, review round, full-text query, page URL substring, created since, regression (only " +
+        "possible regressions of resolved items). Returns compact rows.",
       inputSchema: {
         projectId: z.uuid().optional(),
         status: z.enum([...STATUSES, "active", "all"]).optional(),
@@ -168,6 +176,7 @@ export function createPinwrenMcpServer(client: Pinwren, options: ServerOptions =
         text: z.string().max(200).optional().describe("Full-text search in title and body"),
         page: z.string().max(2000).optional().describe("Part of the page URL"),
         since: z.iso.datetime({ offset: true }).optional(),
+        regression: z.boolean().optional().describe("true = only possible regressions"),
         customField: z
           .string()
           .max(240)
@@ -191,6 +200,7 @@ export function createPinwrenMcpServer(client: Pinwren, options: ServerOptions =
           cf: a.customField,
           page: a.page,
           since: a.since,
+          regression: a.regression,
           limit: a.limit ?? 20,
           cursor: a.cursor,
         });
@@ -209,6 +219,8 @@ export function createPinwrenMcpServer(client: Pinwren, options: ServerOptions =
             comments: i.commentCount,
             hasScreenshot: i.hasScreenshot,
             hasReplay: i.hasReplay,
+            fixedIn: i.fixedInVersion ?? (i.fixedInNextRelease ? "next release" : null),
+            regressionOf: i.regressionOfNumber ?? null,
             createdAt: i.createdAt,
           })),
           nextCursor: page.nextCursor,
@@ -299,14 +311,82 @@ export function createPinwrenMcpServer(client: Pinwren, options: ServerOptions =
       title: "Resolve feedback",
       description:
         "Mark an item resolved, with an optional resolution note (e.g. the commit SHA or pull request URL) " +
-        "saved as an internal comment.",
-      inputSchema: { id: z.uuid(), note: z.string().max(10_000).optional() },
+        "saved as an internal comment. Pass fixedInReleaseId (from list_releases) to say which release fixed it, " +
+        "or nextRelease: true when the fix ships in the next release; reporters then hear 'Fixed in <version>'.",
+      inputSchema: {
+        id: z.uuid(),
+        note: z.string().max(10_000).optional(),
+        fixedInReleaseId: z.uuid().optional(),
+        nextRelease: z.boolean().optional(),
+      },
       annotations: { ...write, idempotentHint: true },
     },
-    ({ id, note }) =>
+    ({ id, note, fixedInReleaseId, nextRelease }) =>
       run(async () => {
-        const f = await client.feedback.resolve(id, note);
-        return json({ id: f.id, number: f.number, status: f.status, resolvedAt: f.resolvedAt });
+        const f = await client.feedback.resolve(id, note, {
+          ...(fixedInReleaseId ? { releaseId: fixedInReleaseId } : {}),
+          ...(nextRelease ? { nextRelease: true } : {}),
+        });
+        return json({
+          id: f.id,
+          number: f.number,
+          status: f.status,
+          resolvedAt: f.resolvedAt,
+          fixedInReleaseId: f.fixedInReleaseId ?? null,
+          fixedInNextRelease: f.fixedInNextRelease ?? false,
+        });
+      }),
+  );
+
+  server.registerTool(
+    "list_releases",
+    {
+      title: "List releases",
+      description:
+        "A project's releases, newest deploy first: version, commit, deploy time, how many items were fixed in " +
+        "it and how many regressions were reported from it. Use the id with resolve_feedback.",
+      inputSchema: { projectId: z.uuid() },
+      annotations: read,
+    },
+    ({ projectId }) =>
+      run(async () =>
+        json(
+          (await client.releases.list(projectId)).map((r) => ({
+            id: r.id,
+            version: r.version,
+            commit: r.commit,
+            deployedAt: r.deployedAt,
+            fixedCount: r.fixedCount,
+            regressionCount: r.regressionCount,
+          })),
+        ),
+      ),
+  );
+
+  server.registerTool(
+    "create_release",
+    {
+      title: "Record a release",
+      description:
+        "Record a release of a project (needs the releases:write scope). Recording the same version again " +
+        "updates it. Items resolved as 'fixed in the next release' become fixed in this one.",
+      inputSchema: {
+        projectId: z.uuid(),
+        version: z.string().min(1).max(100),
+        commit: z.string().max(64).optional(),
+        deployedAt: z.iso.datetime({ offset: true }).optional(),
+        notes: z.string().max(5000).optional(),
+      },
+      annotations: { ...write, idempotentHint: true },
+    },
+    ({ projectId, ...release }) =>
+      run(async () => {
+        const out = await client.releases.create(projectId, release);
+        return json({
+          created: out.created,
+          adopted: out.adopted,
+          release: { id: out.release.id, version: out.release.version, deployedAt: out.release.deployedAt },
+        });
       }),
   );
 

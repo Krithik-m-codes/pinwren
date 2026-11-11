@@ -160,6 +160,10 @@ export const project = pgTable(
       autoLabels: true,
       autoApplyLabels: false,
     }),
+    /** Flag a new report that looks like a resolved item as a possible regression (ADR 0036). */
+    detectRegressions: boolean("detect_regressions").notNull().default(true),
+    /** Reopen the resolved original when a regression is flagged. Off unless a project turns it on. */
+    autoReopenRegressions: boolean("auto_reopen_regressions").notNull().default(false),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps,
   },
@@ -196,6 +200,31 @@ export type ReporterGuest = {
   /** The host app signed `externalId` with the project's identity secret (wave-4 contract §4). */
   verified?: boolean | undefined;
 };
+
+/** A version a project shipped (ADR 0036): recorded by a person, the dashboard or CI. Items can be fixed in one. */
+export const projectRelease = pgTable(
+  "project_release",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    /** As the build calls it (`1.4.0`, `v1.4.0-rc.1`, a SHA). Unique per project, ignoring case. */
+    version: text("version").notNull(),
+    commit: text("commit"),
+    notes: text("notes"),
+    deployedAt: timestamp("deployed_at", { withTimezone: true }).notNull().defaultNow(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("project_release_project_version_uq").on(t.projectId, sql`lower(${t.version})`),
+    index("project_release_project_deployed_idx").on(t.projectId, t.deployedAt),
+    uniqueIndex("project_release_id_org_uq").on(t.id, t.orgId),
+    tenantReference("project_release_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
+  ],
+);
 
 export const reviewRoundStatusEnum = pgEnum("review_round_status", REVIEW_ROUND_STATUSES);
 
@@ -264,6 +293,23 @@ export const feedback = pgTable(
     duplicateOfId: uuid("duplicate_of_id").references((): AnyPgColumn => feedback.id, {
       onDelete: "set null",
     }),
+    /** The release that fixed this resolved item (ADR 0036). Cleared when the item is reopened. */
+    fixedInReleaseId: uuid("fixed_in_release_id").references((): AnyPgColumn => projectRelease.id, {
+      onDelete: "set null",
+    }),
+    /** Resolved with the fix promised for the next release; the next recorded release takes its place. */
+    fixedInNextRelease: boolean("fixed_in_next_release").notNull().default(false),
+    /** Set when this report looks like a regression of that resolved item (same project). */
+    regressionOfId: uuid("regression_of_id").references((): AnyPgColumn => feedback.id, {
+      onDelete: "set null",
+    }),
+    regressionConfidence: text("regression_confidence", { enum: ["possible", "likely"] }),
+    /** Why: the signals that matched, the releases compared and the score (`regressionSignalsData`). */
+    regressionSignals: jsonb("regression_signals").$type<Record<string, unknown>>(),
+    /** What regression detection compares: page path, element key and error hashes. Set when first looked at. */
+    sigPath: text("sig_path"),
+    sigAnchor: text("sig_anchor"),
+    sigErrors: text("sig_errors").array(),
     /** The review link a guest came through (F-012), shown as the item's source and filterable in the inbox. */
     reviewLinkId: uuid("review_link_id").references((): AnyPgColumn => reviewLink.id, {
       onDelete: "set null",
@@ -283,6 +329,17 @@ export const feedback = pgTable(
     index("feedback_search_idx").using("gin", t.search),
     index("feedback_duplicate_of_idx").on(t.duplicateOfId),
     index("feedback_review_link_idx").on(t.reviewLinkId),
+    index("feedback_fixed_in_idx")
+      .on(t.fixedInReleaseId)
+      .where(sql`${t.fixedInReleaseId} is not null`),
+    index("feedback_regression_of_idx")
+      .on(t.regressionOfId)
+      .where(sql`${t.regressionOfId} is not null`),
+    // Regression detection: resolved bugs of a project by element and by error.
+    index("feedback_sig_anchor_idx")
+      .on(t.projectId, t.sigAnchor)
+      .where(sql`${t.sigAnchor} is not null`),
+    index("feedback_sig_errors_idx").using("gin", t.sigErrors),
     index("feedback_custom_fields_idx").using("gin", sql`${t.customFields} jsonb_path_ops`),
     index("feedback_org_reporter_idx")
       .on(t.orgId, t.reporterId)
@@ -292,6 +349,14 @@ export const feedback = pgTable(
     tenantReference("feedback_page_tenant_fk", t.pageId, t.orgId, page.id, page.orgId),
     tenantReference("feedback_round_tenant_fk", t.roundId, t.orgId, reviewRound.id, reviewRound.orgId),
     tenantReference("feedback_duplicate_tenant_fk", t.duplicateOfId, t.orgId, t.id, t.orgId),
+    tenantReference("feedback_regression_tenant_fk", t.regressionOfId, t.orgId, t.id, t.orgId),
+    tenantReference(
+      "feedback_fixed_in_tenant_fk",
+      t.fixedInReleaseId,
+      t.orgId,
+      projectRelease.id,
+      projectRelease.orgId,
+    ),
     tenantReference(
       "feedback_review_link_tenant_fk",
       t.reviewLinkId,

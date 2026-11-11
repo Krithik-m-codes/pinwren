@@ -12,7 +12,7 @@ import type { Key } from "@/lib/i18n/en";
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 import { AreaChart, BarList, Donut } from "./charts";
-import { CircleCheck, FolderKanban, Inbox, Target, Users } from "lucide-react";
+import { CircleCheck, FolderKanban, Inbox, Rocket, Target, TriangleAlert, Users } from "lucide-react";
 import { SignoffBadge } from "@/components/round-signoffs";
 
 // Widget bodies. Each one is a pure view of the stats object (one request feeds the whole screen), so a
@@ -441,6 +441,8 @@ const ACTIVITY_KEYS: Record<string, Key> = {
   comment: "dash.act.comment",
   deleted: "dash.act.deleted",
   restored: "dash.act.restored",
+  fixedIn_changed: "releases.actReleaseFixed",
+  regression_detected: "releases.actRegression",
 };
 
 export function RecentWidget({ stats }: WidgetProps) {
@@ -656,6 +658,110 @@ export function AttentionWidget({ stats, projectId }: WidgetProps) {
   );
 }
 
+/** New reports that look like resolved items (ADR 0036): the open ones first in the count, each a link. */
+export function RegressionsWidget({ stats, projectId }: WidgetProps) {
+  const { t } = useI18n();
+  const r = stats.regressions;
+  return (
+    <Panel
+      title={useTitle("list.regressions")}
+      action={
+        <Link
+          href={inbox(projectId, { regression: "true", status: "all" })}
+          className="text-[11px] text-muted-foreground hover:text-foreground"
+        >
+          {t("dash.viewAll")}
+        </Link>
+      }
+    >
+      {r.items.length === 0 ? (
+        <Quiet icon={CircleCheck} text={t("releases.wNoRegressions")} />
+      ) : (
+        <>
+          <p className="mb-1 text-[11px] text-muted-foreground" data-testid="regression-counts">
+            {t("releases.wOpenCount", { open: r.open, total: r.total })}
+          </p>
+          <ul
+            className="-mx-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto text-xs"
+            data-testid="regression-list"
+          >
+            {r.items.map((i) => (
+              <li key={i.id}>
+                <Link
+                  href={`/inbox?status=all&item=${i.id}` as Route}
+                  className="flex items-center gap-1.5 rounded px-1 py-1 hover:bg-muted/60"
+                >
+                  <TriangleAlert
+                    aria-hidden
+                    className={cn(
+                      "size-3 shrink-0",
+                      i.confidence === "likely" ? "text-red-600" : "text-amber-600",
+                    )}
+                  />
+                  <span className="shrink-0 text-muted-foreground">#{i.number}</span>
+                  <span className="min-w-0 flex-1 truncate">{i.title ?? ""}</span>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                    {t("releases.wOf", { number: i.ofNumber })}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Panel>
+  );
+}
+
+/** Releases with the items fixed in them and the regressions reported from them, newest first. */
+export function FixedPerReleaseWidget({ stats, projectId }: WidgetProps) {
+  const { t } = useI18n();
+  const most = Math.max(1, ...stats.releases.map((r) => r.fixed));
+  return (
+    <Panel title={useTitle("list.fixedPerRelease")}>
+      {stats.releases.length === 0 ? (
+        <Quiet icon={Rocket} text={t("releases.wNoReleases")} />
+      ) : (
+        <ul className="-mx-1 space-y-1 text-xs" data-testid="release-list">
+          {stats.releases.map((r) => (
+            <li key={r.id}>
+              <Link
+                href={inbox(projectId, { status: "all", fixedIn: r.id })}
+                className="block rounded px-1 py-0.5 hover:bg-muted/60"
+              >
+                <span className="flex items-center gap-1.5">
+                  <span className="min-w-0 flex-1 truncate font-medium">{r.version}</span>
+                  <span className="shrink-0 text-muted-foreground tabular-nums">
+                    {t("releases.wFixed", { count: r.fixed })}
+                  </span>
+                  {r.regressions > 0 && (
+                    <span className="shrink-0 text-amber-700 tabular-nums dark:text-amber-400">
+                      {t("releases.wRegressions", { count: r.regressions })}
+                    </span>
+                  )}
+                </span>
+                <span
+                  className="mt-1 block h-1.5 overflow-hidden rounded-full bg-muted"
+                  role="img"
+                  aria-label={t("releases.wFixed", { count: r.fixed })}
+                >
+                  <span
+                    className="block h-full rounded-full bg-emerald-500"
+                    style={{ width: `${Math.round((r.fixed / most) * 100)}%` }}
+                  />
+                </span>
+                {!projectId && (
+                  <span className="block truncate text-[11px] text-muted-foreground">{r.projectName}</span>
+                )}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
 /** Renders the widget named by a layout slot. */
 export function WidgetBody({ id, ...props }: WidgetProps & { id: WidgetId }) {
   switch (id) {
@@ -691,6 +797,10 @@ export function WidgetBody({ id, ...props }: WidgetProps & { id: WidgetId }) {
       return <ProjectsWidget {...props} />;
     case "list.attention":
       return <AttentionWidget {...props} />;
+    case "list.regressions":
+      return <RegressionsWidget {...props} />;
+    case "list.fixedPerRelease":
+      return <FixedPerReleaseWidget {...props} />;
     default:
       return <KpiWidget id={id} {...props} />;
   }
