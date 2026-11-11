@@ -2370,11 +2370,12 @@ if (process.env.SMOKE_SKIP_PACKAGES === "1") {
   );
   const tools = (await http.listTools()).tools.map((t) => t.name).sort();
   check(
-    "MCP (HTTP) exposes the 16 tools",
+    "MCP (HTTP) exposes the 18 tools",
     JSON.stringify(tools) ===
       JSON.stringify(
         [
           "add_comment",
+          "create_release",
           "get_agent_brief",
           "get_asset",
           "get_feedback",
@@ -2385,6 +2386,7 @@ if (process.env.SMOKE_SKIP_PACKAGES === "1") {
           "list_assets",
           "list_labels",
           "list_projects",
+          "list_releases",
           "list_rounds",
           "list_saved_views",
           "resolve_feedback",
@@ -2458,7 +2460,7 @@ if (process.env.SMOKE_SKIP_PACKAGES === "1") {
       stderr: "ignore",
     }),
   );
-  check("MCP (stdio) lists the tools", (await stdio.listTools()).tools.length === 16);
+  check("MCP (stdio) lists the tools", (await stdio.listTools()).tools.length === 18);
   res = await stdio.callTool({ name: "search_feedback", arguments: { projectId, status: "all", limit: 3 } });
   check("MCP (stdio) search_feedback", JSON.parse(mcpText(res)).items.length === 3);
   await stdio.close();
