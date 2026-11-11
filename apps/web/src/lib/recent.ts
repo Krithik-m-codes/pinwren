@@ -4,7 +4,7 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 /**
  * Recently opened feedback items, newest first, per user and per browser (like the dashboard layouts —
- * ADR 0025): the command palette lists them so "that bug from yesterday" is two keystrokes away.
+ * ADR 0038): the command palette lists them so "that bug from yesterday" is two keystrokes away.
  * Only the number, title and project name are kept; the status and the rest are looked up live.
  */
 export type RecentItem = { id: string; number: number; title: string; project: string };

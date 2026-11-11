@@ -76,7 +76,7 @@ function useDebounced(value: string, ms: number) {
 
 /**
  * ⌘K / Ctrl+K: jump to any screen, project or saved view, find feedback by its text, reopen what you
- * looked at recently, and run a few app-wide actions (blueprint 06 §5, ADR 0025).
+ * looked at recently, and run a few app-wide actions (blueprint 06 §5, ADR 0038).
  */
 export function CommandPalette() {
   const t = useT();

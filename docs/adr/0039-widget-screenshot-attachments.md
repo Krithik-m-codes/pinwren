@@ -1,4 +1,4 @@
-# ADR 0025 — "Add screenshot" for attachments lives in its own lazy chunk
+# ADR 0039 — "Add screenshot" for attachments lives in its own lazy chunk
 
 **Status:** accepted
 
