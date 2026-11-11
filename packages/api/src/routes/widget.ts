@@ -15,7 +15,10 @@ import {
   parseWidgetBranding,
   parseWidgetConfig,
   publicWidgetConfig,
+  MAX_RECORDING_BYTES,
   MAX_REPLAY_BYTES,
+  RECORDING_CONTENT_TYPES,
+  recordingEnabled,
   REPLAY_CONTENT_TYPE,
   REPORTER_TOKEN_HEADER,
   REPORTER_TOKENS_HEADER,
@@ -211,10 +214,13 @@ async function privateAccess(
 
 /**
  * Largest valid report: replay (14 MB of base64) + screenshot (11 MB) + three attachments (7 MB each)
- * + text and diagnostics. Anything bigger is refused while it streams in, before it is parsed.
+ * + a screen recording (22.4 MB) + text and diagnostics. Anything bigger is refused while it streams in,
+ * before it is parsed.
  */
-const MAX_REPORT_BODY = 48 * 1024 * 1024;
+const MAX_REPORT_BODY = 72 * 1024 * 1024;
 const MAX_SMALL_BODY = 64 * 1024;
+/** The widget stops at the limit; a few seconds of clock drift and the final flush are not a violation. */
+const RECORDING_SLACK_S = 5;
 
 const tooLarge = () => new ApiError(413, "PAYLOAD_TOO_LARGE", "Request body too large");
 const limitBody = (maxSize: number) =>
@@ -606,6 +612,35 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
             400,
             "INVALID_REPLAY",
             `Session replay: ${err instanceof Error ? err.message : "invalid file"} (gzip, at most 10 MB)`,
+          );
+        }
+      }
+      // Screen recording (ADR 0029): kept as an attachment (a clip is a file the reporter chose to add) only
+      // when the project takes recordings and the clip fits the project's length, so an old or modified
+      // widget can't make the server keep one the admin didn't ask for. Its bytes are checked like any file.
+      const captureCfg = parseCaptureConfig(p.captureConfig);
+      if (input.recording && recordingEnabled(parseWidgetConfig(p.widgetConfig), captureCfg)) {
+        try {
+          if (input.recording.durationMs > (captureCfg.recording.maxSeconds + RECORDING_SLACK_S) * 1000)
+            throw new Error(`longer than the ${captureCfg.recording.maxSeconds} s this project allows`);
+          const file = decodeDataUrl(input.recording.dataUrl, RECORDING_CONTENT_TYPES, MAX_RECORDING_BYTES);
+          decoded.push({
+            kind: "attachment",
+            name: `recording-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.${EXTENSIONS[file.contentType] ?? "webm"}`,
+            meta: {
+              recording: true,
+              durationMs: input.recording.durationMs,
+              audio: input.recording.audio,
+              ...(input.recording.width ? { width: input.recording.width } : {}),
+              ...(input.recording.height ? { height: input.recording.height } : {}),
+            },
+            ...file,
+          });
+        } catch (err) {
+          throw new ApiError(
+            400,
+            "INVALID_RECORDING",
+            `Screen recording: ${err instanceof Error ? err.message : "invalid file"} (WebM or MP4, at most 16 MB)`,
           );
         }
       }

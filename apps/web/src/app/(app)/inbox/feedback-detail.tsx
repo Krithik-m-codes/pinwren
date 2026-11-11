@@ -25,6 +25,7 @@ import {
   Trash2,
   Unlink,
   UserRound,
+  Video,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -65,6 +66,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AttachmentGallery } from "@/components/attachment-gallery";
+import { RecordingPlayer } from "@/components/recording-player";
 import { UserAvatar } from "@/components/user-avatar";
 import {
   type Asset,
@@ -77,6 +79,7 @@ import {
 import { captureOf, isRegion, placeOn } from "@/lib/geometry";
 import { useI18n, useT } from "@/lib/i18n/provider";
 import { itemLink } from "@/lib/links";
+import { isRecording, recordingMeta } from "@/lib/recording";
 import { useRecentItems } from "@/lib/recent";
 import {
   errorMessage,
@@ -780,7 +783,9 @@ function DetailBody({
 
         <Media data={data} replay={replay} player={player} onReplayTime={setReplayAt} />
 
-        <Attachments assets={assets.filter((a) => a.kind === "attachment")} />
+        <Recordings assets={assets.filter(isRecording)} />
+
+        <Attachments assets={assets.filter((a) => a.kind === "attachment" && !isRecording(a))} />
 
         <ContextTabs
           data={data}
@@ -1044,6 +1049,34 @@ function Screenshot({ data, shot }: { data: FeedbackDetail; shot: Asset }) {
         )}
       </figcaption>
     </figure>
+  );
+}
+
+/** The reporter's screen recording (ADR 0029): played in the page, with its length and size shown. */
+function Recordings({ assets }: { assets: Asset[] }) {
+  const t = useT();
+  if (!assets.length) return null;
+  return (
+    <section aria-label={t("recording.heading")} className="space-y-2">
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+        <Video className="size-3.5" /> {t("recording.heading")}
+      </h3>
+      {assets.map((a) => {
+        const m = recordingMeta(a);
+        return (
+          <RecordingPlayer
+            key={a.id}
+            src={assetUrl(a.id)}
+            name={a.name ?? t("recording.heading")}
+            bytes={a.bytes}
+            durationMs={m.durationMs}
+            audio={m.audio}
+            width={m.width}
+            height={m.height}
+          />
+        );
+      })}
+    </section>
   );
 }
 

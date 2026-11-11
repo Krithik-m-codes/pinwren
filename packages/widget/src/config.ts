@@ -236,6 +236,8 @@ export type CaptureCfg = {
   replay: { enabled: boolean; seconds: number };
   /** Take a masked screenshot of the visible area with every new comment (Page Review places it). */
   screenshotOnComment: boolean;
+  /** Screen recording (ADR 0029), passed through unchecked: widget-record.js validates it, the core stays small. */
+  recording?: unknown;
 };
 
 export function resolveCapture(raw: unknown): CaptureCfg {
@@ -252,17 +254,19 @@ export function resolveCapture(raw: unknown): CaptureCfg {
     maskSelectors: masks.filter((m): m is string => typeof m === "string" && validSelector(m)).slice(0, 50),
     replay: resolveReplay(c.replay),
     screenshotOnComment: c.screenshotOnComment === true,
+    recording: c.recording,
   };
 }
 
 function resolveReplay(raw: unknown): CaptureCfg["replay"] {
   const r = isObj(raw) ? raw : {};
-  const s = typeof r.seconds === "number" && Number.isFinite(r.seconds) ? Math.round(r.seconds) : 60;
+  // Not a number (or 0): the 60 s default; the server sends 30–120 anyway.
+  const s = Math.round(Number(r.seconds)) || 60;
   return { enabled: r.enabled === true, seconds: Math.min(120, Math.max(30, s)) };
 }
 
 function validSelector(sel: string): boolean {
-  if (!sel.trim() || sel.length > 200) return false;
+  if (sel.length > 200) return false; // an empty or blank selector throws in querySelector below
   try {
     document.createDocumentFragment().querySelector(sel);
     return true;

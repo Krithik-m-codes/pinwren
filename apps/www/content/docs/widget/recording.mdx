@@ -1,0 +1,106 @@
+---
+title: Screen recording
+description: Let reporters record their browser tab, with optional voice narration, from the bug report, and play the clip in the dashboard.
+---
+
+The attachment area of a [bug report](/docs/widget/bug-reports) has a **Record screen** button next to **Add
+screenshot**. A reporter can show the problem as it happens, talk through it, review the clip and send it with
+the report. The team plays it on the item's detail page.
+
+## What the reporter sees
+
+1. **Record screen** opens a notice: what is recorded (the browser tab, everything visible on it), that nothing is
+   uploaded until the report is sent, the maximum length and, when the project offers it, an **Add voice narration**
+   switch. The browser is asked for nothing yet.
+2. **Start recording** opens the browser's own share prompt (the current tab is offered first) and, if narration
+   is on, asks for the microphone. Declining narration or the microphone never blocks the recording; the clip
+   just has no sound and says so.
+3. A 3-2-1 countdown, then the report and launcher are hidden and recording starts. A live timer with **Pause** and
+   **Stop** is shown where the capture cannot see it (see below). Recording also ends when the maximum length or the
+   16 MB size cap is reached, or when the browser's own **Stop sharing** is used.
+4. A review dialog plays the clip with the browser's player. **Attach recording** keeps it, **Record again** starts
+   over and **Discard** drops it. An attached clip sits under the buttons with **Play** and **Remove**.
+
+The recording is held in the browser until the report is sent. Unlike text and screenshots, it is not saved in the
+report's draft: closing the dialog discards an attached recording.
+
+## Where the controls are
+
+A tab capture records whatever the page shows, so the controls must not be on the page.
+
+- Browsers with **Document Picture-in-Picture** (Chrome and Edge 116 and later) get the controls in a small window of
+  their own, which a tab capture does not include. The window can only be opened while the browser still counts the
+  click on **Start recording** as a user gesture; when it refuses, the corner below is used.
+- Elsewhere, the controls sit in the bottom-left corner of the page and are **invisible until the pointer or keyboard
+  focus is in that corner**, so they are not in the picture. The countdown says so, and two shortcuts work from anywhere on
+  the page: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> stops, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> pauses and
+  resumes. <kbd>Esc</kbd> is left to the page while recording.
+
+Revealing the corner shows the controls for as long as the pointer is there, so moving the pointer away before
+stopping keeps them out of the clip; the keyboard shortcut never shows them.
+
+## Settings
+
+On the project's **Capture** tab, **Screen recording**:
+
+| Setting                     | Default     | Meaning                                                                                                          |
+| --------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Allow screen recordings** | On          | Off in a project in [privacy mode](/docs/widget/privacy) until switched on here; the explicit choice always wins |
+| **Maximum length**          | 120 seconds | 10 to 300 seconds; a recording stops by itself at this length                                                    |
+| **Offer voice narration**   | On          | Shows the narration switch. The browser still asks the reporter for the microphone                               |
+
+They are the `capture.recording` block of the project's capture configuration (`enabled`, `maxSeconds`,
+`microphone`), also available through the [API](/docs/api). `GET /w/config` hands the widget the resolved
+`enabled`, so the privacy-mode default is decided on the server. The widget only downloads its recording code
+(about 8 KB gzip, a chunk of its own) when the project allows recordings and a bug report opens; a project with
+recordings off, or an older server, never fetches it.
+
+## What is stored
+
+A recording is sent with the report as a `recording` field and kept as an **attachment**:
+
+- **Types**: `video/webm` (Chrome, Edge, Firefox) or `video/mp4` (Safari). The server checks the file's first
+  bytes (the WebM EBML header, the MP4 `ftyp` box), never the declared type alone.
+- **Size**: at most 16 MB. The widget lowers the video bitrate for a long maximum length so a full-length clip fits,
+  and stops a little before the cap.
+- **Length**: at most the project's maximum plus a few seconds of slack; longer is refused with
+  `400 INVALID_RECORDING`.
+- **Only while the project allows it**: a report from an older or modified widget has its recording dropped when
+  recordings are off.
+- It does not count towards the three file attachments, and it is not served under a [share link](/docs/api).
+- It counts towards the project's hourly storage budget (`WIDGET_PROJECT_MB_PER_HOUR`) and is deleted with the report,
+  by retention and by a reporter's data deletion, like any other file.
+
+The whole report must stay under 72 MB, which a [reverse proxy](/docs/self-hosting/reverse-proxy) has to allow.
+
+## In the dashboard
+
+The item's detail page shows a **Screen recording** section above the attachments: the video with buttons for
+play and pause, a seek slider that speaks the position ("0:12 of 0:42"), playback speed, mute (when there is a
+voice), full screen and a **Download recording** link, with the length and size underneath. The file is served by
+`GET /api/assets/:id` with byte-range support (Safari will not play a video without it), sandboxed and with
+`nosniff`, like every file. Through the API, `GET /api/v1/assets/:id` returns the same bytes.
+
+A browser-made WebM has no length in its header, so the dashboard uses the length the widget measured; seeking in a
+long clip may pause briefly while the browser reads ahead.
+
+## Privacy
+
+A recording shows everything visible in the tab, including fields you [mask](/docs/widget/privacy) for screenshots
+and replays: **masking cannot apply to a video**, and the notice tells reporters so. That is why recordings are off by
+default in privacy mode, and why you can switch them off per project. The reporter chooses to record, reviews the clip
+before it is attached, and nothing is uploaded until they send the report. The server never receives a clip they
+discarded.
+
+## Content Security Policy
+
+Playing the clip back inside the widget uses a `blob:` URL, so a strict policy needs `media-src blob:`. Without it
+the reporter can still attach and send the recording; only the preview in the widget stays blank. Recording needs a
+secure context (`https://` or `localhost`) because browsers only offer screen capture there.
+
+## Browsers
+
+Recording needs `getDisplayMedia` and `MediaRecorder`, which desktop Chrome, Edge, Firefox and Safari provide.
+Phones and tablets generally cannot capture the screen from a web page; there the notice explains that the browser
+cannot record, and **Add screenshot** remains. Safari records MP4 (H.264); the others record WebM (VP9, falling back
+to VP8).

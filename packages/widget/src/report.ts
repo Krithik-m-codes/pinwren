@@ -33,6 +33,7 @@ import { Picker } from "./picker";
 import { isRetryable } from "./queue";
 import { REPORT_CSS } from "./report-styles";
 import type { ShotMode } from "./shot-math";
+import type { RecordingPayload, RecordModule } from "./record";
 import type { ShotsModule } from "./shots";
 import { COLORS, type Shape, type Size, sanitizeShapes, type Tool } from "./shapes";
 import type { Identity } from "./store";
@@ -115,6 +116,7 @@ const drafts = idbKV<Draft>("drafts");
 const loadModule = (assets: string) => loadChunk<CaptureModule>(assets, "capture");
 const loadEditor = (assets: string) => loadChunk<EditorModule>(assets, "editor");
 const loadShots = (assets: string) => loadChunk<ShotsModule>(assets, "shots");
+const loadRecord = (assets: string) => loadChunk<RecordModule>(assets, "record");
 
 const timeout = <T>(p: Promise<T>, ms: number) =>
   Promise.race([
@@ -211,6 +213,9 @@ export class BugReport {
   private S: ShotsModule | null = null;
   private thumbs: ReturnType<ShotsModule["grid"]> | null = null;
   private shotBtn: ReturnType<ShotsModule["shotMenu"]> | null = null;
+  /** "Record screen" (ADR 0029): the lazy widget-record.js chunk, loaded only when the project allows recordings. */
+  private RM: RecordModule | null = null;
+  private rec: ReturnType<RecordModule["mount"]> | null = null;
   /** How each attachment made with "Add screenshot" was taken, so it can be retaken the same way. */
   private shotModes = new WeakMap<Attachment, ShotMode>();
   private shooting = false;
@@ -297,6 +302,8 @@ export class BugReport {
   private async loadShots() {
     try {
       this.S = await loadShots(this.ctx.assets);
+      if ((this.ctx.capture.recording as { enabled?: unknown } | undefined)?.enabled === true)
+        this.RM = await loadRecord(this.ctx.assets);
     } catch (err) {
       console.warn("[pinwren]", err);
     }
@@ -435,6 +442,20 @@ export class BugReport {
       this.files.append(this.thumbs.el);
       this.cleanup.push(() => S.closeAll());
     }
+    const RM = this.RM;
+    if (RM) {
+      const rec = RM.mount({
+        root: ctx.root,
+        cfg: RM.config(ctx.capture.recording),
+        hide: (on) => {
+          ctx.root.style.visibility = on ? "hidden" : "";
+        },
+        toast: ctx.toast,
+        changed: () => this.renderSummary(),
+      });
+      this.rec = rec;
+      this.cleanup.push(() => rec.destroy());
+    }
 
     send.addEventListener("click", () => {
       const body = this.body.value.trim();
@@ -500,7 +521,10 @@ export class BugReport {
                 "div",
                 { class: "field" },
                 h("span", { class: "label" }, t("attachments")),
-                this.shotBtn?.el,
+                this.rec
+                  ? h("div", { class: "rc-btns" }, this.shotBtn?.el, this.rec.button)
+                  : this.shotBtn?.el,
+                this.rec?.row,
                 drop,
                 this.files,
               ),
@@ -891,6 +915,7 @@ export class BugReport {
   private renderFiles() {
     const full = this.attachments.length >= MAX_FILES;
     this.shotBtn?.setDisabled(!this.mod || this.shooting || full);
+    this.rec?.setDisabled(this.shooting);
     if (this.thumbs) this.thumbs.render(this.attachments);
     else
       // The preview chunk didn't load: names and a remove button still work.
@@ -1047,7 +1072,9 @@ export class BugReport {
         [env.browser, env.os, `${env.viewport.w}×${env.viewport.h}`].filter(Boolean).join(" · "),
         true,
       ),
-      ...(this.attachments.length ? [row(I.clip, tn("files", this.attachments.length), true)] : []),
+      ...(this.attachments.length || this.rec?.attached
+        ? [row(I.clip, tn("files", this.attachments.length + (this.rec?.attached ? 1 : 0)), true)]
+        : []),
       ...(this.ctx.replay ? [this.replayRow(this.ctx.replay.seconds)] : []),
       ...(this.ctx.capture.allowReduceQuality && this.state === "ready" ? [this.qualityRow()] : []),
     );
@@ -1170,6 +1197,17 @@ export class BugReport {
             return null;
           })
         : null;
+    let recording: RecordingPayload | null = null;
+    try {
+      recording = (await this.rec?.pack()) ?? null;
+    } catch (err) {
+      console.warn("[pinwren] screen recording not attached:", err);
+      this.sending = false;
+      btn.disabled = false;
+      btn.textContent = label;
+      this.error.textContent = t("genericError");
+      return;
+    }
     const shot = this.state === "ready" ? this.editor?.exportLayered() : undefined;
     const payload: FeedbackPayload = {
       clientId: this.clientId,
@@ -1186,6 +1224,7 @@ export class BugReport {
       reporter,
       consent,
       replay: replay ?? undefined,
+      recording: recording ?? undefined,
       diagnostics: this.diagnostics(),
       // Privacy mode (wave-3 §3) sends no page-timing metadata.
       metadata: mergeMetadata(withObservability(siteRelease(this.ctx.metadata()), this.ctx.cfg.privacyMode), {

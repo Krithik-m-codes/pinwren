@@ -150,7 +150,8 @@ If your site sends a `Content-Security-Policy`, allow your Pinwren server's orig
 loads its chunks and languages from the folder `widget.js` came from), for `connect-src` (the API calls) and
 for `img-src` (a logo in the report dialog, when the project has one). The widget uses no `eval` and no
 inline scripts; with a nonce-based policy, put the nonce on the script tag and the widget copies it onto
-every script it adds.
+every script it adds. The [screen recording](/docs/widget/recording) preview plays a `blob:` video, so a strict policy
+needs `media-src blob:` as well.
 
 ```http
 Content-Security-Policy: script-src 'self' https://feedback.example.com; connect-src 'self' https://feedback.example.com; img-src 'self' data: https://feedback.example.com
