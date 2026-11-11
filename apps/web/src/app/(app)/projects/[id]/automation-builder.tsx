@@ -6,6 +6,9 @@ import {
   type AutomationCondition,
   type AutomationEvent,
   automationRuleCreate,
+  CUSTOM_FIELD_OPS,
+  type CustomFieldDef,
+  type CustomFieldOp,
   FEEDBACK_KINDS,
   FEEDBACK_STATUSES,
   MAX_RULE_ACTIONS,
@@ -37,6 +40,7 @@ import {
   type AutomationRule,
   errorMessage,
   useCreateAutomationRuleMutation,
+  useCustomFieldsQuery,
   useLabelsQuery,
   useMembersQuery,
   useRoundsQuery,
@@ -61,7 +65,19 @@ export const CONDITION_LABEL = {
   label: "automation.fieldLabel",
   hasAttachment: "automation.fieldAttachment",
   hasReplay: "automation.fieldReplay",
+  customField: "cfields.automationField",
 } as const satisfies Record<AutomationCondition["field"], Key>;
+
+/** Operators of a custom field condition, worded for the builder (ADR 0029). */
+export const CUSTOM_FIELD_OP_LABEL = {
+  equals: "cfields.opEquals",
+  not_equals: "cfields.opNotEquals",
+  contains: "cfields.opContains",
+  gt: "cfields.opGreater",
+  lt: "cfields.opLess",
+  is_set: "cfields.opIsSet",
+  is_not_set: "cfields.opIsNotSet",
+} as const satisfies Record<CustomFieldOp, Key>;
 
 export const ACTION_LABEL = {
   assign: "automation.actionAssign",
@@ -111,6 +127,8 @@ type Options = {
   rounds: { id: string; name: string }[];
   webhooks: { id: string; name: string }[];
   trackers: { id: string; name: string }[];
+  /** The project's custom fields (ADR 0029), for conditions on an answer. */
+  fields: CustomFieldDef[];
 };
 
 export function useRuleOptions(projectId: string): Options {
@@ -119,7 +137,9 @@ export function useRuleOptions(projectId: string): Options {
   const rounds = useRoundsQuery(projectId);
   const webhooks = useWebhooksQuery(undefined);
   const trackers = useTrackersQuery(projectId);
+  const fields = useCustomFieldsQuery(projectId);
   return {
+    fields: fields.data?.fields ?? [],
     labels: labels.data?.labels ?? [],
     members: (members.data?.members ?? []).map((m) => ({ id: m.userId ?? m.id, name: m.name })),
     rounds: (rounds.data?.rounds ?? []).filter((r) => r.status === "active"),
@@ -149,6 +169,8 @@ function defaultCondition(field: AutomationCondition["field"], o: Options): Auto
     case "hasAttachment":
     case "hasReplay":
       return { field, value: true };
+    case "customField":
+      return { field, key: o.fields[0]?.key ?? "", op: "equals", value: "" };
   }
 }
 
@@ -326,6 +348,54 @@ function ConditionEditor({
           onChange={(v) => onChange({ field: c.field, value: v === "yes" })}
         />
       );
+    case "customField": {
+      const def = o.fields.find((f) => f.key === c.key);
+      const needsValue = c.op !== "is_set" && c.op !== "is_not_set";
+      const choices =
+        def?.type === "select" || def?.type === "multiselect"
+          ? def.options.map((x) => ({ value: x.value, label: x.label }))
+          : def?.type === "checkbox"
+            ? [
+                { value: "true", label: t("automation.yes") },
+                { value: "false", label: t("automation.no") },
+              ]
+            : null;
+      return (
+        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1.2fr]">
+          <Pick
+            label={t("cfields.automationField")}
+            value={def ? def.key : ""}
+            placeholder={t("cfields.pickField")}
+            items={o.fields.map((f) => ({ value: f.key, label: f.label }))}
+            onChange={(key) => onChange({ field: "customField", key, op: "equals", value: "" })}
+          />
+          <Pick
+            label={t("cfields.automationOp")}
+            value={c.op}
+            items={CUSTOM_FIELD_OPS.map((op) => ({ value: op, label: t(CUSTOM_FIELD_OP_LABEL[op]) }))}
+            onChange={(op) => onChange({ ...c, op })}
+          />
+          {needsValue &&
+            (choices ? (
+              <Pick
+                label={t("cfields.automationValue")}
+                value={choices.some((x) => x.value === c.value) ? (c.value ?? "") : ""}
+                placeholder={t("cfields.pickValue")}
+                items={choices}
+                onChange={(value) => onChange({ ...c, value })}
+              />
+            ) : (
+              <Input
+                value={c.value ?? ""}
+                aria-label={t("cfields.automationValue")}
+                maxLength={200}
+                placeholder={t("cfields.valuePlaceholder")}
+                onChange={(e) => onChange({ ...c, value: e.target.value })}
+              />
+            ))}
+        </div>
+      );
+    }
   }
 }
 
@@ -490,8 +560,8 @@ export function RuleBuilder({
   };
 
   const statusItems = FEEDBACK_STATUSES.map((s) => ({ value: s, label: t(STATUS_META[s].labelKey) }));
-  const unused = (Object.keys(CONDITION_LABEL) as AutomationCondition["field"][]).filter(
-    (f) => !draft.conditions.some((c) => c.field === f),
+  const unused = (Object.keys(CONDITION_LABEL) as AutomationCondition["field"][]).filter((f) =>
+    f === "customField" ? options.fields.length > 0 : !draft.conditions.some((c) => c.field === f),
   );
 
   return (
@@ -559,7 +629,7 @@ export function RuleBuilder({
             <ul className="grid gap-2">
               {draft.conditions.map((c, i) => (
                 <li
-                  key={c.field}
+                  key={`${c.field}-${i}`}
                   className="grid gap-2 rounded-lg border p-2.5 sm:grid-cols-[10rem_1fr_auto]"
                   data-testid="rule-condition"
                 >

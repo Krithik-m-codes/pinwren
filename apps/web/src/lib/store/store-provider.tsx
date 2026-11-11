@@ -19,9 +19,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(PREFS_KEY);
-      const saved = raw ? (JSON.parse(raw) as { density?: unknown }) : null;
+      const saved = raw ? (JSON.parse(raw) as { density?: unknown; fieldColumns?: unknown }) : null;
       if (saved?.density === "compact" || saved?.density === "comfortable") {
         store.dispatch(prefsLoaded({ density: saved.density }));
+      }
+      if (Array.isArray(saved?.fieldColumns)) {
+        const keys = saved.fieldColumns.filter(
+          (k): k is string => typeof k === "string" && /^[a-z][a-z0-9_]{0,39}$/.test(k),
+        );
+        store.dispatch(prefsLoaded({ fieldColumns: keys.slice(0, 3) }));
       }
     } catch {
       // unreadable or blocked storage: defaults

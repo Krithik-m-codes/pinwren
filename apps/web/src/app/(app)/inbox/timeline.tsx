@@ -4,6 +4,7 @@ import { type FeedbackKind, type FeedbackStatus, type Priority, safeHref } from 
 import {
   ArrowRight,
   BadgeCheck,
+  FormInput,
   CalendarClock,
   CircleDot,
   Eye,
@@ -311,6 +312,23 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
             ),
           })
         : rich(t("inbox2.evNotDuplicate"), { who });
+  } else if (e.type === "customField_changed") {
+    // A custom field answer (ADR 0029): the server words the values ("Pro", "Acme, Beta") from the field's options.
+    icon = <FormInput className="size-3.5" />;
+    const word = (raw: unknown, text: unknown) =>
+      typeof raw === "boolean" ? t(raw ? "cfields.yes" : "cfields.no") : str(text, str(raw));
+    const field = <span className="text-foreground">{str(e.data.label, str(e.data.key))}</span>;
+    const now = word(to, e.data.toText);
+    body = (
+      <>
+        {now
+          ? rich(t("cfields.evSet"), { who, field, value: <span className="text-foreground">{now}</span> })
+          : rich(t("cfields.evCleared"), { who, field })}
+        {from !== null && from !== undefined && now && (
+          <> {t("inbox2.was", { value: word(from, e.data.fromText) })}</>
+        )}
+      </>
+    );
   } else if (e.type === "rule_action") {
     icon = <Workflow className="size-3.5" />;
     body = rich(t(RULE_ACTION_KEY[str(e.data.action)] ?? "automation.evRuleGeneric"), {

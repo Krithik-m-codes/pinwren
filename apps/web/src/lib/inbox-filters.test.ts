@@ -47,6 +47,14 @@ describe("inbox filters in the URL", () => {
     expect(extraFilterCount({ labelId: L, reporter: "x", sort: "updated" })).toBe(2);
   });
 
+  it("reads one custom field filter and counts it as a narrowing filter", () => {
+    expect(filtersFromParams(sp("cf=plan%3Apro"))).toEqual({ cf: "plan:pro" });
+    expect(filtersFromParams(sp("cf=nokey"))).toEqual({});
+    expect(extraFilterCount({ cf: "plan:pro" })).toBe(1);
+    expect(paramsForFilters({ cf: "plan:pro" }).get("cf")).toBe("plan:pro");
+    expect(sameFilters({ cf: "a:b" }, { cf: "a:c" })).toBe(false);
+  });
+
   it("builds export URLs from the list query, or for a selection", () => {
     const args = inboxArgsFromParams(sp(`project=${P}&priority=high`));
     expect(exportUrl(args, "csv")).toBe(

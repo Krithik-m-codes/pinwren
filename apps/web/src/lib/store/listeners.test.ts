@@ -35,6 +35,7 @@ const row = (id: string): FeedbackRow => ({
   screenshotAssetId: null,
   attachmentCount: 0,
   commentCount: 0,
+  customFields: {},
   labels: [],
   dueAt: null,
   updatedAt: "2026-10-01T00:00:00Z",

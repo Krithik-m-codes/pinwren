@@ -100,6 +100,7 @@ import { useUrlParams } from "@/lib/use-url-params";
 import { useMounted } from "@/lib/use-synced-state";
 import { cn } from "@/lib/utils";
 import { useMembers, useViewer } from "@/lib/viewer";
+import { CustomFieldsCard } from "./custom-fields-card";
 import { AiDuplicateBanner } from "./ai-duplicate-banner";
 import { AiReproSteps } from "./ai-repro-steps";
 import { AiLabelSuggestions } from "./ai-label-suggestions";
@@ -746,6 +747,8 @@ function DetailBody({
         <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">
           {activeTranslation?.body ?? f.body}
         </p>
+
+        <CustomFieldsCard feedback={f} canWrite={canWrite} />
 
         {data.ai?.reproductionSteps && data.ai.reproductionSteps.length > 0 && (
           <AiReproSteps steps={data.ai.reproductionSteps} />
