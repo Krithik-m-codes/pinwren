@@ -6,7 +6,7 @@ import { unauthorized } from "../errors";
 import { requirePermission } from "../permissions";
 import { listFieldsOfProject, replaceFields } from "../services/custom-fields";
 
-// Per-project custom fields and the form builder (ADR 0029). Everyone who can see the project reads the
+// Per-project custom fields and the form builder (ADR 0032). Everyone who can see the project reads the
 // fields; Admins (`projects.manage`) save the whole form. Mounted after the dashboard router, so the
 // session and viewer guards apply.
 export const customFieldRoutes = new Hono<{ Variables: SessionVars }>()

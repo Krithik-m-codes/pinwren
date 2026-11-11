@@ -39,7 +39,7 @@ export type BriefInput = {
   instanceUrl: string;
   /** `owner/name` of the project's GitHub/GitLab sync target, when one is set up. */
   repo: { provider: string; path: string } | null;
-  /** The reporter's answers to the project's custom fields, worded; PII already redacted (ADR 0029). */
+  /** The reporter's answers to the project's custom fields, worded; PII already redacted (ADR 0032). */
   answers?: readonly { label: string; text: string }[];
 };
 

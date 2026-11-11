@@ -16,7 +16,7 @@ import { customField, feedback, getDb, project } from "@pinwren/db";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { ApiError, notFound } from "../errors";
 
-// Custom fields (ADR 0029): project-level definitions and the checks every answer goes through. Definitions are
+// Custom fields (ADR 0032): project-level definitions and the checks every answer goes through. Definitions are
 // tenant rows (`custom_field`, RLS `pinwren_tenant`); answers are a JSONB map on `feedback`.
 
 type Row = typeof customField.$inferSelect;

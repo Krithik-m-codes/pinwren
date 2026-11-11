@@ -2,7 +2,7 @@ import type { CustomFieldDef, CustomFieldInputRaw } from "@pinwren/core";
 import { automationApi } from "./automation";
 import { LIST } from "./base";
 
-/** Custom form fields of a project (ADR 0029): read by everyone who sees the project, saved by Admins. */
+/** Custom form fields of a project (ADR 0032): read by everyone who sees the project, saved by Admins. */
 export const customFieldsApi = automationApi.injectEndpoints({
   endpoints: (build) => ({
     customFields: build.query<{ fields: CustomFieldDef[] }, string>({

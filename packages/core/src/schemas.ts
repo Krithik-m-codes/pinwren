@@ -260,7 +260,7 @@ export const captureGeometry = z.object({
 });
 export type CaptureGeometry = z.infer<typeof captureGeometry>;
 
-// --- Custom fields (ADR 0029): the wire pieces other schemas mention; the rest is in custom-fields.ts ----------
+// --- Custom fields (ADR 0032): the wire pieces other schemas mention; the rest is in custom-fields.ts ----------
 
 export const MAX_CUSTOM_FIELDS = 20;
 /** Largest set of answers one item may carry, as serialised JSON. */
@@ -353,7 +353,7 @@ export const widgetFeedbackCreate = z.object({
   annotations: annotationLayer.optional(),
   /** The viewport `screenshot` was taken in. Stored on the screenshot asset. */
   capture: captureGeometry.optional(),
-  /** Answers to the project's custom fields (ADR 0029), by field key. Validated server-side against the definitions. */
+  /** Answers to the project's custom fields (ADR 0032), by field key. Validated server-side against the definitions. */
   customFields: customFieldValues.optional(),
 });
 export type WidgetFeedbackCreate = z.infer<typeof widgetFeedbackCreate>;
@@ -425,7 +425,7 @@ export const feedbackUpdate = z.object({
   duplicateOfId: z.uuid().nullable().optional(),
   /** Convert between comment / bug / idea / question. */
   kind: feedbackKind.optional(),
-  /** Custom field answers to set by key; `null` clears one (ADR 0029). Other fields keep their answer. */
+  /** Custom field answers to set by key; `null` clears one (ADR 0032). Other fields keep their answer. */
   customFields: customFieldValues.optional(),
 });
 export type FeedbackUpdate = z.infer<typeof feedbackUpdate>;
@@ -462,7 +462,7 @@ export const feedbackListQuery = z.object({
   hasReplay: queryBool.optional(),
   /** Browser name contains this text (from the captured environment), e.g. `Safari`. */
   browser: z.string().trim().max(60).optional(),
-  /** One custom field: `key:value` (`*` any answer, `!` none). Text fields match by substring (ADR 0029). */
+  /** One custom field: `key:value` (`*` any answer, `!` none). Text fields match by substring (ADR 0032). */
   cf: customFieldFilter.optional(),
   /** Deleted items (the trash) instead of live ones. Org admins only; others get 403. */
   trash: queryBool.optional(),

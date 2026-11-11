@@ -17,7 +17,7 @@ export type FeedbackPatch = Partial<{
   dueAt: string | null;
   duplicateOfId: string | null;
   kind: FeedbackKind;
-  /** Custom field answers by key; `null` clears one (ADR 0029). */
+  /** Custom field answers by key; `null` clears one (ADR 0032). */
   customFields: Record<string, unknown>;
 }>;
 

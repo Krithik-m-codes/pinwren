@@ -17,7 +17,7 @@ export type InboxState = {
   /** Per-device preferences (saved in localStorage by the listener middleware). */
   prefs: {
     density: Density;
-    /** Custom field keys whose answers show on each row (ADR 0029). */
+    /** Custom field keys whose answers show on each row (ADR 0032). */
     fieldColumns: string[];
   };
 };

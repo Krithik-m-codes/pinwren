@@ -13,7 +13,7 @@ import {
 // they are re-exported from here so `custom-fields` reads as one module.
 export { CUSTOM_FIELD_KEY, customFieldKey, customFieldValues, MAX_CUSTOM_FIELDS, MAX_CUSTOM_VALUES_BYTES };
 
-// Custom fields (ADR 0029): extra questions a project asks on its report form. The definitions live in the
+// Custom fields (ADR 0032): extra questions a project asks on its report form. The definitions live in the
 // `custom_field` table (one row per field), the answers on `feedback.custom_fields` as a `{ key: value }` map.
 // This module is the single source of truth for what a field is and what a value may be: the dashboard
 // builder, the API, the widget's lazy `fields` chunk (which re-implements the same rules in a few lines

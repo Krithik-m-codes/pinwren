@@ -144,7 +144,7 @@ async function assertReferences(
       ),
     "issue tracker",
   );
-  // A condition on a custom field names one of this project's fields (ADR 0029).
+  // A condition on a custom field names one of this project's fields (ADR 0032).
   const fieldKeys = new Set<string>();
   for (const c of conditions) if (c.field === "customField") fieldKeys.add(c.key);
   if (fieldKeys.size) {

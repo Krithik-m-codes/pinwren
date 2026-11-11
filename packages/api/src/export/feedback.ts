@@ -60,7 +60,7 @@ export type ExportItem = {
   updatedAt: string;
   dueAt: string | null;
   link: string;
-  /** Answers to the project's custom fields by key (ADR 0029); PII fields are redacted in a privacy-mode project. */
+  /** Answers to the project's custom fields by key (ADR 0032); PII fields are redacted in a privacy-mode project. */
   customFields: Record<string, unknown>;
 };
 

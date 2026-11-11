@@ -302,6 +302,6 @@ three direct-ownership tables, each with the `pinwren_tenant` policy and composi
   another workspace's label or member are refused when saved, workspace B's identical rule never fires for A's event,
   and loop protection, idempotent retries and partial failures are asserted.
 
-### Custom fields (ADR 0029)
+### Custom fields (ADR 0032)
 
 Migration `0015` adds one direct-ownership table, `custom_field` (parent `project`), with the `pinwren_tenant` policy and a composite `(project_id, org_id)` foreign key (`custom_field_project_tenant_fk`), and the column `feedback.custom_fields` (covered by the existing `feedback` policy). Three `tenant` routes (`GET`/`PUT /api/projects/:id/custom-fields`, `GET /api/v1/projects/:id/custom-fields`) each have a foreign-workspace case in `cloud-routes-db.test.ts`; `custom-fields-db.test.ts` runs in the isolation runner and checks the form, widget ingest, edits, the inbox filter and exports against a real database with row security. The `cf` list filter reads `custom_field` through the caller's scope, so another workspace's field definitions are never matched.

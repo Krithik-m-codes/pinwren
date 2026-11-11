@@ -87,7 +87,7 @@ export type FeedbackRow = {
   updatedAt: string;
   /** Set on items in the trash (`?trash=1`). */
   deletedAt: string | null;
-  /** Answers to the project's custom fields by field key (ADR 0029). */
+  /** Answers to the project's custom fields by field key (ADR 0032). */
   customFields: Record<string, unknown>;
 };
 

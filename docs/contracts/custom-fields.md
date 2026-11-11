@@ -1,6 +1,6 @@
 # Custom fields and the form builder: contract
 
-Design: `docs/adr/0029-custom-fields-and-form-builder.md`. Schemas and the validator live in
+Design: `docs/adr/0032-custom-fields-and-form-builder.md`. Schemas and the validator live in
 `packages/core/src/custom-fields.ts` (and the key/value/filter pieces in `schemas.ts`); the storage is migration
 `0015` (`custom_field`, `feedback.custom_fields`). Every route below is in `tenant-route-inventory.json` (`tenant`,
 `finite`) and has a `cloud-routes-db.test.ts` case; viewers get `403 READ_ONLY_ROLE` on writes.

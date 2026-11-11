@@ -68,7 +68,7 @@ export const CONDITION_LABEL = {
   customField: "cfields.automationField",
 } as const satisfies Record<AutomationCondition["field"], Key>;
 
-/** Operators of a custom field condition, worded for the builder (ADR 0029). */
+/** Operators of a custom field condition, worded for the builder (ADR 0032). */
 export const CUSTOM_FIELD_OP_LABEL = {
   equals: "cfields.opEquals",
   not_equals: "cfields.opNotEquals",
@@ -127,7 +127,7 @@ type Options = {
   rounds: { id: string; name: string }[];
   webhooks: { id: string; name: string }[];
   trackers: { id: string; name: string }[];
-  /** The project's custom fields (ADR 0029), for conditions on an answer. */
+  /** The project's custom fields (ADR 0032), for conditions on an answer. */
   fields: CustomFieldDef[];
 };
 

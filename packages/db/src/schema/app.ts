@@ -243,7 +243,7 @@ export const feedback = pgTable(
     anchor: jsonb("anchor"),
     environment: jsonb("environment"),
     metadata: jsonb("metadata"),
-    /** Answers to the project's custom fields (ADR 0029), `{ field key: value }`; empty answers are not stored. */
+    /** Answers to the project's custom fields (ADR 0032), `{ field key: value }`; empty answers are not stored. */
     customFields: jsonb("custom_fields").$type<CustomFieldValues>().notNull().default({}),
     source: feedbackSourceEnum("source").notNull().default("widget"),
     roundId: uuid("round_id").references(() => reviewRound.id, { onDelete: "set null" }),
@@ -1145,7 +1145,7 @@ export const automationRun = pgTable(
   ],
 );
 
-/** A custom question a project asks on its report form (ADR 0029). Answers live on `feedback.custom_fields`. */
+/** A custom question a project asks on its report form (ADR 0032). Answers live on `feedback.custom_fields`. */
 export const customField = pgTable(
   "custom_field",
   {

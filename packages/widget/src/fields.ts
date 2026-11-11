@@ -3,7 +3,7 @@ import { FIELDS_CSS } from "./fields-styles";
 import { addEnglish, type Key, locale, t } from "./i18n";
 import { enFields } from "./locales/en-fields";
 
-// The project's custom questions (ADR 0029): the lazy widget-fields.js chunk. The report form asks for them
+// The project's custom questions (ADR 0032): the lazy widget-fields.js chunk. The report form asks for them
 // (`customFields` of `GET /w/config`), checks the answers and hands them to the report. Nothing here is trusted
 // beyond what it can render safely: every string goes in through textContent or an attribute, every list and
 // length is clamped, and the server re-validates all of it (`resolveNewValues` in @pinwren/core is the gate).

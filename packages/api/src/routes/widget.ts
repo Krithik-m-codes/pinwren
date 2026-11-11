@@ -414,7 +414,7 @@ export const widget = new Hono<{ Variables: WidgetVars }>()
     return c.json({
       // slug fills `{projectSlug}` in panel-action links (wave-3 contract §1).
       project: { name: p.name, slug: p.slug, publicRead: p.publicRead },
-      // `customFields`: the form builder's reporter fields (ADR 0029); the widget's lazy chunk renders them.
+      // `customFields`: the form builder's reporter fields (ADR 0032); the widget's lazy chunk renders them.
       widget: { ...w, customFields },
       capture,
       // Hiding "Powered by Pinwren" is Enterprise white-label: without the entitlement the stored

@@ -60,7 +60,7 @@ const sameType = (a: string, b: string) =>
   a === b || (["text", "textarea"].includes(a) && ["text", "textarea"].includes(b));
 
 /**
- * Project › Form (ADR 0029): the questions this project's report form asks, their order and rules, with a live
+ * Project › Form (ADR 0032): the questions this project's report form asks, their order and rules, with a live
  * preview. Admins build it and save it as a whole; everyone else reads it.
  */
 export function FormTab({ project }: { project: ProjectDetail }) {

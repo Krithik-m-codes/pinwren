@@ -225,7 +225,7 @@ export async function buildProjectArchive(
   const { p, labels, fields } = await withOrg(orgId, async (db) => ({
     p: await assertProject(orgId, projectId),
     labels: await db.select().from(label).where(eq(label.projectId, projectId)),
-    // The form builder's fields (ADR 0029); every item's answers are in its `customFields`.
+    // The form builder's fields (ADR 0032); every item's answers are in its `customFields`.
     fields: await listFields(orgId, projectId),
   }));
   const { actionSecret: _a, identitySecret: _i, rejectedOrigins: _r, ...projectData } = p;

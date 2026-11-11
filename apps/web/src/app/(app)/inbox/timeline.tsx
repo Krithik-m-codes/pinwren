@@ -313,7 +313,7 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
           })
         : rich(t("inbox2.evNotDuplicate"), { who });
   } else if (e.type === "customField_changed") {
-    // A custom field answer (ADR 0029): the server words the values ("Pro", "Acme, Beta") from the field's options.
+    // A custom field answer (ADR 0032): the server words the values ("Pro", "Acme, Beta") from the field's options.
     icon = <FormInput className="size-3.5" />;
     const word = (raw: unknown, text: unknown) =>
       typeof raw === "boolean" ? t(raw ? "cfields.yes" : "cfields.no") : str(text, str(raw));

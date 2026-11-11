@@ -229,7 +229,7 @@ Strategies in order, first confident hit wins; each yields a confidence score:
 
 ### F-130 Custom fields — _C, E, P, B, X_
 
-- Per-project questions on the report form: short/long text, select, multi-select, checkbox, number, date, link, email; label, help text, placeholder, default, required, options, ordering, validation rules, per-type visibility, reporter-visible or internal. Answers are validated by the server, stored with the feedback, editable by the team, filterable, exported, sent in webhooks/API and usable in automation conditions (ADR 0029).
+- Per-project questions on the report form: short/long text, select, multi-select, checkbox, number, date, link, email; label, help text, placeholder, default, required, options, ordering, validation rules, per-type visibility, reporter-visible or internal. Answers are validated by the server, stored with the feedback, editable by the team, filterable, exported, sent in webhooks/API and usable in automation conditions (ADR 0032).
 
 ### F-131 Form builder — _C, E, P, B, X_
 

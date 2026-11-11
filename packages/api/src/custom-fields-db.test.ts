@@ -9,7 +9,7 @@ import { closeIdentityDatabase } from "../../db/src/identity";
 import { createCloudFixture } from "./test-helpers/cloud-fixture";
 
 /**
- * Custom fields and the form builder (ADR 0029) against a real database with row security: saving the form,
+ * Custom fields and the form builder (ADR 0032) against a real database with row security: saving the form,
  * the widget's config and submission checks, editing answers, the inbox filter, exports (with privacy mode),
  * deleting a field with its answers, and tenant isolation.
  */

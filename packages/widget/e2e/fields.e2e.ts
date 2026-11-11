@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { mockApi } from "./mock";
 
-// Custom questions in the bug report (ADR 0029): rendered from /w/config in the lazy widget-fields.js chunk,
+// Custom questions in the bug report (ADR 0032): rendered from /w/config in the lazy widget-fields.js chunk,
 // validated before sending, translated with the project's own strings, sent as `customFields`.
 
 const report = (page: Page) => page.getByRole("dialog", { name: "Report a bug" });

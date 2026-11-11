@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import type { Key } from "@/lib/i18n/en";
 
-// Client helpers of the form builder and of the item's custom field card (ADR 0029).
+// Client helpers of the form builder and of the item's custom field card (ADR 0032).
 
 export const FIELD_TYPE_META: Record<CustomFieldType, { labelKey: Key; icon: LucideIcon }> = {
   text: { labelKey: "cfields.typeText", icon: TextCursorInput },

@@ -1,6 +1,6 @@
 // Strings for: projects/[id]/form-tab.tsx (Project › Form), components/custom-fields/*, inbox/custom-fields-card.tsx,
 // inbox/custom-field-filter.tsx, the field filter and columns in the inbox toolbar, the custom field condition of an
-// automation rule and the timeline line for a changed answer (ADR 0029).
+// automation rule and the timeline line for a changed answer (ADR 0032).
 export const customFields = {
   "cfields.tab": "Form",
   "cfields.title": "Report form fields",

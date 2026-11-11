@@ -8,7 +8,7 @@
 //   widget-capture.<hash>.js   SnapDOM (screenshot engine)
 //   widget-replay.<hash>.js    rrweb recorder (session replay)
 //   widget-flows.<hash>.js     composer attachments, re-pin mode (wave 5)
-//   widget-fields.<hash>.js    custom questions of the report form (ADR 0029)
+//   widget-fields.<hash>.js    custom questions of the report form (ADR 0032)
 //   widget-shots.<hash>.js     "Add screenshot" menu, attachment thumbnails + lightbox, annotate dialog
 //   widget-record.<hash>.js    "Record screen": getDisplayMedia + MediaRecorder, review dialog (ADR 0029)
 //   widget-i18n-<code>.<hash>.js

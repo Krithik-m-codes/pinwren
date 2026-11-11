@@ -77,7 +77,7 @@ export type ReproInput = {
   errors: ConsoleRow[];
   replay: { durationMs: number; events: number; summarized: boolean } | null;
   screenshotAssetId: string | null;
-  /** The reporter's answers to the project's custom fields (ADR 0029), worded for text output, PII redacted. */
+  /** The reporter's answers to the project's custom fields (ADR 0032), worded for text output, PII redacted. */
   answers: { label: string; text: string }[];
 };
 

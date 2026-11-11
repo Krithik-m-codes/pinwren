@@ -128,7 +128,7 @@ export function InboxToolbar({
   const { canWrite, isAdmin, userId } = useViewer();
   const rounds = useRoundsQuery(filters.projectId ?? "", { skip: !filters.projectId });
   const labels = useLabelsQuery(filters.projectId ?? "", { skip: !filters.projectId });
-  // Custom fields are per project: the field filter and columns appear once one project is chosen (ADR 0029).
+  // Custom fields are per project: the field filter and columns appear once one project is chosen (ADR 0032).
   const customFields = useCustomFieldsQuery(filters.projectId ?? "", { skip: !filters.projectId });
   const fieldDefs = customFields.data?.fields ?? [];
   // Review links are project settings (Admins); others still get the chip from a shared URL.

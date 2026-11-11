@@ -22,7 +22,7 @@ export function answerText(def: Def, value: unknown, yes: string, no: string): s
 }
 
 /**
- * The item's answers to the project's custom fields (ADR 0029): the reporter's (asked in the widget) and the
+ * The item's answers to the project's custom fields (ADR 0032): the reporter's (asked in the widget) and the
  * team's own (internal), for fields that belong to the item's type. Team members edit them here; viewers read.
  * Values are always rendered as text; a link only when it is an http(s) address.
  */

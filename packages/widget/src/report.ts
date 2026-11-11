@@ -91,7 +91,7 @@ type Draft = {
   screenshot: string | null;
   shapes: Shape[];
   attachments: Attachment[];
-  /** Answers to the project's custom questions (ADR 0029). */
+  /** Answers to the project's custom questions (ADR 0032). */
   fields?: Record<string, unknown> | undefined;
 };
 

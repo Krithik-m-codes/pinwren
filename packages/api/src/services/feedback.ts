@@ -115,7 +115,7 @@ export function numberOf(text: string): number | null {
 export type ItemLabel = { id: string; name: string; color: string };
 
 /**
- * `cf=key:value` (ADR 0029). What "matches" depends on the field's type in the item's own project: text fields
+ * `cf=key:value` (ADR 0032). What "matches" depends on the field's type in the item's own project: text fields
  * by substring, choices by membership, numbers and checkboxes by equality, dates by day. `*` is any answer and
  * `!` no answer. Unknown keys and values that don't fit the type match nothing, rather than erroring.
  */
@@ -577,7 +577,7 @@ export async function updateFeedback(orgId: string, actor: Actor, id: string, pa
 
     const set: Partial<typeof feedback.$inferInsert> = { ...columns };
     if (kind) set.kind = kind;
-    // Custom field answers (ADR 0029): merged into the stored map, validated against the project's fields
+    // Custom field answers (ADR 0032): merged into the stored map, validated against the project's fields
     // for the item's (possibly new) kind; each change is its own timeline entry.
     let answerChanges: {
       key: string;

@@ -22,7 +22,7 @@ export type FeedbackPayload = {
   createdAt: string;
   updatedAt: string;
   url: string;
-  /** Answers to the project's custom fields by key (ADR 0029); absent in payloads from before they existed. */
+  /** Answers to the project's custom fields by key (ADR 0032); absent in payloads from before they existed. */
   customFields?: Record<string, unknown>;
 };
 

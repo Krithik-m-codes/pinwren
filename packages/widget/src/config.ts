@@ -32,7 +32,7 @@ export type WidgetConfig = {
   privacyMode: boolean;
   /** Offer a bug report when the page throws an uncaught error (off by default). */
   errorPrompt: boolean;
-  /** The project's custom questions (ADR 0029), raw: widget-fields.js sanitises them when the report opens. */
+  /** The project's custom questions (ADR 0032), raw: widget-fields.js sanitises them when the report opens. */
   customFields: unknown[];
   /**
    * F-012 (wave-4 §4, wave-5 §2): where and for whom the widget shows. Widget-side only; `forceShow` overrides

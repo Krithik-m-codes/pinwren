@@ -66,7 +66,7 @@ export const automationCondition = z.discriminatedUnion("field", [
   z.object({ field: z.literal("label"), labelIds: list(z.uuid()) }),
   z.object({ field: z.literal("hasAttachment"), value: z.boolean() }),
   z.object({ field: z.literal("hasReplay"), value: z.boolean() }),
-  /** An answer to one of the project's custom fields (ADR 0029). `value` is typed as text and read by the answer's type. */
+  /** An answer to one of the project's custom fields (ADR 0032). `value` is typed as text and read by the answer's type. */
   z
     .object({
       field: z.literal("customField"),
@@ -161,7 +161,7 @@ export type AutomationFacts = {
   labelIds: readonly string[];
   hasAttachment: boolean;
   hasReplay: boolean;
-  /** The item's custom field answers by key (ADR 0029). */
+  /** The item's custom field answers by key (ADR 0032). */
   customFields?: Record<string, unknown>;
 };
 

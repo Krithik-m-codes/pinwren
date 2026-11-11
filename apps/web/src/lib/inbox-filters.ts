@@ -18,7 +18,7 @@ export const FILTER_PARAMS = {
   label: "labelId",
   reporter: "reporter",
   review: "reviewLinkId",
-  /** One custom field, `key:value` (ADR 0029). */
+  /** One custom field, `key:value` (ADR 0032). */
   cf: "cf",
   sort: "sort",
   order: "order",
