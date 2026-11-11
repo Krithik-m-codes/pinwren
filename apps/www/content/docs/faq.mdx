@@ -89,6 +89,7 @@ If your site sends a CSP header, allow your Pinwren server (here `https://feedba
 script-src  'self' https://feedback.example.com;
 connect-src 'self' https://feedback.example.com;
 img-src     'self' https://feedback.example.com data: blob:;
+media-src   'self' blob:;
 style-src   'self' 'unsafe-inline';
 ```
 
@@ -96,6 +97,7 @@ style-src   'self' 'unsafe-inline';
 - `connect-src` covers the widget's API calls (`/w/*`).
 - `img-src` covers screenshot previews (`data:`/`blob:` URLs) and a branding logo served by Pinwren; add the
   logo's host if it lives elsewhere.
+- `media-src blob:` lets the widget play a screen recording back for review before it is attached.
 - `style-src 'unsafe-inline'` is needed because the widget puts its stylesheet in a `<style>` element inside its
   shadow root.
 

@@ -3,8 +3,11 @@
 import {
   type CaptureConfigInput,
   captureConfig,
+  MAX_RECORDING_SECONDS,
   MAX_REPLAY_SECONDS,
+  MIN_RECORDING_SECONDS,
   MIN_REPLAY_SECONDS,
+  recordingEnabled,
 } from "@pinwren/core";
 import { useMemo } from "react";
 import { useWatch } from "react-hook-form";
@@ -131,6 +134,13 @@ export function CaptureTab({ project }: { project: ProjectDetail }) {
         seconds={c.replay.seconds}
         privacyMode={project.widgetConfig.privacyMode}
         onSave={(replay, message) => save.mutate({ patch: { captureConfig: { replay } }, message })}
+      />
+      <RecordingCard
+        enabled={recordingEnabled(project.widgetConfig, c)}
+        maxSeconds={c.recording.maxSeconds}
+        microphone={c.recording.microphone}
+        privacyMode={project.widgetConfig.privacyMode}
+        onSave={(recording, message) => save.mutate({ patch: { captureConfig: { recording } }, message })}
       />
       <MaskCard selectors={c.maskSelectors} onSave={(maskSelectors) => commit({ maskSelectors })} />
     </div>
@@ -277,6 +287,95 @@ function ReplayCard({
                 {t("projects1.secondsShort", { n: draft })}
               </span>
             </div>
+          </SettingRow>
+        </SettingGroup>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Screen recording with optional voice narration (ADR 0029). Unset, it follows the project: on, but off in
+ * privacy mode; flipping the switch makes the choice explicit.
+ */
+function RecordingCard({
+  enabled,
+  maxSeconds,
+  microphone,
+  privacyMode,
+  onSave,
+}: {
+  enabled: boolean;
+  maxSeconds: number;
+  microphone: boolean;
+  privacyMode: boolean;
+  onSave: (
+    recording: { enabled?: boolean; maxSeconds?: number; microphone?: boolean },
+    message: string,
+  ) => void;
+}) {
+  const t = useT();
+  const [draft, setDraft] = useSyncedState(maxSeconds);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("recording.cardTitle")}</CardTitle>
+        <CardDescription>{t("recording.cardDescription")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <SettingGroup>
+          <SettingRow
+            label={t("recording.allow")}
+            htmlFor="recording-enabled"
+            description={
+              privacyMode ? t("recording.allowPrivacyDescription") : t("recording.allowDescription")
+            }
+          >
+            <Switch
+              id="recording-enabled"
+              checked={enabled}
+              onCheckedChange={(on) => onSave({ enabled: on }, on ? t("recording.on") : t("recording.off"))}
+            />
+          </SettingRow>
+          <SettingRow
+            label={t("recording.maxLength")}
+            description={t("recording.maxLengthDescription", {
+              min: MIN_RECORDING_SECONDS,
+              max: MAX_RECORDING_SECONDS,
+            })}
+          >
+            <div className="flex w-full items-center gap-3 sm:w-64">
+              <Slider
+                aria-label={t("recording.maxLengthAria")}
+                min={MIN_RECORDING_SECONDS}
+                max={MAX_RECORDING_SECONDS}
+                step={10}
+                disabled={!enabled}
+                value={[draft]}
+                onValueChange={(v) => setDraft(sliderValue(v))}
+                onValueCommitted={(v) => {
+                  const n = sliderValue(v);
+                  if (n !== maxSeconds) onSave({ maxSeconds: n }, t("recording.lengthSaved", { n }));
+                }}
+              />
+              <span className="w-12 shrink-0 text-right text-sm tabular-nums" data-testid="recording-seconds">
+                {t("projects1.secondsShort", { n: draft })}
+              </span>
+            </div>
+          </SettingRow>
+          <SettingRow
+            label={t("recording.microphone")}
+            htmlFor="recording-microphone"
+            description={t("recording.microphoneDescription")}
+          >
+            <Switch
+              id="recording-microphone"
+              checked={microphone}
+              disabled={!enabled}
+              onCheckedChange={(on) =>
+                onSave({ microphone: on }, on ? t("recording.micOn") : t("recording.micOff"))
+              }
+            />
           </SettingRow>
         </SettingGroup>
       </CardContent>
