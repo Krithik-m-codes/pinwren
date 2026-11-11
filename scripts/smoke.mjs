@@ -453,9 +453,12 @@ r = await W("/w/feedback", {
 });
 check("attachment type mismatch rejected", r.status === 400, r.status);
 
-// Screen recordings (ADR 0029): stored as an attachment with their duration, served for playback.
+// Screen recordings (ADR 0029): stored as an attachment with their duration, served for playback. They report
+// from their own address: the main reporter's per-minute budget is spent by the checks around this block.
+const fromElsewhere = { "x-forwarded-for": "198.51.100.77" };
 const webm = `data:video/webm;base64,${Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 1, 2, 3, 4, 5, 6, 7, 8]).toString("base64")}`;
 r = await W("/w/feedback", {
+  headers: fromElsewhere,
   method: "POST",
   json: {
     ...report,
@@ -480,6 +483,7 @@ check(
 r = rec ? await call(`/api/assets/${rec.id}`, { headers: { range: "bytes=4-7" } }) : { status: 0 };
 check("recording answers a byte range", r.status === 206, r.status);
 r = await W("/w/feedback", {
+  headers: fromElsewhere,
   method: "POST",
   json: {
     ...report,
@@ -497,6 +501,7 @@ r = await call(`/api/projects/${projectId}`, {
   json: { captureConfig: { recording: { enabled: false } } },
 });
 r = await W("/w/feedback", {
+  headers: fromElsewhere,
   method: "POST",
   json: {
     ...report,
