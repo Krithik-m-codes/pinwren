@@ -79,6 +79,21 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: DELETE /api/share-links/:id"
   },
+  "DELETE /api/slack": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/slack"
+  },
+  "DELETE /api/slack/links/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/slack/links/:id"
+  },
+  "DELETE /api/slack/routes/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/slack/routes/:id"
+  },
   "DELETE /api/tokens/:id": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -414,6 +429,16 @@
     "databaseLifetime": "finite",
     "check": "public authorization: GET /api/sign-in-methods"
   },
+  "GET /api/slack": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/slack"
+  },
+  "GET /api/slack/channels": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: GET /api/slack/channels"
+  },
   "GET /api/stats": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -648,6 +673,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: PATCH /api/rounds/:id"
+  },
+  "PATCH /api/slack/routes/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/slack/routes/:id"
   },
   "PATCH /api/v1/feedback/:id": {
     "boundary": "tenant",
@@ -969,6 +999,36 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: POST /api/share/:key/unlock"
   },
+  "POST /api/slack/commands": {
+    "boundary": "capability",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/slack/commands"
+  },
+  "POST /api/slack/interactivity": {
+    "boundary": "capability",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/slack/interactivity"
+  },
+  "POST /api/slack/link": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/slack/link"
+  },
+  "POST /api/slack/routes": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/slack/routes"
+  },
+  "POST /api/slack/sync-members": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/slack/sync-members"
+  },
+  "POST /api/slack/test": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: POST /api/slack/test"
+  },
   "POST /api/tokens": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -1048,5 +1108,10 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: PUT /api/settings/ai"
+  },
+  "PUT /api/slack": {
+    "boundary": "tenant",
+    "databaseLifetime": "external",
+    "check": "foreign tenant: PUT /api/slack"
   }
 }

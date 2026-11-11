@@ -94,6 +94,15 @@ export const tenantInventory: readonly TenantTable[] = [
   { table: "automation_rule", ownership: "direct", parents: ["project"] },
   { table: "custom_field", ownership: "direct", parents: ["project"] },
   { table: "automation_run", ownership: "direct", parents: ["automation_rule", "project", "feedback"] },
+  {
+    table: "slack_workspace",
+    ownership: "direct",
+    parents: [],
+    bootstrapColumns: ["id", "org_id", "team_id", "signing_secret", "active"],
+  },
+  { table: "slack_route", ownership: "direct", parents: ["slack_workspace", "project"] },
+  { table: "slack_user_link", ownership: "direct", parents: ["slack_workspace"] },
+  { table: "slack_message", ownership: "direct", parents: ["slack_workspace", "feedback"] },
   { table: "share_link", ownership: "direct", parents: ["project", "feedback", "review_round"] },
   { table: "round_signoff", ownership: "direct", parents: ["review_round", "share_link"] },
   {

@@ -39,7 +39,8 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
       integrationId = id(),
       roundId = id(),
       shareLinkId = id(),
-      ruleId = id();
+      ruleId = id(),
+      slackWorkspaceId = id();
     const userId = `user-${org}`;
     await admin`insert into organization (id, name, slug) values (${org}, ${org}, ${org})`;
     await admin`insert into "user" (id, name, email) values (${userId}, ${userId}, ${`${org}@test.invalid`})`;
@@ -170,6 +171,37 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
         status: "success",
       },
       label_suggestion: { id: id(), org_id: org, feedback_id: feedbackId, label_id: labelId, name: org },
+      slack_workspace: {
+        id: slackWorkspaceId,
+        org_id: org,
+        team_id: `T${slackWorkspaceId.replaceAll("-", "").slice(0, 10).toUpperCase()}`,
+        team_name: org,
+        signing_secret: "v1.x.y.z",
+        bot_token: "v1.x.y.z",
+        token_hint: "test",
+      },
+      slack_route: {
+        id: id(),
+        org_id: org,
+        workspace_id: slackWorkspaceId,
+        project_id: projectId,
+        channel_id: "C0123456789",
+      },
+      slack_user_link: {
+        id: id(),
+        org_id: org,
+        workspace_id: slackWorkspaceId,
+        slack_user_id: "U0123456789",
+        user_id: userId,
+      },
+      slack_message: {
+        id: id(),
+        org_id: org,
+        workspace_id: slackWorkspaceId,
+        feedback_id: feedbackId,
+        channel_id: "C0123456789",
+        ts: "1700000000.000100",
+      },
     };
     for (const [table, row] of Object.entries(rows)) await admin`insert into ${admin(table)} ${admin(row)}`;
     fixture[org] = rows;
@@ -229,7 +261,7 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
     const rows = await admin<
       { name: string; valid: boolean }[]
     >`select conname as name, convalidated as valid from pg_constraint where connamespace = 'public'::regnamespace and conname like '%_tenant_fk'`;
-    expect(rows).toHaveLength(33);
+    expect(rows).toHaveLength(38);
     expect(rows.every((row) => row.valid)).toBe(true);
   });
 

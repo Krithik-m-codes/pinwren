@@ -160,7 +160,7 @@ Strategies in order, first confident hit wins; each yields a confidence score:
 | ID    | Integration                                                                             | Direction     | Edition                 |
 | ----- | --------------------------------------------------------------------------------------- | ------------- | ----------------------- |
 | F-070 | Email (SMTP or Resend/Postmark API)                                                     | out           | All                     |
-| F-071 | Slack (OAuth app; channel per project; interactive buttons: assign/resolve)             | out + actions | All                     |
+| F-071 | Slack (own app; channel per project; buttons, /pinwren, message shortcut)               | out + actions | All                     |
 | F-072 | Discord (webhook)                                                                       | out           | All                     |
 | F-073 | Microsoft Teams (workflow webhook)                                                      | out           | All                     |
 | F-074 | Telegram (bot) and ntfy                                                                 | out           | All                     |
