@@ -13,7 +13,7 @@ import {
 } from "../sdk/types";
 import { asRecord, byName, plainBody, str } from "../sdk/util";
 
-// Asana (ADR 0032): a task per feedback item in one project (optionally one section), authenticated with a
+// Asana (ADR 0035): a task per feedback item in one project (optionally one section), authenticated with a
 // personal access token. Completing a task closes the item and unchecking it reopens. The project webhook is
 // registered through the API; Asana hands over the signing secret in a one-time handshake.
 

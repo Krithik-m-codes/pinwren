@@ -125,7 +125,7 @@ async function unregisterWebhook(i: Integration): Promise<void> {
 }
 
 /**
- * Issue sync with GitHub / GitLab / Linear / Jira / Trello / Asana / ClickUp / Notion (F-076–F-079, ADR 0032).
+ * Issue sync with GitHub / GitLab / Linear / Jira / Trello / Asana / ClickUp / Notion (F-076–F-079, ADR 0035).
  * Configuring is for workspace Admins (`integrations.manage`); sending an item is for Admins and Editors
  * (`feedback.update`).
  */

@@ -1,4 +1,4 @@
-// Strings for the board trackers (Trello, Asana, ClickUp, Notion) in projects/[id]/trackers-tab.tsx (ADR 0032).
+// Strings for the board trackers (Trello, Asana, ClickUp, Notion) in projects/[id]/trackers-tab.tsx (ADR 0035).
 export const trackers = {
   "trackers.descTrello":
     "Creates a card on your board for each feedback item. Moving the card to the done list (or archiving it) resolves the item, and resolving the item moves the card there.",

@@ -142,7 +142,7 @@ const obj = (v: unknown): Record<string, unknown> =>
 const invalidSignature = () => new ApiError(401, "INVALID_SIGNATURE", "Signature verification failed");
 
 /**
- * Webhook of a board tracker (Trello, Asana, ClickUp, Notion; ADR 0032). The URL names the integration
+ * Webhook of a board tracker (Trello, Asana, ClickUp, Notion; ADR 0035). The URL names the integration
  * (`?i=`), so there is nothing to search for: the delivery is checked against that one integration's secret,
  * then read by the tracker's adapter. Order matters: size and rate limits (the guard) → the one-time secret
  * handshake, accepted only while the integration is waiting for it → signature → replay check → events.

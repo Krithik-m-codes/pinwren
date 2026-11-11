@@ -15,7 +15,7 @@ import {
 } from "../sdk/types";
 import { asRecord, chunkText, str } from "../sdk/util";
 
-// Notion (ADR 0032): a database is the tracker — one page per feedback item, with an internal-integration
+// Notion (ADR 0035): a database is the tracker — one page per feedback item, with an internal-integration
 // secret. The status is a Status, Select or Checkbox property; priority an optional Select / Status
 // property. Notion's webhook subscription is created by hand in the integration's settings; Pinwren
 // captures the one-time verification token it posts and uses it to verify every later delivery.

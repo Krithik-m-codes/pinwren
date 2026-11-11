@@ -769,7 +769,7 @@ export const issueProviderEnum = pgEnum("issue_provider", ISSUE_PROVIDERS);
 
 /**
  * GitHub / GitLab / Linear / Jira / Trello / Asana / ClickUp / Notion issue sync for one project,
- * authenticated by an access token (ADR 0015, ADR 0032). `repo` is the repository path, Linear team key, Jira
+ * authenticated by an access token (ADR 0015, ADR 0035). `repo` is the repository path, Linear team key, Jira
  * project key, Trello board id, Asana project gid, ClickUp list id or Notion database id; Jira stores
  * `email:apiToken` and Trello `apiKey:token` in `token`.
  */

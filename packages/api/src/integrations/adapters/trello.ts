@@ -14,7 +14,7 @@ import {
 } from "../sdk/types";
 import { asRecord, byName, str } from "../sdk/util";
 
-// Trello (ADR 0032): a card per feedback item on one board's list, with the API key + token of the
+// Trello (ADR 0035): a card per feedback item on one board's list, with the API key + token of the
 // Power-Up. Closing moves the card to the "done" list (or archives it when none is set); reopening moves
 // it back. The board's webhook is registered through the API and signed with the Power-Up's app secret.
 

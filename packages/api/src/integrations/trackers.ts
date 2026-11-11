@@ -7,7 +7,7 @@ import { LINEAR_API_URL } from "./adapters/linear";
 import type { AccessResult, IssueRef, LinkTarget, NewIssue, TrackerConfig } from "./sdk/types";
 
 // Issue sync entry points: GitHub (F-076), GitLab (F-077), Linear (F-078), Jira Cloud (F-079) and, since
-// ADR 0032, Trello, Asana, ClickUp and Notion. Each tracker is an adapter in `adapters/` implementing the
+// ADR 0035, Trello, Asana, ClickUp and Notion. Each tracker is an adapter in `adapters/` implementing the
 // contract in `sdk/types.ts`; these functions pick the adapter by `cfg.provider` and add nothing of their own,
 // so callers (jobs, routes, tests) never branch on the provider. Every request goes through `safeFetch`;
 // only the instance's own GITHUB_API_URL / GITLAB_URL (operator settings) may point at a private address.

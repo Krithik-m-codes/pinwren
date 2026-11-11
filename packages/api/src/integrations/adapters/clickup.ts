@@ -13,7 +13,7 @@ import {
 } from "../sdk/types";
 import { asRecord, str } from "../sdk/util";
 
-// ClickUp (ADR 0032): a task per feedback item in one list, authenticated with a personal API token (sent
+// ClickUp (ADR 0035): a task per feedback item in one list, authenticated with a personal API token (sent
 // bare in `Authorization`). Closing sets the list's closed status; reopening its first open status. The
 // workspace webhook is registered through the API and ClickUp returns the signing secret with it.
 

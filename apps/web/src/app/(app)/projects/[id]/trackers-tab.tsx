@@ -73,7 +73,7 @@ type Meta = {
   pasteSecret: boolean;
   /** Needs the Enterprise `jira` licence feature (blueprint 07). */
   enterprise: boolean;
-  /** Board trackers (ADR 0032): what a card, task or page is mapped from, and how its webhook is set up. */
+  /** Board trackers (ADR 0035): what a card, task or page is mapped from, and how its webhook is set up. */
   board?: {
     repoHelp: Key;
     mappingHelp: Key;

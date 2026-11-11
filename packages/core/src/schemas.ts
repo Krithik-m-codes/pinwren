@@ -772,7 +772,7 @@ export const emailTemplatePreview = z.object({
 
 export const emailTemplateTest = emailTemplatePreview.extend({ to: z.email().optional() });
 
-// --- Issue trackers (F-076 GitHub, F-077 GitLab, F-078 Linear, F-079 Jira Cloud; ADR 0032: Trello, Asana,
+// --- Issue trackers (F-076 GitHub, F-077 GitLab, F-078 Linear, F-079 Jira Cloud; ADR 0035: Trello, Asana,
 // ClickUp, Notion) --------------------------------------------------------------------------------------
 
 export const ISSUE_PROVIDERS = [
@@ -789,7 +789,7 @@ export type IssueProvider = (typeof ISSUE_PROVIDERS)[number];
 /** Which new feedback opens an issue on its own; "manual" = only the "Send to …" button. */
 export const ISSUE_AUTO_CREATE = ["manual", "bugs", "all"] as const;
 
-/** Providers whose items are not "issues in a repository": a card, a task or a database page (ADR 0032). */
+/** Providers whose items are not "issues in a repository": a card, a task or a database page (ADR 0035). */
 export const BOARD_PROVIDERS = ["trello", "asana", "clickup", "notion"] as const;
 export type BoardProvider = (typeof BOARD_PROVIDERS)[number];
 export const isBoardProvider = (p: IssueProvider): p is BoardProvider =>

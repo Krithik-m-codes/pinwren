@@ -1,4 +1,4 @@
-# ADR 0032 — Tracker adapter SDK and the board trackers (Trello, Asana, ClickUp, Notion)
+# ADR 0035 — Tracker adapter SDK and the board trackers (Trello, Asana, ClickUp, Notion)
 
 **Status:** accepted (extends ADR 0015; no blueprint feature id — the blueprint names GitHub, GitLab, Linear and Jira)
 
