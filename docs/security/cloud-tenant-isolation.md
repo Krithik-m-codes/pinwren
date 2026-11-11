@@ -134,7 +134,7 @@ temporary databases. Never point it at customer data.
 The policy/context tranche passed 80 checks on local PostgreSQL 16 across inventory, context, real pooled connection
 reuse/rollback, row policies and migration failure tests. The original 27 content tables have scoped read and
 missing-context cases. All 23 direct ownership tables reject ownership changes and foreign
-UPDATE/DELETE RETURNING. Valid local CRUD succeeds. Thirty-two composite tenant foreign keys are
+UPDATE/DELETE RETURNING. Valid local CRUD succeeds. Thirty-five composite tenant foreign keys are
 validated. Foreign project references, duplicate links and cross-tenant label joins are rejected,
 including label inconsistencies introduced by privileged maintenance. Upgrade tests prove that
 inconsistent legacy page ownership and label joins abort the migration without changing rows or
@@ -239,7 +239,7 @@ unknown and expired ids answer 404 and that the streaming read holds no transact
 address; token authentication, scope and membership are covered in `cloud-api-db.test.ts`.
 
 Verified on PostgreSQL 16.15: `node scripts/tenant-isolation.mjs` passes 14 files / 368 tests (151 + 25 new). With
-automation and releases (below) the runner is 16 files; the last full run on PostgreSQL 17 passed 447 tests.
+automation and releases (below) the runner is 17 files; the last full run on PostgreSQL 17 passed 468 tests.
 
 ## Cloud sign-up
 

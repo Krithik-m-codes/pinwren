@@ -222,7 +222,7 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
     const rows = await admin<
       { name: string; valid: boolean }[]
     >`select conname as name, convalidated as valid from pg_constraint where connamespace = 'public'::regnamespace and conname like '%_tenant_fk'`;
-    expect(rows).toHaveLength(32);
+    expect(rows).toHaveLength(35);
     expect(rows.every((row) => row.valid)).toBe(true);
   });
 
