@@ -22,6 +22,7 @@ import { global } from "./en/global";
 import { handoff } from "./en/handoff";
 import { recording } from "./en/recording";
 import { share } from "./en/share";
+import { slack } from "./en/slack";
 
 // The dashboard's English strings: the source of every translation key. They are split by area (en/*.ts) so
 // that work on one area never touches another. Keys are `area.name`; plural forms are `<stem>_one` and
@@ -54,6 +55,7 @@ export const en = {
   ...handoff,
   ...recording,
   ...share,
+  ...slack,
 } as const;
 
 export type Key = keyof typeof en;

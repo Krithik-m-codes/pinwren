@@ -14,6 +14,7 @@ import {
   type ProjectAiConfig,
   type RejectedOrigin,
   REVIEW_ROUND_STATUSES,
+  SLACK_LINK_SOURCES,
   SIGNOFF_DECISIONS,
   VIEW_LAYOUTS,
   type WidgetConsent,
@@ -45,7 +46,14 @@ export const feedbackKindEnum = pgEnum("feedback_kind", FEEDBACK_KINDS);
 export const feedbackStatusEnum = pgEnum("feedback_status", FEEDBACK_STATUSES);
 export const priorityEnum = pgEnum("priority", PRIORITIES);
 export const commentVisibilityEnum = pgEnum("comment_visibility", ["public", "internal"]);
-export const feedbackSourceEnum = pgEnum("feedback_source", ["widget", "extension", "api", "email", "mcp"]);
+export const feedbackSourceEnum = pgEnum("feedback_source", [
+  "widget",
+  "extension",
+  "api",
+  "email",
+  "mcp",
+  "slack",
+]);
 export const assetKindEnum = pgEnum("asset_kind", [
   "screenshot",
   "screenshot_annotated",
@@ -1133,5 +1141,128 @@ export const automationRun = pgTable(
     ),
     tenantReference("automation_run_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
     tenantReference("automation_run_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
+  ],
+);
+
+// --- Interactive Slack (F-071) -------------------------------------------------------------------------
+// One Slack app per organisation: the admin pastes its signing secret and bot token. Inbound requests name
+// their workspace (team id), so `team_id` is unique across organisations; it is only ever written after
+// `auth.test` has proved the bot token belongs to that team.
+
+export const slackWorkspace = pgTable(
+  "slack_workspace",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    teamId: text("team_id").notNull(),
+    teamName: text("team_name").notNull(),
+    /** `https://acme.slack.com/`, from auth.test: builds message permalinks. */
+    teamUrl: text("team_url"),
+    botUserId: text("bot_user_id"),
+    /** AES-256-GCM ciphertext of the app's signing secret (verifies every inbound request). */
+    signingSecret: text("signing_secret").notNull(),
+    /** AES-256-GCM ciphertext of the bot token (xoxb-…). */
+    botToken: text("bot_token").notNull(),
+    /** Last 4 characters of the bot token, to recognise it in the UI. */
+    tokenHint: text("token_hint").notNull(),
+    active: boolean("active").notNull().default(true),
+    lastError: text("last_error"),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("slack_workspace_org_uq").on(t.orgId),
+    uniqueIndex("slack_workspace_team_uq").on(t.teamId),
+    uniqueIndex("slack_workspace_id_org_uq").on(t.id, t.orgId),
+  ],
+);
+
+/** Which events of which project go to which channel. A null project covers every project. */
+export const slackRoute = pgTable(
+  "slack_route",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => slackWorkspace.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").references(() => project.id, { onDelete: "cascade" }),
+    channelId: text("channel_id").notNull(),
+    channelName: text("channel_name"),
+    events: text("events")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    ...timestamps,
+  },
+  (t) => [
+    index("slack_route_workspace_idx").on(t.workspaceId),
+    uniqueIndex("slack_route_id_org_uq").on(t.id, t.orgId),
+    tenantReference(
+      "slack_route_workspace_tenant_fk",
+      t.workspaceId,
+      t.orgId,
+      slackWorkspace.id,
+      slackWorkspace.orgId,
+    ),
+    tenantReference("slack_route_project_tenant_fk", t.projectId, t.orgId, project.id, project.orgId),
+  ],
+);
+
+/** A Slack member mapped to a Pinwren member: by verified email, or confirmed by the member in the dashboard. */
+export const slackUserLink = pgTable(
+  "slack_user_link",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => slackWorkspace.id, { onDelete: "cascade" }),
+    slackUserId: text("slack_user_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    source: text("source", { enum: SLACK_LINK_SOURCES }).notNull().default("email"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("slack_user_link_slack_uq").on(t.workspaceId, t.slackUserId),
+    index("slack_user_link_user_idx").on(t.orgId, t.userId),
+    tenantReference(
+      "slack_user_link_workspace_tenant_fk",
+      t.workspaceId,
+      t.orgId,
+      slackWorkspace.id,
+      slackWorkspace.orgId,
+    ),
+  ],
+);
+
+/** The card posted for an item in a channel, so later changes update it in place. */
+export const slackMessage = pgTable(
+  "slack_message",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => slackWorkspace.id, { onDelete: "cascade" }),
+    feedbackId: uuid("feedback_id")
+      .notNull()
+      .references(() => feedback.id, { onDelete: "cascade" }),
+    channelId: text("channel_id").notNull(),
+    ts: text("ts").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("slack_message_feedback_channel_uq").on(t.feedbackId, t.channelId),
+    tenantReference(
+      "slack_message_workspace_tenant_fk",
+      t.workspaceId,
+      t.orgId,
+      slackWorkspace.id,
+      slackWorkspace.orgId,
+    ),
+    tenantReference("slack_message_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
   ],
 );

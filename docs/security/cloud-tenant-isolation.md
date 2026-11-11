@@ -14,7 +14,7 @@ that is listed under "Remaining WP-21 work". The approved design and implementat
 
 ## Database inventory
 
-`packages/db/src/tenant-inventory.ts` classifies all 48 exported tables. The inventory test compares
+`packages/db/src/tenant-inventory.ts` classifies all 52 exported tables. The inventory test compares
 against actual Drizzle schema exports and tenant foreign keys, so a new table or relationship must be
 classified. Direct ownership means a protected `org_id`; parent ownership means a child derives its
 organization through all declared protected parents. Identity tables serve users across memberships;
@@ -23,7 +23,7 @@ system tables serve explicitly authorized instance operations.
 Cloud also protects organization, membership and invitation rows by their organization identifier.
 Tenant reads of user profiles expose only `id`, `name`, `email` and `image`, and only for members or
 contributors linked to that organization's feedback, comments, activity or watcher rows. Private account
-flags remain available only through the authenticated account repository. There are 38 protected tables.
+flags remain available only through the authenticated account repository. There are 42 protected tables.
 
 Better Auth uses a separate, stable identity pool. Its service role has identity/system grants and a
 fixed eight-column token-verification projection; it cannot read tenant feedback or token display names.
@@ -50,7 +50,7 @@ required.
 
 ## HTTP entry points
 
-`packages/api/src/tenant-route-inventory.json` records all 207 mounted endpoint signatures, including
+`packages/api/src/tenant-route-inventory.json` records all 220 mounted endpoint signatures, including
 the ALL-method `/mcp` handler. Each record names its authorization boundary, whether its handler needs
 special treatment for streaming/external work, and its required authorization test case. These names
 are planned coverage identifiers, not claims that the corresponding integration test already passes.
@@ -134,7 +134,7 @@ temporary databases. Never point it at customer data.
 The policy/context tranche passed 80 checks on local PostgreSQL 16 across inventory, context, real pooled connection
 reuse/rollback, row policies and migration failure tests. The original 27 content tables have scoped read and
 missing-context cases. All 23 direct ownership tables reject ownership changes and foreign
-UPDATE/DELETE RETURNING. Valid local CRUD succeeds. Thirty-two composite tenant foreign keys are
+UPDATE/DELETE RETURNING. Valid local CRUD succeeds. Thirty-seven composite tenant foreign keys are
 validated. Foreign project references, duplicate links and cross-tenant label joins are rejected,
 including label inconsistencies introduced by privileged maintenance. Upgrade tests prove that
 inconsistent legacy page ownership and label joins abort the migration without changing rows or
@@ -301,3 +301,29 @@ three direct-ownership tables, each with the `pinwren_tenant` policy and composi
   after commit. `automation-db.test.ts` runs it against PostgreSQL with the restricted runtime role: rules naming
   another workspace's label or member are refused when saved, workspace B's identical rule never fires for A's event,
   and loop protection, idempotent retries and partial failures are asserted.
+
+## Interactive Slack
+
+Design: `docs/adr/0033-interactive-slack.md`; routes: `docs/contracts/slack.md`. Migration `0014` adds four
+direct-ownership tables with the `pinwren_tenant` policy and composite `(id, org_id)` foreign keys, all in
+`tenant-inventory.ts`:
+
+| Table             | Parents                       | Notes                                                                                                                                                              |
+| ----------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `slack_workspace` | none                          | One per organisation; `team_id` unique across organisations; secrets AES-256-GCM; bootstrap-readable columns `id`, `org_id`, `team_id`, `signing_secret`, `active` |
+| `slack_route`     | `slack_workspace`, `project`  | Channel per project (or all) and event                                                                                                                             |
+| `slack_user_link` | `slack_workspace`             | Slack user to member, unique per workspace and Slack user                                                                                                          |
+| `slack_message`   | `slack_workspace`, `feedback` | The card posted per item and channel                                                                                                                               |
+
+- Two `capability` routes (`/api/slack/interactivity`, `/api/slack/commands`) and eleven `tenant` routes. The capability
+  is the Slack app's signing secret: the team id in the request selects a candidate through the bootstrap role, the
+  signature and a five-minute window are verified, and the workspace's `org_id` is the only tenant context from then on.
+  `cloud-routes-public-db.test.ts` signs requests with workspace A's secret that name workspace B's team (refused),
+  use B's secret for A's team (refused), are stale or unsigned (refused), and press a button on B's feedback as A's
+  mapped member (nothing changes); `cloud-routes-db.test.ts` covers the settings routes (a token that authenticates as
+  B's Slack team is refused, A's routes cannot name B's project or route, A's sync cannot link B's member, a link token
+  minted for B's workspace is refused for A).
+- The mapped member is resolved inside the workspace's organisation only. The email confirmation flag is read through
+  the identity role (`verifiedMemberByEmail`), always with the organisation id in the predicate.
+- `slack-db.test.ts` runs the handlers, the outbound job and the settings API against PostgreSQL with the restricted
+  runtime role and row security.

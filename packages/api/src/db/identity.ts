@@ -1,6 +1,6 @@
 import { apiToken, member, user } from "@pinwren/db";
 import { identityDatabase } from "@pinwren/db/identity";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 /** Only verified session/token identities may supply these identifiers. */
 export async function membershipFor(orgId: string, userId: string) {
@@ -57,6 +57,27 @@ export async function tokenForVerification(prefix: string) {
     })
     .from(apiToken)
     .where(eq(apiToken.prefix, prefix))
+    .limit(1);
+  return row;
+}
+
+/**
+ * The member of one organisation whose *confirmed* email is `email` (Slack-to-member mapping). Reads the
+ * confirmation flag, which the tenant runtime role may not see, so it goes through the identity role; the
+ * organisation id is always part of the predicate.
+ */
+export async function verifiedMemberByEmail(orgId: string, email: string) {
+  const [row] = await identityDatabase()
+    .select({ userId: user.id, name: user.name, role: member.role })
+    .from(member)
+    .innerJoin(user, eq(user.id, member.userId))
+    .where(
+      and(
+        eq(member.organizationId, orgId),
+        sql`lower(${user.email}) = ${email.toLowerCase()}`,
+        eq(user.emailVerified, true),
+      ),
+    )
     .limit(1);
   return row;
 }

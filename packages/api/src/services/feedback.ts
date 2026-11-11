@@ -49,7 +49,8 @@ import { assertRoundFor } from "./rounds";
 
 export const ACTIVE_STATUSES = ["open", "in_progress", "in_review"] as const;
 
-export type Actor = { kind: "user" | "api"; userId: string };
+/** `via` names the surface a person acted from when it isn't the dashboard (the timeline shows "via Slack"). */
+export type Actor = { kind: "user" | "api"; userId: string; via?: "slack" };
 
 /** A list cursor: the sort key of the last row, opaque to callers (base64url JSON). */
 type CursorKey = { v?: string; t: string; id: string };
@@ -576,7 +577,11 @@ export async function updateFeedback(orgId: string, actor: Actor, id: string, pa
           // A token acts as its owner; the timeline shows the person either way.
           actorKind: "user",
           type: `${field}_changed`,
-          data: { from, to, ...(actor.kind === "api" ? { via: "api" } : {}) },
+          data: {
+            from,
+            to,
+            ...(actor.kind === "api" ? { via: "api" } : actor.via ? { via: actor.via } : {}),
+          },
         })),
       );
     }
