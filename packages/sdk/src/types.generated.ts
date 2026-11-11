@@ -37,6 +37,7 @@ export type FeedbackListQuery = {
   regression?: boolean | "0" | "1" | "true" | "false" | undefined;
   fixedInReleaseId?: string | undefined;
   browser?: string | undefined;
+  cf?: string | undefined;
   trash?: boolean | "0" | "1" | "true" | "false" | undefined;
   sort?: "created" | "updated" | "priority" | undefined;
   order?: "asc" | "desc" | undefined;
@@ -57,6 +58,7 @@ export type FeedbackUpdate = {
   kind?: "comment" | "bug" | "idea" | "question" | undefined;
   fixedInReleaseId?: string | null | undefined;
   fixedInNextRelease?: boolean | undefined;
+  customFields?: Record<string, unknown> | undefined;
 };
 
 /** A team comment (internal by default). */
@@ -107,6 +109,7 @@ export type FeedbackListItem = {
   regressionOfId?: string | null | undefined;
   regressionOfNumber?: number | null | undefined;
   regressionConfidence?: "possible" | "likely" | null | undefined;
+  customFields: Record<string, unknown>;
   [key: string]: unknown;
 };
 
@@ -144,6 +147,7 @@ export type FeedbackList = {
     regressionOfId?: string | null | undefined;
     regressionOfNumber?: number | null | undefined;
     regressionConfidence?: "possible" | "likely" | null | undefined;
+    customFields: Record<string, unknown>;
     [key: string]: unknown;
   }[];
   nextCursor: string | null;
@@ -183,6 +187,7 @@ export type Feedback = {
   anchor: Record<string, unknown> | null;
   environment: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
+  customFields: Record<string, unknown>;
   source: string;
   resolvedAt: string | null;
   fixedInReleaseId?: string | null | undefined;
@@ -224,6 +229,7 @@ export type FeedbackRow = {
   anchor: Record<string, unknown> | null;
   environment: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
+  customFields: Record<string, unknown>;
   source: string;
   resolvedAt: string | null;
   fixedInReleaseId?: string | null | undefined;
@@ -270,6 +276,7 @@ export type FeedbackDetail = {
     anchor: Record<string, unknown> | null;
     environment: Record<string, unknown> | null;
     metadata: Record<string, unknown> | null;
+    customFields: Record<string, unknown>;
     source: string;
     resolvedAt: string | null;
     fixedInReleaseId?: string | null | undefined;
@@ -382,6 +389,47 @@ export type FeedbackDetail = {
     [key: string]: unknown;
   } | null;
   [key: string]: unknown;
+};
+
+/** A custom question on a project's report form (key, type, options, rules, audience, kinds). */
+export type CustomField = {
+  key: string;
+  type: "text" | "textarea" | "select" | "multiselect" | "checkbox" | "number" | "date" | "url" | "email";
+  label: string;
+  helpText: string;
+  placeholder: string;
+  required: boolean;
+  audience: "reporter" | "internal";
+  kinds: ("comment" | "bug" | "idea" | "question")[];
+  options: {
+    value: string;
+    label: string;
+  }[];
+  defaultValue: unknown;
+  validation: {
+    minLength?: number | undefined;
+    maxLength?: number | undefined;
+    min?: number | undefined;
+    max?: number | undefined;
+    integer?: boolean | undefined;
+    minDate?: string | undefined;
+    maxDate?: string | undefined;
+    minSelected?: number | undefined;
+    maxSelected?: number | undefined;
+  };
+  pii: boolean;
+  strings: Record<
+    string,
+    {
+      label?: string | undefined;
+      helpText?: string | undefined;
+      placeholder?: string | undefined;
+      options?: Record<string, string> | undefined;
+    }
+  >;
+  id: string;
+  projectId: string;
+  position: number;
 };
 
 /** A comment on an item. */

@@ -39,7 +39,7 @@ const releaseForm = z.object({
 });
 
 /**
- * Settings › Releases (ADR 0033): the project's releases with the items fixed in each and the regressions
+ * Settings › Releases (ADR 0036): the project's releases with the items fixed in each and the regressions
  * reported from it, the two regression switches, and how CI records a release. Admins record and delete;
  * everyone else reads.
  */

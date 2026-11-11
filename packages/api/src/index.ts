@@ -15,6 +15,8 @@ import { inbound } from "./routes/inbound";
 import { projectData } from "./routes/project-data";
 import { reviewLinks, reviewLinkWidget } from "./routes/review-links";
 import { setup } from "./routes/setup";
+import { slackInbound } from "./routes/slack";
+import { slackSettings } from "./routes/slack-settings";
 import { signInMethods, signInSettings } from "./routes/sign-in-methods";
 import { account } from "./routes/me";
 import { members } from "./routes/members";
@@ -25,6 +27,7 @@ import { v1 } from "./routes/v1";
 import { aiRoutes } from "./routes/ai";
 import { automationRoutes } from "./routes/automation";
 import { releaseRoutes } from "./routes/releases";
+import { customFieldRoutes } from "./routes/custom-fields";
 import { widget } from "./routes/widget";
 import { guestPortal } from "./routes/guest";
 import { share } from "./routes/share";
@@ -134,6 +137,8 @@ export const app = new Hono()
   .route("/api/v1", v1)
   // Logos and tracker webhooks: no session (verified by random id / signature).
   .route("/api", inbound)
+  // Slack interactivity and the /pinwren command: no session, verified by the app's signing secret.
+  .route("/api", slackInbound)
   // Dodo Payments events: no session, verified by their Standard Webhooks signature.
   .route("/api", billingWebhook)
   .route("/api", unsubscribe)
@@ -155,6 +160,9 @@ export const app = new Hono()
   .route("/api", aiRoutes)
   .route("/api", automationRoutes)
   .route("/api", releaseRoutes)
+  .route("/api", customFieldRoutes)
+  // Settings › Integrations › Slack (workspace admins) and "link my account" for any member.
+  .route("/api", slackSettings)
   // After the dashboard: its session and viewer guards (`use` on /api/*) run for these routes too.
   .route("/api", projectData)
   .route("/api", reviewLinks)

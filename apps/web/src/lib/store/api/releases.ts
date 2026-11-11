@@ -2,7 +2,7 @@ import type { ApiRelease, ReleaseCreate, ReleaseUpdate } from "@pinwren/core";
 import { LIST } from "./base";
 import { adminApi } from "./admin";
 
-/** A release of a project with the items fixed in it and the regressions reported from it (ADR 0033). */
+/** A release of a project with the items fixed in it and the regressions reported from it (ADR 0036). */
 export type Release = ApiRelease;
 
 /** What recording a release answers: `created` false when the version already existed; `adopted` items promised for "the next release". */

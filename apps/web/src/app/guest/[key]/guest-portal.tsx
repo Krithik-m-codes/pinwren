@@ -52,7 +52,7 @@ function useGuestAccess(projectKey: string) {
   return useSyncExternalStore(subscribe, () => snapshots.get(projectKey), serverSnapshot);
 }
 
-/** "Fixed in v1.4" once the team names the release; a promise of the next one before that (ADR 0033). */
+/** "Fixed in v1.4" once the team names the release; a promise of the next one before that (ADR 0036). */
 const fixedLine = (
   t: ReturnType<typeof useT>,
   i: { status: string; fixedInVersion?: string | null; fixedInNextRelease?: boolean },

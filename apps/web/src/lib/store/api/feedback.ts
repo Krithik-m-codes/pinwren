@@ -17,9 +17,11 @@ export type FeedbackPatch = Partial<{
   dueAt: string | null;
   duplicateOfId: string | null;
   kind: FeedbackKind;
-  /** The release that fixed a resolved item, or "the next release" (ADR 0033). */
+  /** The release that fixed a resolved item, or "the next release" (ADR 0036). */
   fixedInReleaseId: string | null;
   fixedInNextRelease: boolean;
+  /** Custom field answers by key; `null` clears one (ADR 0032). */
+  customFields: Record<string, unknown>;
 }>;
 
 /** Fields of a list row / detail the cache may patch in place (from a PATCH or a stream event). */

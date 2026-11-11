@@ -4,6 +4,7 @@ import {
   issueIntegration,
   issueLink,
   project,
+  slackWorkspace,
   webhookDelivery,
 } from "@pinwren/db";
 import { identityDatabase } from "@pinwren/db/identity";
@@ -112,6 +113,26 @@ export async function issueLinkOwner(id: string) {
     .select({ id: issueLink.id, orgId: issueLink.orgId })
     .from(issueLink)
     .where(eq(issueLink.id, id))
+    .limit(1);
+  return row;
+}
+
+/**
+ * The Slack workspace an inbound request names, found by its team id before the signature is checked: the
+ * signing secret is the capability, so only the columns needed to verify it leave this query.
+ */
+export async function slackWorkspaceByTeam(teamId: unknown) {
+  if (typeof teamId !== "string" || !/^[A-Z0-9]{9,15}$/.test(teamId)) return undefined;
+  const [row] = await identityDatabase()
+    .select({
+      id: slackWorkspace.id,
+      orgId: slackWorkspace.orgId,
+      teamId: slackWorkspace.teamId,
+      signingSecret: slackWorkspace.signingSecret,
+      active: slackWorkspace.active,
+    })
+    .from(slackWorkspace)
+    .where(eq(slackWorkspace.teamId, teamId))
     .limit(1);
   return row;
 }

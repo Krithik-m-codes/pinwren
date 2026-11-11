@@ -2,12 +2,13 @@ import type * as ApiModule from "./index";
 import type * as BossModule from "./jobs/boss";
 import type * as BusModule from "./realtime/bus";
 import type * as StorageModule from "./storage";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { beforeAll, afterAll, beforeEach, describe, it, expect, vi } from "vitest";
 import { getRuntimeDb } from "../../db/src/connection";
 import { closeIdentityDatabase } from "../../db/src/identity";
 import { createCloudFixture } from "./test-helpers/cloud-fixture";
 import { coverageGaps, expectedCheck, inventoryRoutes } from "./test-helpers/route-inventory";
+import { fakeSlackApi } from "./test-helpers/slack-fake";
 import { snapshotOrganization } from "./test-helpers/tenant-snapshot";
 
 /**
@@ -45,6 +46,8 @@ type Request = {
   path: string;
   headers?: Record<string, string>;
   body?: unknown;
+  /** Sent as-is (Slack posts form-encoded bodies, signed over their exact bytes). */
+  rawBody?: string;
   key?: string;
 };
 type Spec = {
@@ -219,6 +222,93 @@ const billingWebhookCase = (): Spec => ({
       { n: 1 },
     ]);
     expect(await snapshot()).toBe(before);
+  },
+});
+
+/**
+ * Slack interactivity and commands: the capability is the app's signing secret. Workspace A's secret signs
+ * a button press naming workspace B's feedback; the mapped member (A's owner) has no access to it.
+ */
+const slackCase = (route: "interactivity" | "commands"): Spec => ({
+  status: [200, 401],
+  run: async (ids, { request, db, snapshot }) => {
+    const { signSlackRequest } = await import("./slack/signature");
+    const { setSlackApiFactory } = await import("./slack/workspace");
+    const api = fakeSlackApi({
+      userInfo: vi.fn((id: string) =>
+        Promise.resolve({
+          ok: true as const,
+          data: {
+            id,
+            name: "Owner A",
+            email: ids.emailA ?? "",
+            isBot: false,
+            isRestricted: false,
+            deleted: false,
+          },
+        }),
+      ),
+    });
+    setSlackApiFactory(() => api);
+    const before = await snapshot();
+    const body = (team: string) =>
+      route === "interactivity"
+        ? new URLSearchParams({
+            payload: JSON.stringify({
+              type: "block_actions",
+              team: { id: team },
+              user: { id: "U0AAAAAAAA" },
+              trigger_id: randomUUID(),
+              container: { channel_id: "C0AAAAAAAA", message_ts: "1700000000.000100" },
+              actions: [
+                {
+                  action_id: "pw_set_status",
+                  block_id: `pw:${ids.itemB ?? ""}`,
+                  selected_option: { value: "resolved" },
+                },
+              ],
+            }),
+          }).toString()
+        : new URLSearchParams({
+            team_id: team,
+            user_id: "U0AAAAAAAA",
+            channel_id: "C0AAAAAAAA",
+            command: "/pinwren",
+            text: "help",
+            trigger_id: randomUUID(),
+          }).toString();
+    const send = (raw: string, secret: string, now = Date.now()) =>
+      request({
+        method: "POST",
+        path: `/api/slack/${route}`,
+        rawBody: raw,
+        headers: signSlackRequest(secret, raw, now),
+      });
+    const teamA = ids.slackTeamA ?? "";
+    const secretA = ids.slackSecretA ?? "";
+    // Wrong or missing signature, a signature from the other workspace's secret, a stale timestamp, an
+    // unknown team: all the same refusal, and nothing changes.
+    expect(
+      (await request({ method: "POST", path: `/api/slack/${route}`, rawBody: body(teamA) })).status,
+    ).toBe(401);
+    expect((await send(body(teamA), ids.slackSecretB ?? "")).status).toBe(401);
+    expect((await send(body(ids.slackTeamB ?? ""), secretA)).status).toBe(401);
+    expect((await send(body(teamA), secretA, Date.now() - 10 * 60_000)).status).toBe(401);
+    expect((await send(body("T0UNKNOWN0"), secretA)).status).toBe(401);
+    expect(await snapshot()).toBe(before);
+    // A correctly signed request from A acts as A's mapped member: B's feedback is simply not found.
+    const ok = body(teamA);
+    const response = await send(ok, secretA);
+    expect(response.status).toBe(200);
+    expect(await db()`select status from feedback where id=${ids.itemB ?? ""}`).toMatchObject([
+      { status: "open" },
+    ]);
+    // Slack redelivers the same trigger: acknowledged, not processed twice.
+    const calls = api.userInfo.mock.calls.length;
+    expect((await send(ok, secretA)).status).toBe(200);
+    expect(api.userInfo.mock.calls.length).toBe(calls);
+    expect(await snapshot()).toBe(before);
+    setSlackApiFactory(null);
   },
 });
 
@@ -415,6 +505,8 @@ const cases: Record<string, Spec> = {
   "POST /api/integrations/gitlab/webhook": webhookCase("gitlab"),
   "POST /api/integrations/jira/webhook": webhookCase("jira"),
   "POST /api/integrations/linear/webhook": webhookCase("linear"),
+  "POST /api/slack/commands": slackCase("commands"),
+  "POST /api/slack/interactivity": slackCase("interactivity"),
   "POST /api/unsubscribe": {
     status: [400],
     request: async (ids) => ({
@@ -491,7 +583,18 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)(
       return fixture.db;
     };
     const request: Helpers["request"] = (call) => {
-      const headers = new Headers({ "content-type": "application/json", ...call.headers });
+      const headers = new Headers({
+        "content-type": call.rawBody === undefined ? "application/json" : "application/x-www-form-urlencoded",
+        ...call.headers,
+      });
+      if (call.rawBody !== undefined) {
+        headers.set("content-length", String(Buffer.byteLength(call.rawBody)));
+        return api.request(`http://localhost:3100${call.path}`, {
+          method: call.method,
+          headers,
+          body: call.rawBody,
+        });
+      }
       if (call.body !== undefined)
         headers.set("content-length", String(Buffer.byteLength(JSON.stringify(call.body))));
       if (call.key) headers.set("x-pinwren-key", call.key);
@@ -564,6 +667,20 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)(
             [`item_${provider}_${side}`]: linked,
           });
         }
+        // A connected Slack workspace per side (own team, own signing secret); A also has a mapped owner.
+        const slackSecret = randomBytes(16).toString("hex"),
+          slackWs = randomUUID(),
+          slackTeam = `T${slackWs.replaceAll("-", "").slice(0, 10).toUpperCase()}`,
+          slackUser = `slack-user-${side}-${suffix}`;
+        await database`insert into "user" (id,name,email,email_verified) values (${slackUser},${slackUser},${`${slackUser}@test.invalid`},true)`;
+        await database`insert into member (id,organization_id,user_id,role) values (${randomUUID()},${org ?? ""},${slackUser},'owner')`;
+        await database`insert into slack_workspace (id,org_id,team_id,team_name,signing_secret,bot_token,token_hint,team_url) values (${slackWs},${org ?? ""},${slackTeam},${mark},${encryptSecret(slackSecret)},${encryptSecret("xoxb-" + "3".repeat(30))},'3333','https://acme.slack.com/')`;
+        Object.assign(ids, {
+          [`slackSecret${side}`]: slackSecret,
+          [`slackTeam${side}`]: slackTeam,
+          [`slackWs${side}`]: slackWs,
+          [`email${side}`]: `${slackUser}@test.invalid`,
+        });
         await database`update project set feedback_counter=5 where id=${projectId}`;
       }
       api = (await import("./index")).app;

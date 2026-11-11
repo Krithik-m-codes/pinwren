@@ -20,6 +20,8 @@ export const FILTER_PARAMS = {
   review: "reviewLinkId",
   regression: "regression",
   fixedIn: "fixedInReleaseId",
+  /** One custom field, `key:value` (ADR 0032). */
+  cf: "cf",
   sort: "sort",
   order: "order",
 } as const satisfies Record<string, keyof ViewFilters>;
@@ -40,6 +42,7 @@ export const NARROWING_PARAMS = [
   "review",
   "regression",
   "fixedIn",
+  "cf",
   "q",
 ] as const satisfies readonly Param[];
 
@@ -149,6 +152,7 @@ export const extraFilterCount = (f: ViewFilters) =>
     f.reviewLinkId,
     f.regression,
     f.fixedInReleaseId,
+    f.cf,
   ].filter(Boolean).length;
 
 /** URL changes that clear every narrowing filter (and search), keeping project, status and order. */
@@ -164,6 +168,7 @@ export const CLEAR_FILTERS: Record<(typeof NARROWING_PARAMS)[number] | "item", n
   review: null,
   regression: null,
   fixedIn: null,
+  cf: null,
   q: null,
   item: null,
 };

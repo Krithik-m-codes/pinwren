@@ -80,9 +80,10 @@ console.log(test.caveats, test.code);
 | `feedback.reproduction(id)`         | `{ feedbackId, markdown, steps, failingRequests, errors, replay }`                                                            | `feedback:read`  |
 | `feedback.brief(id)`                | `{ markdown, hints, commands, links, privacy }`                                                                               | `feedback:read`  |
 | `feedback.reproTest(id)`            | `{ filename, code, caveats, stats }` — a draft, not a verified test                                                           | `feedback:read`  |
+| `labels.list(projectId)`            | The project's labels with live item counts                                                                                    | `feedback:read`  |
 | `releases.list(projectId)`          | The project's [releases](/docs/dashboard/releases) with fixed and regression counts                                           | `feedback:read`  |
 | `releases.create(projectId, r)`     | Record a release (`{ version, commit?, deployedAt?, notes? }`); the same version updates it → `{ release, created, adopted }` | `releases:write` |
-| `labels.list(projectId)`            | The project's labels with live item counts                                                                                    | `feedback:read`  |
+| `customFields.list(projectId)`      | The project's custom form fields (key, type, options, audience, kinds)                                                        | `feedback:read`  |
 | `views.list()`                      | Saved inbox views you can use                                                                                                 | `feedback:read`  |
 | `stats.get({ days?, projectId? })`  | Totals, breakdowns and a daily series                                                                                         | `feedback:read`  |
 

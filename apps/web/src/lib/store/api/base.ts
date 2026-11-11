@@ -92,6 +92,7 @@ export const TAG_TYPES = [
   "ProjectAi",
   "Automation",
   "Release",
+  "CustomField",
   "Guest",
   "Stats",
   "Share",

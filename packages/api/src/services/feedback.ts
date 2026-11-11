@@ -1,15 +1,19 @@
 import {
   type FeedbackListQuery,
   type FeedbackUpdate,
+  formatValue,
   isClosedStatus,
+  parseCustomFieldFilter,
   parseWidgetConfig,
   panelActionsFor,
   PRIORITIES,
   reportedRelease,
+  resolvePatchValues,
 } from "@pinwren/core";
 import {
   activity,
   comment,
+  customField,
   diagnostics,
   feedback,
   feedbackAi,
@@ -47,11 +51,13 @@ import { ApiError, notFound } from "../errors";
 import { emit, updateEvents } from "../events";
 import { purgeFeedback } from "../jobs/maintenance";
 import { publishDeleted, publishRestored } from "../realtime/publish";
+import { invalidFields, listFields, outboundAnswersOf } from "./custom-fields";
 import { assertRoundFor } from "./rounds";
 
 export const ACTIVE_STATUSES = ["open", "in_progress", "in_review"] as const;
 
-export type Actor = { kind: "user" | "api"; userId: string };
+/** `via` names the surface a person acted from when it isn't the dashboard (the timeline shows "via Slack"). */
+export type Actor = { kind: "user" | "api"; userId: string; via?: "slack" };
 
 /** A list cursor: the sort key of the last row, opaque to callers (base64url JSON). */
 type CursorKey = { v?: string; t: string; id: string };
@@ -111,6 +117,27 @@ export function numberOf(text: string): number | null {
 
 export type ItemLabel = { id: string; name: string; color: string };
 
+/**
+ * `cf=key:value` (ADR 0032). What "matches" depends on the field's type in the item's own project: text fields
+ * by substring, choices by membership, numbers and checkboxes by equality, dates by day. `*` is any answer and
+ * `!` no answer. Unknown keys and values that don't fit the type match nothing, rather than erroring.
+ */
+export function customFieldPredicate(cf: string): SQL {
+  const { key, value } = parseCustomFieldFilter(cf);
+  const answers = sql`${feedback.customFields}`;
+  if (value === "*") return sql`${answers} ? ${key}`;
+  if (value === "!") return sql`not (${answers} ? ${key})`;
+  const num = value.trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
+  const bool = value === "true" || value === "false" ? value : null;
+  return sql`exists(select 1 from ${customField} cf where cf.project_id = ${feedback.projectId} and cf.key = ${key}
+    and case
+      when cf.type in ('text', 'textarea', 'url', 'email') then ${answers}->>${key} ilike ${likePattern(value)}
+      when cf.type in ('select', 'multiselect', 'date') then ${answers}->${key} @> to_jsonb(${value}::text)
+      when cf.type = 'number' then ${num}::numeric is not null and (${answers}->>${key})::numeric = ${num}::numeric
+      when cf.type = 'checkbox' then ${bool}::text is not null and ${answers}->>${key} = ${bool}::text
+      else false end)`;
+}
+
 export type ListOptions = {
   /** Only these items (export of a selection). */
   ids?: string[];
@@ -151,6 +178,7 @@ export async function listFeedback(orgId: string, q: FeedbackListQuery, opts: Li
   }
   if (q.fixedInReleaseId) where.push(eq(feedback.fixedInReleaseId, q.fixedInReleaseId));
   if (q.browser) where.push(sql`${feedback.environment}->>'browser' ilike ${likePattern(q.browser)}`);
+  if (q.cf) where.push(customFieldPredicate(q.cf));
   if (q.hasReplay !== undefined) {
     const replay = sql`exists(select 1 from ${feedbackAsset} a where a.feedback_id = ${feedback.id} and a.kind = 'replay')`;
     where.push(q.hasReplay ? replay : sql`not ${replay}`);
@@ -214,7 +242,7 @@ export async function listFeedback(orgId: string, q: FeedbackListQuery, opts: Li
         projectName: project.name,
         pageUrl: page.url,
         roundId: feedback.roundId,
-        // Releases and regressions (ADR 0033): the badge, the "fixed in" chip and the filters read these.
+        // Releases and regressions (ADR 0036): the badge, the "fixed in" chip and the filters read these.
         release: sql<string | null>`nullif(trim(${feedback.metadata}->>'release'), '')`,
         fixedInReleaseId: feedback.fixedInReleaseId,
         fixedInVersion: sql<
@@ -226,6 +254,7 @@ export async function listFeedback(orgId: string, q: FeedbackListQuery, opts: Li
           number | null
         >`(select o.number from ${feedback} o where o.id = ${feedback.regressionOfId} and o.org_id = ${feedback.orgId})`,
         regressionConfidence: feedback.regressionConfidence,
+        customFields: feedback.customFields,
         hasReplay: sql<boolean>`exists(select 1 from ${feedbackAsset} a where a.feedback_id = ${feedback.id} and a.kind = 'replay')`,
         hasScreenshot: sql<boolean>`exists(select 1 from ${feedbackAsset} a where a.feedback_id = ${feedback.id} and a.kind in ('screenshot', 'screenshot_annotated'))`,
         // The card thumbnail (annotated first), so the board never fetches a detail for it.
@@ -484,7 +513,7 @@ export async function getFeedbackDetail(
     return e;
   });
 
-  // Releases and regressions (ADR 0033).
+  // Releases and regressions (ADR 0036).
   const [fixedInRow, regressionOfRow, regressionRows] = await Promise.all([
     row.f.fixedInReleaseId
       ? db
@@ -615,7 +644,15 @@ export async function updateFeedback(orgId: string, actor: Actor, id: string, pa
     }
     patch = { ...patch, assigneeIds: unique };
   }
-  const { labelIds, dueAt, kind, fixedInReleaseId, fixedInNextRelease, ...columns } = patch;
+  const {
+    labelIds,
+    dueAt,
+    kind,
+    fixedInReleaseId,
+    fixedInNextRelease,
+    customFields: answers,
+    ...columns
+  } = patch;
   const { before, after, labels, fixedIn } = await db.transaction(async (tx) => {
     const [before] = await tx
       .select()
@@ -628,6 +665,38 @@ export async function updateFeedback(orgId: string, actor: Actor, id: string, pa
 
     const set: Partial<typeof feedback.$inferInsert> = { ...columns };
     if (kind) set.kind = kind;
+    // Custom field answers (ADR 0032): merged into the stored map, validated against the project's fields
+    // for the item's (possibly new) kind; each change is its own timeline entry.
+    let answerChanges: {
+      key: string;
+      label: string;
+      from: unknown;
+      to: unknown;
+      fromText: string;
+      toText: string;
+    }[] = [];
+    if (answers && Object.keys(answers).length) {
+      const fields = await listFields(orgId, before.projectId);
+      const r = resolvePatchValues(fields, before.customFields, answers, kind ?? before.kind);
+      if (r.problems.length) throw invalidFields(r.problems);
+      if (r.changed.length) {
+        set.customFields = r.values;
+        answerChanges = r.changed.flatMap((key) => {
+          const def = fields.find((x) => x.key === key);
+          if (!def) return [];
+          return [
+            {
+              key,
+              label: def.label,
+              from: before.customFields[key] ?? null,
+              to: r.values[key] ?? null,
+              fromText: formatValue(def, before.customFields[key]),
+              toText: formatValue(def, r.values[key]),
+            },
+          ];
+        });
+      }
+    }
     if (dueAt !== undefined) set.dueAt = dueAt === null ? null : new Date(dueAt);
     if (patch.status && patch.status !== before.status) {
       set.resolvedAt = isClosedStatus(patch.status) ? new Date() : null;
@@ -644,9 +713,13 @@ export async function updateFeedback(orgId: string, actor: Actor, id: string, pa
 
     const fields = Object.keys(set).filter(
       (k) =>
-        k !== "resolvedAt" && k !== "updatedAt" && k !== "fixedInReleaseId" && k !== "fixedInNextRelease",
+        k !== "resolvedAt" &&
+        k !== "updatedAt" &&
+        k !== "customFields" &&
+        k !== "fixedInReleaseId" &&
+        k !== "fixedInNextRelease",
     ) as (keyof typeof after)[];
-    const entries: { field: string; from: unknown; to: unknown }[] = fields
+    const entries: { field: string; from: unknown; to: unknown; extra?: Record<string, unknown> }[] = fields
       .filter((k) => JSON.stringify(before[k] ?? null) !== JSON.stringify(after[k] ?? null))
       .map((k) => ({ field: k, from: before[k] ?? null, to: after[k] ?? null }));
     const labels = labelIds ? await replaceLabels(tx, before, labelIds) : null;
@@ -654,33 +727,55 @@ export async function updateFeedback(orgId: string, actor: Actor, id: string, pa
     if (fixedInChange?.explicit) {
       entries.push({ field: "fixedIn", from: fixedInChange.from, to: fixedInChange.to });
     }
+    // One entry per answer, named by field key; the timeline resolves the label from the project's fields.
+    for (const c of answerChanges)
+      entries.push({
+        field: "customField",
+        from: c.from,
+        to: c.to,
+        extra: { key: c.key, label: c.label, fromText: c.fromText, toText: c.toText },
+      });
 
     if (entries.length) {
       await tx.insert(activity).values(
-        entries.map(({ field, from, to }) => ({
+        entries.map(({ field, from, to, extra }) => ({
           orgId,
           feedbackId: id,
           actorId: actor.userId,
           // A token acts as its owner; the timeline shows the person either way.
           actorKind: "user",
           type: `${field}_changed`,
-          data: { from, to, ...(actor.kind === "api" ? { via: "api" } : {}) },
+          data: {
+            ...extra,
+            from,
+            to,
+            ...(actor.kind === "api" ? { via: "api" } : actor.via ? { via: actor.via } : {}),
+          },
         })),
       );
     }
     return { before, after, labels, fixedIn: fixedInChange };
   });
+  // Outbound events carry the answers as a webhook may see them (PII fields redacted in privacy mode).
+  const answered = answers && JSON.stringify(before.customFields) !== JSON.stringify(after.customFields);
+  const [maskedBefore, maskedAfter] = answered
+    ? await Promise.all([
+        outboundAnswersOf(orgId, before.projectId, before.customFields),
+        outboundAnswersOf(orgId, before.projectId, after.customFields),
+      ])
+    : [before.customFields, after.customFields];
   emit(
     ...updateEvents(
       { orgId, feedbackId: id, actor: { kind: actor.kind, id: actor.userId } },
-      { ...before, labelIds: labels?.from },
-      { ...after, labelIds: labels?.to },
+      { ...before, labelIds: labels?.from, customFields: maskedBefore },
+      { ...after, labelIds: labels?.to, customFields: maskedAfter },
       [
         ...Object.keys(columns),
         ...(kind ? ["kind"] : []),
         ...(dueAt !== undefined ? ["dueAt"] : []),
         ...(labels ? ["labelIds"] : []),
         ...(fixedIn ? ["fixedInReleaseId", "fixedInNextRelease"] : []),
+        ...(answers ? ["customFields"] : []),
       ],
     ),
   );

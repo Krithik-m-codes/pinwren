@@ -2,10 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const MANIFEST = {
-  panel: "widget-panel.0123456789.js",
-  editor: "widget-editor.abcdef0123.js",
-  "i18n-fr": "widget-i18n-fr.fedcba9876.js",
-  report: "../../evil.js",
+  panel: "0123456789",
+  editor: "abcdef0123",
+  "i18n-fr": "fedcba9876",
+  report: "../../evil",
 };
 
 /** Scripts the code under test added (happy-dom would really fetch them if they reached the document). */

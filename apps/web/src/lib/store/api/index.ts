@@ -1,10 +1,10 @@
-import { automationApi } from "./automation";
+import { customFieldsApi } from "./custom-fields";
 
 /**
  * The dashboard's RTK Query API with every endpoint (base → account → projects → feedback → rounds →
  * admin; each module injects into the previous one). Import hooks from here.
  */
-export const api = automationApi;
+export const api = customFieldsApi;
 
 export const {
   // account
@@ -118,6 +118,9 @@ export const {
   useAiLabelSuggestionsQuery,
   useDecideLabelSuggestionMutation,
   useBulkAiLabelsMutation,
+  // custom fields (form builder)
+  useCustomFieldsQuery,
+  useSaveCustomFieldsMutation,
 } = api;
 
 /**
@@ -140,7 +143,7 @@ export type {
   LabelSuggestion,
 } from "./automation";
 
-// Releases and regressions (ADR 0033). Injected into the same API; its hooks are exported from its own module.
+// Releases and regressions (ADR 0036). Injected into the same API; its hooks are exported from its own module.
 export {
   useDeleteReleaseMutation,
   useRecordReleaseMutation,

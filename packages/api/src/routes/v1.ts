@@ -22,6 +22,7 @@ import { clientIp, isInternalRequest } from "../net";
 import { consume, exhausted } from "../rate-limit";
 import { audienceOf, isReadOnlyRole, readOnlyError } from "../permissions";
 import { assetResponse } from "../services/assets";
+import { listFieldsOfProject } from "../services/custom-fields";
 import { addTeamComment, getFeedbackDetail, listFeedback, updateFeedback } from "../services/feedback";
 import { agentBrief, reproTest } from "../services/handoff";
 import { reproductionContext } from "../services/reproduction";
@@ -220,6 +221,9 @@ export const v1 = new Hono<{ Variables: TokenVars }>()
     const out = await recordRelease(c.var.orgId, c.var.userId, c.req.param("id"), c.req.valid("json"));
     return c.json(out, out.created ? 201 : 200);
   })
+  .get("/projects/:id/custom-fields", scope("feedback:read"), async (c) =>
+    c.json({ fields: await listFieldsOfProject(c.var.orgId, c.req.param("id")) }),
+  )
   .get("/views", scope("feedback:read"), async (c) =>
     c.json({ views: await listViews(c.var.orgId, c.var.userId) }),
   )

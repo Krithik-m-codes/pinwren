@@ -103,6 +103,7 @@ describe("agent hand-off, labels, views and stats", () => {
       json({ labels: [{ id: "l", name: "n", color: "#fff", count: 1 }] }),
       json({ views: [{ id: "v" }] }),
       json({ days: 30 }),
+      json({ fields: [{ key: "plan", type: "select" }] }),
     ]);
     const pw = new Pinwren({ url: "https://fb.example.com", token: "pwt_x", fetch: fetchImpl });
     expect((await pw.feedback.brief("a b")).markdown).toBe("# Fix");
@@ -110,12 +111,14 @@ describe("agent hand-off, labels, views and stats", () => {
     expect((await pw.labels.list("p")).at(0)?.count).toBe(1);
     expect(await pw.views.list()).toEqual([{ id: "v" }]);
     expect((await pw.stats.get({ days: 30 })).days).toBe(30);
+    expect((await pw.customFields.list("p")).at(0)?.key).toBe("plan");
     expect(calls.map((c) => c.url.replace("https://fb.example.com/api/v1", ""))).toEqual([
       "/feedback/a%20b/brief",
       "/feedback/a/repro-test",
       "/projects/p/labels",
       "/views",
       "/stats?days=30",
+      "/projects/p/custom-fields",
     ]);
   });
 });

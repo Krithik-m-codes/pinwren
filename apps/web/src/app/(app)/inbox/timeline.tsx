@@ -4,6 +4,7 @@ import { type FeedbackKind, type FeedbackStatus, type Priority, safeHref } from 
 import {
   ArrowRight,
   BadgeCheck,
+  FormInput,
   CalendarClock,
   CircleDot,
   Eye,
@@ -110,7 +111,7 @@ function actorOf(e: ActivityEvent, t: TFn): string {
   if (e.actorKind === "rule")
     return t("automation.ruleActor", { name: str(e.data.ruleName, t("automation.aRule")) });
   if (e.actorKind === "ai") return t("automation.aiActor");
-  // Regression detection and the release landing write the timeline themselves (ADR 0033).
+  // Regression detection and the release landing write the timeline themselves (ADR 0036).
   if (e.actorKind === "system") return t("releases.systemActor");
   if (e.actorKind === "guest")
     return e.data.via === "reporter" ? t("inbox2.theReporter") : t("inbox2.visitor");
@@ -187,6 +188,7 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
       <>
         {rich(t("inbox2.evStatusChanged"), { who, change })}
         {e.data.via === "api" && <> {t("inbox2.viaApi")}</>}
+        {e.data.via === "slack" && <> {t("slack.viaSlack")}</>}
         {typeof e.data.issue === "number" && <> {t("inbox2.issueNumber", { number: e.data.issue })}</>}
       </>
     );
@@ -352,6 +354,23 @@ function EventLine({ event: e }: { event: ActivityEvent }) {
         ? t(e.data.confidence === "likely" ? "releases.evRegressionLikely" : "releases.evRegression")
         : t("releases.evRegressionReported"),
       { who, item },
+    );
+  } else if (e.type === "customField_changed") {
+    // A custom field answer (ADR 0032): the server words the values ("Pro", "Acme, Beta") from the field's options.
+    icon = <FormInput className="size-3.5" />;
+    const word = (raw: unknown, text: unknown) =>
+      typeof raw === "boolean" ? t(raw ? "cfields.yes" : "cfields.no") : str(text, str(raw));
+    const field = <span className="text-foreground">{str(e.data.label, str(e.data.key))}</span>;
+    const now = word(to, e.data.toText);
+    body = (
+      <>
+        {now
+          ? rich(t("cfields.evSet"), { who, field, value: <span className="text-foreground">{now}</span> })
+          : rich(t("cfields.evCleared"), { who, field })}
+        {from !== null && from !== undefined && now && (
+          <> {t("inbox2.was", { value: word(from, e.data.fromText) })}</>
+        )}
+      </>
     );
   } else if (e.type === "rule_action") {
     icon = <Workflow className="size-3.5" />;

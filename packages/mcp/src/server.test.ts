@@ -272,6 +272,55 @@ describe("Pinwren MCP server", () => {
     expect(bad.isError).toBe(true);
   });
 
+  it("lists custom fields, filters by one and sets answers through the public API", async () => {
+    const id = "0192f0c4-4f6e-7c1a-8d55-9a3e2b1c4d5e";
+    const { mcp, calls, text } = await connect((url, init) => {
+      if (url.pathname.endsWith("/custom-fields"))
+        return json({
+          fields: [
+            {
+              key: "plan",
+              label: "Plan",
+              type: "select",
+              required: false,
+              audience: "reporter",
+              kinds: ["bug"],
+              options: [{ value: "pro", label: "Pro" }],
+              pii: true,
+              strings: {},
+            },
+          ],
+        });
+      if (init.method === "PATCH")
+        return json({ feedback: { id, number: 1, status: "open", priority: "none", title: null } });
+      return json({ items: [], nextCursor: null });
+    });
+    expect(
+      JSON.parse(text(await mcp.callTool({ name: "list_custom_fields", arguments: { projectId: id } }))),
+    ).toEqual([
+      {
+        key: "plan",
+        label: "Plan",
+        type: "select",
+        required: false,
+        audience: "reporter",
+        kinds: ["bug"],
+        options: [{ value: "pro", label: "Pro" }],
+      },
+    ]);
+    await mcp.callTool({ name: "search_feedback", arguments: { customField: "plan:pro" } });
+    await mcp.callTool({
+      name: "update_feedback",
+      arguments: { id, customFields: { plan: "pro", owner: null } },
+    });
+    expect(calls.map((c) => c.path)).toEqual([
+      `/api/v1/projects/${id}/custom-fields`,
+      "/api/v1/feedback?cf=plan%3Apro&limit=20",
+      `/api/v1/feedback/${id}`,
+    ]);
+    expect(calls[2]?.body).toEqual({ customFields: { plan: "pro", owner: null } });
+  });
+
   it("lists asset metadata and sends an image to a model only when asked", async () => {
     const id = "0192f0c4-4f6e-7c1a-8d55-9a3e2b1c4d5e";
     const png = new Uint8Array([137, 80, 78, 71]);

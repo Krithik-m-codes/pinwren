@@ -13,6 +13,7 @@ import { AiTab } from "./ai-tab";
 import { AutomationTab } from "./automation-tab";
 import { CaptureTab } from "./capture-tab";
 import { DangerTab } from "./danger-tab";
+import { FormTab } from "./form-tab";
 import { InstallTab } from "./install-tab";
 import { LabelsTab } from "./labels-tab";
 import { PrivacyTab } from "./privacy-tab";
@@ -30,6 +31,7 @@ import { useT } from "@/lib/i18n/provider";
 const TABS = [
   { value: "install", label: "projects2.tabInstall" },
   { value: "widget", label: "projects2.tabWidget" },
+  { value: "form", label: "cfields.tab" },
   { value: "review", label: "projects2.reviewLinks" },
   { value: "capture", label: "projects2.tabCapture" },
   { value: "actions", label: "projects2.tabActions" },
@@ -130,6 +132,9 @@ export function ProjectSettings({ id }: { id: string }) {
             </TabsContent>
             <TabsContent value="widget" className="pt-3">
               <WidgetTab project={p} />
+            </TabsContent>
+            <TabsContent value="form" className="pt-3">
+              <FormTab project={p} />
             </TabsContent>
             <TabsContent value="capture" className="pt-3">
               <CaptureTab project={p} />

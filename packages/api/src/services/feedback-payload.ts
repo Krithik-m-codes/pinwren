@@ -12,6 +12,7 @@ import {
 } from "@pinwren/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { env } from "../env";
+import { outboundAnswers } from "./custom-fields";
 import type { CommentPayload, FeedbackPayload } from "../webhooks/format";
 
 /**
@@ -75,6 +76,7 @@ export async function loadFeedbackContext(feedbackId: string): Promise<FeedbackC
       regressionOfNumber: sql<
         number | null
       >`(select o.number from feedback o where o.id = ${feedback.regressionOfId} and o.org_id = ${feedback.orgId})`,
+      widgetConfig: project.widgetConfig,
     })
     .from(feedback)
     .innerJoin(project, eq(project.id, feedback.projectId))
@@ -94,6 +96,8 @@ export async function loadFeedbackContext(feedbackId: string): Promise<FeedbackC
     reporterName ??= u?.name ?? null;
     reporterEmail ??= u?.email ?? null;
   }
+  // Answers to the project's custom fields (ADR 0032); PII fields are redacted in a privacy-mode project.
+  const customFields = await outboundAnswers(f.orgId, f.projectId, f.customFields, row.widgetConfig);
   return {
     orgId: f.orgId,
     projectKey: row.projectKey,
@@ -131,6 +135,7 @@ export async function loadFeedbackContext(feedbackId: string): Promise<FeedbackC
       createdAt: f.createdAt.toISOString(),
       updatedAt: f.updatedAt.toISOString(),
       url: feedbackLink(f.orgId, f.id),
+      customFields,
     },
   };
 }

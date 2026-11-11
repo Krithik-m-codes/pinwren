@@ -658,7 +658,7 @@ export function AttentionWidget({ stats, projectId }: WidgetProps) {
   );
 }
 
-/** New reports that look like resolved items (ADR 0033): the open ones first in the count, each a link. */
+/** New reports that look like resolved items (ADR 0036): the open ones first in the count, each a link. */
 export function RegressionsWidget({ stats, projectId }: WidgetProps) {
   const { t } = useI18n();
   const r = stats.regressions;

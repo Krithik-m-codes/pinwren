@@ -9,7 +9,7 @@ import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
 import { ApiError, notFound } from "../errors";
 import { emit } from "../events";
 
-// Releases (ADR 0033): the versions a project shipped. Recorded from the dashboard or by CI
+// Releases (ADR 0036): the versions a project shipped. Recorded from the dashboard or by CI
 // (`POST /api/v1/projects/:id/releases`); items are marked "fixed in" one of them, or in "the next release",
 // which the next release recorded takes over.
 

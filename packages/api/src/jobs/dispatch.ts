@@ -13,6 +13,7 @@ import {
   loadFeedbackContext,
   loadFeedbackFacts,
 } from "../services/feedback-payload";
+import { queueSlack } from "../slack/queue";
 import { enqueue, QUEUES } from "./boss";
 import { addWatchers, watcherIds } from "../services/watchers";
 import { queueDelivery } from "../webhooks/deliver";
@@ -469,7 +470,7 @@ export async function dispatchEvent(e: DomainEvent): Promise<void> {
       await syncIssueState(e.feedbackId, newStatus(e, ctx));
     }
     await notifications(e, ctx, commentInfo);
-    // A new bug report is compared with the resolved ones (ADR 0033). It only flags; a failure here must never
+    // A new bug report is compared with the resolved ones (ADR 0036). It only flags; a failure here must never
     // hold back the automation and AI jobs below, and the flag it sets reaches people through its own event.
     if (e.type === "feedback.created" && ctx.payload.kind === "bug") {
       try {
@@ -479,6 +480,8 @@ export async function dispatchEvent(e: DomainEvent): Promise<void> {
         console.warn("[pinwren] regression detection failed", err);
       }
     }
+    // Slack cards run from their own job too: a Slack outage must not delay anything above.
+    await queueSlack(e);
     // Automation rules run from their own job, after the bell and emails, so a rule can never hold them back.
     if (wantsAutomation(e)) {
       await enqueue(

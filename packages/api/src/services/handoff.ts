@@ -46,6 +46,7 @@ function briefOf(orgId: string, input: ReproInput, repo: { provider: string; pat
     reportUrl: feedbackLink(orgId, f.id),
     instanceUrl: env().PINWREN_URL.replace(/\/+$/, ""),
     repo,
+    answers: input.answers,
   });
 }
 

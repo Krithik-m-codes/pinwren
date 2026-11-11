@@ -82,6 +82,7 @@ export type WidgetCfg = DeepPartial<{
   panelActions: Record<string, unknown>[];
   privacyMode: boolean;
   errorPrompt: boolean;
+  customFields: Record<string, unknown>[];
   visibility: {
     environments: "all" | "non-production";
     minViewportWidth: number;

@@ -13,7 +13,7 @@ import { withOrg } from "../../db/src/tenant-context";
 import { createCloudFixture } from "./test-helpers/cloud-fixture";
 
 /**
- * Releases, "fixed in" and regression detection against a real database with row security (ADR 0033): the
+ * Releases, "fixed in" and regression detection against a real database with row security (ADR 0036): the
  * dashboard and CI routes, the fixed-in rules, the detector and its release awareness, the dispatcher wiring
  * and the tenant boundary of every one of them.
  */

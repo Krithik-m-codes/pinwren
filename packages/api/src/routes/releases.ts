@@ -6,7 +6,7 @@ import { unauthorized } from "../errors";
 import { requirePermission } from "../permissions";
 import { deleteRelease, listReleases, recordRelease, updateRelease } from "../services/releases";
 
-// Releases of a project (ADR 0033). Everyone who can see the project reads them; Admins (`projects.manage`)
+// Releases of a project (ADR 0036). Everyone who can see the project reads them; Admins (`projects.manage`)
 // record, correct and delete them. CI records them through `POST /api/v1/projects/:id/releases`. Mounted after
 // the dashboard router, so the session and viewer guards apply.
 

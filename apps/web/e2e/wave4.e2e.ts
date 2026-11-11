@@ -439,8 +439,11 @@ test.describe("wave 4", () => {
     expect(main.headers()["cache-control"]).toBe("public, max-age=300");
     expect(main.headers()["content-type"]).toBe("text/javascript; charset=utf-8");
     expect(main.headers()["access-control-allow-origin"]).toBe("*");
-    const chunk = /widget-[\w-]+\.[0-9a-f]{10}\.js/.exec(await main.text())?.[0];
-    if (!chunk) throw new Error("no hashed chunk referenced by widget.js");
+    // widget.js carries each chunk's content hash by name (`{panel:"3fe741b106",…}`); the file is widget-<name>.<hash>.js.
+    const hit = /panel:"([0-9a-f]{10})"/.exec(await main.text());
+    const hash = hit?.[1];
+    if (!hash) throw new Error("no hashed chunk referenced by widget.js");
+    const chunk = `widget-panel.${hash}.js`;
     const res = await request.get(`/${chunk}`);
     expect(res.status()).toBe(200);
     expect(res.headers()["cache-control"]).toBe("public, max-age=31536000, immutable");

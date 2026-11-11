@@ -38,6 +38,8 @@ const result = spawnSync(
     "src/cloud-signup-db.test.ts",
     "src/automation-db.test.ts",
     "src/releases-db.test.ts",
+    "src/custom-fields-db.test.ts",
+    "src/slack-db.test.ts",
   ],
   {
     cwd: root,

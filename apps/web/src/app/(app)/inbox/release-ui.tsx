@@ -11,7 +11,7 @@ import { useI18n, useT } from "@/lib/i18n/provider";
 import { errorMessage, useReleasesQuery, useUpdateFeedbackMutation } from "@/lib/store/api";
 import { cn } from "@/lib/utils";
 
-// Releases and regressions on an item (ADR 0033): the "Fixed in" picker beside the status, the badges, and
+// Releases and regressions on an item (ADR 0036): the "Fixed in" picker beside the status, the badges, and
 // the banner that says a new report looks like a resolved one coming back.
 
 type Item = Pick<
