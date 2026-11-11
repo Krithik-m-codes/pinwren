@@ -38,6 +38,8 @@ export const apiFeedbackListItem = z
     hasReplay: z.boolean(),
     attachmentCount: z.number().int(),
     commentCount: z.number().int(),
+    /** Answers to the project's custom fields, by field key (ADR 0029). */
+    customFields: z.record(z.string(), z.unknown()),
   })
   .loose();
 export type ApiFeedbackListItem = z.infer<typeof apiFeedbackListItem>;
@@ -73,6 +75,8 @@ export const apiFeedback = z
     anchor: z.record(z.string(), z.unknown()).nullable(),
     environment: z.record(z.string(), z.unknown()).nullable(),
     metadata: z.record(z.string(), z.unknown()).nullable(),
+    /** Answers to the project's custom fields, by field key (ADR 0029). */
+    customFields: z.record(z.string(), z.unknown()),
     source: z.string(),
     resolvedAt: iso.nullable(),
     createdAt: iso,

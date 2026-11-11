@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { feedbackKind, feedbackStatus, priority } from "./schemas";
+import { customFieldKey, feedbackKind, feedbackStatus, priority } from "./schemas";
 import { urlPatternMatches } from "./url-pattern";
 
 // Automation rules (per project): when [event] and [conditions] then [actions]. The schema is shared by the
@@ -31,6 +31,17 @@ export type AutomationTrigger = z.infer<typeof automationTrigger>;
 const list = <T extends z.ZodType>(item: T) => z.array(item).min(1).max(20);
 const text = z.string().trim().min(1).max(200);
 
+export const CUSTOM_FIELD_OPS = [
+  "equals",
+  "not_equals",
+  "contains",
+  "gt",
+  "lt",
+  "is_set",
+  "is_not_set",
+] as const;
+export type CustomFieldOp = (typeof CUSTOM_FIELD_OPS)[number];
+
 export const automationCondition = z.discriminatedUnion("field", [
   z.object({ field: z.literal("kind"), values: list(feedbackKind) }),
   z.object({ field: z.literal("priority"), values: list(priority) }),
@@ -55,6 +66,18 @@ export const automationCondition = z.discriminatedUnion("field", [
   z.object({ field: z.literal("label"), labelIds: list(z.uuid()) }),
   z.object({ field: z.literal("hasAttachment"), value: z.boolean() }),
   z.object({ field: z.literal("hasReplay"), value: z.boolean() }),
+  /** An answer to one of the project's custom fields (ADR 0029). `value` is typed as text and read by the answer's type. */
+  z
+    .object({
+      field: z.literal("customField"),
+      key: customFieldKey,
+      op: z.enum(CUSTOM_FIELD_OPS),
+      value: z.string().trim().max(200).optional(),
+    })
+    .refine((c) => c.op === "is_set" || c.op === "is_not_set" || !!c.value, {
+      path: ["value"],
+      message: "Enter a value to compare with",
+    }),
 ]);
 export type AutomationCondition = z.infer<typeof automationCondition>;
 
@@ -112,6 +135,7 @@ export const automationTestRequest = z.union([
       labelIds: z.array(z.uuid()).max(20).default([]),
       hasAttachment: z.boolean().default(false),
       hasReplay: z.boolean().default(false),
+      customFields: z.record(z.string().max(60), z.unknown()).default({}),
       toStatus: feedbackStatus.nullable().default(null),
       addedLabelId: z.uuid().nullable().default(null),
     }),
@@ -137,6 +161,8 @@ export type AutomationFacts = {
   labelIds: readonly string[];
   hasAttachment: boolean;
   hasReplay: boolean;
+  /** The item's custom field answers by key (ADR 0029). */
+  customFields?: Record<string, unknown>;
 };
 
 export type ConditionResult = { condition: AutomationCondition; passed: boolean };
@@ -170,6 +196,49 @@ export function triggerMatches(t: AutomationTrigger, f: AutomationFacts): boolea
   return true;
 }
 
+const textOf = (v: unknown): string =>
+  typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? String(v) : "";
+
+/** Compare one stored answer with the rule's text value, by the answer's own type. Unset never matches a comparison. */
+export function customFieldMatches(
+  op: CustomFieldOp,
+  answer: unknown,
+  expected: string | undefined,
+): boolean {
+  const set =
+    answer !== undefined && answer !== null && answer !== "" && !(Array.isArray(answer) && !answer.length);
+  if (op === "is_set") return set;
+  if (op === "is_not_set") return !set;
+  const want = (expected ?? "").trim().toLowerCase();
+  if (!set) return op === "not_equals";
+  const same = (a: unknown) => textOf(a).trim().toLowerCase() === want;
+  switch (op) {
+    case "equals":
+      return Array.isArray(answer) ? answer.some(same) : same(answer);
+    case "not_equals":
+      return Array.isArray(answer) ? !answer.some(same) : !same(answer);
+    case "contains":
+      return Array.isArray(answer)
+        ? answer.some((a) => textOf(a).toLowerCase().includes(want))
+        : textOf(answer).toLowerCase().includes(want);
+    case "gt":
+    case "lt": {
+      // Numbers compare as numbers, dates (YYYY-MM-DD) as text: both orders agree with the calendar.
+      const a = typeof answer === "number" ? answer : Number(answer);
+      const b = Number(want);
+      const cmp =
+        typeof answer === "number" && Number.isFinite(b)
+          ? a - b
+          : typeof answer === "string"
+            ? answer.localeCompare(expected ?? "")
+            : Number.NaN;
+      return op === "gt" ? cmp > 0 : cmp < 0;
+    }
+    default:
+      return false;
+  }
+}
+
 export function conditionPasses(c: AutomationCondition, f: AutomationFacts): boolean {
   switch (c.field) {
     case "kind":
@@ -190,6 +259,8 @@ export function conditionPasses(c: AutomationCondition, f: AutomationFacts): boo
       return f.hasAttachment === c.value;
     case "hasReplay":
       return f.hasReplay === c.value;
+    case "customField":
+      return customFieldMatches(c.op, f.customFields?.[c.key], c.value);
   }
 }
 

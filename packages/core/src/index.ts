@@ -2,6 +2,7 @@ export * from "./api-types";
 export * from "./automation";
 export * from "./billing";
 export * from "./config";
+export * from "./custom-fields";
 export * from "./dashboard-stats";
 export * from "./guest";
 export * from "./license";

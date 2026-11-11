@@ -92,6 +92,7 @@ export const tenantInventory: readonly TenantTable[] = [
   { table: "review_link", ownership: "direct", parents: ["project"] },
   { table: "label_suggestion", ownership: "direct", parents: ["feedback", "label"] },
   { table: "automation_rule", ownership: "direct", parents: ["project"] },
+  { table: "custom_field", ownership: "direct", parents: ["project"] },
   { table: "automation_run", ownership: "direct", parents: ["automation_rule", "project", "feedback"] },
   { table: "share_link", ownership: "direct", parents: ["project", "feedback", "review_round"] },
   { table: "round_signoff", ownership: "direct", parents: ["review_round", "share_link"] },
