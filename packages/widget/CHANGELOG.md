@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.0](https://github.com/Krithik-m-codes/pinwren/compare/widget-v0.6.0...widget-v0.7.0) (2026-11-11)
+
+
+### Features
+
+* custom fields and form builder ([#63](https://github.com/Krithik-m-codes/pinwren/issues/63)) ([25a8640](https://github.com/Krithik-m-codes/pinwren/commit/25a86405c9aad827af11a3d2675a307c29451acd))
+* release tracking, fixed-in and regression detection ([#64](https://github.com/Krithik-m-codes/pinwren/issues/64)) ([fa1e373](https://github.com/Krithik-m-codes/pinwren/commit/fa1e3737e27ed7360b6b0a339f4b66442ab39939))
+* **widget:** screen recording with optional voice narration ([#58](https://github.com/Krithik-m-codes/pinwren/issues/58)) ([900cd1a](https://github.com/Krithik-m-codes/pinwren/commit/900cd1a3b9193047242911c7895782df10fda953))
+
 ## [0.6.0](https://github.com/Krithik-m-codes/pinwren/compare/widget-v0.5.0...widget-v0.6.0) (2026-11-10)
 
 

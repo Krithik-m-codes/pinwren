@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/Krithik-m-codes/pinwren/compare/cli-v0.3.0...cli-v0.4.0) (2026-11-11)
+
+
+### Features
+
+* release tracking, fixed-in and regression detection ([#64](https://github.com/Krithik-m-codes/pinwren/issues/64)) ([fa1e373](https://github.com/Krithik-m-codes/pinwren/commit/fa1e3737e27ed7360b6b0a339f4b66442ab39939))
+
 ## [0.3.0](https://github.com/Krithik-m-codes/pinwren/compare/cli-v0.2.0...cli-v0.3.0) (2026-11-10)
 
 
