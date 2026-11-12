@@ -32,7 +32,7 @@
     "@pinwren/core": "workspace:*",
     "@opentelemetry/api": "^1.10.0",
     "drizzle-orm": "^0.45.4",
-    "postgres": "^3.4.7"
+    "postgres": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22",
