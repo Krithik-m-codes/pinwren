@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
-import { expect, type Locator, type Page, test } from "@playwright/test";
-import { mockApi } from "./mock";
+import { expect, type Page, test } from "@playwright/test";
+import { mockApi, stableBox } from "./mock";
 
 // Bug report mode: capture modes, editor tools, attachments, offline outbox, drafts, locales.
 
@@ -18,11 +18,7 @@ const PNG = Buffer.from(
   "base64",
 );
 
-async function box(l: Locator) {
-  const b = await l.boundingBox();
-  if (!b) throw new Error("element has no box");
-  return b;
-}
+const box = stableBox;
 
 async function ready(page: Page, url = "/") {
   await page.goto(url);

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { type CDPSession, expect, type Locator, type Page, test } from "@playwright/test";
-import { anchorFor, mockApi, seed } from "./mock";
+import { type CDPSession, expect, type Page, test } from "@playwright/test";
+import { anchorFor, mockApi, seed, stableBox } from "./mock";
 
 // Wave 3 (docs/contracts/wave-3.md): panel actions, branding, privacy mode, masking as solid blocks, export —
 // plus Russian, comment on selection, focus management and touch input.
@@ -18,11 +18,7 @@ const report = (page: Page) => page.getByRole("dialog", { name: "Report a bug" }
 const canvas = (page: Page) => page.locator("pinwren-root .ed canvas");
 const toast = (page: Page) => page.locator("pinwren-root .toast").last();
 
-async function box(l: Locator) {
-  const b = await l.boundingBox();
-  if (!b) throw new Error("element has no box");
-  return b;
-}
+const box = stableBox;
 
 async function ready(page: Page, url = "/") {
   await page.goto(url);
