@@ -1,4 +1,4 @@
-import type { Page, Route } from "@playwright/test";
+import type { Locator, Page, Route } from "@playwright/test";
 
 // In-memory implementation of the widget API (docs/contracts/wave-1.md), installed with page.route so the
 // suite needs no server, database or Docker.
@@ -281,4 +281,34 @@ export async function mockApi(
     return json(route, 405, { title: "Method not allowed" });
   });
   return mock;
+}
+
+/**
+ * The element's box once the page has stopped moving. Opening a thread whose pin sits near the viewport
+ * edge scrolls the page smoothly (by design), and on a busy CI runner that animation is still running when
+ * a test measures a target and then clicks its centre. The click then lands on the old spot, which can be
+ * empty page: comment mode ignores it and no composer ever opens. Playwright's own actionability checks
+ * cannot help because comment mode's shield intercepts pointer events, so the tests click by coordinate.
+ */
+export async function stableBox(l: Locator) {
+  await l.waitFor({ state: "attached" });
+  await l.evaluate(
+    (el) =>
+      new Promise<void>((done) => {
+        let last = "";
+        let same = 0;
+        const tick = () => {
+          const r = el.getBoundingClientRect();
+          const now = `${r.x},${r.y},${r.width},${r.height},${scrollX},${scrollY}`;
+          same = now === last ? same + 1 : 0;
+          last = now;
+          if (same >= 4) done();
+          else requestAnimationFrame(tick);
+        };
+        tick();
+      }),
+  );
+  const b = await l.boundingBox();
+  if (!b) throw new Error("element has no box");
+  return b;
 }
