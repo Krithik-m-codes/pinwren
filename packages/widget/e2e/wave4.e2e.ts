@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
-import { expect, type Locator, type Page, test } from "@playwright/test";
-import { mockApi } from "./mock";
+import { expect, type Page, test } from "@playwright/test";
+import { mockApi, stableBox } from "./mock";
 
 // Wave 4 (docs/contracts/wave-4.md): hashed chunks + manifest (§7), the editor split out of capture, session
 // replay (§3), signed identity / page scope / visibility rules (§4) and the consent record (§6).
@@ -22,11 +22,7 @@ type Manifest = {
 };
 const manifest = async () => JSON.parse(await readFile(`${DIST}manifest.json`, "utf8")) as Manifest;
 
-async function box(l: Locator) {
-  const b = await l.boundingBox();
-  if (!b) throw new Error("element has no box");
-  return b;
-}
+const box = stableBox;
 
 async function ready(page: Page, url = "/") {
   await page.goto(url);

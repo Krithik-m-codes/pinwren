@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
-import { expect, type Locator, type Page, test } from "@playwright/test";
-import { anchorFor, mockApi, seed } from "./mock";
+import { expect, type Page, test } from "@playwright/test";
+import { anchorFor, mockApi, seed, stableBox } from "./mock";
 
 const SHOTS = fileURLToPath(new URL("./__screenshots__/", import.meta.url));
 const shot = (page: Page, name: string) =>
@@ -11,11 +11,7 @@ const launcher = (page: Page) => page.locator("pinwren-root .launcher");
 const composer = (page: Page) => page.getByRole("dialog", { name: "New comment" });
 const pins = (page: Page) => page.locator("pinwren-root .pin:not(.draft)");
 
-async function box(l: Locator) {
-  const b = await l.boundingBox();
-  if (!b) throw new Error("element has no box");
-  return b;
-}
+const box = stableBox;
 
 async function ready(page: Page, url = "/") {
   await page.goto(url);

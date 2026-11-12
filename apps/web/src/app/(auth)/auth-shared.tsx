@@ -5,6 +5,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import type { SetupStatus } from "@/lib/api";
 import { useT } from "@/lib/i18n/provider";
 import { safeNext } from "@/lib/next-path";
+import { publicGet } from "@/lib/public-get";
 import type { SignInMethods } from "@/lib/store/api/sign-in";
 
 // Shared by the sign-in screens. They are prerendered, so anything from the URL or the server is read
@@ -32,12 +33,9 @@ export function useHydrated(): boolean {
   );
 }
 
-const publicGets = new Map<string, { at: number; body: Promise<unknown> }>();
-
 /**
- * A public `GET /api…` for these prerendered pages, sent after hydration. Not RTK Query: its hooks read the
- * clock while rendering (even skipped), which Next refuses during a prerender. Answers are shared between
- * the screens of one visit for 30 s.
+ * A public `GET /api…` for these prerendered pages, sent after hydration (see `lib/public-get.ts`). Not RTK Query:
+ * its hooks read the clock while rendering (even skipped), which Next refuses during a prerender.
  */
 function usePublicGet(path: string): { data: unknown; isLoading: boolean } {
   const hydrated = useHydrated();
@@ -45,17 +43,7 @@ function usePublicGet(path: string): { data: unknown; isLoading: boolean } {
   useEffect(() => {
     if (!hydrated) return;
     let live = true;
-    let hit = publicGets.get(path);
-    if (!hit || performance.now() - hit.at > 30_000) {
-      hit = {
-        at: performance.now(),
-        body: fetch(`/api${path}`, { credentials: "same-origin" })
-          .then((r) => (r.ok ? (r.json() as Promise<unknown>) : undefined))
-          .catch(() => undefined),
-      };
-      publicGets.set(path, hit);
-    }
-    void hit.body.then((data) => {
+    void publicGet(path, performance.now()).then((data) => {
       if (live) setState({ path, data });
     });
     return () => {
