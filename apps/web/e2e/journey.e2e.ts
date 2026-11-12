@@ -366,6 +366,7 @@ test.describe.serial("fresh install journey", () => {
     const page = await ctx.newPage();
     await page.goto("/sign-in");
     await page.getByRole("link", { name: "Forgot password?" }).click();
+    await expect(page).toHaveURL(/\/forgot-password/);
     await expect(page.getByText("Ask your administrator")).toBeVisible();
     await shot(page, "09-forgot-password");
 
