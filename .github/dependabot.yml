@@ -36,6 +36,17 @@ updates:
       production-dependencies:
         dependency-type: production
         update-types: [minor, patch]
+    ignore:
+      # @types/node has to match the runtime (.nvmrc, engines, node:22-alpine in docker/Dockerfile and
+      # apps/www/Dockerfile): typing against newer Node APIs than we ship lets missing calls pass typecheck.
+      # Move it in the same change that moves the Node version.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # The widget's capture chunk is held to 92 KiB gzip (ADR 0022, enforced in packages/widget/build.mjs).
+      # SnapDOM 3.3.6 builds to about 90 KiB; 3.3.7 already exceeds the budget. Upgrade it deliberately,
+      # together with a budget decision, not through the grouped bumps.
+      - dependency-name: "@zumer/snapdom"
+        update-types: ["version-update:semver-minor", "version-update:semver-patch"]
     open-pull-requests-limit: 10
 
   - package-ecosystem: github-actions
