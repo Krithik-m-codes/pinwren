@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/Krithik-m-codes/pinwren/compare/widget-v0.7.0...widget-v0.7.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* deflake the widget comment e2e and the forgot-password lookup ([#76](https://github.com/Krithik-m-codes/pinwren/issues/76)) ([61240c6](https://github.com/Krithik-m-codes/pinwren/commit/61240c6b0601469fdef0d4e682b5c39103de8d84))
+
 ## [0.7.0](https://github.com/Krithik-m-codes/pinwren/compare/widget-v0.6.0...widget-v0.7.0) (2026-11-11)
 
 
