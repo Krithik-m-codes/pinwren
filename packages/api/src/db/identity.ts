@@ -1,6 +1,21 @@
-import { apiToken, member, user } from "@pinwren/db";
+import { apiToken, member, user, userPreference } from "@pinwren/db";
+import type { EmailDigestFrequency } from "@pinwren/core";
 import { identityDatabase } from "@pinwren/db/identity";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
+
+/** Fixed identity projection for already org-scoped notification recipients; never grants tenant bypass. */
+export async function notificationPreferencesFor(orgId: string, userIds: string[]) {
+  if (!userIds.length) return [];
+  return identityDatabase()
+    .select({
+      userId: member.userId,
+      paused: sql<boolean>`coalesce(${userPreference.emailPaused}, false)`,
+      digest: sql<EmailDigestFrequency>`coalesce(${userPreference.emailDigest}, 'off')`,
+    })
+    .from(member)
+    .leftJoin(userPreference, eq(userPreference.userId, member.userId))
+    .where(and(eq(member.organizationId, orgId), inArray(member.userId, userIds)));
+}
 
 /** Only verified session/token identities may supply these identifiers. */
 export async function membershipFor(orgId: string, userId: string) {

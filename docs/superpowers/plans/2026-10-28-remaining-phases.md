@@ -19,7 +19,7 @@ has been retired to avoid reopening finished work. The current source of truth i
 
 - [ ] Release readiness: fix the fresh-install journey, obtain a fully green release run, verify artifacts,
       real accounts/sites and clean installs/upgrades.
-- [ ] Cloud gate: independent review, remaining worker audit, multi-instance/operational rehearsals,
+- [ ] Cloud gate: remediate the completed independent review findings, finish the worker audit, multi-instance/operational rehearsals,
       live billing setup and deployment evidence before opening production sign-up.
 - [ ] WP-22: Business/add-ons, currency/tax handling and downgrade behaviour gaps.
 - [ ] WP-24/25: audit log/export, custom roles, SSO/SCIM, custom domains, legal hold and planned SIEM/support.

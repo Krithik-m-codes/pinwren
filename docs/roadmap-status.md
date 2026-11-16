@@ -10,6 +10,12 @@ availability, npm publication, production deployment, or completion of a phase's
 This reconciliation inspected code, tests, ADRs and recorded CI; it did not rerun application suites.
 The release manifest records app **0.6.0**, widget **0.7.0**, SDK/MCP/CLI **0.4.0**, React **0.2.0**.
 
+Follow-up on `feat/roadmap-completion` (2026-11-16): the sign-in race and three reviewed Cloud worker
+defects are fixed. Fresh local evidence is 9/9 journey checks, 591 tests across 23 PostgreSQL 17
+isolation suites, 1,224 workspace unit tests, typechecking and production builds. See the
+[review and remaining worker findings](security/2026-11-16-cloud-worker-review.md).
+The initial documentation reconciliation above did not run tests; this follow-up did.
+
 ## Implemented work removed from the backlog
 
 - [x] Core self-host feedback, triage, capture, notifications, Docker/setup and CLI; widget parity extras
@@ -44,12 +50,19 @@ The release manifest records app **0.6.0**, widget **0.7.0**, SDK/MCP/CLI **0.4.
 - [ ] Resolve the fresh-install journey failure and obtain a fully green CI run on the intended release head.
       At the audited upstream head, [CI run 43149389098](https://github.com/Krithik-m-codes/pinwren/actions/runs/43149389098)
       failed only `Extended E2E (journey)`: expected `/forgot-password`, stayed on `/sign-in`.
+      Fixed locally on 2026-11-16: late setup response moved the centred sign-in card during a click.
+      The footer now reserves both states' natural height. The deterministic delayed-response journey
+      failed before the fix (8 passed / 1 failed) and passed afterwards (9/9, fresh PostgreSQL 17 database).
+      A fully green CI run on the pushed fix is still required.
       Both PostgreSQL 16/17 isolation jobs, dashboard/widget E2E, website, API smoke, build, Docker and
       format/lint/typecheck/unit jobs passed in that run. These are upstream results, not checks of subsequent edits.
-- [ ] Obtain and retain an independent whole-branch Cloud isolation review. PR #27 is merged; its recorded
-      Copilot response says review could not run because of quota, which is not a completed review.
-- [ ] Complete the WP-21 worker audit: negative tests under the restricted role for every remaining
-      dispatch/maintenance/notification path; classify intentional identity/system database access.
+- [x] Obtain and retain an independent Cloud isolation source review:
+      [2026-11-16 report](security/2026-11-16-cloud-worker-review.md). Queue provisioning and remaining
+      worker/operational findings stay open; the review does not certify production readiness.
+- [ ] Finish WP-21 worker remediation: provision pg-boss offline without granting runtime DDL; verify
+      real queue startup/enqueue/consume, bounded maintenance, legacy Cloud startup repairs and multi-org
+      digests. Fixed and regression-tested locally: notification identity preferences, rollback-safe bell/queue
+      effects and AI job project validation. See the [review](security/2026-11-16-cloud-worker-review.md).
 - [ ] Exercise Cloud multi-instance isolation, presence/reconnect, rate limits and failure recovery.
       Existing fan-out uses PostgreSQL LISTEN/NOTIFY and counters use PostgreSQL; Redis is an optional
       unimplemented WP-28 addition, not a missing prerequisite for the existing implementation.

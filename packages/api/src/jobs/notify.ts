@@ -1,5 +1,5 @@
 import type { EmailDigestFrequency } from "@pinwren/core";
-import { getDb, member, notification, notificationPreference, user, userPreference } from "@pinwren/db";
+import { afterOrgCommit, getDb, member, notification, notificationPreference, user } from "@pinwren/db";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { RenderedEmail } from "../email/render";
 import type { EmailMessage } from "../email/send";
@@ -7,6 +7,7 @@ import { unsubscribeHeaders } from "../email/unsubscribe";
 import { manageNotificationsUrl, teamUnsubscribeUrl } from "../email/links";
 import { publish } from "../realtime/bus";
 import { enqueue, QUEUES } from "./boss";
+import { notificationPreferencesFor } from "../db/identity";
 
 // In-app notifications and team emails for the dispatch job (wave-5 contract §3.2, §5). One row per person
 // per event (idempotent on `event_id`); the bell hears about it through a per-user `notification.created`
@@ -40,14 +41,12 @@ export async function membersWanting(
 ): Promise<Recipient[]> {
   if (only?.length === 0) return [];
   const col = notificationPreference[pref];
-  return getDb()
+  const recipients = await getDb()
     .select({
       userId: user.id,
       name: user.name,
       email: user.email,
       wantsEmail: sql<boolean>`coalesce(${notificationPreference.email}, true)`,
-      paused: sql<boolean>`coalesce(${userPreference.emailPaused}, false)`,
-      digest: sql<EmailDigestFrequency>`coalesce(${userPreference.emailDigest}, 'off')`,
     })
     .from(member)
     .innerJoin(user, eq(user.id, member.userId))
@@ -55,7 +54,6 @@ export async function membersWanting(
       notificationPreference,
       and(eq(notificationPreference.userId, member.userId), eq(notificationPreference.projectId, projectId)),
     )
-    .leftJoin(userPreference, eq(userPreference.userId, member.userId))
     .where(
       and(
         eq(member.organizationId, orgId),
@@ -63,6 +61,19 @@ export async function membersWanting(
         only ? inArray(member.userId, [...only]) : undefined,
       ),
     );
+  const preferences = new Map(
+    (
+      await notificationPreferencesFor(
+        orgId,
+        recipients.map((r) => r.userId),
+      )
+    ).map((p) => [p.userId, p]),
+  );
+  // Membership is checked again by the identity projection, so a concurrently removed member is omitted.
+  return recipients.flatMap((r) => {
+    const pref = preferences.get(r.userId);
+    return pref ? [{ ...r, paused: pref.paused, digest: pref.digest }] : [];
+  });
 }
 
 export type NotifyInput = {
@@ -121,19 +132,21 @@ export async function notify(n: NotifyInput): Promise<Recipient[]> {
       createdAt: notification.createdAt,
     });
   for (const row of inserted) {
-    void publish({
-      t: "n",
-      orgId: n.orgId,
-      userId: row.userId,
-      data: {
-        id: row.id,
-        type: n.type,
-        feedbackId: n.feedbackId,
+    afterOrgCommit(() =>
+      publish({
+        t: "n",
         orgId: n.orgId,
-        data: n.data,
-        createdAt: row.createdAt.toISOString(),
-      },
-    });
+        userId: row.userId,
+        data: {
+          id: row.id,
+          type: n.type,
+          feedbackId: n.feedbackId,
+          orgId: n.orgId,
+          data: n.data,
+          createdAt: row.createdAt.toISOString(),
+        },
+      }),
+    );
   }
   const fresh = inserted.flatMap((row) => {
     const r = byId.get(row.userId);

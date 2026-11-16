@@ -1,5 +1,6 @@
 import { PgBoss, type SendOptions } from "pg-boss";
 import { env } from "../env";
+import { afterOrgCommit, currentOrgId } from "@pinwren/db";
 
 // Background jobs on pg-boss (blueprint 02: Postgres-backed queue, no Redis). Every process (each
 // cluster worker, each replica) runs its own PgBoss instance against the same tables; pg-boss's
@@ -77,6 +78,10 @@ export function getBoss(): Promise<PgBoss> {
  * (CLAUDE.md — integrations and notifications must never block ingest).
  */
 export async function enqueue(name: QueueName, data: object, options: SendOptions = {}): Promise<void> {
+  if (currentOrgId()) {
+    afterOrgCommit(() => enqueue(name, data, options));
+    return;
+  }
   try {
     const boss = await getBoss();
     await boss.send(name, data, options);
@@ -86,6 +91,10 @@ export async function enqueue(name: QueueName, data: object, options: SendOption
 }
 
 export async function enqueueAfter(name: QueueName, data: object, seconds: number): Promise<void> {
+  if (currentOrgId()) {
+    afterOrgCommit(() => enqueueAfter(name, data, seconds));
+    return;
+  }
   try {
     const boss = await getBoss();
     await boss.sendAfter(name, data, null, seconds);

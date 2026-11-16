@@ -8,8 +8,10 @@ readiness gates are in [the roadmap checklist](../roadmap-status.md).
 At upstream `0762e93`, [CI run 43149389098](https://github.com/Krithik-m-codes/pinwren/actions/runs/43149389098)
 passed format/lint/types/unit, production/Docker builds, PostgreSQL 16/17 isolation, dashboard/widget
 browser tests, website and API smoke. The fresh-install journey failed: expected `/forgot-password`,
-stayed on `/sign-in`. Release readiness remains open until that failure is resolved and the intended
-release head is fully green. This documentation reconciliation did not rerun application tests.
+stayed on `/sign-in`. The late-setup layout shift is now fixed locally: a deterministic regression
+failed before the change, and the complete fresh-install journey passed 9/9 afterwards against a fresh
+PostgreSQL 17 database. Release readiness remains open until CI is fully green on the intended release
+head. Cloud worker findings and fixes are recorded in the [independent review](../security/2026-11-16-cloud-worker-review.md).
 
 ## Automated release gates
 

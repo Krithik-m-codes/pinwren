@@ -13,7 +13,7 @@ milestone targets; their version numbers are not statements about current packag
 | 0: WP-00–03        | Foundations implemented                                                                                     | Maintain release checks                                                                                          |
 | 1: WP-04–13        | Core self-host loop implemented                                                                             | Full doctor diagnostics, backup automation and release/real-service validation; fresh-install CI currently fails |
 | 2: WP-14–20, WP-30 | Collaboration implemented, including standalone guest portal, interactive Slack and launcher theming        | Real-account/site validation; Jira Data Center remains unsupported                                               |
-| 3: WP-21           | Tenant isolation, provisioning, cross-tenant tests and Cloud sign-up implemented; sign-up closed by default | Independent review, worker/multi-instance audit, operator rehearsals and deployed CDN/disable evidence           |
+| 3: WP-21           | Tenant isolation, provisioning, cross-tenant tests and Cloud sign-up implemented; sign-up closed by default | Review findings, queue/worker/multi-instance fixes, operator rehearsals and deployed CDN/disable evidence        |
 | 3: WP-22           | Dodo Payments Free/Pro, checkout/portal, usage limits and dunning implemented in test mode                  | Live setup, Business/add-ons and downgrade gaps; Dodo supersedes Stripe via ADR 0023                             |
 | 3: WP-23           | Licence verification, entitlements, signing tool and admin/grace UI implemented                             | Operational key/issuance and release validation                                                                  |
 | 3: WP-24           | Not implemented                                                                                             | SSO/SCIM, audit log/export, custom roles                                                                         |
@@ -30,7 +30,8 @@ agent hand-off/repro tests, report sharing and client sign-off. See the
 [feature-parity inventory](14-feature-parity.md) and [remaining checklist](../docs/roadmap-status.md).
 
 At upstream `0762e93`, both PostgreSQL isolation jobs and most CI gates passed, but the fresh-install
-journey failed. Implemented features do not by themselves close phase release gates or establish
+journey failed. The sign-in layout cause is fixed locally (9/9 fresh-install checks), and an independent
+Cloud source review is recorded with queue/worker findings and remediation in progress. Implemented features do not by themselves close phase release gates or establish
 production Cloud availability. See the checklist for the exact run and outstanding validation.
 
 ## Phase 0 — Foundations (≈ 2 weeks)
