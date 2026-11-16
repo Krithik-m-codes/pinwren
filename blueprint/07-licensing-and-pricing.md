@@ -1,5 +1,10 @@
 # 07 — Licensing, editions and pricing
 
+Implementation note (2026-11-16): [ADR 0023](../docs/adr/0023-cloud-billing-with-dodo-payments.md)
+supersedes the original Stripe provider below with Dodo Payments. Free/Pro billing is implemented in
+test mode; Business and other gaps are in the [current checklist](../docs/roadmap-status.md).
+The edition/price tables describe target scope, not proof of service availability.
+
 ## 1. Licence structure (open core)
 
 | Code                                                                       | Licence                                                                                       | Rationale                                                                        |

@@ -1,5 +1,9 @@
 # 11 — Build prompts
 
+These are the original work-package instructions, not a queue of unimplemented features.
+Before resuming work, consult the [current status and remaining checklist](../docs/roadmap-status.md).
+WP-22 uses Dodo Payments under ADR 0023 instead of the original Stripe design.
+
 One prompt per work package (WP). Run them **in order**, each in a session that has read the whole blueprint. Every prompt implicitly includes the **standard footer** below — don't repeat it, but always follow it.
 
 > **Standard footer (applies to every WP)**

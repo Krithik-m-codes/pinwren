@@ -1,5 +1,9 @@
 # AI Triage & Enrichment Implementation Plan
 
+> Historical execution plan. Unchecked steps are not a current implementation inventory.
+> Consult the [reconciled roadmap checklist](../../roadmap-status.md) before resuming; AI enrichment,
+> Cloud isolation/sign-up and Free/Pro billing have since shipped, with remaining gates recorded there.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement Phase 4 (`WP-27`) AI Triage & Enrichment for Pinwren: auto-summary, priority/category suggestions, hybrid duplicate detection, reproduction step synthesis, and multi-language translation using Anthropic, OpenAI-compatible, or local Ollama models.

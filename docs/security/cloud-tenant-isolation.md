@@ -4,7 +4,7 @@ Status: request-path isolation implemented and tested; **not certified for custo
 but closed by default. The transaction context, policy definitions, relationship constraints, Cloud provisioning and
 startup validation are implemented. Authenticated request integration includes identity repositories, finite tenant
 scopes, streams and mixed-I/O handlers. Public capability integration includes key/Origin, guest/review, signed
-asset/unsubscribe and inbound signature boundaries. Route-wide acceptance evidence covers all 173 inventoried routes
+asset/unsubscribe and inbound signature boundaries. Route-wide acceptance evidence covers the evolving mounted-route inventory
 (see "Route-wide acceptance evidence"). Background jobs: the AI, digest, dispatch, maintenance and webhook-delivery
 paths were split into org-scoped units, but some still call `getDb()` (for example parts of `jobs/dispatch.ts`,
 `jobs/maintenance.ts`, `jobs/notify.ts`) and no negative test under the restricted role proves every one of them;
@@ -95,6 +95,10 @@ atomic. Concurrent retries return one record and emit one success event. Unsubsc
 remaining database work share a transaction so later failures roll back suppression state.
 
 ## Background and deferred work audit
+
+This section records the initial audit boundaries and requirements. Some paths have since been
+scoped and tested; the remaining worker-coverage audit is tracked in the current
+[roadmap checklist](../roadmap-status.md). It is not a claim that all listed integration work is absent.
 
 Database access exists in 64 source/script files at the initial audit. The integration tasks must
 resolve each `getDb()` or raw postgres call according to the following boundaries:
@@ -274,16 +278,26 @@ and `cloud-signup.test.ts` (rules and counters).
 
 ## Remaining WP-21 work (explicitly incomplete)
 
-- Cloud sign-up is **built but ships closed** (`PINWREN_CLOUD_SIGNUPS` defaults to `closed`; see "Cloud
-  sign-up" above). Do not set it to `open` in production until the items below are done;
-  `PINWREN_DISABLE_SIGNUP` semantics and first-account promotion remain closed in Cloud mode.
-- Branch review: one independent whole-branch review against the spec has not yet been obtained.
-- Required protected-branch CI (PostgreSQL 16 and 17 matrix, existing builds and browser journeys) has not been
-  observed green for this head; local PostgreSQL 17 and the dashboard Playwright journeys were not run.
-- Redis-backed realtime/presence and rate-limit isolation across instances, and multi-instance behavior.
-- Operator procedures not yet exercised against a production-shaped environment: credential rotation,
-  migration/rollback rehearsal, backup/restore of a Cloud database.
-- Billing, usage limits, audit foundation, custom roles/SSO and legacy-data migration (WP-22/24/25) are separate.
+Reconciled 2026-11-16; see the [central checklist](../roadmap-status.md) for all phases.
+
+- Cloud sign-up is implemented and closed by default (`PINWREN_CLOUD_SIGNUPS=closed`). Opening it in
+  production remains gated on review, operator readiness and live-service validation.
+- PR #27 is merged. Its recorded Copilot response reports insufficient review quota; an independent
+  whole-branch review is still outstanding.
+- Both PostgreSQL 16/17 isolation jobs and dashboard browser tests passed at upstream `0762e93` in
+  [CI run 43149389098](https://github.com/Krithik-m-codes/pinwren/actions/runs/43149389098).
+  The overall run failed in the fresh-install forgot-password journey. Do not retain the old claim
+  that PostgreSQL 17/browser CI has never run, or call the whole release green.
+- Complete restricted-role negative coverage and classification for remaining background dispatch,
+  notification and maintenance access, including intentional identity/system exceptions.
+- Rehearse multi-instance presence/reconnect, rate-limit isolation and failure recovery. Realtime
+  already fans out through PostgreSQL LISTEN/NOTIFY; rate-limit counters already use PostgreSQL.
+  Redis integration is optional unimplemented WP-28 scope, not the existing transport.
+- Exercise production-shaped credential rotation, migration/rollback, legacy-data migration where
+  applicable, and backup/restore of Cloud data, uploads and secrets.
+- Verify Cloud CDN/version delivery and remote widget disable behaviour in the deployed environment.
+- Free/Pro Dodo billing, usage limits and dunning are implemented in test mode; live setup and the
+  remaining billing gaps are WP-22. Audit/custom roles/SSO/custom domains/legal hold remain WP-24/25.
 
 ## Automation rules and AI label suggestions
 

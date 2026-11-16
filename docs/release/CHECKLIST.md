@@ -1,7 +1,15 @@
 ﻿# Pinwren release checklist
 
-Status reconciled on 2026-10-27. The app is released at **0.2.0**, the widget at **0.3.0**, and React,
-SDK, MCP and CLI at **0.2.0**. A GitHub release and an npm publication are separate events: check both.
+Status reconciled on **2026-11-16**. The release manifest records app **0.6.0**, widget **0.7.0**,
+SDK/MCP/CLI **0.4.0** and React **0.2.0**. These are source version records; a GitHub release and an npm
+publication are separate events and must each be verified. The current implementation backlog and
+readiness gates are in [the roadmap checklist](../roadmap-status.md).
+
+At upstream `0762e93`, [CI run 43149389098](https://github.com/Krithik-m-codes/pinwren/actions/runs/43149389098)
+passed format/lint/types/unit, production/Docker builds, PostgreSQL 16/17 isolation, dashboard/widget
+browser tests, website and API smoke. The fresh-install journey failed: expected `/forgot-password`,
+stayed on `/sign-in`. Release readiness remains open until that failure is resolved and the intended
+release head is fully green. This documentation reconciliation did not rerun application tests.
 
 ## Automated release gates
 
@@ -55,10 +63,16 @@ exercise authentication. Optionally configure `RELEASE_PLEASE_TOKEN` so generate
 
 ## Implemented features previously listed as missing
 
-Screenshot-on-comment, AI triage and dashboard translations are implemented. The widget and dashboard
-support eleven languages. AI is optional and off by default. Jira Cloud and white-label entitlements
-are implemented; SSO, SCIM, audit logs, custom roles, legal hold and SIEM streaming remain planned.
-Cloud billing, the standalone guest portal and interactive Slack remain roadmap work.
+Screenshot-on-comment, optional AI triage, dashboard/widget translations, Jira Cloud and white-label
+entitlements are implemented. The standalone guest portal, launcher theming/favicon, interactive Slack,
+Cloud tenant isolation and sign-up/onboarding are also implemented. Cloud sign-up defaults to closed;
+Free/Pro Dodo Payments billing, limits and dunning are built in test mode.
+
+Later additions include named/shared server-persisted dashboards and filters, account preferences,
+custom fields, release/regression tracking, tracker adapters, screen recording/voice, AI labels/automation,
+agent hand-off/repro tests and sharing/client sign-off. SSO, SCIM, audit logs, custom roles, custom
+domains, legal hold and SIEM streaming remain unimplemented. The
+[remaining-work checklist](../roadmap-status.md) records billing gaps, scale/AI work and validation separately.
 
 ## Known operational limits
 

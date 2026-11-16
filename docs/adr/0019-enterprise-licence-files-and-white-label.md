@@ -37,7 +37,7 @@ thing behind them: white-label (hiding "Powered by Pinwren" and custom email bra
 
 ## Consequences
 
-- Until the maintainers issue a production key, no production instance can verify an Enterprise licence (by design;
-  the mechanism is ready).
+- Production key `pinwren-2026` is now committed in `packages/api/src/license/keys.ts`; production instances can
+  verify licences signed by its matching private key. Issuance and private-key custody remain operator responsibilities.
 - A self-hoster can patch the check out (AGPL); licences protect the commercial relationship, not the code.
 - A changed hidePoweredBy behaviour for wave-3 users is documented in `docs/contracts/wave-4.md` §9.

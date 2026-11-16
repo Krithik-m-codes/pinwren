@@ -40,10 +40,9 @@ the first pass suggested, so each row says what exists.
    the fallback destination is now `/`, so the choice applies there too.
 5. **Palette actions:** "Keyboard shortcuts" and "Copy link to this page".
 
-## Not done, and why
+## Follow-up status — reconciled 2026-11-16
 
-- Account-level preferences (would need a column on `user_preference`); the start page is per device like
-  dashboard layouts (ADR 0024).
-- Idle / expired-session toast: the 401 redirect works; a toast needs a flag handed across the redirect and
-  is a small follow-up.
-- Pinned projects: the sidebar already lists projects; saved views cover the "favourite filter" need.
+All three original follow-ups are implemented by [ADR 0037](../../adr/0037-server-dashboards-named-shared.md):
+account-level start-page/dismissal preferences, the session-expired notice and redirect, and pinned projects.
+The per-device cookie described above is now synchronised with account state. See the
+[current remaining-work checklist](../../roadmap-status.md).

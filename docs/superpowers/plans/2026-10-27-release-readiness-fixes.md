@@ -1,5 +1,9 @@
 # Release readiness fixes
 
+> Historical execution plan. Unchecked steps are not a current implementation inventory.
+> Consult the [reconciled roadmap checklist](../../roadmap-status.md) before resuming; AI enrichment,
+> Cloud isolation/sign-up and Free/Pro billing have since shipped, with remaining gates recorded there.
+
 **Goal:** Resolve the actionable findings from the repository status review and push verified fixes.
 
 **Scope:** Existing Community functionality, security, CI, release tooling and documentation. Cloud and planned Enterprise features remain separate roadmap work.

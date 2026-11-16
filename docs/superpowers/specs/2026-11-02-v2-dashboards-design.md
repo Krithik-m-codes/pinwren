@@ -1,5 +1,9 @@
 # v2 dashboards — what Pinwren takes from the DocuSigner v2 UI
 
+Current status (2026-11-16): [ADR 0037](../../adr/0037-server-dashboards-named-shared.md)
+supersedes the initial persistence and dashboard scope below. The
+[current roadmap checklist](../../roadmap-status.md) tracks only remaining work.
+
 Reference: `docusigner_frontend`, branch `v2-ui` (`src/components/instances/dashboard/builder/*`,
 `(dashboard)/layout/command*`, `(dashboard)/period-selector`, `(dashboard)/report/*`). Read only.
 
@@ -16,23 +20,23 @@ Reference: `docusigner_frontend`, branch `v2-ui` (`src/components/instances/dash
 
 ## Mapping
 
-| DocuSigner pattern                                          | Pinwren                                                                                         |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| 12-column card grid, sizes, move earlier/later              | **Built.** 12 columns, widths 3/4/6/8/12, heights 1-3 rows, drag and drop plus buttons.         |
-| Card catalogue, "Add component"                             | **Built.** Sheet listing widgets by group (numbers, charts, lists) that fit the screen.         |
-| Edit mode, remove, resize, reset                            | **Built.** Customise / Done, per-widget controls, Reset to default.                             |
-| localStorage persistence, normalise on read                 | **Built.** Per user and screen; role defaults; drops unknown widgets (ADR 0024).                |
-| KPI tile with comparison to previous period                 | **Built.** "New reports" shows the delta against the previous range.                            |
-| Charts (line/area, donut, bars)                             | **Built** as dependency-free SVG: trend, status donut, bars by type/priority/project.           |
-| Table / leaderboard / activity cards                        | **Built.** Projects table, recent activity, "needs attention" list.                             |
-| Period selector                                             | **Built** as a range menu (7/14/30/90 days) stored with the layout.                             |
-| Command palette                                             | Already present; added Dashboard and "Customise dashboard".                                     |
-| Overview on sub-pages                                       | **Built.** Collapsible strip on inbox (collapsed by default), projects, project, notifications. |
-| Multiple named dashboards, favourites, share, "system" fork | Not built: one layout per screen is enough for triage. Revisit with shared dashboards.          |
-| Per-card editor (measure, group, filters, palette, goal)    | Not built: widgets are fixed; the inbox filters already cover ad-hoc slicing.                   |
-| Funnel, gauge, pie, text note                               | Not built: no data in Pinwren needs them yet.                                                   |
-| Dashboard-wide filter bar                                   | Not built: the strip follows the page (project) it sits on; the range is the one filter.        |
-| Server-side persistence                                     | Deferred: per-browser now; `user_preference` column later (storage.ts is the seam).             |
+| DocuSigner pattern                                          | Pinwren                                                                                                            |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 12-column card grid, sizes, move earlier/later              | **Built.** 12 columns, widths 3/4/6/8/12, heights 1-3 rows, drag and drop plus buttons.                            |
+| Card catalogue, "Add component"                             | **Built.** Sheet listing widgets by group (numbers, charts, lists) that fit the screen.                            |
+| Edit mode, remove, resize, reset                            | **Built.** Customise / Done, per-widget controls, Reset to default.                                                |
+| localStorage persistence, normalise on read                 | **Built, superseded.** Server persistence with local fallback/import; role defaults and validation (ADR 0037).     |
+| KPI tile with comparison to previous period                 | **Built.** "New reports" shows the delta against the previous range.                                               |
+| Charts (line/area, donut, bars)                             | **Built** as dependency-free SVG: trend, status donut, bars by type/priority/project.                              |
+| Table / leaderboard / activity cards                        | **Built.** Projects table, recent activity, "needs attention" list.                                                |
+| Period selector                                             | **Built** as a range menu (7/14/30/90 days) stored with the layout.                                                |
+| Command palette                                             | Already present; added Dashboard and "Customise dashboard".                                                        |
+| Overview on sub-pages                                       | **Built.** Collapsible strip on inbox (collapsed by default), projects, project, notifications.                    |
+| Multiple named dashboards, favourites, share, "system" fork | **Built in ADR 0037:** named dashboards, share, duplicate and role defaults. Dedicated favourites remain deferred. |
+| Per-card editor (measure, group, filters, palette, goal)    | Not built: widgets are fixed; the inbox filters already cover ad-hoc slicing.                                      |
+| Funnel, gauge, pie, text note                               | Not built: no data in Pinwren needs them yet.                                                                      |
+| Dashboard-wide filter bar                                   | **Built in ADR 0037:** home project/label/assignee/date filters in the URL; strips follow their page.              |
+| Server-side persistence                                     | **Built in ADR 0037:** `dashboard`, `workspace_preference` and `user_preference.ui_state`.                         |
 
 ## Data
 
@@ -41,6 +45,6 @@ Reference: `docusigner_frontend`, branch `v2-ui` (`src/components/instances/dash
 ## Screens
 
 - `/dashboard` — the home dashboard, role defaults (Admin: unassigned, projects table; others: my work, needs
-  attention). New first entry in the sidebar; "/" still lands on the inbox so existing flows are unchanged.
+  attention). New first entry in the sidebar; "/" follows the account start-page preference (inbox by default; ADR 0037).
 - Inbox, projects, project, notifications — the same component as a compact strip (`scope`), one row of tiles.
 - Not done: settings overview (settings are configuration; no data of its own to chart yet).

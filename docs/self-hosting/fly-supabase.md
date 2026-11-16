@@ -150,21 +150,29 @@ node scripts/post-deploy-check.mjs https://app.pinwren.xride-labs.in
 
 The check requires `/api/health` to answer 200. In Cloud mode the app validates role attributes, grants, RLS and
 policies before serving; while that guard fails, `/api/health` answers 500 and `fly logs` shows the reason. It also
-checks the HTTP-to-HTTPS redirect, that the dashboard responds, and that HSTS is sent. The first account created on a
-fresh instance becomes the instance admin: create it yourself immediately, or set `PINWREN_ADMIN_EMAILS` first.
+checks the HTTP-to-HTTPS redirect, that the dashboard responds, and that HSTS is sent. On a fresh self-host
+instance, the first account becomes instance admin. Cloud disables that promotion; configure explicit
+`PINWREN_ADMIN_EMAILS` and keep public sign-up closed while completing operator setup.
 
 Sizing: one `shared-cpu-2x` / 1 GB machine with `PINWREN_WORKERS=2` (one Node process per core, via `docker/cluster.cjs`).
 Jobs run in the same processes (`PINWREN_ROLE=all`), so the machine never auto-stops. Stay on one machine until the
-multi-instance work in the isolation doc (Redis-backed realtime and rate limits) is finished; scale up
+multi-instance validation in the isolation doc is complete; scale up
 (`fly scale vm shared-cpu-4x --vm-memory 2048`, raise `PINWREN_WORKERS` to match) rather than out.
 
-## Sign-ups and billing (coming)
+## Sign-ups and billing
 
-- `PINWREN_CLOUD_SIGNUPS`: planned with the Cloud sign-up PR (branch `feat/cloud-signup`). It does not exist in `main`
-  yet; until it ships, sign-up stays closed in Cloud mode. Add it to `[env]` in `fly.toml` when that PR merges.
-- Dodo Payments (billing PR, branch `feat/wp22-billing`): secrets `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_WEBHOOK_KEY`,
-  `DODO_PRO_MONTHLY_PRODUCT_ID`, `DODO_PRO_ANNUAL_PRODUCT_ID`; non-secret `DODO_PAYMENTS_ENVIRONMENT` and optionally
-  `DODO_PAYMENTS_BASE_URL`. Confirm the names against that PR's env schema when it merges.
+Sign-up/onboarding and Free/Pro Dodo Payments billing are implemented. This is implementation status,
+not evidence of a public launch or a successful live payment.
+
+- `PINWREN_CLOUD_SIGNUPS=open|closed` exists and defaults to `closed`. Closed permits invited addresses
+  but refuses new public accounts. Keep it closed until the Cloud review and operational gates are met.
+- Sign-up requires email/password, terms consent and verified email; it enforces signup abuse limits
+  and creates a Free workspace. See the Cloud sign-up section in the isolation document.
+- Dodo secrets: `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_WEBHOOK_KEY`, `DODO_PRO_MONTHLY_PRODUCT_ID`,
+  `DODO_PRO_ANNUAL_PRODUCT_ID`. Non-secrets: `DODO_PAYMENTS_ENVIRONMENT` (defaults to `test_mode`) and
+  optional `DODO_PAYMENTS_BASE_URL`. These names are implemented in `packages/api/src/env.ts`.
+- Checkout, customer portal, signed/idempotent webhooks, quotas and dunning exist. Live-account/product
+  setup, Business/add-ons and downgrade gaps remain; see ADR 0023 and `docs/roadmap-status.md`.
 
 ## Runbook
 

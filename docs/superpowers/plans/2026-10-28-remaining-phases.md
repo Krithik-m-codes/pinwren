@@ -1,45 +1,32 @@
-# Remaining phases execution plan
+# Remaining phases execution plan — reconciled 2026-11-16
 
-**Goal:** Progress unfinished roadmap work in dependency order, starting with the Community collaboration gap.
+The original guest-portal execution tranche is implemented and merged. Its old branch/CI narrative
+has been retired to avoid reopening finished work. The current source of truth is
+[Roadmap status and remaining work](../../roadmap-status.md), reconciled against upstream `0762e93`.
 
-**Spec:** `docs/superpowers/specs/2026-10-28-guest-portal.md`, blueprint 06 section 7 and WP-20.
+## Completed tranches
 
-**Execution:** The guest portal is being implemented on `feat/phase2-guest-portal`, followed by security
-review, integration checks and protected-branch delivery. The checkout retains installed dependencies
-without duplicating several gigabytes on a nearly full drive.
+- [x] Guest contract/API, scoped portal, widget/private email entry and automated coverage (PR #19).
+- [x] Launcher light/dark/hover controls and organisation favicon branding (PR #21).
+- [x] WP-21 tenant isolation foundation, role provisioning and route-wide cross-tenant tests (PR #27).
+- [x] WP-22 Free/Pro Dodo Payments test-mode billing, usage limits and dunning (PR #28).
+- [x] Fly.io/Supabase deployment configuration and runbooks (PR #29).
+- [x] Cloud sign-up/onboarding, consent, verification and abuse limits; closed by default (PR #31).
+- [x] Later v2 additions: server/named/shared dashboards, interactive Slack, custom fields, releases and
+      regressions, tracker adapters, recording/voice, AI labels/automation, agent hand-off, sharing/sign-off.
 
-## Current tranche: guest portal
+## Remaining tranches
 
-1. Define the shared Zod request/response and credential schemas in core. Test malformed, excessive,
-   foreign and expired capabilities rather than trusting browser-supplied ids.
-2. Implement the public guest router, minimal query projections, public replies, rate limits and
-   entitled branding. Add no database migration: existing reporter hashes and signed tokens suffice.
-3. Implement the standalone guest page with RTK Query, client credential handling, list/thread/reply,
-   responsive states and existing design components. No component-level fetches.
-4. Add the widget's private portal entry and reporter-email portal links. Keep credentials in the
-   fragment and keep widget functionality unchanged when storage is unavailable.
-5. Add real-DB smoke and browser journeys, including another reporter and an internal note. Verify
-   formatting, lint, types, unit tests, widget budgets, builds and browser checks sequentially where
-   outputs overlap. Obtain independent code/security/UI review before delivery.
-6. Update parity and public docs only for behaviour verified by tests. Push via a feature branch and
-   required checks; main is protected. Preserve release PR closure preference.
+- [ ] Release readiness: fix the fresh-install journey, obtain a fully green release run, verify artifacts,
+      real accounts/sites and clean installs/upgrades.
+- [ ] Cloud gate: independent review, remaining worker audit, multi-instance/operational rehearsals,
+      live billing setup and deployment evidence before opening production sign-up.
+- [ ] WP-22: Business/add-ons, currency/tax handling and downgrade behaviour gaps.
+- [ ] WP-24/25: audit log/export, custom roles, SSO/SCIM, custom domains, legal hold and planned SIEM/support.
+- [ ] WP-27/28/29: pgvector clustering, Helm/read replicas/optional Redis, backup automation/restore CI,
+      current capacity and accessibility/performance/VPAT evidence.
+- [ ] Phase 5 and optional UI/capture additions remain deferred; see the full checklist for each item.
 
-**Status:** The shared contract, API, email-link integration, widget entry, localized portal, browser
-credential handling and API smoke cases are implemented. Core/API/web focused tests, all API tests,
-all widget tests, widget typecheck/build/budget, the widget portal browser journey and formatting pass.
-The dashboard browser journey and real-Postgres smoke still need the database-backed CI environment;
-Docker Desktop is unavailable in this checkout. Repo lint is currently being rerun after fixing the
-issues it found. Full code review and protected-branch CI are still outstanding.
-
-## Following tranches
-
-- Finish remaining launcher theming and organisation favicon parity.
-- WP-21: tenant isolation and cross-tenant tests before exposing Cloud sign-up. **Status:** Tasks 1-8 coverage is implemented on `feat/wp21-tenant-isolation` (PR #27, draft): database policies, request/public/worker scoping and route-wide real-PostgreSQL acceptance for all 173 inventory routes (368 isolation tests passing locally). **Still incomplete:** independent whole-branch review, required CI green on PostgreSQL 16/17, Redis/multi-instance isolation, operator rehearsal, and enabling Cloud sign-up (kept disabled). See `docs/security/cloud-tenant-isolation.md`.
-- WP-22: billing, usage limits and dunning, using test-mode fixtures until live-account setup exists.
-- WP-24/25: audit foundation, custom roles, SSO/SCIM, custom domains and legal hold.
-- WP-27/28/29: remaining duplicate clustering, backup/restore automation, Helm/read replicas, capacity
-  and accessibility evidence. Phase 5 reach features remain demand-driven per the roadmap.
-
-Ruling: existing blueprint requirements and the user's explicit direction authorize implementation;
-do not ask them to approve the same scope again. Account credentials, paid services and irreversible
-production changes remain separate from local implementation and test-mode verification.
+Implementation does not imply a completed release gate. PostgreSQL 16/17 isolation and dashboard
+browser CI passed at the audited upstream head; the fresh-install journey failed. See the current
+checklist for evidence and avoid treating dated plan checkboxes as the current build state.
