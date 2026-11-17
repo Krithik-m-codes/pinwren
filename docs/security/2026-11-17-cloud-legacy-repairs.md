@@ -54,4 +54,6 @@ RLS on the relevant fixture tables, and mounts the real regroup router with auth
 variables and no outer tenant middleware. It reproduced the exact organisation-transaction error
 before the route fix. After the fix, all seven repair cases, 209 Cloud route cases and 21 related
 unit cases passed locally (237 focused checks), as did API typechecking, source lint and formatting.
-A new CI head must verify the dashboard and full API smoke recovery.
+All required checks passed on `9e44d4d` in
+[CI run 44040406671](https://github.com/Krithik-m-codes/pinwren/actions/runs/44040406671), including
+dashboard regrouping and full API smoke. Later follow-ups need their own green head.

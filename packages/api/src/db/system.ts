@@ -150,7 +150,7 @@ export async function digestRecipients(orgId: string) {
 export async function markDigestSent(userId: string, at: Date): Promise<void> {
   await systemDatabase()
     .update(userPreference)
-    .set({ lastDigestAt: at })
+    .set({ lastDigestAt: sql`greatest(${userPreference.lastDigestAt}, ${at.toISOString()}::timestamptz)` })
     .where(eq(userPreference.userId, userId));
 }
 

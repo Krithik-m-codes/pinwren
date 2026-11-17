@@ -74,6 +74,13 @@ export async function enqueue(name: QueueName, data: object, options: SendOption
   }
 }
 
+/** For background progress cursors: advance only after the queue confirms persistence. */
+export async function enqueueRequired(name: QueueName, data: object): Promise<void> {
+  if (currentOrgId()) throw new Error("Required enqueue must run outside a tenant transaction");
+  const boss = await getBoss();
+  if (!(await boss.send(name, data))) throw new Error(`Queue did not accept ${name}`);
+}
+
 export async function enqueueAfter(name: QueueName, data: object, seconds: number): Promise<void> {
   if (currentOrgId()) {
     afterOrgCommit(() => enqueueAfter(name, data, seconds));

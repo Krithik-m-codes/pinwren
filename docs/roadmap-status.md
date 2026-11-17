@@ -60,7 +60,7 @@ The initial documentation reconciliation above did not run tests; this follow-up
       format/lint/typecheck/unit jobs passed in that run. These are upstream results, not checks of subsequent edits.
 - [x] Obtain and retain an independent Cloud isolation source review:
       [2026-11-16 report](security/2026-11-16-cloud-worker-review.md). Remaining
-      worker/operational findings stay open; the review does not certify production readiness.
+      finding status is tracked in that report; the review does not certify production readiness.
 - [x] Implement offline Cloud pg-boss provisioning and restricted service-role queue startup, with real
       send/consume/supervision/cron, grant, upgrade and recovery tests. See [ADR 0041](adr/0041-offline-cloud-job-queues.md).
       All required checks passed on `29d68b4` in [PR #83](https://github.com/Krithik-m-codes/pinwren/pull/83),
@@ -74,10 +74,16 @@ The initial documentation reconciliation above did not run tests; this follow-up
       [CI run 44025517438](https://github.com/Krithik-m-codes/pinwren/actions/runs/44025517438).
 - [x] Scope legacy Cloud startup URL encryption and page merging without widening database privileges.
       Real-role regression and review evidence: [legacy repair report](security/2026-11-17-cloud-legacy-repairs.md).
-      This follow-up requires its own green CI head; production upgrade rehearsals remain open below.
-- [ ] Finish WP-21 worker remediation: multi-org
-      digests. Notification identity preferences, rollback-safe bell/queue effects, AI job project validation
-      and offline queue provisioning are implemented. See the [review](security/2026-11-16-cloud-worker-review.md).
+      All required checks passed on `9e44d4d` in [PR #85](https://github.com/Krithik-m-codes/pinwren/pull/85),
+      [CI run 44040406671](https://github.com/Krithik-m-codes/pinwren/actions/runs/44040406671), including
+      dashboard regrouping and API smoke after the selfhost scope regression fix.
+- [x] Implement multi-workspace digests without shared-cursor suppression, with explicit tenant filters,
+      confirmed queue acceptance and cursor preservation on partial failure. See the
+      [digest evidence](security/2026-11-17-multi-workspace-digests.md). This follow-up needs its own green CI head.
+      Local verification passed 625 tests across all 27 PostgreSQL 17 isolation suites, 1,224 workspace
+      unit tests, full lint, formatting, typechecking and production builds.
+      All findings in the [independent worker review](security/2026-11-16-cloud-worker-review.md) now have
+      implementation fixes; multi-instance and operator acceptance below remain open.
 - [ ] Exercise Cloud multi-instance isolation, presence/reconnect, rate limits and failure recovery.
       Existing fan-out uses PostgreSQL LISTEN/NOTIFY and counters use PostgreSQL; Redis is an optional
       unimplemented WP-28 addition, not a missing prerequisite for the existing implementation.

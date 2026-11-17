@@ -1,11 +1,12 @@
 import { type EmailDigestFrequency, kindNoun } from "@pinwren/core";
 import { feedback, notification, notificationPreference, withOrg } from "@pinwren/db";
-import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lte, or } from "drizzle-orm";
 import { digestRecipients, markDigestSent, organizationIds } from "../db/system";
 import { renderEmail } from "../email/render";
 import { env } from "../env";
-import { enqueue, QUEUES } from "./boss";
+import { enqueueRequired, QUEUES } from "./boss";
 import { teamRenderOptions } from "./notify";
+import { assertGlobalMaintenance } from "./maintenance-batches";
 
 // Email digests (wave-5 contract §3.2): people who chose hourly or daily get no instant team emails; the
 // `notify.digest` job (hourly cron) sends each of them one email per workspace listing the notifications
@@ -74,10 +75,25 @@ export function digestSummary(rows: Row[]): string {
 
 /** `notify.digest` handler (hourly). */
 export async function runDigest(now = new Date()): Promise<void> {
+  assertGlobalMaintenance();
   const base = env().PINWREN_URL.replace(/\/$/, "");
+  const snapshots: { orgId: string; recipients: Awaited<ReturnType<typeof digestRecipients>> }[] = [];
+  // The cursor is account-wide: every workspace must see it before this run advances it.
   for (const orgId of await organizationIds()) {
-    for (const p of await digestRecipients(orgId)) {
-      if (!digestDue(p.freq, p.last, now)) continue;
+    snapshots.push({
+      orgId,
+      recipients: (await digestRecipients(orgId)).filter((p) => digestDue(p.freq, p.last, now)),
+    });
+  }
+  const completed = new Set<string>();
+  const failed = new Set<string>();
+  for (const { orgId, recipients } of snapshots) {
+    if (!recipients.length) continue;
+    // Snapshot collection can take time; honour membership removal and opt-outs before reading content.
+    const eligible = new Map((await digestRecipients(orgId)).map((p) => [p.userId, p]));
+    for (const snapshot of recipients) {
+      const p = eligible.get(snapshot.userId);
+      if (!p || !digestDue(p.freq, p.last, now)) continue;
       try {
         const since = new Date(Math.max(p.last?.getTime() ?? 0, now.getTime() - MAX_LOOKBACK_MS));
         const prepared = await withOrg(orgId, async (db) => {
@@ -85,12 +101,14 @@ export async function runDigest(now = new Date()): Promise<void> {
             db
               .select({ type: notification.type, data: notification.data })
               .from(notification)
-              .leftJoin(feedback, eq(feedback.id, notification.feedbackId))
+              .leftJoin(feedback, and(eq(feedback.id, notification.feedbackId), eq(feedback.orgId, orgId)))
               .where(
                 and(
+                  eq(notification.orgId, orgId),
                   eq(notification.userId, p.userId),
                   isNull(notification.readAt),
                   gt(notification.createdAt, since),
+                  lte(notification.createdAt, now),
                   or(isNull(feedback.deletedAt), eq(notification.type, "feedback.deleted")),
                 ),
               )
@@ -100,7 +118,11 @@ export async function runDigest(now = new Date()): Promise<void> {
               .select({ projectId: notificationPreference.projectId })
               .from(notificationPreference)
               .where(
-                and(eq(notificationPreference.userId, p.userId), eq(notificationPreference.email, false)),
+                and(
+                  eq(notificationPreference.orgId, orgId),
+                  eq(notificationPreference.userId, p.userId),
+                  eq(notificationPreference.email, false),
+                ),
               ),
           ]);
           const off = new Set(muted.map((m) => m.projectId));
@@ -121,11 +143,20 @@ export async function runDigest(now = new Date()): Promise<void> {
             teamRenderOptions(),
           );
         });
-        if (prepared) await enqueue(QUEUES.email, { to: p.email, ...prepared });
-        await markDigestSent(p.userId, now);
+        if (prepared) await enqueueRequired(QUEUES.email, { to: p.email, ...prepared });
+        completed.add(p.userId);
       } catch (err) {
+        failed.add(p.userId);
         console.error(`[pinwren] digest failed for user ${p.userId} in org ${orgId}`, err);
       }
+    }
+  }
+  for (const userId of completed) {
+    if (failed.has(userId)) continue;
+    try {
+      await markDigestSent(userId, now);
+    } catch (err) {
+      console.error(`[pinwren] digest cursor update failed for user ${userId}`, err);
     }
   }
 }

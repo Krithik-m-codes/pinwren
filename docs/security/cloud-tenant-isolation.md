@@ -5,10 +5,12 @@ but closed by default. The transaction context, policy definitions, relationship
 startup validation are implemented. Authenticated request integration includes identity repositories, finite tenant
 scopes, streams and mixed-I/O handlers. Public capability integration includes key/Origin, guest/review, signed
 asset/unsubscribe and inbound signature boundaries. Route-wide acceptance evidence covers the evolving mounted-route inventory
-(see "Route-wide acceptance evidence"). Background jobs: the AI, digest, dispatch, maintenance and webhook-delivery
-paths were split into org-scoped units, but some still call `getDb()` (for example parts of `jobs/dispatch.ts`,
-`jobs/maintenance.ts`, `jobs/notify.ts`) and restricted-role worker coverage is not exhaustive;
-that is listed under "Remaining WP-21 work". The approved design and implementation plan are in
+(see "Route-wide acceptance evidence"). Background worker review findings now have implementation fixes,
+including scoped identity preferences, deferred effects, queue provisioning, bounded maintenance,
+legacy repairs and multi-workspace digests. Scoped `getDb()` calls resolve the active tenant transaction;
+their presence alone does not indicate missing integration. Restricted-role coverage and independent
+source review do not replace multi-instance and operator acceptance under "Remaining WP-21 work".
+The approved design and implementation plan are in
 `docs/superpowers/specs/2026-10-29-cloud-tenant-isolation-design.md` and
 `docs/superpowers/plans/2026-10-29-cloud-tenant-isolation.md`.
 
@@ -295,7 +297,10 @@ Reconciled 2026-11-16; see the [central checklist](../roadmap-status.md) for all
   `29d68b4` in [CI run 44020453858](https://github.com/Krithik-m-codes/pinwren/actions/runs/44020453858).
   Bounded maintenance is implemented under [ADR 0042](../adr/0042-bounded-maintenance.md).
   Legacy Cloud startup repairs now run through scoped runtime transactions; see the
-  [repair evidence](2026-11-17-cloud-legacy-repairs.md). Complete multi-org digest delivery. See the review.
+  [repair evidence](2026-11-17-cloud-legacy-repairs.md); required checks passed on `9e44d4d` in
+  [CI run 44040406671](https://github.com/Krithik-m-codes/pinwren/actions/runs/44040406671).
+  Multi-workspace digests now snapshot due recipients and wait for confirmed queue persistence before
+  advancing shared cursors; see [digest evidence](2026-11-17-multi-workspace-digests.md).
 - Rehearse multi-instance presence/reconnect, rate-limit isolation and failure recovery. Realtime
   already fans out through PostgreSQL LISTEN/NOTIFY; rate-limit counters already use PostgreSQL.
   Redis integration is optional unimplemented WP-28 scope, not the existing transport.
@@ -398,6 +403,6 @@ direct-ownership table and tenant-checked columns on `feedback`, all in `tenant-
   it is never a candidate, and that `GET /api/stats` never counts the other workspace's releases or regressions.
 - The widget key cannot create a release: `data-release` / `setMetadata({ release })` only lands in the report's
   `metadata`, which is read back as plain text.
-- The team notification for a regression resolves its recipients through `membersWanting`, which still reads the
-  identity table `user_preference` outside the tenant role (listed under "Remaining WP-21 work"); the DB test stands in
-  for that one query.
+- The team notification for a regression resolves recipients through scoped `membersWanting` and its fixed
+  identity preference projection. `cloud-workers-db.test.ts` verifies that restricted-role path; the focused
+  release/regression test substitutes recipient lookup.

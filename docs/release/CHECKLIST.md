@@ -19,7 +19,9 @@ Queue provisioning's required checks passed on `29d68b4` in [PR #83](https://git
 [CI run 44020453858](https://github.com/Krithik-m-codes/pinwren/actions/runs/44020453858).
 Bounded maintenance follows [ADR 0042](../adr/0042-bounded-maintenance.md); required checks passed on
 `6312d62` in [CI run 44025517438](https://github.com/Krithik-m-codes/pinwren/actions/runs/44025517438).
-The [legacy repair follow-up](../security/2026-11-17-cloud-legacy-repairs.md) requires its own green head.
+The [legacy repair follow-up](../security/2026-11-17-cloud-legacy-repairs.md) passed required checks on
+`9e44d4d` in [CI run 44040406671](https://github.com/Krithik-m-codes/pinwren/actions/runs/44040406671).
+The [digest follow-up](../security/2026-11-17-multi-workspace-digests.md) requires its own green head.
 
 ## Automated release gates
 
