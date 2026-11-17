@@ -34,9 +34,24 @@ refusal with RLS disabled, write failure/rollback/recovery, competing repairs, n
 refusal and draining a backlog above 5,000 endpoints. See [the roadmap checklist](../roadmap-status.md)
 for the remaining worker and operator work.
 
-Local PostgreSQL 17 verification passed all six new cases and all 209 Cloud route cases. The four
+Initial local PostgreSQL 17 verification passed all six new cases and all 209 Cloud route cases. The four
 startup-security, seven wave-5 notification/permission and ten widget/page-grouping cases also passed
 (236 focused checks in total). Workspace unit tests passed 1,224 cases; database-dependent suites run separately from
 that unit count. Workspace typechecking and a final API typecheck passed. CI must verify the pushed
 follow-up head independently of the green maintenance checkpoint `6312d62`. Full lint, formatting,
 documentation links and production builds also passed locally.
+
+## Selfhost route regression found by CI
+
+CI run [44029610337](https://github.com/Krithik-m-codes/pinwren/actions/runs/44029610337) on `75f7e5a`
+passed both PostgreSQL isolation jobs but failed dashboard URL grouping and two API smoke assertions
+(628 passed, two failed). The on-demand regroup route relied on Cloud's outer transaction middleware;
+selfhost skips that middleware, so the newly scoped merge helper threw before regrouping pages.
+
+The route now establishes `withOrg` from the authenticated workspace before both project lookup and
+merging. Cloud reuses its existing scope. A seventh database regression uses selfhost mode, disables
+RLS on the relevant fixture tables, and mounts the real regroup router with authenticated context
+variables and no outer tenant middleware. It reproduced the exact organisation-transaction error
+before the route fix. After the fix, all seven repair cases, 209 Cloud route cases and 21 related
+unit cases passed locally (237 focused checks), as did API typechecking, source lint and formatting.
+A new CI head must verify the dashboard and full API smoke recovery.

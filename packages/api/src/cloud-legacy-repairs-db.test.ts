@@ -4,6 +4,8 @@ import { withOrg } from "../../db/src";
 import { getRuntimeDb } from "../../db/src/connection";
 import { closeIdentityDatabase } from "../../db/src/identity";
 import { createCloudFixture } from "./test-helpers/cloud-fixture";
+import { Hono } from "hono";
+import type { SessionVars } from "./context";
 
 describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud legacy startup repairs", () => {
   let fixture: Awaited<ReturnType<typeof createCloudFixture>> | undefined;
@@ -124,4 +126,33 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud legacy startup 
     ).toHaveLength(0);
     expect(await encryptLegacyChatWebhookUrls()).toBe(0);
   }, 120_000);
+  it("establishes a scope for the authenticated regroup route without outer tenant middleware", async () => {
+    const { pageLinks } = await import("./routes/page-links");
+    const id = randomUUID();
+    await db()`insert into page (id,org_id,project_id,url) values (${id},${orgs[0] ?? ""},${projects[0] ?? ""},'https://example.test/pricing?utm_source=route')`;
+    // Selfhost requests have authenticated context variables but no Cloud transaction middleware.
+    const app = new Hono<{ Variables: SessionVars }>();
+    app.use(async (c, next) => {
+      c.set("orgId", orgs[0] ?? "");
+      c.set("userId", randomUUID());
+      c.set("role", "owner");
+      await next();
+    });
+    app.route("/api", pageLinks);
+    vi.stubEnv("PINWREN_MODE", "selfhost");
+    for (const table of ["page", "project", "feedback"])
+      await db().unsafe(`alter table ${table} disable row level security`);
+    try {
+      const response = await app.request(`/api/projects/${projects[0] ?? ""}/pages/regroup`, {
+        method: "POST",
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ merged: 1 });
+      expect(await db()`select id from page where id=${id}`).toHaveLength(0);
+    } finally {
+      vi.stubEnv("PINWREN_MODE", "cloud");
+      for (const table of ["page", "project", "feedback"])
+        await db().unsafe(`alter table ${table} enable row level security`);
+    }
+  });
 });
