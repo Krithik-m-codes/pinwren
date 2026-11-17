@@ -15,6 +15,9 @@ PostgreSQL 17 database. All ten required checks then passed on `10cb468` in
 PostgreSQL 16/17 isolation. Later commits need their own CI verification; the wider release gates below
 remain open. Cloud queue provisioning follows [ADR 0041](../adr/0041-offline-cloud-job-queues.md).
 Worker findings and fixes are recorded in the [independent review](../security/2026-11-16-cloud-worker-review.md).
+Queue provisioning's required checks passed on `29d68b4` in [PR #83](https://github.com/Krithik-m-codes/pinwren/pull/83),
+[CI run 44020453858](https://github.com/Krithik-m-codes/pinwren/actions/runs/44020453858).
+Bounded maintenance follows [ADR 0042](../adr/0042-bounded-maintenance.md) and needs its own green CI head.
 
 ## Automated release gates
 

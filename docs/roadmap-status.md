@@ -63,8 +63,15 @@ The initial documentation reconciliation above did not run tests; this follow-up
       worker/operational findings stay open; the review does not certify production readiness.
 - [x] Implement offline Cloud pg-boss provisioning and restricted service-role queue startup, with real
       send/consume/supervision/cron, grant, upgrade and recovery tests. See [ADR 0041](adr/0041-offline-cloud-job-queues.md).
-      CI evidence for this follow-up is separate from the green `10cb468` checkpoint.
-- [ ] Finish WP-21 worker remediation: bounded maintenance, legacy Cloud startup repairs and multi-org
+      All required checks passed on `29d68b4` in [PR #83](https://github.com/Krithik-m-codes/pinwren/pull/83),
+      [CI run 44020453858](https://github.com/Krithik-m-codes/pinwren/actions/runs/44020453858).
+- [x] Bound maintenance transactions and per-workspace work: 500 root rows per transaction and ten
+      batches per category per run, including tenant/system logs and counters. PostgreSQL regressions
+      cover continuation, rollback, timeout and concurrent counter refresh; see [ADR 0042](adr/0042-bounded-maintenance.md).
+      Local verification on 2026-11-17 passed 610 tests across all 25 isolation suites on PostgreSQL 17,
+      1,224 workspace unit tests, full lint, formatting, typechecking and production builds.
+      CI for this follow-up must pass on its own pushed head.
+- [ ] Finish WP-21 worker remediation: legacy Cloud startup repairs and multi-org
       digests. Notification identity preferences, rollback-safe bell/queue effects, AI job project validation
       and offline queue provisioning are implemented. See the [review](security/2026-11-16-cloud-worker-review.md).
 - [ ] Exercise Cloud multi-instance isolation, presence/reconnect, rate limits and failure recovery.

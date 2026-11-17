@@ -1,6 +1,7 @@
 import { withOrg, afterOrgCommit } from "@pinwren/db";
 import { getDb, webhookDelivery, webhookEndpoint } from "@pinwren/db";
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { MAINTENANCE_BATCH_SIZE } from "../jobs/maintenance-batches";
 import { decryptSecret } from "../crypto";
 import { enqueue, enqueueAfter, QUEUES } from "../jobs/boss";
 import { type OutboundFetch, outboundErrorText, safeFetch } from "../outbound/safe-fetch";
@@ -218,10 +219,19 @@ export async function runDelivery(
 }
 
 /** Delete delivery logs older than 30 days. */
-export async function pruneDeliveries(): Promise<number> {
-  const rows = await getDb()
+export async function pruneDeliveries(orgId: string): Promise<number> {
+  const db = getDb();
+  const ids = db
+    .select({ id: webhookDelivery.id })
+    .from(webhookDelivery)
+    .where(
+      and(eq(webhookDelivery.orgId, orgId), lt(webhookDelivery.createdAt, sql`now() - interval '30 days'`)),
+    )
+    .orderBy(webhookDelivery.createdAt, webhookDelivery.id)
+    .limit(MAINTENANCE_BATCH_SIZE);
+  const rows = await db
     .delete(webhookDelivery)
-    .where(and(lt(webhookDelivery.createdAt, sql`now() - interval '30 days'`)))
+    .where(and(eq(webhookDelivery.orgId, orgId), inArray(webhookDelivery.id, ids)))
     .returning({ id: webhookDelivery.id });
   return rows.length;
 }

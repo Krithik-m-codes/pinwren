@@ -1,5 +1,6 @@
 import {
   authRateLimit,
+  emailDelivery,
   getDb,
   license,
   member,
@@ -10,8 +11,14 @@ import {
   userPreference,
 } from "@pinwren/db";
 import { identityDatabase } from "@pinwren/db/identity";
-import { eq, desc, sql } from "drizzle-orm";
+import { and, eq, desc, inArray, isNull, lt, sql } from "drizzle-orm";
 import { env } from "../env";
+import {
+  assertGlobalMaintenance,
+  maintenanceTimeouts,
+  MAINTENANCE_BATCH_SIZE,
+  runMaintenanceBatches,
+} from "../jobs/maintenance-batches";
 
 const systemDatabase = () => (env().PINWREN_MODE === "cloud" ? identityDatabase() : getDb());
 
@@ -62,12 +69,66 @@ export async function organizationIds(): Promise<string[]> {
 }
 
 export async function pruneSystemRateLimits(): Promise<void> {
-  await systemDatabase()
-    .delete(rateLimit)
-    .where(sql`${rateLimit.resetAt} < now() - interval '1 hour'`);
-  await systemDatabase()
-    .delete(authRateLimit)
-    .where(sql`${authRateLimit.lastRequest} < extract(epoch from now() - interval '1 day') * 1000`);
+  assertGlobalMaintenance();
+  await runMaintenanceBatches(() =>
+    systemDatabase().transaction(async (db) => {
+      await maintenanceTimeouts(db);
+      const expired = sql`${rateLimit.resetAt} < now() - interval '1 hour'`;
+      const ids = db
+        .select({ key: rateLimit.key })
+        .from(rateLimit)
+        .where(expired)
+        .orderBy(rateLimit.resetAt, rateLimit.key)
+        .limit(MAINTENANCE_BATCH_SIZE);
+      // Recheck after waiting for concurrent requests that refresh a selected counter.
+      return (
+        await db
+          .delete(rateLimit)
+          .where(and(inArray(rateLimit.key, ids), expired))
+          .returning({ key: rateLimit.key })
+      ).length;
+    }),
+  );
+  await runMaintenanceBatches(() =>
+    systemDatabase().transaction(async (db) => {
+      await maintenanceTimeouts(db);
+      const expired = sql`${authRateLimit.lastRequest} < extract(epoch from now() - interval '1 day') * 1000`;
+      const ids = db
+        .select({ id: authRateLimit.id })
+        .from(authRateLimit)
+        .where(expired)
+        .orderBy(authRateLimit.lastRequest, authRateLimit.id)
+        .limit(MAINTENANCE_BATCH_SIZE);
+      return (
+        await db
+          .delete(authRateLimit)
+          .where(and(inArray(authRateLimit.id, ids), expired))
+          .returning({ id: authRateLimit.id })
+      ).length;
+    }),
+  );
+}
+
+/** Service-policy projection: instance email only; tenant email stays on the runtime path. */
+export async function pruneSystemEmailDeliveries(cutoff: Date): Promise<number> {
+  assertGlobalMaintenance();
+  return runMaintenanceBatches(() =>
+    systemDatabase().transaction(async (db) => {
+      await maintenanceTimeouts(db);
+      const ids = db
+        .select({ id: emailDelivery.id })
+        .from(emailDelivery)
+        .where(and(isNull(emailDelivery.orgId), lt(emailDelivery.createdAt, cutoff)))
+        .orderBy(emailDelivery.createdAt, emailDelivery.id)
+        .limit(MAINTENANCE_BATCH_SIZE);
+      return (
+        await db
+          .delete(emailDelivery)
+          .where(and(isNull(emailDelivery.orgId), inArray(emailDelivery.id, ids)))
+          .returning({ id: emailDelivery.id })
+      ).length;
+    }),
+  );
 }
 
 export async function digestRecipients(orgId: string) {
