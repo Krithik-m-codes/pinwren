@@ -70,8 +70,12 @@ The initial documentation reconciliation above did not run tests; this follow-up
       cover continuation, rollback, timeout and concurrent counter refresh; see [ADR 0042](adr/0042-bounded-maintenance.md).
       Local verification on 2026-11-17 passed 610 tests across all 25 isolation suites on PostgreSQL 17,
       1,224 workspace unit tests, full lint, formatting, typechecking and production builds.
-      CI for this follow-up must pass on its own pushed head.
-- [ ] Finish WP-21 worker remediation: legacy Cloud startup repairs and multi-org
+      All required checks passed on `6312d62` in [PR #84](https://github.com/Krithik-m-codes/pinwren/pull/84),
+      [CI run 44025517438](https://github.com/Krithik-m-codes/pinwren/actions/runs/44025517438).
+- [x] Scope legacy Cloud startup URL encryption and page merging without widening database privileges.
+      Real-role regression and review evidence: [legacy repair report](security/2026-11-17-cloud-legacy-repairs.md).
+      This follow-up requires its own green CI head; production upgrade rehearsals remain open below.
+- [ ] Finish WP-21 worker remediation: multi-org
       digests. Notification identity preferences, rollback-safe bell/queue effects, AI job project validation
       and offline queue provisioning are implemented. See the [review](security/2026-11-16-cloud-worker-review.md).
 - [ ] Exercise Cloud multi-instance isolation, presence/reconnect, rate limits and failure recovery.

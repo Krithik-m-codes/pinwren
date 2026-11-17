@@ -294,7 +294,8 @@ Reconciled 2026-11-16; see the [central checklist](../roadmap-status.md) for all
   implemented under [ADR 0041](../adr/0041-offline-cloud-job-queues.md); its required checks passed on
   `29d68b4` in [CI run 44020453858](https://github.com/Krithik-m-codes/pinwren/actions/runs/44020453858).
   Bounded maintenance is implemented under [ADR 0042](../adr/0042-bounded-maintenance.md).
-  Complete legacy Cloud startup repair and multi-org digest delivery. See the review.
+  Legacy Cloud startup repairs now run through scoped runtime transactions; see the
+  [repair evidence](2026-11-17-cloud-legacy-repairs.md). Complete multi-org digest delivery. See the review.
 - Rehearse multi-instance presence/reconnect, rate-limit isolation and failure recovery. Realtime
   already fans out through PostgreSQL LISTEN/NOTIFY; rate-limit counters already use PostgreSQL.
   Redis integration is optional unimplemented WP-28 scope, not the existing transport.
