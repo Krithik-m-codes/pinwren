@@ -283,15 +283,16 @@ Reconciled 2026-11-16; see the [central checklist](../roadmap-status.md) for all
 - Cloud sign-up is implemented and closed by default (`PINWREN_CLOUD_SIGNUPS=closed`). Opening it in
   production remains gated on review, operator readiness and live-service validation.
 - PR #27 is merged. An independent Cloud isolation source review was completed on 2026-11-16; see
-  [the findings and fix evidence](2026-11-16-cloud-worker-review.md). Queue provisioning and other
+  [the findings and fix evidence](2026-11-16-cloud-worker-review.md). Other
   worker/operator findings remain open; source review is not production certification.
 - Both PostgreSQL 16/17 isolation jobs and dashboard browser tests passed at upstream `0762e93` in
   [CI run 43149389098](https://github.com/Krithik-m-codes/pinwren/actions/runs/43149389098).
   The overall run failed in the fresh-install forgot-password journey. Do not retain the old claim
   that PostgreSQL 17/browser CI has never run, or call the whole release green.
 - New restricted-role worker regressions cover notification preference access, rollback-safe bell/queue
-  effects and AI job project validation. Complete offline pg-boss provisioning and real queue startup,
-  bounded maintenance batches, legacy Cloud startup repair and multi-org digest delivery. See the review.
+  effects and AI job project validation. Offline queue provisioning and real queue startup are now
+  implemented under [ADR 0041](../adr/0041-offline-cloud-job-queues.md). Complete bounded maintenance
+  batches, legacy Cloud startup repair and multi-org digest delivery. See the review.
 - Rehearse multi-instance presence/reconnect, rate-limit isolation and failure recovery. Realtime
   already fans out through PostgreSQL LISTEN/NOTIFY; rate-limit counters already use PostgreSQL.
   Redis integration is optional unimplemented WP-28 scope, not the existing transport.

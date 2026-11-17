@@ -94,10 +94,19 @@ pnpm install --frozen-lockfile
 scripts/cloud-migrate.sh
 ```
 
-This runs `pnpm --filter @pinwren/db migrate` with the migration role, then `pnpm --filter @pinwren/db provision:cloud`,
-which revokes broad grants, grants the two roles their exact tables and columns, enables and forces RLS, and validates
-the catalogs in one transaction (a failure rolls back). It is idempotent. **Repeat it before every `fly deploy` that
-ships a new migration, and after any upgrade that adds projections** (see the isolation doc).
+This runs app migrations with the migration role, then Cloud table/RLS provisioning, then offline pg-boss
+queue provisioning. The table step revokes broad grants, grants exact tables/columns, forces RLS and validates
+catalogs transactionally. The queue step installs/migrates the schema, shares the app's queue definitions,
+waits for asynchronous index builds, validates topology/effective privileges and grants queue access only to
+the service role. Repeating it preserves pending jobs. **Repeat before every `fly deploy`, including pg-boss
+upgrades**; stop app workers for the offline upgrade and keep migration credentials outside the app.
+
+Cloud jobs use the service connection for global queue payloads; tenant connections cannot read them. Runtime
+queue migration, automatic reindexing and DDL-backed persisted warnings/stats are disabled; cron, supervision
+and job processing remain enabled. Application roles cannot submit BAM migration SQL or rewrite the version
+marker. Unsafe inherited grants or custom/partitioned queue topology require offline inspection before the
+command can proceed. Failed or ten-minute-timeout index builds abort provisioning; inspect pg-boss BAM with
+the migration owner, repair the cause, and rerun. Do not grant CREATE to application roles as a workaround.
 
 ## 5. Create the Fly app and set secrets
 

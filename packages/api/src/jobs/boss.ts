@@ -6,65 +6,49 @@ import { afterOrgCommit, currentOrgId } from "@pinwren/db";
 // cluster worker, each replica) runs its own PgBoss instance against the same tables; pg-boss's
 // SKIP LOCKED fetch hands each job to exactly one of them, and its cron runs each schedule once.
 
-export const QUEUES = {
-  /** Fan-out of a domain event: in-app notifications, emails, webhook deliveries. */
-  dispatch: "events.dispatch",
-  /** Send one email (and record it in the delivery log). */
-  email: "notify.email",
-  /** Hourly: one digest email per person who chose hourly or daily digests. */
-  digest: "notify.digest",
-  /** One webhook delivery attempt; failed attempts schedule the next one themselves. */
-  webhook: "webhook.deliver",
-  /** Daily: delete feedback past each project's retention, prune delivery logs. */
-  retention: "retention.apply",
-  /** Daily: purge soft-deleted feedback (and its files) after the trash window. */
-  cleanup: "assets.cleanup",
-  /** GitHub/GitLab: create an issue, or push a close/reopen (retried with backoff). */
-  issues: "issues.sync",
-  /** Daily: look for a newer Pinwren release (skipped in privacy mode). */
-  update: "update.check",
-  /** Build one project's data export (zip of JSON + files) on request (Project › Privacy & data). */
-  projectExport: "project.export",
-  /** AI enrichment: auto-summary, severity, duplicates, repro steps. */
-  aiEnrich: "ai.enrich",
-  /** Automation rules: evaluate a project's rules for one committed domain event. */
-  automation: "automation.run",
-  /** Interactive Slack: post or refresh the cards for one domain event. */
-  slack: "slack.deliver",
-} as const;
-export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
+import { QUEUES, QUEUE_OPTIONS } from "./definitions";
+export { QUEUES, type QueueName } from "./definitions";
+import type { QueueName } from "./definitions";
+import { assertQueueSecurity } from "./queue-security";
 
 const g = globalThis as unknown as { __pinwrenBoss?: Promise<PgBoss> | undefined };
 
-/** The process-wide PgBoss instance, started (and its schema installed) on first use. */
+/** Self-host installs on first use; Cloud only opens queues provisioned offline through its service role. */
 export function getBoss(): Promise<PgBoss> {
   g.__pinwrenBoss ??= (async () => {
+    const settings = env();
+    const cloud = settings.PINWREN_MODE === "cloud";
+    const connectionString = cloud ? settings.PINWREN_SERVICE_DATABASE_URL : settings.DATABASE_URL;
+    if (!connectionString) throw new Error("Cloud job queues require PINWREN_SERVICE_DATABASE_URL");
     const boss = new PgBoss({
-      connectionString: env().DATABASE_URL,
+      connectionString,
       schema: "pgboss",
       max: Number(process.env.PINWREN_JOBS_POOL_MAX ?? 3),
       application_name: "pinwren-jobs",
+      ...(cloud ? { migrate: false, reindex: false, persistQueueStats: false, persistWarnings: false } : {}),
     });
     boss.on("error", (err) => console.error("[pinwren] job queue error", err));
-    await boss.start();
-    // Queue definitions are idempotent; retries are per-queue defaults (webhooks retry themselves).
-    await Promise.all([
-      boss.createQueue(QUEUES.dispatch, { retryLimit: 3, retryDelay: 30, retryBackoff: true }),
-      boss.createQueue(QUEUES.email, { retryLimit: 4, retryDelay: 60, retryBackoff: true }),
-      boss.createQueue(QUEUES.digest, { retryLimit: 1, retryDelay: 300 }),
-      boss.createQueue(QUEUES.webhook, { retryLimit: 0, expireInSeconds: 120 }),
-      boss.createQueue(QUEUES.retention, { retryLimit: 2, retryDelay: 600 }),
-      boss.createQueue(QUEUES.cleanup, { retryLimit: 2, retryDelay: 600 }),
-      boss.createQueue(QUEUES.issues, { retryLimit: 6, retryDelay: 30, retryBackoff: true }),
-      boss.createQueue(QUEUES.update, { retryLimit: 0 }),
-      // The job records its own failure on the export; a retry would only repeat it.
-      boss.createQueue(QUEUES.projectExport, { retryLimit: 0, expireInSeconds: 3600 }),
-      boss.createQueue(QUEUES.aiEnrich, { retryLimit: 2, retryDelay: 60, retryBackoff: true }),
-      // Runs are claimed per (rule, event), so a retry after a crash never applies an action twice.
-      boss.createQueue(QUEUES.automation, { retryLimit: 2, retryDelay: 30, retryBackoff: true }),
-      // Retried only when Slack rate-limits the app; other failures are recorded on the connection.
-      boss.createQueue(QUEUES.slack, { retryLimit: 4, retryDelay: 30, retryBackoff: true }),
-    ]);
+    try {
+      if (cloud) await assertQueueSecurity(settings.DATABASE_URL, connectionString);
+      await boss.start();
+      if (cloud) {
+        const installed = new Set((await boss.getQueues()).map((queue) => queue.name));
+        if (Object.values(QUEUES).some((name) => !installed.has(name))) {
+          throw new Error(
+            "Cloud job queues are incomplete; run the offline Cloud migration/provisioning command",
+          );
+        }
+      } else {
+        await Promise.all(Object.values(QUEUES).map((name) => boss.createQueue(name, QUEUE_OPTIONS[name])));
+      }
+    } catch (error) {
+      await boss.stop({ graceful: false }).catch(() => undefined);
+      if (cloud)
+        throw new Error("Cloud job queue startup failed; run scripts/cloud-migrate.sh offline", {
+          cause: error,
+        });
+      throw error;
+    }
     return boss;
   })().catch((err: unknown) => {
     g.__pinwrenBoss = undefined;

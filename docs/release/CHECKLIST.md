@@ -10,8 +10,11 @@ passed format/lint/types/unit, production/Docker builds, PostgreSQL 16/17 isolat
 browser tests, website and API smoke. The fresh-install journey failed: expected `/forgot-password`,
 stayed on `/sign-in`. The late-setup layout shift is now fixed locally: a deterministic regression
 failed before the change, and the complete fresh-install journey passed 9/9 afterwards against a fresh
-PostgreSQL 17 database. Release readiness remains open until CI is fully green on the intended release
-head. Cloud worker findings and fixes are recorded in the [independent review](../security/2026-11-16-cloud-worker-review.md).
+PostgreSQL 17 database. All ten required checks then passed on `10cb468` in
+[PR #81](https://github.com/Krithik-m-codes/pinwren/pull/81), including the fresh-install journey and
+PostgreSQL 16/17 isolation. Later commits need their own CI verification; the wider release gates below
+remain open. Cloud queue provisioning follows [ADR 0041](../adr/0041-offline-cloud-job-queues.md).
+Worker findings and fixes are recorded in the [independent review](../security/2026-11-16-cloud-worker-review.md).
 
 ## Automated release gates
 

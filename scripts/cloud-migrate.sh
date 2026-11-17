@@ -13,15 +13,21 @@ for v in PINWREN_MIGRATION_DATABASE_URL PINWREN_RUNTIME_DIRECT_URL PINWREN_SERVI
   if [ -z "${!v:-}" ]; then echo "$v is not set" >&2; exit 1; fi
 done
 
-echo "[1/2] migrating"
+echo "[1/3] migrating"
 DATABASE_URL="$PINWREN_MIGRATION_DATABASE_URL" \
   PINWREN_SERVICE_DATABASE_URL= PINWREN_MIGRATION_DATABASE_URL= \
   pnpm --filter @pinwren/db migrate
 
-echo "[2/2] provisioning Cloud isolation"
+echo "[2/3] provisioning Cloud isolation"
 DATABASE_URL="$PINWREN_RUNTIME_DIRECT_URL" \
   PINWREN_SERVICE_DATABASE_URL="$PINWREN_SERVICE_DIRECT_URL" \
   PINWREN_MIGRATION_DATABASE_URL="$PINWREN_MIGRATION_DATABASE_URL" \
   pnpm --filter @pinwren/db provision:cloud
+
+echo "[3/3] provisioning Cloud job queues"
+DATABASE_URL="$PINWREN_RUNTIME_DIRECT_URL" \
+  PINWREN_SERVICE_DATABASE_URL="$PINWREN_SERVICE_DIRECT_URL" \
+  PINWREN_MIGRATION_DATABASE_URL="$PINWREN_MIGRATION_DATABASE_URL" \
+  pnpm --filter @pinwren/db exec tsx ../../packages/api/src/jobs/provision-cli.ts
 
 echo "done. Now deploy the app: fly deploy"

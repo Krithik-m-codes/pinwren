@@ -20,6 +20,7 @@
     "./schema": "./src/schema/index.ts",
     "./migrate": "./src/migrate.ts",
     "./cloud-security": "./src/cloud-security.ts",
+    "./cloud-database-url": "./src/cloud-database-url.ts",
     "./identity": "./src/identity.ts"
   },
   "scripts": {

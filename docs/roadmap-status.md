@@ -47,22 +47,26 @@ The initial documentation reconciliation above did not run tests; this follow-up
 
 ## Release blockers and readiness checks
 
-- [ ] Resolve the fresh-install journey failure and obtain a fully green CI run on the intended release head.
+- [x] Resolve the fresh-install journey failure and obtain a fully green CI run on the pushed fix.
       At the audited upstream head, [CI run 43149389098](https://github.com/Krithik-m-codes/pinwren/actions/runs/43149389098)
       failed only `Extended E2E (journey)`: expected `/forgot-password`, stayed on `/sign-in`.
       Fixed locally on 2026-11-16: late setup response moved the centred sign-in card during a click.
       The footer now reserves both states' natural height. The deterministic delayed-response journey
       failed before the fix (8 passed / 1 failed) and passed afterwards (9/9, fresh PostgreSQL 17 database).
-      A fully green CI run on the pushed fix is still required.
+      All ten required checks passed on `10cb468` in [PR #81](https://github.com/Krithik-m-codes/pinwren/pull/81),
+      [CI run 43916132122](https://github.com/Krithik-m-codes/pinwren/actions/runs/43916132122), including the
+      fresh-install journey and both PostgreSQL isolation jobs. Later commits need their own CI evidence.
       Both PostgreSQL 16/17 isolation jobs, dashboard/widget E2E, website, API smoke, build, Docker and
       format/lint/typecheck/unit jobs passed in that run. These are upstream results, not checks of subsequent edits.
 - [x] Obtain and retain an independent Cloud isolation source review:
-      [2026-11-16 report](security/2026-11-16-cloud-worker-review.md). Queue provisioning and remaining
+      [2026-11-16 report](security/2026-11-16-cloud-worker-review.md). Remaining
       worker/operational findings stay open; the review does not certify production readiness.
-- [ ] Finish WP-21 worker remediation: provision pg-boss offline without granting runtime DDL; verify
-      real queue startup/enqueue/consume, bounded maintenance, legacy Cloud startup repairs and multi-org
-      digests. Fixed and regression-tested locally: notification identity preferences, rollback-safe bell/queue
-      effects and AI job project validation. See the [review](security/2026-11-16-cloud-worker-review.md).
+- [x] Implement offline Cloud pg-boss provisioning and restricted service-role queue startup, with real
+      send/consume/supervision/cron, grant, upgrade and recovery tests. See [ADR 0041](adr/0041-offline-cloud-job-queues.md).
+      CI evidence for this follow-up is separate from the green `10cb468` checkpoint.
+- [ ] Finish WP-21 worker remediation: bounded maintenance, legacy Cloud startup repairs and multi-org
+      digests. Notification identity preferences, rollback-safe bell/queue effects, AI job project validation
+      and offline queue provisioning are implemented. See the [review](security/2026-11-16-cloud-worker-review.md).
 - [ ] Exercise Cloud multi-instance isolation, presence/reconnect, rate limits and failure recovery.
       Existing fan-out uses PostgreSQL LISTEN/NOTIFY and counters use PostgreSQL; Redis is an optional
       unimplemented WP-28 addition, not a missing prerequisite for the existing implementation.
