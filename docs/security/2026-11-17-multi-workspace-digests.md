@@ -44,9 +44,11 @@ the enqueue helper are real. Existing worker/email coverage also passed (29 targ
 Independent source review found no blocking correctness, compatibility or privilege issues. It ran
 no tests. Optional coverage for full overlapping worker runs and late account opt-outs remains a
 possible extension; the membership recheck and database cursor tests cover the implemented boundaries.
-This source review does not establish production operational readiness. CI must pass on the new head.
+This source review does not establish production operational readiness.
 
 The complete local PostgreSQL 17 isolation run passed **625 tests across all 27 runner suites**.
 Workspace unit tests passed **1,224 cases**; database-dependent cases run separately from that count.
 Full lint, formatting, workspace typechecking, production builds and changed-document link checks
-passed. These results do not replace CI on the pushed follow-up commit.
+passed. All required checks passed on `f5c8e31` in
+[CI run 44106834458](https://github.com/Krithik-m-codes/pinwren/actions/runs/44106834458), including
+both PostgreSQL isolation versions. Later follow-ups require their own green head.

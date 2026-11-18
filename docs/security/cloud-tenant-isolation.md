@@ -304,6 +304,9 @@ Reconciled 2026-11-16; see the [central checklist](../roadmap-status.md) for all
 - Rehearse multi-instance presence/reconnect, rate-limit isolation and failure recovery. Realtime
   already fans out through PostgreSQL LISTEN/NOTIFY; rate-limit counters already use PostgreSQL.
   Redis integration is optional unimplemented WP-28 scope, not the existing transport.
+  [Two-process backend acceptance](2026-11-17-cloud-multi-instance.md) now covers real roles,
+  authentication, SSE/presence, shared counters and listener/process recovery. It does not replace
+  deployed network/proxy/load-balancer, browser resync or production capacity rehearsals.
 - Exercise production-shaped credential rotation, migration/rollback, legacy-data migration where
   applicable, and backup/restore of Cloud data, uploads and secrets.
 - Verify Cloud CDN/version delivery and remote widget disable behaviour in the deployed environment.

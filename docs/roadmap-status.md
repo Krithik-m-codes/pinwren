@@ -79,12 +79,21 @@ The initial documentation reconciliation above did not run tests; this follow-up
       dashboard regrouping and API smoke after the selfhost scope regression fix.
 - [x] Implement multi-workspace digests without shared-cursor suppression, with explicit tenant filters,
       confirmed queue acceptance and cursor preservation on partial failure. See the
-      [digest evidence](security/2026-11-17-multi-workspace-digests.md). This follow-up needs its own green CI head.
+      [digest evidence](security/2026-11-17-multi-workspace-digests.md). All required checks passed on
+      `f5c8e31` in [PR #86](https://github.com/Krithik-m-codes/pinwren/pull/86),
+      [CI run 44106834458](https://github.com/Krithik-m-codes/pinwren/actions/runs/44106834458).
       Local verification passed 625 tests across all 27 PostgreSQL 17 isolation suites, 1,224 workspace
       unit tests, full lint, formatting, typechecking and production builds.
       All findings in the [independent worker review](security/2026-11-16-cloud-worker-review.md) now have
       implementation fixes; multi-instance and operator acceptance below remain open.
-- [ ] Exercise Cloud multi-instance isolation, presence/reconnect, rate limits and failure recovery.
+- [x] Automate two-process Cloud backend acceptance: real authentication/tenant filtering, SSE and
+      presence, cross-process replay, shared rate limits, listener reconnection, process restart and
+      request/reconnect revocation. See [evidence and limits](security/2026-11-17-cloud-multi-instance.md).
+      Local verification passed 633 tests across all 28 PostgreSQL 17 isolation suites, 1,224 workspace
+      unit tests, full lint, formatting, typechecking and production builds.
+      This follow-up requires its own green CI head.
+- [ ] Rehearse deployed Cloud multi-instance isolation, presence/reconnect, rate limits and failure
+      recovery through real networking/load balancers, including proxy buffering, client resync and capacity.
       Existing fan-out uses PostgreSQL LISTEN/NOTIFY and counters use PostgreSQL; Redis is an optional
       unimplemented WP-28 addition, not a missing prerequisite for the existing implementation.
 - [ ] Rehearse Cloud credential rotation, migrations/app rollback, legacy-data migration where applicable,

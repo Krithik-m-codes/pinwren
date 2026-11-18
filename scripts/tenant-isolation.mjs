@@ -42,6 +42,7 @@ const result = spawnSync(
     "src/cloud-maintenance-db.test.ts",
     "src/cloud-legacy-repairs-db.test.ts",
     "src/cloud-digest-db.test.ts",
+    "src/cloud-multi-instance-db.test.ts",
     "src/automation-db.test.ts",
     "src/dashboards-db.test.ts",
     "src/releases-db.test.ts",

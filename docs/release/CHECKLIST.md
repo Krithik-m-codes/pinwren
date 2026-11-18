@@ -21,7 +21,10 @@ Bounded maintenance follows [ADR 0042](../adr/0042-bounded-maintenance.md); requ
 `6312d62` in [CI run 44025517438](https://github.com/Krithik-m-codes/pinwren/actions/runs/44025517438).
 The [legacy repair follow-up](../security/2026-11-17-cloud-legacy-repairs.md) passed required checks on
 `9e44d4d` in [CI run 44040406671](https://github.com/Krithik-m-codes/pinwren/actions/runs/44040406671).
-The [digest follow-up](../security/2026-11-17-multi-workspace-digests.md) requires its own green head.
+The [digest follow-up](../security/2026-11-17-multi-workspace-digests.md) passed required checks on
+`f5c8e31` in [CI run 44106834458](https://github.com/Krithik-m-codes/pinwren/actions/runs/44106834458).
+The [two-process acceptance follow-up](../security/2026-11-17-cloud-multi-instance.md) requires its own
+green head. Deployed networking, load-balancer and operator gates remain open.
 
 ## Automated release gates
 
