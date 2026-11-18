@@ -26,6 +26,11 @@ export class CloudInstance {
     secret: string,
     readonly name: string,
   ) {
+    const environment = { ...process.env };
+    // The parent owns provisioning/fault injection; application children receive restricted roles only.
+    delete environment.PINWREN_ISOLATION_ADMIN_URL;
+    delete environment.PINWREN_TEST_DATABASE_URL;
+    delete environment.PINWREN_MIGRATION_DATABASE_URL;
     const named = (url: string) => {
       const parsed = new URL(url);
       parsed.searchParams.set("application_name", name);
@@ -34,7 +39,7 @@ export class CloudInstance {
     this.child = fork(fileURLToPath(new URL("./multi-instance-worker.ts", import.meta.url)), [], {
       execArgv: ["--import", pathToFileURL(require.resolve("tsx")).href],
       env: {
-        ...process.env,
+        ...environment,
         PINWREN_TEST_MULTIPROCESS: "1",
         PINWREN_MODE: "cloud",
         DATABASE_URL: named(runtimeUrl),
@@ -56,7 +61,7 @@ export class CloudInstance {
       const timeout = setTimeout(() => {
         this.child.kill("SIGKILL");
         reject(new Error(`Instance startup timed out: ${this.diagnostics}`));
-      }, 30_000);
+      }, 100_000);
       this.child.once("error", (error) => {
         clearTimeout(timeout);
         reject(error);

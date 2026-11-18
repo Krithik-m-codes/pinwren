@@ -109,7 +109,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud separate-proces
     ] as const) {
       expect((await instance.open(name, `/api/stream?projectIds=${project}`, cookie)).status).toBe(200);
     }
-  }, 120_000);
+  }, 180_000);
   afterAll(async () => {
     const closed = await Promise.allSettled([first?.close(), second?.close()]);
     try {
@@ -332,7 +332,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud separate-proces
       timeout: 10_000,
       interval: 30,
     });
-  }, 90_000);
+  }, 150_000);
   it("rechecks revoked membership and sessions on either process and SSE reconnect", async () => {
     await db()`delete from member where user_id=${userA} and organization_id=${orgA}`;
     for (const instance of [a(), b()]) {

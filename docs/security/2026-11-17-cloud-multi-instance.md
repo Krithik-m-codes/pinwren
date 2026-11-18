@@ -7,6 +7,8 @@ restricted runtime/service roles. Each child imports the real Hono API, signs in
 owns real SSE readers and uses PostgreSQL LISTEN/NOTIFY and rate repositories. Application names
 identify each process's database connections. No authentication, tenant access, SSE bus or counter
 repository is mocked.
+Administrative test/migration URLs stay in the parent process; the controller removes them from
+child environments, and child startup rejects their presence.
 
 The controller uses validated IPC to invoke `app.request` and collect responses/frames inside each
 child. This exercises HTTP handler semantics and Web Streams without opening network ports. It does
@@ -56,6 +58,7 @@ Stream readers now expose unexpected failure/closure rather than letting negativ
 pass against dead readers; event-ID equality is checked on every relevant process/stream. Startup,
 command and process-cleanup waits are bounded. Teardown checks database connections and restricts
 fallback termination to the fixture's own named processes before disposing its database and roles.
+Cold API imports have a 100-second startup deadline (a cold import takes ~25 s on a quiet machine and several times that under CPU contention); bootstrap diagnostics identify an import stall.
 
 All eight cases passed locally on PostgreSQL 17 after these review changes. The reviewer ran no tests.
 The complete local isolation run passed **633 tests across all 28 runner suites**. Workspace unit

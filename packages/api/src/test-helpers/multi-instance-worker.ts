@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { app } from "../index";
 import { consume, consumeAmount, exhausted } from "../rate-limit";
 import { publish, type BusEvent } from "../realtime/bus";
 import {
@@ -13,6 +12,15 @@ import type { z } from "zod";
 const send = process.send?.bind(process);
 if (!send || process.env.PINWREN_TEST_MULTIPROCESS !== "1")
   throw new Error("This entry point requires test IPC");
+if (
+  ["PINWREN_ISOLATION_ADMIN_URL", "PINWREN_TEST_DATABASE_URL", "PINWREN_MIGRATION_DATABASE_URL"].some(
+    (key) => process.env[key],
+  )
+)
+  throw new Error("Application child received an administrative database URL");
+console.info("[multi-instance] importing application");
+const { app } = await import("../index");
+console.info("[multi-instance] application loaded");
 type Stream = {
   controller: AbortController;
   reader: ReadableStreamDefaultReader<Uint8Array>;
