@@ -1,5 +1,8 @@
 # Pinwren — build blueprint
 
+Current implementation status and outstanding work: [roadmap checklist](../docs/roadmap-status.md)
+(reconciled 2026-11-16). The blueprint specifies target scope; it is not a completion certificate.
+
 > **Codename:** `Pinwren` (placeholder — check trademark/domain before launch; every doc uses this name so a find-and-replace renames it).
 
 Pinwren is a visual feedback and bug-reporting platform. A single script tag (or npm package) adds a widget to any website. Clients and teammates **pin comments onto live page elements** (SitePing-style, DOM-anchored, threaded), or **file a full bug report** with an annotated screenshot, console logs, network errors and an optional session replay (BugPin/Marker.io-style). Everything lands in a fast, keyboard-first triage inbox and is routed to email, chat, issue trackers and AI coding agents.

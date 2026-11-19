@@ -1,5 +1,9 @@
 # Cloud Tenant Isolation Implementation Plan
 
+> Historical execution plan. Unchecked steps are not a current implementation inventory.
+> Consult the [reconciled roadmap checklist](../../roadmap-status.md) before resuming; AI enrichment,
+> Cloud isolation/sign-up and Free/Pro billing have since shipped, with remaining gates recorded there.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Enforce organization isolation at the database boundary and prove it across tenant entry points before enabling Cloud signup.

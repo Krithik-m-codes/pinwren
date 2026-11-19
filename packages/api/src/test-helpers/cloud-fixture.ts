@@ -48,7 +48,13 @@ export async function createCloudFixture() {
       fileURLToPath(new URL("../../../db/drizzle", import.meta.url)),
     );
     await provisionCloudDatabase(fixtureUrl.toString(), { runtimeRole, serviceRole });
-    return { db, runtimeUrl: runtimeUrl.toString(), serviceUrl: serviceUrl.toString(), dispose };
+    return {
+      db,
+      migrationUrl: fixtureUrl.toString(),
+      runtimeUrl: runtimeUrl.toString(),
+      serviceUrl: serviceUrl.toString(),
+      dispose,
+    };
   } catch (error) {
     await dispose();
     throw error;

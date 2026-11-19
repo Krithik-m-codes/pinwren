@@ -1,6 +1,8 @@
 import { normalizePageUrl, parseWidgetConfig } from "@pinwren/core";
-import { feedback, getDb, page, project } from "@pinwren/db";
+import { currentOrgId, feedback, getDb, page, project, withOrg } from "@pinwren/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { organizationIds } from "../db/system";
+import { assertGlobalMaintenance } from "../jobs/maintenance-batches";
 
 // Page grouping (wave-5 contract §2): `normalizePageUrl` now drops tracking parameters, folds a trailing slash
 // and applies each project's `ignoredQueryParams`. Pages stored under the old rules (one row per distinct
@@ -46,59 +48,71 @@ const STALE = sql`(${page.url} like '%?%' or ${page.url} ~ '^[a-z]+://[^/]+/.*/$
 
 /** Merge every project's stale page rows (startup). Returns how many rows were merged or renamed. */
 export async function mergeStalePages(): Promise<number> {
-  const candidates = await getDb()
-    .select({ id: page.id, url: page.url, projectId: page.projectId })
-    .from(page)
-    .where(STALE)
-    .limit(50_000);
-  const byProject = new Map<string, PageRow[]>();
-  for (const r of candidates) byProject.set(r.projectId, [...(byProject.get(r.projectId) ?? []), r]);
+  assertGlobalMaintenance();
   let changed = 0;
-  for (const [projectId, rows] of byProject) changed += await mergeProjectPages(projectId, rows);
+  for (const orgId of await organizationIds()) {
+    const projects = await withOrg(orgId, (db) =>
+      db.select({ id: project.id }).from(project).where(eq(project.orgId, orgId)).orderBy(project.id),
+    );
+    for (const p of projects) changed += await withOrg(orgId, () => mergeProjectPages(p.id));
+  }
   return changed;
 }
 
 /**
  * Re-group one project's pages now, e.g. right after its ignored query parameters changed (Page Review ›
- * URL grouping). `rows` defaults to the project's stale rows.
+ * URL grouping). Candidates are re-read under the project's transaction lock.
  */
-export async function mergeProjectPages(projectId: string, rows?: PageRow[]): Promise<number> {
-  const db = getDb();
-  const list =
-    rows ??
-    (await db
+export async function mergeProjectPages(projectId: string): Promise<number> {
+  const orgId = currentOrgId();
+  if (!orgId) throw new Error("Page merging requires an organization transaction");
+  return getDb().transaction(async (db) => {
+    // Plan under the same lock as writes; concurrent startup/on-demand repairs must re-read after waiting.
+    const [p] = await db
+      .select({ widgetConfig: project.widgetConfig })
+      .from(project)
+      .where(and(eq(project.orgId, orgId), eq(project.id, projectId)))
+      .for("update");
+    if (!p) return 0;
+    const list = await db
       .select({ id: page.id, url: page.url })
       .from(page)
-      .where(and(eq(page.projectId, projectId), STALE))
-      .limit(50_000));
-  if (!list.length) return 0;
-  const [p] = await db
-    .select({ widgetConfig: project.widgetConfig })
-    .from(project)
-    .where(eq(project.id, projectId));
-  if (!p) return 0;
-  const ignored = parseWidgetConfig(p.widgetConfig).ignoredQueryParams;
-  const keys = new Set<string>();
-  for (const r of list) {
-    try {
-      keys.add(normalizePageUrl(r.url, ignored));
-    } catch {
-      // skipped by planPageMerge too
+      .where(and(eq(page.orgId, orgId), eq(page.projectId, projectId), STALE))
+      .orderBy(page.id)
+      .limit(50_000);
+    if (!list.length) return 0;
+    const ignored = parseWidgetConfig(p.widgetConfig).ignoredQueryParams;
+    const keys = new Set<string>();
+    for (const r of list) {
+      try {
+        keys.add(normalizePageUrl(r.url, ignored));
+      } catch {
+        // skipped by planPageMerge too
+      }
     }
-  }
-  if (!keys.size) return 0;
-  const existing = await db
-    .select({ id: page.id, url: page.url })
-    .from(page)
-    .where(and(eq(page.projectId, projectId), inArray(page.url, [...keys])));
-  const plan = planPageMerge(list, new Map(existing.map((e) => [e.url, e.id])), ignored);
-  if (!plan.moves.length && !plan.renames.length) return 0;
-  await db.transaction(async (tx) => {
+    if (!keys.size) return 0;
+    const existing = await db
+      .select({ id: page.id, url: page.url })
+      .from(page)
+      .where(and(eq(page.orgId, orgId), eq(page.projectId, projectId), inArray(page.url, [...keys])));
+    const plan = planPageMerge(list, new Map(existing.map((e) => [e.url, e.id])), ignored);
+    if (!plan.moves.length && !plan.renames.length) return 0;
     for (const m of plan.moves) {
-      await tx.update(feedback).set({ pageId: m.to }).where(eq(feedback.pageId, m.from));
-      await tx.delete(page).where(eq(page.id, m.from));
+      await db
+        .update(feedback)
+        .set({ pageId: m.to })
+        .where(
+          and(eq(feedback.orgId, orgId), eq(feedback.projectId, projectId), eq(feedback.pageId, m.from)),
+        );
+      await db
+        .delete(page)
+        .where(and(eq(page.orgId, orgId), eq(page.projectId, projectId), eq(page.id, m.from)));
     }
-    for (const r of plan.renames) await tx.update(page).set({ url: r.url }).where(eq(page.id, r.id));
+    for (const r of plan.renames)
+      await db
+        .update(page)
+        .set({ url: r.url })
+        .where(and(eq(page.orgId, orgId), eq(page.projectId, projectId), eq(page.id, r.id)));
+    return plan.moves.length + plan.renames.length;
   });
-  return plan.moves.length + plan.renames.length;
 }

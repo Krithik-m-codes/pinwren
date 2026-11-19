@@ -3,6 +3,7 @@ import { emailDelivery, getDb, withOrg } from "@pinwren/db";
 import { identityDatabase } from "@pinwren/db/identity";
 import { and, count, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { enqueue, QUEUES } from "../jobs/boss";
+import { MAINTENANCE_BATCH_SIZE } from "../jobs/maintenance-batches";
 import { resolveSmtp } from "./config";
 import { type EmailMessage, sendEmail } from "./send";
 
@@ -205,11 +206,18 @@ export async function resendSkipped(): Promise<{ queued: number } | null> {
 }
 
 /** Daily retention: the log is for troubleshooting, not an archive. */
-export async function pruneDeliveries(now = new Date()): Promise<number> {
+export async function pruneDeliveries(orgId: string, now = new Date()): Promise<number> {
   const cutoff = new Date(now.getTime() - DELIVERY_RETENTION_DAYS * 86_400_000);
-  const gone = await getDb()
+  const db = getDb();
+  const ids = db
+    .select({ id: emailDelivery.id })
+    .from(emailDelivery)
+    .where(and(eq(emailDelivery.orgId, orgId), lt(emailDelivery.createdAt, cutoff)))
+    .orderBy(emailDelivery.createdAt, emailDelivery.id)
+    .limit(MAINTENANCE_BATCH_SIZE);
+  const gone = await db
     .delete(emailDelivery)
-    .where(lt(emailDelivery.createdAt, cutoff))
+    .where(and(eq(emailDelivery.orgId, orgId), inArray(emailDelivery.id, ids)))
     .returning({ id: emailDelivery.id });
   return gone.length;
 }

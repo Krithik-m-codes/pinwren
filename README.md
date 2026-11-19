@@ -26,9 +26,11 @@ in a keyboard-first triage inbox you run yourself.
 <!-- Screenshot placeholder: add docs/assets/screenshot.png (the widget on a page next to the inbox) and
      embed it here. -->
 
-> **Status: v0.2 — early.** The core loop (pin, report, triage, sync to your tracker) works and is covered by
+> **Status: v0.6 — pre-1.0.** The core loop (pin, report, triage, sync to your tracker) works and is covered by
 > unit, Playwright and end-to-end API tests. Expect rough edges and breaking changes before 1.0. The full
-> product spec and roadmap live in [`blueprint/`](blueprint/README.md).
+> product spec and roadmap live in [`blueprint/`](blueprint/README.md). The reconciled
+> [implementation status and remaining-work checklist](docs/roadmap-status.md) distinguish shipped features
+> from missing implementation and release validation.
 
 ## Features
 

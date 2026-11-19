@@ -1,5 +1,5 @@
 import { anchorBundle, roleCan } from "@pinwren/core";
-import { feedback, getDb, page, project } from "@pinwren/db";
+import { feedback, getDb, page, project, withOrg } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq, isNull } from "drizzle-orm";
 import { Hono } from "hono";
@@ -72,10 +72,13 @@ export const pageLinks = new Hono<{ Variables: SessionVars }>()
    * after an Admin changed them in Page Review › URL grouping. Startup does the same for every project.
    */
   .post("/projects/:id/pages/regroup", requirePermission("projects.manage"), async (c) => {
-    const [p] = await getDb()
-      .select({ id: project.id })
-      .from(project)
-      .where(and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId)));
-    if (!p) throw notFound("Project");
-    return c.json({ merged: await mergeProjectPages(p.id) });
+    // Selfhost requests do not have Cloud's outer tenant middleware.
+    return withOrg(c.var.orgId, async (db) => {
+      const [p] = await db
+        .select({ id: project.id })
+        .from(project)
+        .where(and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId)));
+      if (!p) throw notFound("Project");
+      return c.json({ merged: await mergeProjectPages(p.id) });
+    });
   });

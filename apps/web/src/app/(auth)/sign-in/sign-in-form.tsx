@@ -3,6 +3,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { cn } from "cn";
 import { useEffect, useState } from "react";
 import { Controller } from "react-hook-form";
 import { controlProps, Field, FormError, useZodForm } from "@/components/form";
@@ -93,18 +94,29 @@ export function SignInForm() {
             {isSubmitting ? t("other1.signingIn") : t("other1.signIn")}
           </Button>
           <OtherSignIn mode="sign-in" nextParam={nextParam} onEmailLink={() => setStep("link")} />
-          {signupOpen ? (
-            <p className="text-center text-sm text-muted-foreground">
+          {/* Both alternatives size this grid, so a late setup response cannot move a link mid-click.
+              Visibility also removes the inactive text and link from keyboard/accessibility navigation. */}
+          <div className="grid">
+            <p
+              className={cn(
+                "col-start-1 row-start-1 text-center text-sm text-muted-foreground",
+                !signupOpen && "invisible",
+              )}
+            >
               {t("other1.newHere")}{" "}
               <Link href={withNext("/sign-up", nextParam) as Route} className={linkClass}>
                 {t("other1.createAnAccount")}
               </Link>
             </p>
-          ) : (
-            <p className="text-center text-sm text-pretty text-muted-foreground">
+            <p
+              className={cn(
+                "col-start-1 row-start-1 text-center text-sm text-pretty text-muted-foreground",
+                signupOpen && "invisible",
+              )}
+            >
               {t("other1.newHereInvitationOnly")}
             </p>
-          )}
+          </div>
         </form>
       </CardContent>
     </Card>

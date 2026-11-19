@@ -1,6 +1,12 @@
 import { getDb, webhookEndpoint } from "@pinwren/db";
 import { and, eq, inArray, not, like } from "drizzle-orm";
 import { decryptSecret, encryptSecret } from "../crypto";
+import { organizationIds } from "../db/system";
+import {
+  assertGlobalMaintenance,
+  maintenanceBatch,
+  MAINTENANCE_BATCH_SIZE,
+} from "../jobs/maintenance-batches";
 
 // Chat webhook URLs (Slack, Discord, Teams), Telegram bot targets and ntfy topic URLs are credentials
 // (anyone holding one can post to the channel, or read the topic), so they are stored encrypted like other
@@ -77,16 +83,45 @@ export function telegramChatOf(e: { url: string; kind: Kind }): string | null {
 
 /** Encrypt chat webhook URLs stored in clear text before this change (runs at startup, idempotent). */
 export async function encryptLegacyChatWebhookUrls(): Promise<number> {
-  const db = getDb();
-  const rows = await db
-    .select({ id: webhookEndpoint.id, url: webhookEndpoint.url })
-    .from(webhookEndpoint)
-    .where(and(inArray(webhookEndpoint.kind, ["slack", "discord"]), not(like(webhookEndpoint.url, "v1.%"))));
-  for (const r of rows) {
-    await db
-      .update(webhookEndpoint)
-      .set({ url: encryptSecret(r.url) })
-      .where(and(eq(webhookEndpoint.id, r.id), eq(webhookEndpoint.url, r.url)));
+  assertGlobalMaintenance();
+  let changed = 0;
+  for (const orgId of await organizationIds()) {
+    // Startup has no scheduled continuation: drain the backlog using independently committed batches.
+    for (;;) {
+      const result = await maintenanceBatch(orgId, async () => {
+        const db = getDb();
+        const rows = await db
+          .select({ id: webhookEndpoint.id, url: webhookEndpoint.url })
+          .from(webhookEndpoint)
+          .where(
+            and(
+              eq(webhookEndpoint.orgId, orgId),
+              inArray(webhookEndpoint.kind, ["slack", "discord"]),
+              not(like(webhookEndpoint.url, "v1.%")),
+            ),
+          )
+          .orderBy(webhookEndpoint.id)
+          .limit(MAINTENANCE_BATCH_SIZE);
+        let updated = 0;
+        for (const r of rows) {
+          const result = await db
+            .update(webhookEndpoint)
+            .set({ url: encryptSecret(r.url) })
+            .where(
+              and(
+                eq(webhookEndpoint.orgId, orgId),
+                eq(webhookEndpoint.id, r.id),
+                eq(webhookEndpoint.url, r.url),
+              ),
+            )
+            .returning({ id: webhookEndpoint.id });
+          updated += result.length;
+        }
+        return { selected: rows.length, updated };
+      });
+      changed += result.updated;
+      if (result.selected < MAINTENANCE_BATCH_SIZE) break;
+    }
   }
-  return rows.length;
+  return changed;
 }

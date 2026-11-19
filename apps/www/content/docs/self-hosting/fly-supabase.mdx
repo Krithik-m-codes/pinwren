@@ -94,10 +94,19 @@ pnpm install --frozen-lockfile
 scripts/cloud-migrate.sh
 ```
 
-This runs `pnpm --filter @pinwren/db migrate` with the migration role, then `pnpm --filter @pinwren/db provision:cloud`,
-which revokes broad grants, grants the two roles their exact tables and columns, enables and forces RLS, and validates
-the catalogs in one transaction (a failure rolls back). It is idempotent. **Repeat it before every `fly deploy` that
-ships a new migration, and after any upgrade that adds projections** (see the isolation doc).
+This runs app migrations with the migration role, then Cloud table/RLS provisioning, then offline pg-boss
+queue provisioning. The table step revokes broad grants, grants exact tables/columns, forces RLS and validates
+catalogs transactionally. The queue step installs/migrates the schema, shares the app's queue definitions,
+waits for asynchronous index builds, validates topology/effective privileges and grants queue access only to
+the service role. Repeating it preserves pending jobs. **Repeat before every `fly deploy`, including pg-boss
+upgrades**; stop app workers for the offline upgrade and keep migration credentials outside the app.
+
+Cloud jobs use the service connection for global queue payloads; tenant connections cannot read them. Runtime
+queue migration, automatic reindexing and DDL-backed persisted warnings/stats are disabled; cron, supervision
+and job processing remain enabled. Application roles cannot submit BAM migration SQL or rewrite the version
+marker. Unsafe inherited grants or custom/partitioned queue topology require offline inspection before the
+command can proceed. Failed or ten-minute-timeout index builds abort provisioning; inspect pg-boss BAM with
+the migration owner, repair the cause, and rerun. Do not grant CREATE to application roles as a workaround.
 
 ## 5. Create the Fly app and set secrets
 
@@ -151,21 +160,29 @@ node scripts/post-deploy-check.mjs https://app.pinwren.xride-labs.in
 
 The check requires `/api/health` to answer 200. In Cloud mode the app validates role attributes, grants, RLS and
 policies before serving; while that guard fails, `/api/health` answers 500 and `fly logs` shows the reason. It also
-checks the HTTP-to-HTTPS redirect, that the dashboard responds, and that HSTS is sent. The first account created on a
-fresh instance becomes the instance admin: create it yourself immediately, or set `PINWREN_ADMIN_EMAILS` first.
+checks the HTTP-to-HTTPS redirect, that the dashboard responds, and that HSTS is sent. On a fresh self-host
+instance, the first account becomes instance admin. Cloud disables that promotion; configure explicit
+`PINWREN_ADMIN_EMAILS` and keep public sign-up closed while completing operator setup.
 
 Sizing: one `shared-cpu-2x` / 1 GB machine with `PINWREN_WORKERS=2` (one Node process per core, via `docker/cluster.cjs`).
 Jobs run in the same processes (`PINWREN_ROLE=all`), so the machine never auto-stops. Stay on one machine until the
-multi-instance work in the isolation doc (Redis-backed realtime and rate limits) is finished; scale up
+multi-instance validation in the isolation doc is complete; scale up
 (`fly scale vm shared-cpu-4x --vm-memory 2048`, raise `PINWREN_WORKERS` to match) rather than out.
 
-## Sign-ups and billing (coming)
+## Sign-ups and billing
 
-- `PINWREN_CLOUD_SIGNUPS`: planned with the Cloud sign-up PR (branch `feat/cloud-signup`). It does not exist in `main`
-  yet; until it ships, sign-up stays closed in Cloud mode. Add it to `[env]` in `fly.toml` when that PR merges.
-- Dodo Payments (billing PR, branch `feat/wp22-billing`): secrets `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_WEBHOOK_KEY`,
-  `DODO_PRO_MONTHLY_PRODUCT_ID`, `DODO_PRO_ANNUAL_PRODUCT_ID`; non-secret `DODO_PAYMENTS_ENVIRONMENT` and optionally
-  `DODO_PAYMENTS_BASE_URL`. Confirm the names against that PR's env schema when it merges.
+Sign-up/onboarding and Free/Pro Dodo Payments billing are implemented. This is implementation status,
+not evidence of a public launch or a successful live payment.
+
+- `PINWREN_CLOUD_SIGNUPS=open|closed` exists and defaults to `closed`. Closed permits invited addresses
+  but refuses new public accounts. Keep it closed until the Cloud review and operational gates are met.
+- Sign-up requires email/password, terms consent and verified email; it enforces signup abuse limits
+  and creates a Free workspace. See the Cloud sign-up section in the isolation document.
+- Dodo secrets: `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_WEBHOOK_KEY`, `DODO_PRO_MONTHLY_PRODUCT_ID`,
+  `DODO_PRO_ANNUAL_PRODUCT_ID`. Non-secrets: `DODO_PAYMENTS_ENVIRONMENT` (defaults to `test_mode`) and
+  optional `DODO_PAYMENTS_BASE_URL`. These names are implemented in `packages/api/src/env.ts`.
+- Checkout, customer portal, signed/idempotent webhooks, quotas and dunning exist. Live-account/product
+  setup, Business/add-ons and downgrade gaps remain; see ADR 0023 and `docs/roadmap-status.md`.
 
 ## Runbook
 

@@ -213,7 +213,8 @@ Strategies in order, first confident hit wins; each yields a confidence score:
 
 ### F-097 Usage & billing — _Cloud only_
 
-- Stripe Billing: plans, trials, seats/limits enforcement, invoices, customer portal, dunning; usage meters (reports/month, replay storage).
+- Dodo Payments (ADR 0023 supersedes Stripe): plans, trials, seats/limits enforcement, invoices, customer portal, dunning; usage meters (reports/month, replay storage).
+- Current implementation: Free/Pro, checkout/portal, project/seat/report quotas and dunning. Trials, replay-storage metering and remaining plan gaps are tracked in [the roadmap checklist](../docs/roadmap-status.md).
 
 ### F-098 Licence management — _E_
 

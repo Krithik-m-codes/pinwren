@@ -108,6 +108,31 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
 
   if (!p) return { status: "skipped", reason: "Project not found" };
 
+  // Validate all job identifiers before any skipped/failed write or provider lookup.
+  const [item] = await withOrg(job.orgId, (db) =>
+    db
+      .select({
+        id: feedback.id,
+        title: feedback.title,
+        body: feedback.body,
+        anchor: feedback.anchor,
+        pageUrl: page.url,
+      })
+      .from(feedback)
+      .leftJoin(page, eq(page.id, feedback.pageId))
+      .where(
+        and(
+          eq(feedback.id, job.feedbackId),
+          eq(feedback.orgId, job.orgId),
+          eq(feedback.projectId, job.projectId),
+        ),
+      ),
+  );
+
+  if (!item) {
+    return { status: "skipped", reason: "Feedback item not found" };
+  }
+
   if (!p.aiConfig.enabled) {
     await withOrg(job.orgId, (db) =>
       db
@@ -167,31 +192,6 @@ export async function runAiEnrichmentJob(job: AiEnrichJob): Promise<{
         }),
     );
     return { status: "failed", error };
-  }
-
-  // 4. Load feedback item and technical diagnostics
-  const [item] = await withOrg(job.orgId, (db) =>
-    db
-      .select({
-        id: feedback.id,
-        title: feedback.title,
-        body: feedback.body,
-        anchor: feedback.anchor,
-        pageUrl: page.url,
-      })
-      .from(feedback)
-      .leftJoin(page, eq(page.id, feedback.pageId))
-      .where(
-        and(
-          eq(feedback.id, job.feedbackId),
-          eq(feedback.orgId, job.orgId),
-          eq(feedback.projectId, job.projectId),
-        ),
-      ),
-  );
-
-  if (!item) {
-    return { status: "skipped", reason: "Feedback item not found" };
   }
 
   const [diag] = await withOrg(job.orgId, (db) =>

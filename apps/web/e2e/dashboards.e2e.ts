@@ -55,7 +55,8 @@ test.describe("dashboards", () => {
       .getByRole("button", { name: /^Remove / })
       .first()
       .click();
-    expect(await board.locator("[data-widget]").count()).toBe(before.length - 1);
+    // Retrying assertion: the removal renders after the click returns.
+    await expect(board.locator("[data-widget]")).toHaveCount(before.length - 1);
     await page.getByRole("button", { name: "Add widget" }).click();
     await page.getByRole("dialog").locator("ul button").first().click();
     await expect(board.locator("[data-widget]")).toHaveCount(before.length);

@@ -81,7 +81,8 @@ webhook.disabled`. `webhook.disabled` rows have `feedbackId: null`.
 - `feedbackListQuery` adds `labelId`, `reporter` (name/email contains), `hasReplay` (bool), `browser` (contains),
   `trash` (bool; org admins only), `sort: created|updated|priority` (default `created`), `order: asc|desc` (default
   `desc`). Query-string booleans accept `true/false/1/0`. The existing `page` filter is the "page URL contains" filter.
-  **Not yet applied** by `listFeedback`: triage implements them, including a cursor that works for every sort.
+  **Implemented** by `listFeedback` in `services/feedback.ts`, including sort-aware cursors; covered by
+  `triage.test.ts` and the triage browser journey.
 - `labelCreate { name 1–40, color hex }`, `labelUpdate` (partial), `MAX_LABELS_PER_PROJECT` (100), `MAX_LABELS_PER_ITEM` (20).
 - `commentCreate.mentions?: string[]` (≤ 20 user ids).
 - `notificationPreferenceInput` adds `mentioned`, `priorityChanges`. `notificationsRead` adds `{ feedbackId }`.

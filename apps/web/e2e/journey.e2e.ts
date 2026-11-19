@@ -364,8 +364,27 @@ test.describe.serial("fresh install journey", () => {
   test("9. forgot password without SMTP: ask the admin, who copies a reset link", async ({ browser }) => {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
+    let releaseSetup!: () => void;
+    const setupGate = new Promise<void>((resolve) => {
+      releaseSetup = resolve;
+    });
+    await page.route("**/api/setup", async (route) => {
+      const response = await route.fetch();
+      await setupGate;
+      await route.fulfill({ response });
+    });
     await page.goto("/sign-in");
-    await page.getByRole("link", { name: "Forgot password?" }).click();
+    await expect(page.getByTestId("other-sign-in")).toBeVisible();
+    const forgot = page.getByRole("link", { name: "Forgot password?" });
+    const box = await forgot.boundingBox();
+    if (!box) throw new Error("Forgot-password link has no hit target");
+    // The setup answer can arrive between pointer-down and pointer-up. Its invitation-only footer
+    // must not move the centred card and turn a click on this link into a click on the form.
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    releaseSetup();
+    await expect(page.getByText(/Accounts on this server are by invitation/)).toBeVisible();
+    await page.mouse.up();
     await expect(page).toHaveURL(/\/forgot-password/);
     await expect(page.getByText("Ask your administrator")).toBeVisible();
     await shot(page, "09-forgot-password");

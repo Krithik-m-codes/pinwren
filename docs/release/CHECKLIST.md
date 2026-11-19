@@ -1,7 +1,30 @@
 ﻿# Pinwren release checklist
 
-Status reconciled on 2026-10-27. The app is released at **0.2.0**, the widget at **0.3.0**, and React,
-SDK, MCP and CLI at **0.2.0**. A GitHub release and an npm publication are separate events: check both.
+Status reconciled on **2026-11-16**. The release manifest records app **0.6.0**, widget **0.7.0**,
+SDK/MCP/CLI **0.4.0** and React **0.2.0**. These are source version records; a GitHub release and an npm
+publication are separate events and must each be verified. The current implementation backlog and
+readiness gates are in [the roadmap checklist](../roadmap-status.md).
+
+At upstream `0762e93`, [CI run 43149389098](https://github.com/Krithik-m-codes/pinwren/actions/runs/43149389098)
+passed format/lint/types/unit, production/Docker builds, PostgreSQL 16/17 isolation, dashboard/widget
+browser tests, website and API smoke. The fresh-install journey failed: expected `/forgot-password`,
+stayed on `/sign-in`. The late-setup layout shift is now fixed locally: a deterministic regression
+failed before the change, and the complete fresh-install journey passed 9/9 afterwards against a fresh
+PostgreSQL 17 database. All ten required checks then passed on `10cb468` in
+[PR #81](https://github.com/Krithik-m-codes/pinwren/pull/81), including the fresh-install journey and
+PostgreSQL 16/17 isolation. Later commits need their own CI verification; the wider release gates below
+remain open. Cloud queue provisioning follows [ADR 0041](../adr/0041-offline-cloud-job-queues.md).
+Worker findings and fixes are recorded in the [independent review](../security/2026-11-16-cloud-worker-review.md).
+Queue provisioning's required checks passed on `29d68b4` in [PR #83](https://github.com/Krithik-m-codes/pinwren/pull/83),
+[CI run 44020453858](https://github.com/Krithik-m-codes/pinwren/actions/runs/44020453858).
+Bounded maintenance follows [ADR 0042](../adr/0042-bounded-maintenance.md); required checks passed on
+`6312d62` in [CI run 44025517438](https://github.com/Krithik-m-codes/pinwren/actions/runs/44025517438).
+The [legacy repair follow-up](../security/2026-11-17-cloud-legacy-repairs.md) passed required checks on
+`9e44d4d` in [CI run 44040406671](https://github.com/Krithik-m-codes/pinwren/actions/runs/44040406671).
+The [digest follow-up](../security/2026-11-17-multi-workspace-digests.md) passed required checks on
+`f5c8e31` in [CI run 44106834458](https://github.com/Krithik-m-codes/pinwren/actions/runs/44106834458).
+The [two-process acceptance follow-up](../security/2026-11-17-cloud-multi-instance.md) requires its own
+green head. Deployed networking, load-balancer and operator gates remain open.
 
 ## Automated release gates
 
@@ -55,10 +78,16 @@ exercise authentication. Optionally configure `RELEASE_PLEASE_TOKEN` so generate
 
 ## Implemented features previously listed as missing
 
-Screenshot-on-comment, AI triage and dashboard translations are implemented. The widget and dashboard
-support eleven languages. AI is optional and off by default. Jira Cloud and white-label entitlements
-are implemented; SSO, SCIM, audit logs, custom roles, legal hold and SIEM streaming remain planned.
-Cloud billing, the standalone guest portal and interactive Slack remain roadmap work.
+Screenshot-on-comment, optional AI triage, dashboard/widget translations, Jira Cloud and white-label
+entitlements are implemented. The standalone guest portal, launcher theming/favicon, interactive Slack,
+Cloud tenant isolation and sign-up/onboarding are also implemented. Cloud sign-up defaults to closed;
+Free/Pro Dodo Payments billing, limits and dunning are built in test mode.
+
+Later additions include named/shared server-persisted dashboards and filters, account preferences,
+custom fields, release/regression tracking, tracker adapters, screen recording/voice, AI labels/automation,
+agent hand-off/repro tests and sharing/client sign-off. SSO, SCIM, audit logs, custom roles, custom
+domains, legal hold and SIEM streaming remain unimplemented. The
+[remaining-work checklist](../roadmap-status.md) records billing gaps, scale/AI work and validation separately.
 
 ## Known operational limits
 

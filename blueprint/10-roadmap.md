@@ -2,6 +2,40 @@
 
 Durations assume one developer working with an AI build agent full-time. Each phase ends with a **release gate**: all exit criteria met, CI green, a tagged release, and a written changelog. Work-package IDs (`WP-xx`) map 1:1 to prompts in [11-build-prompts.md](11-build-prompts.md).
 
+## Current status — 2026-11-16
+
+The roadmap is **not complete**. The current evidence and actionable remaining-work checklist live in
+[docs/roadmap-status.md](../docs/roadmap-status.md). The phase tables below specify scope and original
+milestone targets; their version numbers are not statements about current package releases.
+
+| Phase / packages   | Implementation status                                                                                       | Remaining work                                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 0: WP-00–03        | Foundations implemented                                                                                     | Maintain release checks                                                                                          |
+| 1: WP-04–13        | Core self-host loop implemented                                                                             | Full doctor diagnostics, backup automation and release/real-service validation; fresh-install CI currently fails |
+| 2: WP-14–20, WP-30 | Collaboration implemented, including standalone guest portal, interactive Slack and launcher theming        | Real-account/site validation; Jira Data Center remains unsupported                                               |
+| 3: WP-21           | Tenant isolation, provisioning, cross-tenant tests and Cloud sign-up implemented; sign-up closed by default | Remaining worker/multi-instance findings, operator rehearsals and deployed CDN/disable evidence                  |
+| 3: WP-22           | Dodo Payments Free/Pro, checkout/portal, usage limits and dunning implemented in test mode                  | Live setup, Business/add-ons and downgrade gaps; Dodo supersedes Stripe via ADR 0023                             |
+| 3: WP-23           | Licence verification, entitlements, signing tool and admin/grace UI implemented                             | Operational key/issuance and release validation                                                                  |
+| 3: WP-24           | Not implemented                                                                                             | SSO/SCIM, audit log/export, custom roles                                                                         |
+| 3: WP-25           | White-label and Jira Cloud implemented                                                                      | Custom domains and legal hold; planned SIEM/support follow-ups                                                   |
+| 3: WP-26           | Marketing site, pricing, docs and changelog implemented                                                     | Keep availability and release claims tied to actual deployment/publication                                       |
+| 4: WP-27           | AI provider layer, summaries, triage, repro, translation and candidate duplicate checks implemented         | Automatic embedding/pgvector duplicate clustering                                                                |
+| 4: WP-28           | Cluster workers, Postgres realtime/limits, operator backup docs and historical k6 tests implemented         | Helm, read replicas, optional Redis, backup/restore CI and fresh capacity evidence                               |
+| 4: WP-29           | Accessibility checks exist, including website CI                                                            | Product-wide accessibility/performance evidence, dashboard Lighthouse ≥95 and VPAT                               |
+| 5                  | Deferred, demand-driven                                                                                     | Extension, mobile SDKs, public feedback board and design-frame comparison                                        |
+
+Later shipped additions include named/shared server-persisted dashboards and filters, custom fields,
+release/regression tracking, additional tracker adapters, screen recording/voice, AI labels/automation,
+agent hand-off/repro tests, report sharing and client sign-off. See the
+[feature-parity inventory](14-feature-parity.md) and [remaining checklist](../docs/roadmap-status.md).
+
+At upstream `0762e93`, both PostgreSQL isolation jobs and most CI gates passed, but the fresh-install
+journey failed. The sign-in layout cause is fixed locally (9/9 fresh-install checks), and an independent
+Cloud source review is recorded with queue/worker findings and remediation in progress. All ten required
+checks passed on `10cb468` (PR #81); offline queue provisioning is implemented in the follow-up under
+[ADR 0041](../docs/adr/0041-offline-cloud-job-queues.md), with its own CI verification still required. Implemented features do not by themselves close phase release gates or establish
+production Cloud availability. See the checklist for the exact run and outstanding validation.
+
 ## Phase 0 — Foundations (≈ 2 weeks)
 
 | WP    | Deliverable                                                                                                                                           |
@@ -50,7 +84,7 @@ Durations assume one developer working with an AI build agent full-time. Each ph
 | WP    | Deliverable                                                                                                     | Features            |
 | ----- | --------------------------------------------------------------------------------------------------------------- | ------------------- |
 | WP-21 | Cloud mode: multi-tenancy hardening, RLS enforcement, cross-tenant test suite, CDN widget delivery, kill switch | 02 §4               |
-| WP-22 | Stripe billing, plans, limits, usage counters, dunning                                                          | F-097, 07 §5        |
+| WP-22 | Dodo Payments billing, plans, limits, usage counters, dunning (ADR 0023 supersedes Stripe)                      | F-097, 07 §5        |
 | WP-23 | `ee/licensing`: licence verification, entitlements, admin UI, grace behaviour; licence-signing tool             | F-098, 07 §4        |
 | WP-24 | SSO (SAML/OIDC), SCIM, enforced SSO, audit log + export, custom roles                                           | F-091, F-092, F-093 |
 | WP-25 | White-label + custom domains, Jira integration, legal hold                                                      | F-094, F-079, F-095 |
