@@ -13,7 +13,9 @@ const nextConfig: NextConfig = {
   typedRoutes: true,
   // A second server in the same checkout (e.g. a test run) needs its own build folder.
   distDir: process.env.PINWREN_WWW_DIST_DIR || ".next",
-  output: "standalone",
+  // Standalone is for the Docker image; Vercel builds its own function bundles, and the extra copy of
+  // every traced file only adds to each deployment's stored size.
+  ...(process.env.VERCEL ? {} : { output: "standalone" as const }),
   outputFileTracingRoot: fileURLToPath(new URL("../..", import.meta.url)),
   // The demo API validates requests with the real widget contract schemas.
   transpilePackages: ["@pinwren/core"],
