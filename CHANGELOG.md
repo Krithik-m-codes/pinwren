@@ -8,6 +8,14 @@ From the first release on, release-please adds a section per version from the Co
 `main`; the widget's own changes are also listed in [`packages/widget/CHANGELOG.md`](packages/widget/CHANGELOG.md)
 once it is published.
 
+## [0.6.1](https://github.com/Krithik-m-codes/pinwren/compare/v0.6.0...v0.6.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* deflake the widget comment e2e and the forgot-password lookup ([#76](https://github.com/Krithik-m-codes/pinwren/issues/76)) ([61240c6](https://github.com/Krithik-m-codes/pinwren/commit/61240c6b0601469fdef0d4e682b5c39103de8d84))
+* **www:** stop Vercel deployments from piling up in storage ([#100](https://github.com/Krithik-m-codes/pinwren/issues/100)) ([a174ab0](https://github.com/Krithik-m-codes/pinwren/commit/a174ab0651c289006861bee0560afd44e6f341c3))
+
 ## [0.6.0](https://github.com/Krithik-m-codes/pinwren/compare/v0.5.0...v0.6.0) (2026-11-11)
 
 
