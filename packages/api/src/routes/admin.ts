@@ -24,6 +24,7 @@ import {
   resolveEntitlements,
 } from "../license";
 import { emailBrand } from "../services/branding";
+import { runDiagnostics } from "../services/diagnostics";
 import { getSecuritySettings, runUpdateCheck, updateSecuritySettings } from "../settings/instance";
 
 /** What instance admins see in Settings › Licence: entitlements plus where the licence comes from. */
@@ -62,6 +63,12 @@ const deliveriesQuery = z.object({
 /** Instance settings for self-host administrators (mounted at /api/admin, after requireSession). */
 export const admin = new Hono<{ Variables: SessionVars }>()
   .use(requireInstanceAdmin)
+
+  /** `pinwren doctor` for instance admins: database, migrations, storage, SMTP and config, each with its own verdict. */
+  .get("/diagnostics", async (c) => {
+    c.header("cache-control", "no-store");
+    return c.json({ checks: await runDiagnostics() });
+  })
 
   .get("/settings/email", async (c) => c.json({ email: await getEmailSettings() }))
 

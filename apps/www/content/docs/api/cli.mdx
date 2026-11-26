@@ -16,7 +16,7 @@ npm install -g @pinwren/cli
 
 ```text
 pinwren init   [--url <instance>] [--key <pk_…>] [--framework html|vite|next] [--write] [--file <path>]
-pinwren doctor --url <instance> [--key <pk_…>] [--origin <https://your-site>] [--json]
+pinwren doctor --url <instance> [--key <pk_…>] [--origin <https://your-site>] [--cookie <session cookie>] [--json]
 pinwren status --url <instance> --token <pwt_…> [--json]
 pinwren feedback list  --url <instance> --token <pwt_…> [--project <id>] [--status <s>] [--kind <k>] [--text <q>] [--limit <n>] [--json]
 pinwren feedback get   <id> --url <instance> --token <pwt_…> [--json]
@@ -74,6 +74,20 @@ Checks a running instance and exits with `1` if anything fails. Without `--key` 
 | `server`        | `GET /api/health` answers `{ "ok": true, "version": "…" }`; shows the version.                                                                                 |
 | `widget.js`     | `GET /widget.js` is served as JavaScript.                                                                                                                      |
 | `widget config` | With `--key`: `GET /w/config` with that key and `--origin` (default: the instance's own origin). Reports an unknown or archived key, or an origin not allowed. |
+
+With an instance administrator's session cookie (`--cookie`, or `PINWREN_ADMIN_COOKIE`) it also asks the server to
+check itself, through `GET /api/admin/diagnostics` (instance administrators only, never cached):
+
+| Check        | What it does                                                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `database`   | Runs a query and shows the round-trip time.                                                                                    |
+| `migrations` | Compares the migrations this build ships with the ones the database applied: pending ones fail, and so does a newer database.  |
+| `storage`    | Writes, reads back and deletes a probe through the configured driver (local disk or S3).                                       |
+| `smtp`       | Connects, negotiates TLS and logs in without sending anything. Not configured shows `-`, not a failure.                        |
+| `config`     | Warns about a public `PINWREN_URL` without https, `PINWREN_ENFORCE_HTTPS` off, or `PINWREN_TRUST_PROXY=0` on a public address. |
+
+Copy the cookie from your browser's developer tools (Application › Cookies) while signed in; the CLI sends it only to
+`--url` and never prints it. Each check has a 10-second limit and reports separately, so one failure hides nothing.
 
 ```bash
 pinwren doctor --url https://feedback.example.com --key pk_123… --origin https://www.example.com

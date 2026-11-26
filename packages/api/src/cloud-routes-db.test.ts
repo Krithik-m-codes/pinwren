@@ -419,6 +419,7 @@ const cases: Record<string, Spec> = {
   "DELETE /api/admin/license": authorization({ status: [403] }),
   "GET /api/admin/instance-admins": authorization({ status: [403] }),
   "GET /api/admin/license": authorization({ status: [403] }),
+  "GET /api/admin/diagnostics": authorization({ status: [403] }),
   "GET /api/admin/settings/email": authorization({ status: [403] }),
   "GET /api/admin/settings/email/deliveries": authorization({ status: [403] }),
   "GET /api/admin/settings/security": authorization({ status: [403] }),
