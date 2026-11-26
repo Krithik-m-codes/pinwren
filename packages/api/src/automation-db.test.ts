@@ -128,7 +128,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Automation rules", ()
       [orgA, ids.projectA, ids.labelA],
       [orgB, ids.projectB, ids.labelB],
     ] as const) {
-      await d`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${org},'P',${org},${project},${d.array(["https://customer.test"])},${randomUUID()},${randomUUID()})`;
+      await d`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${org},'P',${org},${project},${["https://customer.test"]},${randomUUID()},${randomUUID()})`;
       await d`insert into label (id,org_id,project_id,name,color) values (${label},${org},${project},'Billing','#112233')`;
     }
     api = (await import("./index")).app;
@@ -270,7 +270,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Automation rules", ()
     expect(picks[0]).not.toBe(picks[1]);
     expect(picks[0]).toBe(picks[2]);
     const taken = await newItem();
-    await db()`update feedback set assignee_ids = ${db().array([owner])} where id = ${taken}`;
+    await db()`update feedback set assignee_ids = ${[owner]} where id = ${taken}`;
     await engine.runAutomations(createdEvent(taken));
     expect((await item(taken)).assignee_ids).toEqual([owner]);
     expect(await runsOf(rule)).toHaveLength(5);

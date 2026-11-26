@@ -228,7 +228,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Interactive Slack", (
       [orgA, ids.projectA2, "Beta"],
       [orgB, ids.projectB, "Gamma"],
     ] as const) {
-      await d`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${org},${name},${project},${project},${d.array(["https://customer.test"])},${randomUUID()},${randomUUID()})`;
+      await d`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${org},${name},${project},${project},${["https://customer.test"]},${randomUUID()},${randomUUID()})`;
     }
     await d`insert into label (id,org_id,project_id,name,color) values (${ids.labelA},${orgA},${ids.projectA},'Billing','#112233')`;
     for (const [id, org, project] of [

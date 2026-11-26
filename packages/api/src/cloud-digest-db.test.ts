@@ -37,7 +37,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud multi-workspace
       const project = projects[i];
       if (!project) throw new Error("Missing project");
       await db()`insert into organization (id,name,slug) values (${org},${org},${org})`;
-      await db()`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${org},'Project',${project},${randomUUID()},${db().array(["https://example.test"])},${randomUUID()},${randomUUID()})`;
+      await db()`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${org},'Project',${project},${randomUUID()},${["https://example.test"]},${randomUUID()},${randomUUID()})`;
       for (const id of [user, paused])
         await db()`insert into member (id,organization_id,user_id,role) values (${randomUUID()},${org},${id},'owner')`;
     }

@@ -765,7 +765,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)(
           share = `pws_${randomUUID().replaceAll("-", "")}`,
           asset = randomUUID();
         await database`insert into organization (id,name,slug) values (${org ?? ""},${org ?? ""},${org ?? ""})`;
-        await database`insert into project (id,org_id,name,slug,public_key,allowed_origins,public_read,identity_secret,action_secret,notify_emails,feedback_counter) values (${projectId},${org ?? ""},${org ?? ""},${org ?? ""},${key},${database.array([origin])},true,${randomUUID()},${randomUUID()},${database.array(["reporter@test.invalid"])},1)`;
+        await database`insert into project (id,org_id,name,slug,public_key,allowed_origins,public_read,identity_secret,action_secret,notify_emails,feedback_counter) values (${projectId},${org ?? ""},${org ?? ""},${org ?? ""},${key},${[origin]},true,${randomUUID()},${randomUUID()},${["reporter@test.invalid"]},1)`;
         await database`insert into feedback (id,org_id,project_id,number,kind,body,client_id,reporter_token_hash,reporter_guest) values (${item},${org ?? ""},${projectId},1,'bug',${`public ${mark}`},${randomUUID()},${sha256Hex(reporter)},${database.json({ name: "Reporter", email: `private-${mark}@test.invalid` })})`;
         await database`insert into comment (org_id,feedback_id,body,visibility) values (${org ?? ""},${item},${`INTERNAL ${mark}`},'internal'),(${org ?? ""},${item},${`PUBLIC ${mark}`},'public')`;
         await database`insert into review_link (org_id,project_id,label,token_hash) values (${org ?? ""},${projectId},'fixture',${sha256Hex(review)})`;

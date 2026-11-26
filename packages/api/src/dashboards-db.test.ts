@@ -95,7 +95,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Dashboards", () => {
       [orgA, ids.projectA, ids.labelA],
       [orgB, ids.projectB, ids.labelB],
     ] as const) {
-      await d`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${org},'P',${org},${project},${d.array(["https://customer.test"])},${randomUUID()},${randomUUID()})`;
+      await d`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${org},'P',${org},${project},${["https://customer.test"]},${randomUUID()},${randomUUID()})`;
       await d`insert into label (id,org_id,project_id,name,color) values (${label},${org},${project},'Billing','#112233')`;
     }
     api = (await import("./index")).app;
@@ -403,7 +403,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Dashboards", () => {
       const org = fields.org ?? orgA;
       const project = fields.project ?? ids.projectA;
       n += 1;
-      await db()`insert into feedback (id,org_id,project_id,number,kind,priority,status,body,client_id,assignee_ids,created_at) values (${id},${org},${project},${n},'bug','none','open','Filter me',${randomUUID()},${db().array(fields.assignee ? [fields.assignee] : [])},${fields.createdAt ?? new Date().toISOString()})`;
+      await db()`insert into feedback (id,org_id,project_id,number,kind,priority,status,body,client_id,assignee_ids,created_at) values (${id},${org},${project},${n},'bug','none','open','Filter me',${randomUUID()},${fields.assignee ? [fields.assignee] : []},${fields.createdAt ?? new Date().toISOString()})`;
       if (fields.label)
         await db()`insert into feedback_label (feedback_id,label_id) values (${id},${fields.label})`;
       return id;

@@ -878,7 +878,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
       await db`insert into "user" (id,name,email,email_verified) values (${user ?? ""},${user ?? ""},${`${user ?? ""}@test.invalid`},true)`;
       await db`insert into account (id,account_id,provider_id,user_id,password) values (${randomUUID()},${user ?? ""},'credential',${user ?? ""},${hashed})`;
       await db`insert into member (id,organization_id,user_id,role) values (${randomUUID()},${org ?? ""},${user ?? ""},'owner')`;
-      await db`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${projectId},${org ?? ""},${mark},${org ?? ""},${projectId},${db.array(["https://customer.test"])},${randomUUID()},${randomUUID()})`;
+      await db`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${projectId},${org ?? ""},${mark},${org ?? ""},${projectId},${["https://customer.test"]},${randomUUID()},${randomUUID()})`;
       await db`insert into feedback (id,org_id,project_id,number,kind,body,client_id) values (${feedbackId},${org ?? ""},${projectId},1,'bug',${mark},${randomUUID()})`;
       await db`update project set feedback_counter=1 where id=${projectId}`;
       if (key === "D") continue;
@@ -932,7 +932,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
       await db`insert into email_template (org_id,key,subject,body) values (${org ?? ""},'reporter_received',${mark},${mark})`;
       await db`insert into brand_asset (org_id,storage_key,content_type,bytes) values (${org ?? ""},${row.asset},'text/plain',1)`;
       await db`insert into email_delivery (id,org_id,to_address,template_key,subject,status,payload) values (${row.mail},${org ?? ""},${`${mark}@test.invalid`},'test',${mark},'sent',${db.json({})})`;
-      await db`insert into api_token (id,org_id,user_id,name,prefix,hash,scopes) values (${row.token},${org ?? ""},${user ?? ""},${mark},${token.slice(0, 12)},${await hashToken(token)},${db.array(["feedback:read", "feedback:write", "releases:write"])})`;
+      await db`insert into api_token (id,org_id,user_id,name,prefix,hash,scopes) values (${row.token},${org ?? ""},${user ?? ""},${mark},${token.slice(0, 12)},${await hashToken(token)},${["feedback:read", "feedback:write", "releases:write"]})`;
       if (key === "B") {
         // A connected Slack workspace with a route, a mapped member and a posted card.
         const ws = randomUUID();
@@ -940,7 +940,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
         await db`insert into slack_workspace (id,org_id,team_id,team_name,signing_secret,bot_token,token_hint) values (${ws},${org ?? ""},${team},${mark},${encryptSecret("b".repeat(32))},${encryptSecret("xoxb-" + "2".repeat(30))},'2222')`;
         row.slackRoute = randomUUID();
         row.slackLink = randomUUID();
-        await db`insert into slack_route (id,org_id,workspace_id,project_id,channel_id,events) values (${row.slackRoute},${org ?? ""},${ws},${projectId},'C0BBBBBBBB',${db.array(["feedback.created"])})`;
+        await db`insert into slack_route (id,org_id,workspace_id,project_id,channel_id,events) values (${row.slackRoute},${org ?? ""},${ws},${projectId},'C0BBBBBBBB',${["feedback.created"]})`;
         await db`insert into slack_user_link (id,org_id,workspace_id,slack_user_id,user_id) values (${row.slackLink},${org ?? ""},${ws},'U0BBBBBBBB',${user ?? ""})`;
         await db`insert into slack_message (org_id,workspace_id,feedback_id,channel_id,ts) values (${org ?? ""},${ws},${feedbackId},'C0BBBBBBBB','1700000000.000100')`;
         Object.assign(ids, { slackWsB: ws, slackTeamB: team });
