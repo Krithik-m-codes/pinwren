@@ -4,6 +4,8 @@ import {
   type BillingInterval,
   effectivePlan,
   overLimitProjectIds,
+  PAID_PLAN_IDS,
+  type PaidPlanId,
   reportQuota,
   SUBSCRIPTION_STATUSES,
   type SubscriptionState,
@@ -13,7 +15,7 @@ import { billingEvent, billingSubscription, feedback, getDb, member, project, wi
 import { and, count, eq, gte, isNull } from "drizzle-orm";
 import { env } from "../env";
 import { ApiError } from "../errors";
-import { billingEnabled, configuredIntervals, dodoBaseUrl, intervalForProduct, productFor } from "./config";
+import { billingEnabled, configuredIntervals, dodoBaseUrl, planForProduct, productFor } from "./config";
 import { createDodoClient, type DodoClient, dodoOverride } from "./dodo";
 
 type Row = typeof billingSubscription.$inferSelect;
@@ -42,7 +44,7 @@ const asInterval = (s: string | null): BillingInterval | null =>
 export const toState = (row: Row | undefined): SubscriptionState | null =>
   row
     ? {
-        plan: row.plan === "pro" ? "pro" : "free",
+        plan: row.plan === "pro" || row.plan === "business" ? row.plan : "free",
         interval: asInterval(row.interval),
         status: isStatus(row.status) ? row.status : "none",
         currentPeriodEnd: row.currentPeriodEnd,
@@ -95,6 +97,13 @@ export async function getBillingInfo(orgId: string, now = new Date()): Promise<B
   const { plan, dunning, row, definition } = await planFor(db, orgId, now);
   const used = await orgUsage(db, orgId, now);
   const intervals = configuredIntervals();
+  const plans = Object.fromEntries(PAID_PLAN_IDS.map((p) => [p, configuredIntervals(p)])) as Record<
+    PaidPlanId,
+    BillingInterval[]
+  >;
+  const planPrices = Object.fromEntries(
+    PAID_PLAN_IDS.map((p) => [p, BILLING_PLANS[p].price ?? { monthly: 0, annualPerMonth: 0 }]),
+  ) as Record<PaidPlanId, { monthly: number; annualPerMonth: number }>;
   const l = definition.limits;
   return {
     plan,
@@ -112,23 +121,26 @@ export async function getBillingInfo(orgId: string, now = new Date()): Promise<B
     },
     readOnlyProjects: (await readOnlyProjectIds(db, orgId, now)).size,
     checkout: {
-      available: billingEnabled() && intervals.length > 0,
+      available: billingEnabled() && PAID_PLAN_IDS.some((p) => plans[p].length > 0),
       intervals,
+      plans,
       manageable: !!row?.dodoCustomerId,
     },
     prices: BILLING_PLANS.pro.price ?? { monthly: 0, annualPerMonth: 0 },
+    planPrices,
   };
 }
 
 export async function startCheckout(input: {
   orgId: string;
   interval: BillingInterval;
+  plan?: PaidPlanId;
   user: { email: string; name: string };
 }): Promise<{ url: string }> {
-  const productId = productFor(input.interval);
+  const productId = productFor(input.interval, input.plan ?? "pro");
   const row = await loadRow(getDb(), input.orgId);
   const { plan } = effectivePlan(toState(row));
-  if (plan === "pro" && row?.status === "active") {
+  if (plan !== "free" && row?.status === "active") {
     throw new ApiError(
       409,
       "ALREADY_SUBSCRIBED",
@@ -310,10 +322,11 @@ export function applyEvent(current: Row | undefined, e: DodoEvent, now = new Dat
   }
   if (!status) return null;
 
-  const interval = intervalForProduct(data.product_id);
+  const product = planForProduct(data.product_id);
+  const interval = product?.interval ?? null;
   if (status === "active") {
     // Never grant a paid plan for a product that is not one of ours.
-    if (!interval) return null;
+    if (!product) return null;
   } else if (!sameSub) {
     // A late event of a replaced subscription must not touch the one in force.
     return null;
@@ -326,7 +339,7 @@ export function applyEvent(current: Row | undefined, e: DodoEvent, now = new Dat
   const next = toDate(data.next_billing_date);
   if (next) patch.currentPeriodEnd = next;
   if (status === "active") {
-    patch.plan = "pro";
+    patch.plan = product?.plan ?? "pro";
     if (interval) patch.interval = interval;
     patch.pastDueSince = null;
     patch.cancelAtPeriodEnd = data.cancel_at_next_billing_date === true;

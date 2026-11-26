@@ -13,6 +13,8 @@ const env = {
   PINWREN_SERVICE_DATABASE_URL: "postgres://unused@127.0.0.1:1/none",
   DODO_PRO_MONTHLY_PRODUCT_ID: "prod_m",
   DODO_PRO_ANNUAL_PRODUCT_ID: "prod_a",
+  DODO_BUSINESS_MONTHLY_PRODUCT_ID: "prod_bm",
+  DODO_BUSINESS_ANNUAL_PRODUCT_ID: "prod_ba",
 };
 
 beforeEach(() => {
@@ -125,6 +127,24 @@ describe("Dodo client", () => {
 });
 
 describe("product mapping", () => {
+  it("maps each paid plan's products to the plan and interval", async () => {
+    const config = await import("./config");
+    expect(config.productFor("monthly", "business")).toBe("prod_bm");
+    expect(config.productFor("annual")).toBe("prod_a"); // Pro stays the default
+    expect(config.planForProduct("prod_ba")).toEqual({ plan: "business", interval: "annual" });
+    expect(config.planForProduct("prod_m")).toEqual({ plan: "pro", interval: "monthly" });
+    expect(config.planForProduct("prod_other")).toBeNull();
+    expect(config.configuredIntervals("business")).toEqual(["monthly", "annual"]);
+    vi.resetModules();
+    vi.stubEnv("DODO_BUSINESS_MONTHLY_PRODUCT_ID", "");
+    vi.stubEnv("DODO_BUSINESS_ANNUAL_PRODUCT_ID", "");
+    const bare = await import("./config");
+    expect(bare.configuredIntervals("business")).toEqual([]);
+    expect(() => bare.productFor("monthly", "business")).toThrow(
+      /DODO_BUSINESS_MONTHLY_PRODUCT_ID is not set/,
+    );
+  });
+
   it("reads product ids from the environment and names the missing variable", async () => {
     const config = await import("./config");
     expect(config.productFor("monthly")).toBe("prod_m");
@@ -212,6 +232,39 @@ describe("webhook state machine", () => {
       pastDueSince: null,
     });
     expect(patch?.currentPeriodEnd?.toISOString()).toBe("2027-11-01T00:00:00.000Z");
+  });
+
+  it("activates Business for its product, and a plan change moves a Pro workspace to it", async () => {
+    const { applyEvent } = await import("./service");
+    expect(
+      applyEvent(
+        undefined,
+        { type: "subscription.active", timestamp: at(0), data: data({ product_id: "prod_bm" }) },
+        t0,
+      ),
+    ).toMatchObject({ plan: "business", interval: "monthly", status: "active" });
+    expect(
+      applyEvent(
+        row({ plan: "pro" }),
+        {
+          type: "subscription.plan_changed",
+          timestamp: at(5),
+          data: data({ product_id: "prod_ba", status: "active" }),
+        },
+        t0,
+      ),
+    ).toMatchObject({ plan: "business", interval: "annual" });
+  });
+
+  it("keeps the paid plan while a renewal fails, and never invents one", async () => {
+    const { applyEvent } = await import("./service");
+    const patch = applyEvent(
+      row({ plan: "business", productId: "prod_ba" }),
+      { type: "subscription.past_due", timestamp: at(5), data: data({ product_id: "prod_ba" }) },
+      t0,
+    );
+    expect(patch).toMatchObject({ status: "past_due" });
+    expect(patch).not.toHaveProperty("plan");
   });
 
   it("never grants Pro for a product that is not configured", async () => {
