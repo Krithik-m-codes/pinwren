@@ -254,6 +254,24 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud billing", () =>
     expect(list.projects).toHaveLength(2);
   });
 
+  it("keeps the oldest project writable after the downgrade and makes the newer one read-only", async () => {
+    const { assertProjectWritable } = await import("./billing/service");
+    const [oldest, newest] = await db()<
+      { id: string }[]
+    >`select id from project where org_id=${org} and archived_at is null order by created_at asc, id asc`;
+    expect(await billing()).toMatchObject({ readOnlyProjects: 1 });
+    await expect(assertProjectWritable(org, oldest?.id ?? "")).resolves.toBeUndefined();
+    await expect(assertProjectWritable(org, newest?.id ?? "")).rejects.toMatchObject({
+      status: 403,
+      code: "PLAN_PROJECT_READ_ONLY",
+    });
+    // Archiving the newer project brings the workspace back within its plan: nothing is read-only any more.
+    await db()`update project set archived_at = now() where id=${newest?.id ?? ""}`;
+    expect(await billing()).toMatchObject({ readOnlyProjects: 0 });
+    await expect(assertProjectWritable(org, oldest?.id ?? "")).resolves.toBeUndefined();
+    await db()`update project set archived_at = null where id=${newest?.id ?? ""}`;
+  });
+
   it("recovers on a successful renewal", async () => {
     await webhook(
       "msg_4",

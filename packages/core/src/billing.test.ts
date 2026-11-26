@@ -3,6 +3,7 @@ import {
   BILLING_PLANS,
   DUNNING_GRACE_DAYS,
   effectivePlan,
+  overLimitProjectIds,
   reportQuota,
   type SubscriptionState,
 } from "./billing";
@@ -61,5 +62,38 @@ describe("reportQuota", () => {
   });
   it("never limits when there is no limit", () => {
     expect(reportQuota(10 ** 9, null)).toBe("ok");
+  });
+});
+
+describe("overLimitProjectIds", () => {
+  const at = (n: number) => new Date(Date.UTC(2026, 0, n));
+  const projects = [
+    { id: "c", createdAt: at(3) },
+    { id: "a", createdAt: at(1) },
+    { id: "b", createdAt: at(2) },
+  ];
+
+  it("keeps the oldest projects writable and marks the rest read-only", () => {
+    expect([...overLimitProjectIds(projects, 1)].sort()).toEqual(["b", "c"]);
+    expect([...overLimitProjectIds(projects, 2)]).toEqual(["c"]);
+  });
+
+  it("marks nothing at or under the limit, or without one", () => {
+    expect(overLimitProjectIds(projects, 3).size).toBe(0);
+    expect(overLimitProjectIds(projects, 10).size).toBe(0);
+    expect(overLimitProjectIds(projects, null).size).toBe(0);
+  });
+
+  it("breaks creation-time ties by id so the answer is stable", () => {
+    const tied = [
+      { id: "z", createdAt: at(1) },
+      { id: "m", createdAt: at(1) },
+    ];
+    expect([...overLimitProjectIds(tied, 1)]).toEqual(["z"]);
+    expect([...overLimitProjectIds([...tied].reverse(), 1)]).toEqual(["z"]);
+  });
+
+  it("a limit of zero makes every project read-only", () => {
+    expect(overLimitProjectIds(projects, 0).size).toBe(3);
   });
 });

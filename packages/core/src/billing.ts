@@ -97,6 +97,22 @@ export function effectivePlan(
   }
 }
 
+/**
+ * After a downgrade a workspace can hold more live projects than its plan allows. Nothing is deleted: the
+ * oldest `limit` projects stay writable and the rest become read-only until the plan is raised or projects
+ * are archived. Oldest-first (ties by id) keeps the answer stable between requests.
+ */
+export function overLimitProjectIds(
+  projects: readonly { id: string; createdAt: Date }[],
+  limit: number | null,
+): Set<string> {
+  if (limit === null || projects.length <= limit) return new Set();
+  const ordered = [...projects].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+  );
+  return new Set(ordered.slice(limit).map((p) => p.id));
+}
+
 /** ok below the limit; soft at 100% (banner only); blocked at 120% (widget queues locally). */
 export function reportQuota(used: number, limit: number | null): "ok" | "soft" | "blocked" {
   if (limit === null || used < limit) return "ok";
@@ -115,6 +131,8 @@ export const billingResponse = z.object({
   /** Set while a failed renewal is in grace (or the grace is over and the plan was lowered). */
   dunning: z.object({ endsAt: z.string(), daysLeft: z.number().int(), downgraded: z.boolean() }).nullable(),
   usage: z.object({ seats: usageEntry, projects: usageEntry, reports: usageEntry }),
+  /** Live projects past the plan's project limit (after a downgrade): they stay readable but take no new feedback. */
+  readOnlyProjects: z.number().int().default(0),
   /** Which paid intervals the server can sell (product ids configured). */
   checkout: z.object({
     available: z.boolean(),
