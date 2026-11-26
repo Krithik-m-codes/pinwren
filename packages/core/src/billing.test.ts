@@ -3,6 +3,7 @@ import {
   BILLING_PLANS,
   DUNNING_GRACE_DAYS,
   effectivePlan,
+  overLimitProjectIds,
   reportQuota,
   type SubscriptionState,
 } from "./billing";
@@ -61,5 +62,56 @@ describe("reportQuota", () => {
   });
   it("never limits when there is no limit", () => {
     expect(reportQuota(10 ** 9, null)).toBe("ok");
+  });
+});
+
+describe("overLimitProjectIds", () => {
+  const at = (n: number) => new Date(Date.UTC(2026, 0, n));
+  const projects = [
+    { id: "c", createdAt: at(3) },
+    { id: "a", createdAt: at(1) },
+    { id: "b", createdAt: at(2) },
+  ];
+
+  it("keeps the oldest projects writable and marks the rest read-only", () => {
+    expect([...overLimitProjectIds(projects, 1)].sort()).toEqual(["b", "c"]);
+    expect([...overLimitProjectIds(projects, 2)]).toEqual(["c"]);
+  });
+
+  it("marks nothing at or under the limit, or without one", () => {
+    expect(overLimitProjectIds(projects, 3).size).toBe(0);
+    expect(overLimitProjectIds(projects, 10).size).toBe(0);
+    expect(overLimitProjectIds(projects, null).size).toBe(0);
+  });
+
+  it("breaks creation-time ties by id so the answer is stable", () => {
+    const tied = [
+      { id: "z", createdAt: at(1) },
+      { id: "m", createdAt: at(1) },
+    ];
+    expect([...overLimitProjectIds(tied, 1)]).toEqual(["z"]);
+    expect([...overLimitProjectIds([...tied].reverse(), 1)]).toEqual(["z"]);
+  });
+
+  it("a limit of zero makes every project read-only", () => {
+    expect(overLimitProjectIds(projects, 0).size).toBe(3);
+  });
+});
+
+describe("plan table", () => {
+  it("Business sits above Pro on every limit and price", () => {
+    const { pro, business } = BILLING_PLANS;
+    expect(business.limits.seats).toBeGreaterThan(pro.limits.seats ?? 0);
+    expect(business.limits.projects).toBeNull(); // unlimited
+    expect(business.limits.reportsPerMonth).toBeGreaterThan(pro.limits.reportsPerMonth ?? 0);
+    expect(business.price?.monthly).toBeGreaterThan(pro.price?.monthly ?? 0);
+    // Annual billing is always the cheaper per-month rate.
+    for (const p of [pro, business]) expect(p.price?.annualPerMonth).toBeLessThan(p.price?.monthly ?? 0);
+  });
+
+  it("a paid plan in force keeps its own plan through the grace and drops to free after it", () => {
+    const biz: SubscriptionState = { ...base, plan: "business", status: "past_due", pastDueSince: days(2) };
+    expect(effectivePlan(biz, now).plan).toBe("business");
+    expect(effectivePlan({ ...biz, pastDueSince: days(DUNNING_GRACE_DAYS + 1) }, now).plan).toBe("free");
   });
 });

@@ -816,6 +816,10 @@ check("deleted token stops working", r.status === 401, r.status);
 console.log("\n— email");
 r = await call("/api/admin/settings/email", { jar: memberJar });
 check("non-admins cannot read instance settings", r.status === 403, r.status);
+r = await call("/api/admin/diagnostics", { jar: memberJar });
+check("non-admins cannot run the server diagnostics", r.status === 403, r.status);
+r = await call("/api/admin/diagnostics", { jar: { cookie: "" } });
+check("signed-out callers cannot run the server diagnostics", r.status === 401, r.status);
 const adminJar = { cookie: "" };
 const adminEmail = process.env.SMOKE_ADMIN_EMAIL ?? "smoke-admin@example.com";
 const adminPassword = process.env.SMOKE_ADMIN_PASSWORD ?? "correct-horse-admin";
@@ -843,6 +847,20 @@ if (Array.isArray(r.body) && r.body[0]) {
     json: { organizationId: r.body[0].id },
     jar: adminJar,
   });
+}
+r = await call("/api/admin/diagnostics", { jar: adminJar });
+if (r.status === 200) {
+  const names = (r.body.checks ?? []).map((c) => c.name);
+  check(
+    "admin runs the server diagnostics: database, migrations, storage, smtp, config",
+    ["database", "migrations", "storage", "smtp", "config"].every((n) => names.includes(n)),
+    JSON.stringify(names),
+  );
+  check(
+    "diagnostics find the database and storage healthy",
+    r.body.checks.filter((c) => ["database", "storage"].includes(c.name)).every((c) => c.ok),
+    JSON.stringify(r.body.checks),
+  );
 }
 r = await call("/api/admin/settings/email", { jar: adminJar });
 if (r.status === 403) {

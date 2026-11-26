@@ -115,11 +115,21 @@ The initial documentation reconciliation above did not run tests; this follow-up
 
 ## Missing implementation in Phases 1–4
 
-- [ ] **WP-12:** extend `pinwren doctor` beyond HTTP health, widget delivery and origin/key checks to the
-      specified storage writability, SMTP, configuration and pending-migration diagnostics. Current checks:
-      [checks.ts](../packages/cli/src/checks.ts).
-- [ ] **WP-22:** Business plan and its entitlements/limits, extra-seat add-ons, tax/invoice currency handling,
-      read-only behaviour for over-limit projects after downgrade, and seat-overage dashboard notification.
+- [x] **WP-12:** `pinwren doctor` checks the database, pending migrations, storage writability, SMTP and
+      configuration through `GET /api/admin/diagnostics` ([service](../packages/api/src/services/diagnostics.ts),
+      [tests](../packages/api/src/diagnostics.test.ts), [CLI tests](../packages/cli/src/cli.test.ts)). It needs an
+      instance administrator's session cookie because no API-token scope grants instance access; a token scope
+      would be a follow-up. Not yet exercised against a deployed Docker stack.
+- [x] **WP-22:** Business plan: 30 seats, unlimited projects, 20,000 reports a month, white-label,
+      $99 monthly / $79 annual per month (blueprint 07 §3). Sold through its own Dodo products
+      (`DODO_BUSINESS_*_PRODUCT_ID`), selected in Settings › Billing, and reached from Pro through the portal's
+      plan change; see [billing tests](../packages/api/src/cloud-billing-db.test.ts). Test mode only: the Dodo
+      products and a paid lifecycle are not set up (operator gate above).
+- [ ] **WP-22:** extra-seat add-ons, tax/invoice currency handling, and seat-overage dashboard notification.
+- [ ] **WP-22:** finish read-only over-limit projects after a downgrade. Widget intake is refused
+      (`PLAN_PROJECT_READ_ONLY`, [ADR 0043](adr/0043-over-limit-projects-read-only.md), covered by
+      [billing tests](../packages/api/src/cloud-billing-db.test.ts)); dashboard writes inside such a project and
+      the billing screen's notice are still open.
       Free/Pro and refusal of new over-limit projects/seats already exist; see [ADR 0023](adr/0023-cloud-billing-with-dodo-payments.md).
 - [ ] **WP-22:** subscription trials, replay-storage usage metering, and the specified Cloud AI quota model.
       Current [plan limits](../packages/core/src/billing.ts) meter seats/projects/reports; AI remains provider-configured.
