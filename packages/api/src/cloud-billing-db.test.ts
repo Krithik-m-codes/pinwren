@@ -121,7 +121,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud billing", () =>
     await d`insert into account (id,account_id,provider_id,user_id,password) values (${randomUUID()},${userId},'credential',${userId},${await hashPassword(password)})`;
     await d`insert into member (id,organization_id,user_id,role) values (${randomUUID()},${org},${userId},'owner')`;
     const projectId = randomUUID();
-    await d`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${projectId},${org},'First','first',${projectId},${d.array(["https://customer.test"])},${randomUUID()},${randomUUID()})`;
+    await d`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${projectId},${org},'First','first',${projectId},${["https://customer.test"]},${randomUUID()},${randomUUID()})`;
     api = (await import("./index")).app;
     const { setDodoClient } = await import("./billing/dodo");
     setDodoClient({

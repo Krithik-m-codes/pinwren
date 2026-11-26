@@ -27,7 +27,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud legacy startup 
       const project = projects[i];
       if (!project) throw new Error("Missing test project");
       await db()`insert into organization (id,name,slug) values (${org},${org},${org})`;
-      await db()`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${org},'Project',${project},${randomUUID()},${db().array(["https://example.test"])},${randomUUID()},${randomUUID()})`;
+      await db()`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${org},'Project',${project},${randomUUID()},${["https://example.test"]},${randomUUID()},${randomUUID()})`;
       await db()`insert into page (id,org_id,project_id,url) values (${canonical[i] ?? ""},${org},${project},'https://example.test/pricing')`;
       for (const [number, url] of [
         [1, "https://example.test/pricing?utm_source=old"],

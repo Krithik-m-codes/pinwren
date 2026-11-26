@@ -129,7 +129,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Custom fields", () =>
       [orgA, ids.projectA],
       [orgB, ids.projectB],
     ] as const)
-      await d`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret,widget_rate_limit_per_min) values (${project},${org},'P',${org},${project},${d.array([origin])},${randomUUID()},${randomUUID()},1000)`;
+      await d`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret,widget_rate_limit_per_min) values (${project},${org},'P',${org},${project},${[origin]},${randomUUID()},${randomUUID()},1000)`;
     api = (await import("./index")).app;
     const signed = await request("/api/auth/sign-in/email", {
       method: "POST",

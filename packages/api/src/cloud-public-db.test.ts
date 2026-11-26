@@ -96,7 +96,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud public capabili
       [orgB, projectB, keyB, itemB, reporterB, integrationB, secretB],
     ] as const) {
       await db()`insert into organization (id,name,slug) values (${org},${org},${org})`;
-      await db()`insert into project (id,org_id,name,slug,public_key,allowed_origins,public_read,identity_secret,action_secret,notify_emails) values (${projectId},${org},${org},${org},${key},${db().array([origin])},true,${randomUUID()},${randomUUID()},${db().array(["reporter@test.invalid"])})`;
+      await db()`insert into project (id,org_id,name,slug,public_key,allowed_origins,public_read,identity_secret,action_secret,notify_emails) values (${projectId},${org},${org},${org},${key},${[origin]},true,${randomUUID()},${randomUUID()},${["reporter@test.invalid"]})`;
       await db()`insert into feedback (id,org_id,project_id,number,kind,body,client_id,reporter_token_hash,reporter_guest) values (${item},${org},${projectId},1,'bug',${`public ${org}`},${randomUUID()},${sha256Hex(reporter)},${db().json({ name: "Reporter", email: `private-${org}@test.invalid` })})`;
       await db()`insert into comment (org_id,feedback_id,body,visibility) values (${org},${item},${`INTERNAL ${org}`},'internal'),(${org},${item},${`PUBLIC ${org}`},'public')`;
       await db()`insert into issue_integration (id,org_id,project_id,provider,token,token_hint,repo,webhook_secret) values (${integration},${org},${projectId},'github',${encryptSecret(randomUUID())},'test','fixture/shared',${encryptSecret(secret)})`;

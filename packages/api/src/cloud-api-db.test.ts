@@ -130,9 +130,9 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud authenticated H
       await fixture.db`insert into member (id,organization_id,user_id,role) values (${randomUUID()},${org},${user},'owner')`;
       await fixture.db`insert into project (id,org_id,name,slug,public_key) values (${projectId},${org},${org},${org},${projectId})`;
       await fixture.db`insert into feedback (id,org_id,project_id,number,kind,body,client_id) values (${feedbackId},${org},${projectId},1,'bug',${org},${randomUUID()})`;
-      await fixture.db`insert into api_token (org_id,user_id,name,prefix,hash,scopes) values (${org},${user},'api fixture',${secret.slice(0, 12)},${await hashToken(secret)},${fixture.db.array(["feedback:read", "feedback:write"])})`;
+      await fixture.db`insert into api_token (org_id,user_id,name,prefix,hash,scopes) values (${org},${user},'api fixture',${secret.slice(0, 12)},${await hashToken(secret)},${["feedback:read", "feedback:write"]})`;
     }
-    await fixture.db`insert into api_token (org_id,user_id,name,prefix,hash,scopes) values (${orgA},${userA},'read fixture',${readToken.slice(0, 12)},${await hashToken(readToken)},${fixture.db.array(["feedback:read"])})`;
+    await fixture.db`insert into api_token (org_id,user_id,name,prefix,hash,scopes) values (${orgA},${userA},'read fixture',${readToken.slice(0, 12)},${await hashToken(readToken)},${["feedback:read"]})`;
     await fixture.db`insert into feedback_asset (id,org_id,feedback_id,kind,storage_key,content_type,bytes) values (${assetB},${orgB},${feedbackB},'attachment',${assetB},'text/plain',1)`;
     api = (await import("./index")).app;
     await signIn(userA, orgA, cookiesA);

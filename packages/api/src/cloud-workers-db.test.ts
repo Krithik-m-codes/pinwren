@@ -45,7 +45,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud worker boundari
       [orgA, projectOther],
       [orgB, projectB],
     ] as const) {
-      await db()`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${org},'Project',${project},${randomUUID()},${db().array(["https://example.test"])},${randomUUID()},${randomUUID()})`;
+      await db()`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${org},'Project',${project},${randomUUID()},${["https://example.test"]},${randomUUID()},${randomUUID()})`;
     }
     for (const [id, project] of [
       [feedbackA, projectA],

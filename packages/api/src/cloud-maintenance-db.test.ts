@@ -30,7 +30,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud maintenance bud
       [orgB, projectB],
     ] as const) {
       await db()`insert into organization (id,name,slug) values (${org},${org},${org})`;
-      await db()`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret,retention_days) values (${project},${org},'Project',${project},${randomUUID()},${db().array(["https://example.test"])},${randomUUID()},${randomUUID()},1)`;
+      await db()`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret,retention_days) values (${project},${org},'Project',${project},${randomUUID()},${["https://example.test"]},${randomUUID()},${randomUUID()},1)`;
     }
     // Record actual transaction boundaries and settings, rather than mocking withOrg.
     await db()`create schema maintenance_audit`;

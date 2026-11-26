@@ -174,7 +174,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Releases and regressi
       [orgA, ids.projectA, ids.keyA],
       [orgB, ids.projectB, `pk_${randomUUID().replaceAll("-", "")}`],
     ] as const) {
-      await d`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${org},'P',${org},${key},${d.array(["https://customer.test"])},${randomUUID()},${randomUUID()})`;
+      await d`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${org},'P',${org},${key},${["https://customer.test"]},${randomUUID()},${randomUUID()})`;
     }
     api = (await import("./index")).app;
     regression = await import("./services/regression");
@@ -628,7 +628,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Releases and regressi
 
     it("the dispatcher detects, announces and notifies the people who followed the original", async () => {
       const original = await newItem({ status: "resolved", page: checkout, css: "main > button.pay" });
-      await db()`update feedback set assignee_ids = ${db().array([editor])} where id = ${original}`;
+      await db()`update feedback set assignee_ids = ${[editor]} where id = ${original}`;
       const fresh = await newItem({ page: checkout, css: "main > button.pay" });
       await dispatch.dispatchEvent({
         id: randomUUID(),

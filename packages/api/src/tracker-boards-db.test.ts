@@ -197,7 +197,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Board trackers", () =
     await d`insert into account (id,account_id,provider_id,user_id,password) values (${randomUUID()},${owner},'credential',${owner},${hashed})`;
     await d`insert into member (id,organization_id,user_id,role) values (${randomUUID()},${orgA},${owner},'owner')`;
     for (const project of [projectA, projectB]) {
-      await d`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${orgA},'P',${project},${project},${d.array(["https://customer.test"])},${randomUUID()},${randomUUID()})`;
+      await d`insert into project (id,org_id,name,slug,public_key,allowed_origins,identity_secret,action_secret) values (${project},${orgA},'P',${project},${project},${["https://customer.test"]},${randomUUID()},${randomUUID()})`;
     }
     api = (await import("./index")).app;
     const signed = await request("/api/auth/sign-in/email", {
