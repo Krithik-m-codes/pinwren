@@ -83,6 +83,6 @@ export const entitlementsResponse = z.object({
   error: z.string().nullable(),
   seats: z.object({ limit: z.number().int().nullable(), used: z.number().int() }),
   /** Cloud only: the billing plan in force (WP-22). Absent on self-host. */
-  plan: z.enum(["free", "pro"]).optional(),
+  plan: z.enum(["free", "pro", "business"]).optional(),
 });
 export type Entitlements = z.infer<typeof entitlementsResponse>;

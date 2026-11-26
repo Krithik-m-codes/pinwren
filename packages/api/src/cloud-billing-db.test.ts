@@ -113,6 +113,8 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud billing", () =>
     vi.stubEnv("DODO_PAYMENTS_WEBHOOK_KEY", WEBHOOK_KEY);
     vi.stubEnv("DODO_PRO_MONTHLY_PRODUCT_ID", "prod_monthly");
     vi.stubEnv("DODO_PRO_ANNUAL_PRODUCT_ID", "prod_annual");
+    vi.stubEnv("DODO_BUSINESS_MONTHLY_PRODUCT_ID", "prod_biz_monthly");
+    vi.stubEnv("DODO_BUSINESS_ANNUAL_PRODUCT_ID", "prod_biz_annual");
     const d = fixture.db;
     await d`insert into organization (id,name,slug) values (${org},${org},${org})`;
     await d`insert into "user" (id,name,email,email_verified) values (${userId},'Owner',${`${userId}@test.invalid`},true)`;
@@ -322,5 +324,50 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud billing", () =>
       (await request("/api/billing/portal", { method: "POST", cookies: other, body: {} })).status,
     ];
     expect(statuses).toEqual([403, 403, 403]);
+  });
+
+  it("sells Business: a checkout for its product, and a plan change lifts the limits further", async () => {
+    // The earlier case left the subscription expired: start an active Pro one again.
+    await webhook(
+      "msg_pro_again",
+      "subscription.active",
+      { status: "active", product_id: "prod_annual" },
+      new Date(Date.now() + 15_000),
+    );
+    const before = dodoCalls.checkout.length;
+    // With an active subscription a second checkout is refused: Business is reached through the portal's
+    // plan change, which arrives as a webhook.
+    const refused = await request("/api/billing/checkout", {
+      method: "POST",
+      body: { interval: "monthly", plan: "business" },
+    });
+    expect(refused.status).toBe(409);
+    expect(dodoCalls.checkout.length).toBe(before);
+    expect(await billing()).toMatchObject({
+      plan: "pro",
+      planPrices: { pro: { monthly: 29 }, business: { monthly: 99, annualPerMonth: 79 } },
+      checkout: { plans: { pro: ["monthly", "annual"], business: ["monthly", "annual"] } },
+    });
+    await webhook(
+      "msg_biz",
+      "subscription.plan_changed",
+      { status: "active", product_id: "prod_biz_monthly" },
+      new Date(Date.now() + 20_000),
+    );
+    expect(await billing()).toMatchObject({
+      plan: "business",
+      planName: "Business",
+      interval: "monthly",
+      usage: { seats: { limit: 30 }, projects: { limit: null }, reports: { limit: 20000 } },
+    });
+    expect(await entitlements()).toMatchObject({ plan: "business", features: ["white_label"] });
+    // A product that is not one of ours never grants a plan, even on a plan-change event.
+    await webhook(
+      "msg_foreign",
+      "subscription.plan_changed",
+      { status: "active", product_id: "prod_unknown" },
+      new Date(Date.now() + 30_000),
+    );
+    expect(await billing()).toMatchObject({ plan: "business" });
   });
 });
