@@ -125,13 +125,15 @@ Self-hosted installs have no billing: nothing below is read unless `PINWREN_MODE
 plans (Free and Pro) are sold through [Dodo Payments](https://dodopayments.com). Billing stays off until
 `DODO_PAYMENTS_API_KEY` is set.
 
-| Variable                      | Purpose                                                                                         |
-| ----------------------------- | ----------------------------------------------------------------------------------------------- |
-| `DODO_PAYMENTS_API_KEY`       | Server-side API key. Billing is disabled while it is empty.                                     |
-| `DODO_PAYMENTS_ENVIRONMENT`   | `test_mode` (default) or `live_mode`; picks `test.dodopayments.com` or `live.dodopayments.com`. |
-| `DODO_PAYMENTS_WEBHOOK_KEY`   | Signing secret (`whsec_…`) of the webhook endpoint that points at `/api/billing/webhook`.       |
-| `DODO_PRO_MONTHLY_PRODUCT_ID` | Id of the Pro monthly subscription product you created in the Dodo dashboard.                   |
-| `DODO_PRO_ANNUAL_PRODUCT_ID`  | Id of the Pro annual subscription product.                                                      |
+| Variable                           | Purpose                                                                                         |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `DODO_PAYMENTS_API_KEY`            | Server-side API key. Billing is disabled while it is empty.                                     |
+| `DODO_PAYMENTS_ENVIRONMENT`        | `test_mode` (default) or `live_mode`; picks `test.dodopayments.com` or `live.dodopayments.com`. |
+| `DODO_PAYMENTS_WEBHOOK_KEY`        | Signing secret (`whsec_…`) of the webhook endpoint that points at `/api/billing/webhook`.       |
+| `DODO_PRO_MONTHLY_PRODUCT_ID`      | Id of the Pro monthly subscription product you created in the Dodo dashboard.                   |
+| `DODO_PRO_ANNUAL_PRODUCT_ID`       | Id of the Pro annual subscription product.                                                      |
+| `DODO_BUSINESS_MONTHLY_PRODUCT_ID` | Id of the Business monthly subscription product (optional: Business is sold once one is set).   |
+| `DODO_BUSINESS_ANNUAL_PRODUCT_ID`  | Id of the Business annual subscription product.                                                 |
 
 An interval whose product id is empty is not offered, and asking for it answers `503 BILLING_NOT_CONFIGURED`
 naming the missing variable. Incoming billing events are checked against the signing secret above (five-minute
