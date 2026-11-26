@@ -97,3 +97,21 @@ describe("overLimitProjectIds", () => {
     expect(overLimitProjectIds(projects, 0).size).toBe(3);
   });
 });
+
+describe("plan table", () => {
+  it("Business sits above Pro on every limit and price", () => {
+    const { pro, business } = BILLING_PLANS;
+    expect(business.limits.seats).toBeGreaterThan(pro.limits.seats ?? 0);
+    expect(business.limits.projects).toBeNull(); // unlimited
+    expect(business.limits.reportsPerMonth).toBeGreaterThan(pro.limits.reportsPerMonth ?? 0);
+    expect(business.price?.monthly).toBeGreaterThan(pro.price?.monthly ?? 0);
+    // Annual billing is always the cheaper per-month rate.
+    for (const p of [pro, business]) expect(p.price?.annualPerMonth).toBeLessThan(p.price?.monthly ?? 0);
+  });
+
+  it("a paid plan in force keeps its own plan through the grace and drops to free after it", () => {
+    const biz: SubscriptionState = { ...base, plan: "business", status: "past_due", pastDueSince: days(2) };
+    expect(effectivePlan(biz, now).plan).toBe("business");
+    expect(effectivePlan({ ...biz, pastDueSince: days(DUNNING_GRACE_DAYS + 1) }, now).plan).toBe("free");
+  });
+});

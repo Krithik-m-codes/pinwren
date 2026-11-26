@@ -1,6 +1,6 @@
 "use client";
 
-import type { BillingInfo, BillingInterval } from "@pinwren/core";
+import { BILLING_PLANS, type BillingInfo, type BillingInterval, type PaidPlanId } from "@pinwren/core";
 import { CreditCard, ExternalLink, Sparkles, TriangleAlert } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -33,6 +33,12 @@ const STATUS: Record<BillingInfo["status"], Key> = {
   failed: "billing.statusFailed",
 };
 
+const PLAN_NAME: Record<BillingInfo["plan"], Key> = {
+  free: "billing.planFree",
+  pro: "billing.planPro",
+  business: "billing.planBusiness",
+};
+
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" });
@@ -43,14 +49,19 @@ export function BillingSettings() {
   const query = useBillingQuery(undefined);
   const returned = useSearchParams().get("checkout");
   const [interval, setInterval] = useState<BillingInterval>("annual");
+  const [wantedPlan, setPlan] = useState<PaidPlanId>("pro");
   const [startCheckout, checkout] = useStartCheckoutMutation();
   const [openPortal, portal] = useOpenBillingPortalMutation();
 
   if (query.isLoading) return <Skeleton className="h-96 rounded-xl" />;
   if (!query.data) return <ErrorState error={query.error} retry={() => void query.refetch()} />;
   const b = query.data;
-  const intervals = b.checkout.intervals;
+  // Only plans with a product configured can be bought; the choice falls back to the first one that can.
+  const sellable = (["pro", "business"] as const).filter((p) => (b.checkout.plans[p] ?? []).length > 0);
+  const plan = sellable.includes(wantedPlan) ? wantedPlan : (sellable[0] ?? "pro");
+  const intervals = b.checkout.plans[plan] ?? b.checkout.intervals;
   const chosen = intervals.includes(interval) ? interval : (intervals[0] ?? "monthly");
+  const prices = b.planPrices[plan] ?? b.prices;
 
   const go = async (run: () => Promise<{ url: string }>) => {
     try {
@@ -80,16 +91,16 @@ export function BillingSettings() {
         <CardHeader>
           <CardTitle className="flex flex-wrap items-center gap-2">
             <CreditCard className="size-4 text-muted-foreground" />
-            {t("billing.currentPlan")}: {b.plan === "pro" ? t("billing.planPro") : t("billing.planFree")}
+            {t("billing.currentPlan")}: {t(PLAN_NAME[b.plan])}
             <Badge variant="outline" className="ml-auto font-normal">
               {t(STATUS[b.status])}
             </Badge>
           </CardTitle>
           <CardDescription>
             {b.interval &&
-              b.plan === "pro" &&
+              b.plan !== "free" &&
               (b.interval === "annual" ? t("billing.billedAnnually") : t("billing.billedMonthly"))}
-            {b.currentPeriodEnd && b.plan === "pro" && (
+            {b.currentPeriodEnd && b.plan !== "free" && (
               <>
                 {" · "}
                 {b.status === "cancelled"
@@ -121,6 +132,43 @@ export function BillingSettings() {
           <CardContent className="grid gap-4">
             {b.checkout.available ? (
               <>
+                {sellable.length > 1 && (
+                  <ToggleGroup
+                    aria-label={t("billing.choosePlan")}
+                    value={[plan]}
+                    onValueChange={(v) => {
+                      const next = v[0] as PaidPlanId | undefined;
+                      if (next) setPlan(next);
+                    }}
+                    spacing={2}
+                    className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2"
+                  >
+                    {sellable.map((p) => (
+                      <ToggleGroupItem
+                        key={p}
+                        value={p}
+                        variant="outline"
+                        data-testid={`billing-plan-${p}`}
+                        className={cn(
+                          "h-auto w-full flex-col items-start justify-start gap-1 rounded-lg! px-3 py-2.5 text-left whitespace-normal",
+                          "aria-pressed:border-primary aria-pressed:bg-primary/5 aria-pressed:ring-1 aria-pressed:ring-primary/40",
+                        )}
+                      >
+                        <span className="text-sm font-medium">{t(PLAN_NAME[p])}</span>
+                        <span className="text-xs font-normal text-muted-foreground">
+                          {t("billing.planSummary", {
+                            seats: BILLING_PLANS[p].limits.seats ?? 0,
+                            projects:
+                              BILLING_PLANS[p].limits.projects === null
+                                ? t("billing.projectsUnlimited")
+                                : t("billing.projectsCount", { n: BILLING_PLANS[p].limits.projects }),
+                            reports: (BILLING_PLANS[p].limits.reportsPerMonth ?? 0).toLocaleString("en-US"),
+                          })}
+                        </span>
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                )}
                 <ToggleGroup
                   aria-label={t("billing.intervalLabel")}
                   value={[chosen]}
@@ -147,8 +195,8 @@ export function BillingSettings() {
                       </span>
                       <span className="text-xs font-normal text-muted-foreground">
                         {i === "annual"
-                          ? t("billing.priceAnnual", { price: money(b.prices.annualPerMonth) })
-                          : t("billing.priceMonthly", { price: money(b.prices.monthly) })}
+                          ? t("billing.priceAnnual", { price: money(prices.annualPerMonth) })
+                          : t("billing.priceMonthly", { price: money(prices.monthly) })}
                       </span>
                     </ToggleGroupItem>
                   ))}
@@ -156,7 +204,7 @@ export function BillingSettings() {
                 <div>
                   <Button
                     disabled={checkout.isLoading}
-                    onClick={() => void go(() => startCheckout(chosen).unwrap())}
+                    onClick={() => void go(() => startCheckout({ interval: chosen, plan }).unwrap())}
                     data-testid="billing-subscribe"
                   >
                     {checkout.isLoading ? t("billing.redirecting") : t("billing.subscribe")}
@@ -176,9 +224,13 @@ export function BillingSettings() {
             <CardTitle>{t("billing.manage")}</CardTitle>
             <CardDescription>{t("billing.manageDescription")}</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="grid gap-3">
+            {b.plan !== "free" && (
+              <p className="text-sm text-muted-foreground">{t("billing.changePlanHint")}</p>
+            )}
             <Button
               variant="outline"
+              className="w-fit"
               disabled={portal.isLoading}
               onClick={() => void go(() => openPortal(undefined).unwrap())}
               data-testid="billing-manage"

@@ -7,6 +7,7 @@ import { Features } from "@/components/landing/features";
 import { Frameworks } from "@/components/landing/frameworks";
 import { Hero } from "@/components/landing/hero";
 import { HowItWorks } from "@/components/landing/how-it-works";
+import { MoreFeatures } from "@/components/landing/more-features";
 import { absoluteUrl, GITHUB_URL, SITE_DESCRIPTION, SITE_NAME, VERSION } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -50,6 +51,7 @@ export default function Home() {
       <Hero />
       <Frameworks />
       <Features />
+      <MoreFeatures />
       <HowItWorks />
       <Comparison />
       <Faq />
