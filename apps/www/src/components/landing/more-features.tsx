@@ -84,7 +84,7 @@ const ITEMS: Item[] = [
 
 export function MoreFeatures() {
   return (
-    <section id="more" className="scroll-mt-20 border-b bg-muted/30 py-24">
+    <section id="more" className="scroll-mt-20 border-b py-24">
       <div className="container-page">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-sm font-semibold text-brand">And it keeps going</p>
