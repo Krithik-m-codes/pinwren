@@ -33,17 +33,10 @@
     "aws4fetch": "^1.0.20",
     "better-auth": "^1.7.26",
     "drizzle-orm": "^0.45.4",
-<<<<<<< HEAD
-    "hono": "^4.13.16",
-    "nodemailer": "^10.3.1",
-    "pg-boss": "^12.38.0",
-    "postgres": "^4.1.1",
-=======
     "hono": "^4.13.19",
     "nodemailer": "^10.6.0",
     "pg-boss": "^12.38.2",
-    "postgres": "^3.4.9",
->>>>>>> origin/main
+    "postgres": "^4.1.1",
     "zod": "^4.1.0"
   },
   "devDependencies": {
