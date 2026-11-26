@@ -18,6 +18,8 @@ minimumReleaseAgeExclude:
   - better-auth@1.7.12
 # Security overrides for transitive dev tooling (pnpm audit). Remove each once its parent ships the fix.
 overrides:
+  # eslint-config-next pins typescript-eslint 8.72.2; a second copy makes ESLint refuse to redefine the plugin, and 8.73 adds no-deprecated findings on zod `message`. Lift once both are handled.
+  typescript-eslint: "8.72.2"
   # Test tooling still resolves an older peer; GHSA-834v-8h66-3h79 is fixed in 21.0.4.
   "happy-dom@<21.0.4": "21.0.4"
   # shadcn CLI > @modelcontextprotocol/sdk > express: DoS via trailing bytes (GHSA, fixed in 2.4.0).
