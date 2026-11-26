@@ -109,6 +109,8 @@ const schema = z.object({
   DODO_PAYMENTS_WEBHOOK_KEY: optionalString,
   DODO_PRO_MONTHLY_PRODUCT_ID: optionalString,
   DODO_PRO_ANNUAL_PRODUCT_ID: optionalString,
+  DODO_BUSINESS_MONTHLY_PRODUCT_ID: optionalString,
+  DODO_BUSINESS_ANNUAL_PRODUCT_ID: optionalString,
 
   // Sign-in with Google / GitHub (Settings › Security › Sign-in methods). A provider is offered only when
   // both its id and secret are set; the callback is PINWREN_URL/api/auth/callback/<google|github>.
