@@ -20,7 +20,7 @@ const MATRIX: { group: string; rows: { label: string; cells: Cell[] }[] }[] = [
   {
     group: "Usage",
     rows: [
-      { label: "Team seats", cells: ["Unlimited", "3", "10 (+$6/seat)", "30 (+$5/seat)", "Per contract"] },
+      { label: "Team seats", cells: ["Unlimited", "3", "10", "30", "Per contract"] },
       { label: "Guests (clients)", cells: ["Unlimited", "Unlimited", "Unlimited", "Unlimited", "Unlimited"] },
       { label: "Projects", cells: ["Unlimited", "1", "10", "Unlimited", "Unlimited"] },
       { label: "Reports / month", cells: ["Unlimited", "100", "2,000", "20,000", "Contract"] },
@@ -104,7 +104,8 @@ export default function PricingPage() {
         <PlanCards />
         <p className="mt-6 text-center text-xs text-muted-foreground">
           Cloud and Enterprise prices are proposals and may change before launch. Prices in USD, excluding
-          tax.
+          tax. Seats, projects, monthly reports and branding are enforced by the plans today; replay length,
+          retention tiers, extra-seat add-ons and the audit log are planned.
         </p>
       </section>
 
