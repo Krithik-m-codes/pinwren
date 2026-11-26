@@ -23,8 +23,10 @@ const HELP = `pinwren ${pkg.version} — Pinwren command line
 Usage:
   pinwren init   [--url <instance>] [--key <pk_…>] [--framework html|vite|next] [--write] [--file <path>]
       Print the widget snippet for this project (and insert it with --write).
-  pinwren doctor --url <instance> [--key <pk_…>] [--origin <https://your-site>] [--json]
-      Check the server, widget.js and the widget config for a project key + origin.
+  pinwren doctor --url <instance> [--key <pk_…>] [--origin <https://your-site>] [--cookie <session cookie>] [--json]
+      Check the server, widget.js and the widget config for a project key + origin. With an instance
+      admin's session cookie (or PINWREN_ADMIN_COOKIE) it also checks the database, pending migrations,
+      storage writability and SMTP.
   pinwren status --url <instance> --token <pwt_…> [--json]
       List projects and their open feedback.
 
@@ -131,6 +133,7 @@ async function run(argv: string[]): Promise<number> {
     options: {
       url: { type: "string" },
       key: { type: "string" },
+      cookie: { type: "string" },
       token: { type: "string" },
       origin: { type: "string" },
       framework: { type: "string" },
@@ -171,6 +174,7 @@ async function run(argv: string[]): Promise<number> {
       url,
       projectKey: values.key ?? process.env.PINWREN_KEY,
       origin: values.origin,
+      cookie: values.cookie ?? process.env.PINWREN_ADMIN_COOKIE,
     });
     const failed = checks.some((c) => !c.ok);
     if (values.json) console.log(JSON.stringify({ ok: !failed, checks }, null, 2));

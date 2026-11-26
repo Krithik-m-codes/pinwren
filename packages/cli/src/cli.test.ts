@@ -116,6 +116,65 @@ describe("doctor", () => {
   });
 });
 
+describe("doctor server checks", () => {
+  const base = {
+    "/api/health": { status: 200, body: { ok: true } },
+    "/widget.js": { status: 200, body: "x", type: "application/javascript" },
+  };
+
+  it("adds the server's own checks, keeping warnings and failures, and sends the cookie", async () => {
+    const seen: { url: string; headers: Record<string, string> }[] = [];
+    const checks = await doctor(
+      { url: "https://fb.example.com", cookie: "better-auth.session_token=abc" },
+      fakeFetch(
+        {
+          ...base,
+          "/api/admin/diagnostics": {
+            status: 200,
+            body: {
+              checks: [
+                { name: "database", ok: true, detail: "reachable (3 ms)" },
+                { name: "migrations", ok: false, detail: "2 pending" },
+                { name: "smtp", ok: true, warn: true, detail: "not configured" },
+                { nope: true },
+              ],
+            },
+          },
+        },
+        seen,
+      ),
+    );
+    expect(checks.map((c) => c.name)).toEqual([
+      "server",
+      "widget.js",
+      "database",
+      "migrations",
+      "smtp",
+      "widget config",
+    ]);
+    expect(checks.find((c) => c.name === "migrations")?.ok).toBe(false);
+    expect(checks.find((c) => c.name === "smtp")?.warn).toBe(true);
+    expect(seen.find((s) => s.url === "/api/admin/diagnostics")?.headers).toEqual({
+      cookie: "better-auth.session_token=abc",
+    });
+  });
+
+  it("hints instead of failing when no cookie is given, and never calls the admin route", async () => {
+    const seen: { url: string; headers: Record<string, string> }[] = [];
+    const checks = await doctor({ url: "https://fb.example.com" }, fakeFetch(base, seen));
+    expect(checks.find((c) => c.name === "server checks")).toMatchObject({ ok: true, warn: true });
+    expect(seen.map((s) => s.url)).not.toContain("/api/admin/diagnostics");
+  });
+
+  it("says so when the cookie is not an instance administrator's", async () => {
+    const checks = await doctor(
+      { url: "https://fb.example.com", cookie: "x=1" },
+      fakeFetch({ ...base, "/api/admin/diagnostics": { status: 403, body: { code: "FORBIDDEN" } } }),
+    );
+    expect(checks.find((c) => c.name === "server checks")).toMatchObject({ ok: false });
+  });
+});
+
 describe("status", () => {
   it("lists projects with open counts", async () => {
     const s = await status(
