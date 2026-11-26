@@ -120,8 +120,12 @@ The initial documentation reconciliation above did not run tests; this follow-up
       [tests](../packages/api/src/diagnostics.test.ts), [CLI tests](../packages/cli/src/cli.test.ts)). It needs an
       instance administrator's session cookie because no API-token scope grants instance access; a token scope
       would be a follow-up. Not yet exercised against a deployed Docker stack.
-- [ ] **WP-22:** Business plan and its entitlements/limits, extra-seat add-ons, tax/invoice currency handling,
-      read-only behaviour for over-limit projects after downgrade, and seat-overage dashboard notification.
+- [ ] **WP-22:** Business plan and its entitlements/limits (needs pricing decisions and a Dodo product),
+      extra-seat add-ons, tax/invoice currency handling, and seat-overage dashboard notification.
+- [ ] **WP-22:** finish read-only over-limit projects after a downgrade. Widget intake is refused
+      (`PLAN_PROJECT_READ_ONLY`, [ADR 0043](adr/0043-over-limit-projects-read-only.md), covered by
+      [billing tests](../packages/api/src/cloud-billing-db.test.ts)); dashboard writes inside such a project and
+      the billing screen's notice are still open.
       Free/Pro and refusal of new over-limit projects/seats already exist; see [ADR 0023](adr/0023-cloud-billing-with-dodo-payments.md).
 - [ ] **WP-22:** subscription trials, replay-storage usage metering, and the specified Cloud AI quota model.
       Current [plan limits](../packages/core/src/billing.ts) meter seats/projects/reports; AI remains provider-configured.

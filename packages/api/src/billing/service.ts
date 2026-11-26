@@ -3,6 +3,7 @@ import {
   type BillingInfo,
   type BillingInterval,
   effectivePlan,
+  overLimitProjectIds,
   reportQuota,
   SUBSCRIPTION_STATUSES,
   type SubscriptionState,
@@ -70,6 +71,18 @@ export async function orgUsage(db: Db, orgId: string, now = new Date()) {
   return { seats: seats?.n ?? 0, projects: projects?.n ?? 0, reports: reports?.n ?? 0 };
 }
 
+/** Live projects past the plan's project limit; empty without billing or while within the limit. */
+export async function readOnlyProjectIds(db: Db, orgId: string, now = new Date()): Promise<Set<string>> {
+  if (!billingEnabled()) return new Set();
+  const limit = (await planFor(db, orgId, now)).definition.limits.projects;
+  if (limit === null) return new Set();
+  const live = await db
+    .select({ id: project.id, createdAt: project.createdAt })
+    .from(project)
+    .where(and(eq(project.orgId, orgId), isNull(project.archivedAt)));
+  return overLimitProjectIds(live, limit);
+}
+
 /** The plan in force for an organisation (the entitlement code consumes this in Cloud). */
 export async function planFor(db: Db, orgId: string, now = new Date()) {
   const row = await loadRow(db, orgId);
@@ -97,6 +110,7 @@ export async function getBillingInfo(orgId: string, now = new Date()): Promise<B
       projects: { used: used.projects, limit: l.projects },
       reports: { used: used.reports, limit: l.reportsPerMonth },
     },
+    readOnlyProjects: (await readOnlyProjectIds(db, orgId, now)).size,
     checkout: {
       available: billingEnabled() && intervals.length > 0,
       intervals,
@@ -180,6 +194,20 @@ export async function assertSeatQuota(db: Db, orgId: string): Promise<void> {
       `Your plan includes ${limit} team seats. Upgrade to add more people.`,
     );
   }
+}
+
+/** Widget intake into a project the plan no longer covers (after a downgrade). No-op without billing. */
+export async function assertProjectWritable(orgId: string, projectId: string): Promise<void> {
+  if (!billingEnabled()) return;
+  await withOrg(orgId, async (db) => {
+    if ((await readOnlyProjectIds(db, orgId)).has(projectId)) {
+      throw new ApiError(
+        403,
+        "PLAN_PROJECT_READ_ONLY",
+        "This project is read-only on the current plan: upgrade, or archive another project",
+      );
+    }
+  });
 }
 
 /** Widget intake: blocked at 120% of the monthly allowance (the widget queues locally). */
