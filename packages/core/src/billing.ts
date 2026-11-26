@@ -5,8 +5,11 @@ import type { LICENSE_FEATURES } from "./license";
 // public prices: the dashboard, the API and apps/www all read it. It holds no secrets and no provider ids;
 // Dodo product ids come from the server environment.
 
-export const BILLING_PLAN_IDS = ["free", "pro"] as const;
+export const BILLING_PLAN_IDS = ["free", "pro", "business"] as const;
 export type BillingPlanId = (typeof BILLING_PLAN_IDS)[number];
+/** The plans that are sold (each has its own Dodo products). */
+export const PAID_PLAN_IDS = ["pro", "business"] as const;
+export type PaidPlanId = (typeof PAID_PLAN_IDS)[number];
 export const BILLING_INTERVALS = ["monthly", "annual"] as const;
 export type BillingInterval = (typeof BILLING_INTERVALS)[number];
 
@@ -56,6 +59,15 @@ export const BILLING_PLANS: Readonly<Record<BillingPlanId, BillingPlan>> = {
     features: ["white_label"],
     price: { monthly: 29, annualPerMonth: 24 },
   },
+  // Blueprint 07 §3. Extra-seat add-ons, replay retention and the audit log are separate work items:
+  // what is listed here is exactly what the API enforces today (seats, projects, reports, white-label).
+  business: {
+    id: "business",
+    name: "Business",
+    limits: { seats: 30, projects: null, reportsPerMonth: 20_000 },
+    features: ["white_label"],
+    price: { monthly: 99, annualPerMonth: 79 },
+  },
 };
 
 /** Days a failed renewal keeps the paid plan (blueprint 07 §5). */
@@ -97,6 +109,22 @@ export function effectivePlan(
   }
 }
 
+/**
+ * After a downgrade a workspace can hold more live projects than its plan allows. Nothing is deleted: the
+ * oldest `limit` projects stay writable and the rest become read-only until the plan is raised or projects
+ * are archived. Oldest-first (ties by id) keeps the answer stable between requests.
+ */
+export function overLimitProjectIds(
+  projects: readonly { id: string; createdAt: Date }[],
+  limit: number | null,
+): Set<string> {
+  if (limit === null || projects.length <= limit) return new Set();
+  const ordered = [...projects].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+  );
+  return new Set(ordered.slice(limit).map((p) => p.id));
+}
+
 /** ok below the limit; soft at 100% (banner only); blocked at 120% (widget queues locally). */
 export function reportQuota(used: number, limit: number | null): "ok" | "soft" | "blocked" {
   if (limit === null || used < limit) return "ok";
@@ -115,15 +143,26 @@ export const billingResponse = z.object({
   /** Set while a failed renewal is in grace (or the grace is over and the plan was lowered). */
   dunning: z.object({ endsAt: z.string(), daysLeft: z.number().int(), downgraded: z.boolean() }).nullable(),
   usage: z.object({ seats: usageEntry, projects: usageEntry, reports: usageEntry }),
-  /** Which paid intervals the server can sell (product ids configured). */
+  /** Live projects past the plan's project limit (after a downgrade): they stay readable but take no new feedback. */
+  readOnlyProjects: z.number().int().default(0),
+  /** Which paid intervals the server can sell (product ids configured); `intervals` is the Pro list. */
   checkout: z.object({
     available: z.boolean(),
     intervals: z.array(z.enum(BILLING_INTERVALS)),
+    /** Per paid plan: the intervals that have a product configured. */
+    plans: z.partialRecord(z.enum(PAID_PLAN_IDS), z.array(z.enum(BILLING_INTERVALS))).default({}),
     manageable: z.boolean(),
   }),
+  /** Pro's prices (kept for older clients); see `planPrices` for every paid plan. */
   prices: z.object({ monthly: z.number(), annualPerMonth: z.number() }),
+  planPrices: z
+    .partialRecord(z.enum(PAID_PLAN_IDS), z.object({ monthly: z.number(), annualPerMonth: z.number() }))
+    .default({}),
 });
 export type BillingInfo = z.infer<typeof billingResponse>;
 
-export const checkoutRequest = z.object({ interval: z.enum(BILLING_INTERVALS) });
+export const checkoutRequest = z.object({
+  interval: z.enum(BILLING_INTERVALS),
+  plan: z.enum(PAID_PLAN_IDS).default("pro"),
+});
 export const billingLinkResponse = z.object({ url: z.url() });

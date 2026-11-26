@@ -3,6 +3,9 @@ import {
   type BillingInfo,
   type BillingInterval,
   effectivePlan,
+  overLimitProjectIds,
+  PAID_PLAN_IDS,
+  type PaidPlanId,
   reportQuota,
   SUBSCRIPTION_STATUSES,
   type SubscriptionState,
@@ -12,7 +15,7 @@ import { billingEvent, billingSubscription, feedback, getDb, member, project, wi
 import { and, count, eq, gte, isNull } from "drizzle-orm";
 import { env } from "../env";
 import { ApiError } from "../errors";
-import { billingEnabled, configuredIntervals, dodoBaseUrl, intervalForProduct, productFor } from "./config";
+import { billingEnabled, configuredIntervals, dodoBaseUrl, planForProduct, productFor } from "./config";
 import { createDodoClient, type DodoClient, dodoOverride } from "./dodo";
 
 type Row = typeof billingSubscription.$inferSelect;
@@ -41,7 +44,7 @@ const asInterval = (s: string | null): BillingInterval | null =>
 export const toState = (row: Row | undefined): SubscriptionState | null =>
   row
     ? {
-        plan: row.plan === "pro" ? "pro" : "free",
+        plan: row.plan === "pro" || row.plan === "business" ? row.plan : "free",
         interval: asInterval(row.interval),
         status: isStatus(row.status) ? row.status : "none",
         currentPeriodEnd: row.currentPeriodEnd,
@@ -70,6 +73,18 @@ export async function orgUsage(db: Db, orgId: string, now = new Date()) {
   return { seats: seats?.n ?? 0, projects: projects?.n ?? 0, reports: reports?.n ?? 0 };
 }
 
+/** Live projects past the plan's project limit; empty without billing or while within the limit. */
+export async function readOnlyProjectIds(db: Db, orgId: string, now = new Date()): Promise<Set<string>> {
+  if (!billingEnabled()) return new Set();
+  const limit = (await planFor(db, orgId, now)).definition.limits.projects;
+  if (limit === null) return new Set();
+  const live = await db
+    .select({ id: project.id, createdAt: project.createdAt })
+    .from(project)
+    .where(and(eq(project.orgId, orgId), isNull(project.archivedAt)));
+  return overLimitProjectIds(live, limit);
+}
+
 /** The plan in force for an organisation (the entitlement code consumes this in Cloud). */
 export async function planFor(db: Db, orgId: string, now = new Date()) {
   const row = await loadRow(db, orgId);
@@ -82,6 +97,13 @@ export async function getBillingInfo(orgId: string, now = new Date()): Promise<B
   const { plan, dunning, row, definition } = await planFor(db, orgId, now);
   const used = await orgUsage(db, orgId, now);
   const intervals = configuredIntervals();
+  const plans = Object.fromEntries(PAID_PLAN_IDS.map((p) => [p, configuredIntervals(p)])) as Record<
+    PaidPlanId,
+    BillingInterval[]
+  >;
+  const planPrices = Object.fromEntries(
+    PAID_PLAN_IDS.map((p) => [p, BILLING_PLANS[p].price ?? { monthly: 0, annualPerMonth: 0 }]),
+  ) as Record<PaidPlanId, { monthly: number; annualPerMonth: number }>;
   const l = definition.limits;
   return {
     plan,
@@ -97,24 +119,28 @@ export async function getBillingInfo(orgId: string, now = new Date()): Promise<B
       projects: { used: used.projects, limit: l.projects },
       reports: { used: used.reports, limit: l.reportsPerMonth },
     },
+    readOnlyProjects: (await readOnlyProjectIds(db, orgId, now)).size,
     checkout: {
-      available: billingEnabled() && intervals.length > 0,
+      available: billingEnabled() && PAID_PLAN_IDS.some((p) => plans[p].length > 0),
       intervals,
+      plans,
       manageable: !!row?.dodoCustomerId,
     },
     prices: BILLING_PLANS.pro.price ?? { monthly: 0, annualPerMonth: 0 },
+    planPrices,
   };
 }
 
 export async function startCheckout(input: {
   orgId: string;
   interval: BillingInterval;
+  plan?: PaidPlanId;
   user: { email: string; name: string };
 }): Promise<{ url: string }> {
-  const productId = productFor(input.interval);
+  const productId = productFor(input.interval, input.plan ?? "pro");
   const row = await loadRow(getDb(), input.orgId);
   const { plan } = effectivePlan(toState(row));
-  if (plan === "pro" && row?.status === "active") {
+  if (plan !== "free" && row?.status === "active") {
     throw new ApiError(
       409,
       "ALREADY_SUBSCRIBED",
@@ -180,6 +206,20 @@ export async function assertSeatQuota(db: Db, orgId: string): Promise<void> {
       `Your plan includes ${limit} team seats. Upgrade to add more people.`,
     );
   }
+}
+
+/** Widget intake into a project the plan no longer covers (after a downgrade). No-op without billing. */
+export async function assertProjectWritable(orgId: string, projectId: string): Promise<void> {
+  if (!billingEnabled()) return;
+  await withOrg(orgId, async (db) => {
+    if ((await readOnlyProjectIds(db, orgId)).has(projectId)) {
+      throw new ApiError(
+        403,
+        "PLAN_PROJECT_READ_ONLY",
+        "This project is read-only on the current plan: upgrade, or archive another project",
+      );
+    }
+  });
 }
 
 /** Widget intake: blocked at 120% of the monthly allowance (the widget queues locally). */
@@ -282,10 +322,11 @@ export function applyEvent(current: Row | undefined, e: DodoEvent, now = new Dat
   }
   if (!status) return null;
 
-  const interval = intervalForProduct(data.product_id);
+  const product = planForProduct(data.product_id);
+  const interval = product?.interval ?? null;
   if (status === "active") {
     // Never grant a paid plan for a product that is not one of ours.
-    if (!interval) return null;
+    if (!product) return null;
   } else if (!sameSub) {
     // A late event of a replaced subscription must not touch the one in force.
     return null;
@@ -298,7 +339,7 @@ export function applyEvent(current: Row | undefined, e: DodoEvent, now = new Dat
   const next = toDate(data.next_billing_date);
   if (next) patch.currentPeriodEnd = next;
   if (status === "active") {
-    patch.plan = "pro";
+    patch.plan = product?.plan ?? "pro";
     if (interval) patch.interval = interval;
     patch.pastDueSince = null;
     patch.cancelAtPeriodEnd = data.cancel_at_next_billing_date === true;

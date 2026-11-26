@@ -28,7 +28,56 @@ async function get(fetchImpl: Fetch, url: string, headers: Record<string, string
   }
 }
 
-export type DoctorInput = { url: string; projectKey?: string | undefined; origin?: string | undefined };
+export type DoctorInput = {
+  url: string;
+  projectKey?: string | undefined;
+  origin?: string | undefined;
+  /** An instance admin's session cookie: adds the server-side checks (database, migrations, storage, SMTP). */
+  cookie?: string | undefined;
+};
+
+/** The server's own checks. They need an instance admin, so a missing login is a hint, not a failure. */
+async function serverChecks(fetchImpl: Fetch, url: string, cookie: string | undefined): Promise<Check[]> {
+  if (!cookie) {
+    return [
+      {
+        name: "server checks",
+        ok: true,
+        warn: true,
+        detail:
+          "skipped (pass --cookie with an instance admin's session cookie for database, migrations, storage and SMTP)",
+      },
+    ];
+  }
+  const res = await get(fetchImpl, `${url}/api/admin/diagnostics`, { cookie });
+  if (res.status === 401 || res.status === 403) {
+    return [
+      {
+        name: "server checks",
+        ok: false,
+        detail: `the cookie is not an instance administrator's session (answered ${res.status})`,
+      },
+    ];
+  }
+  const list = res.json?.checks;
+  if (res.status !== 200 || !Array.isArray(list)) {
+    return [
+      { name: "server checks", ok: false, detail: `GET /api/admin/diagnostics answered ${res.status}` },
+    ];
+  }
+  return list.flatMap((c: unknown): Check[] => {
+    const v = c as { name?: unknown; ok?: unknown; detail?: unknown; warn?: unknown };
+    if (typeof v.name !== "string" || typeof v.ok !== "boolean") return [];
+    return [
+      {
+        name: v.name,
+        ok: v.ok,
+        detail: typeof v.detail === "string" ? v.detail : "",
+        ...(v.warn === true ? { warn: true } : {}),
+      },
+    ];
+  });
+}
 
 export async function doctor(input: DoctorInput, fetchImpl: Fetch = fetch): Promise<Check[]> {
   const checks: Check[] = [];
@@ -54,6 +103,8 @@ export async function doctor(input: DoctorInput, fetchImpl: Fetch = fetch): Prom
       ? { name: "widget.js", ok: true, detail: "served" }
       : { name: "widget.js", ok: false, detail: `GET /widget.js answered ${script.status} ${type}`.trim() },
   );
+
+  checks.push(...(await serverChecks(fetchImpl, input.url, input.cookie)));
 
   if (!input.projectKey) {
     checks.push({

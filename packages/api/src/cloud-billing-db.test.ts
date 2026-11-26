@@ -113,6 +113,8 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud billing", () =>
     vi.stubEnv("DODO_PAYMENTS_WEBHOOK_KEY", WEBHOOK_KEY);
     vi.stubEnv("DODO_PRO_MONTHLY_PRODUCT_ID", "prod_monthly");
     vi.stubEnv("DODO_PRO_ANNUAL_PRODUCT_ID", "prod_annual");
+    vi.stubEnv("DODO_BUSINESS_MONTHLY_PRODUCT_ID", "prod_biz_monthly");
+    vi.stubEnv("DODO_BUSINESS_ANNUAL_PRODUCT_ID", "prod_biz_annual");
     const d = fixture.db;
     await d`insert into organization (id,name,slug) values (${org},${org},${org})`;
     await d`insert into "user" (id,name,email,email_verified) values (${userId},'Owner',${`${userId}@test.invalid`},true)`;
@@ -254,6 +256,24 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud billing", () =>
     expect(list.projects).toHaveLength(2);
   });
 
+  it("keeps the oldest project writable after the downgrade and makes the newer one read-only", async () => {
+    const { assertProjectWritable } = await import("./billing/service");
+    const [oldest, newest] = await db()<
+      { id: string }[]
+    >`select id from project where org_id=${org} and archived_at is null order by created_at asc, id asc`;
+    expect(await billing()).toMatchObject({ readOnlyProjects: 1 });
+    await expect(assertProjectWritable(org, oldest?.id ?? "")).resolves.toBeUndefined();
+    await expect(assertProjectWritable(org, newest?.id ?? "")).rejects.toMatchObject({
+      status: 403,
+      code: "PLAN_PROJECT_READ_ONLY",
+    });
+    // Archiving the newer project brings the workspace back within its plan: nothing is read-only any more.
+    await db()`update project set archived_at = now() where id=${newest?.id ?? ""}`;
+    expect(await billing()).toMatchObject({ readOnlyProjects: 0 });
+    await expect(assertProjectWritable(org, oldest?.id ?? "")).resolves.toBeUndefined();
+    await db()`update project set archived_at = null where id=${newest?.id ?? ""}`;
+  });
+
   it("recovers on a successful renewal", async () => {
     await webhook(
       "msg_4",
@@ -304,5 +324,50 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud billing", () =>
       (await request("/api/billing/portal", { method: "POST", cookies: other, body: {} })).status,
     ];
     expect(statuses).toEqual([403, 403, 403]);
+  });
+
+  it("sells Business: a checkout for its product, and a plan change lifts the limits further", async () => {
+    // The earlier case left the subscription expired: start an active Pro one again.
+    await webhook(
+      "msg_pro_again",
+      "subscription.active",
+      { status: "active", product_id: "prod_annual" },
+      new Date(Date.now() + 15_000),
+    );
+    const before = dodoCalls.checkout.length;
+    // With an active subscription a second checkout is refused: Business is reached through the portal's
+    // plan change, which arrives as a webhook.
+    const refused = await request("/api/billing/checkout", {
+      method: "POST",
+      body: { interval: "monthly", plan: "business" },
+    });
+    expect(refused.status).toBe(409);
+    expect(dodoCalls.checkout.length).toBe(before);
+    expect(await billing()).toMatchObject({
+      plan: "pro",
+      planPrices: { pro: { monthly: 29 }, business: { monthly: 99, annualPerMonth: 79 } },
+      checkout: { plans: { pro: ["monthly", "annual"], business: ["monthly", "annual"] } },
+    });
+    await webhook(
+      "msg_biz",
+      "subscription.plan_changed",
+      { status: "active", product_id: "prod_biz_monthly" },
+      new Date(Date.now() + 20_000),
+    );
+    expect(await billing()).toMatchObject({
+      plan: "business",
+      planName: "Business",
+      interval: "monthly",
+      usage: { seats: { limit: 30 }, projects: { limit: null }, reports: { limit: 20000 } },
+    });
+    expect(await entitlements()).toMatchObject({ plan: "business", features: ["white_label"] });
+    // A product that is not one of ours never grants a plan, even on a plan-change event.
+    await webhook(
+      "msg_foreign",
+      "subscription.plan_changed",
+      { status: "active", product_id: "prod_unknown" },
+      new Date(Date.now() + 30_000),
+    );
+    expect(await billing()).toMatchObject({ plan: "business" });
   });
 });

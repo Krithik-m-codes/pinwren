@@ -179,7 +179,7 @@ not evidence of a public launch or a successful live payment.
 - Sign-up requires email/password, terms consent and verified email; it enforces signup abuse limits
   and creates a Free workspace. See the Cloud sign-up section in the isolation document.
 - Dodo secrets: `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_WEBHOOK_KEY`, `DODO_PRO_MONTHLY_PRODUCT_ID`,
-  `DODO_PRO_ANNUAL_PRODUCT_ID`. Non-secrets: `DODO_PAYMENTS_ENVIRONMENT` (defaults to `test_mode`) and
+  `DODO_PRO_ANNUAL_PRODUCT_ID`, and for the Business plan `DODO_BUSINESS_MONTHLY_PRODUCT_ID`, `DODO_BUSINESS_ANNUAL_PRODUCT_ID`. Non-secrets: `DODO_PAYMENTS_ENVIRONMENT` (defaults to `test_mode`) and
   optional `DODO_PAYMENTS_BASE_URL`. These names are implemented in `packages/api/src/env.ts`.
 - Checkout, customer portal, signed/idempotent webhooks, quotas and dunning exist. Live-account/product
   setup, Business/add-ons and downgrade gaps remain; see ADR 0023 and `docs/roadmap-status.md`.

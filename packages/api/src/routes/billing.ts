@@ -37,9 +37,8 @@ export const billing = new Hono<{ Variables: SessionVars }>()
       .from(user)
       .where(eq(user.id, c.var.userId));
     if (!u) throw new ApiError(403, "FORBIDDEN", "Not allowed");
-    return c.json(
-      await startCheckout({ orgId: c.var.orgId, interval: c.req.valid("json").interval, user: u }),
-    );
+    const { interval, plan } = c.req.valid("json");
+    return c.json(await startCheckout({ orgId: c.var.orgId, interval, plan, user: u }));
   })
   .post("/billing/portal", cloudOnly, requireOrgAdmin, async (c) => c.json(await portalLink(c.var.orgId)));
 

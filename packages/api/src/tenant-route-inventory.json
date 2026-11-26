@@ -129,6 +129,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: DELETE /w/feedback/:id"
   },
+  "GET /api/admin/diagnostics": {
+    "boundary": "system",
+    "databaseLifetime": "finite",
+    "check": "system authorization: GET /api/admin/diagnostics"
+  },
   "GET /api/admin/instance-admins": {
     "boundary": "system",
     "databaseLifetime": "finite",
