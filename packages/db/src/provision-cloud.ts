@@ -37,6 +37,8 @@ export async function provisionCloudDatabase(
           await tx`alter table public.${tx(entry.table)} force row level security`;
           if (entry.runtimeColumns) {
             await tx`grant select (${tx([...entry.runtimeColumns])}) on public.${tx(entry.table)} to ${tx(options.runtimeRole)}`;
+          } else if (entry.appendOnly) {
+            await tx`grant select,insert,delete on public.${tx(entry.table)} to ${tx(options.runtimeRole)}`;
           } else {
             await tx`grant select,insert,update,delete on public.${tx(entry.table)} to ${tx(options.runtimeRole)}`;
           }

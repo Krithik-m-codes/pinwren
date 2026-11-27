@@ -7,6 +7,7 @@ import {
   type LucideIcon,
   Mail,
   Palette,
+  ScrollText,
   ShieldCheck,
   Sparkles,
   UserRound,
@@ -103,6 +104,14 @@ const PAGES: readonly Omit<SettingsPage, "label">[] = [
     icon: ShieldCheck,
     access: "instance",
     keywords: ["sessions", "https", "updates"],
+  },
+  {
+    href: "/settings/audit",
+    labelKey: "audit.title",
+    icon: ScrollText,
+    // Workspace Admins; the page itself explains when the plan or licence lacks the feature (ADR 0044).
+    access: "org",
+    keywords: ["history", "log", "who changed", "compliance", "export", "security"],
   },
   {
     href: "/settings/billing",

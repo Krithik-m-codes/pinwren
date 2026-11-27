@@ -136,7 +136,10 @@ The initial documentation reconciliation above did not run tests; this follow-up
 - [ ] **WP-23:** automated Enterprise licence issuance from paid invoices with managed signing-key custody;
       the existing signing CLI is manual, not the billing-triggered issuance flow described in blueprint 07.
 - [ ] **WP-24:** SAML/OIDC SSO with enforcement, domain capture and recovery; SCIM provisioning/deprovisioning.
-- [ ] **WP-24:** audit log/export and custom roles/permissions.
+- [x] **WP-24:** audit log (F-092): append-only `audit_log` with RLS, admin/security actions recorded, Settings › Audit log,
+      `GET /api/audit` and CSV/JSONL export; Cloud Business (30 days) and the `audit_log` licence feature
+      ([ADR 0044](adr/0044-audit-log.md), [DB tests](../packages/api/src/cloud-audit-db.test.ts)). Sign-in events and the SIEM stream are not part of it.
+- [ ] **WP-24:** custom roles/permissions.
 - [ ] **WP-25:** customer custom-domain provisioning/verification/TLS and legal hold. White-label and
       Jira Cloud are already built; Jira Data Center remains unsupported.
 - [ ] **Enterprise follow-ups:** SIEM streaming and the planned priority-support entitlement/service.

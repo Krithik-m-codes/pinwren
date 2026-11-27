@@ -1,3 +1,4 @@
+import { audit } from "../services/audit";
 import { apiTokenCreate } from "@pinwren/core";
 import { apiToken, getDb } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
@@ -49,6 +50,12 @@ export const tokens = new Hono<{ Variables: SessionVars }>()
       })
       .returning();
     if (!t) throw new Error("token insert failed");
+    await audit(
+      c,
+      "api_token.created",
+      { type: "api_token", id: t.id },
+      { name: t.name, scopes: t.scopes, expiresAt: t.expiresAt },
+    );
     // The secret is returned once and never stored.
     return c.json({ token: tokenOut(t), secret }, 201);
   })
@@ -60,5 +67,6 @@ export const tokens = new Hono<{ Variables: SessionVars }>()
       .where(and(eq(apiToken.id, c.req.param("id")), eq(apiToken.orgId, c.var.orgId), owner))
       .returning({ id: apiToken.id });
     if (!rows.length) throw notFound("Token");
+    await audit(c, "api_token.revoked", { type: "api_token", id: c.req.param("id") });
     return c.body(null, 204);
   });

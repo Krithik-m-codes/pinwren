@@ -58,7 +58,7 @@ const MATRIX: { group: string; rows: { label: string; cells: Cell[] }[] }[] = [
         label: "“Powered by Pinwren” removal / white-label",
         cells: [false, false, "Remove badge", "Full", true],
       },
-      { label: "Audit log", cells: [false, false, false, "Planned", "Planned (+ SIEM stream)"] },
+      { label: "Audit log", cells: [false, false, false, "30 days", "Full history (SIEM stream planned)"] },
       { label: "SSO (SAML/OIDC), SCIM", cells: [false, false, false, false, "Planned"] },
       { label: "Support", cells: ["Community", "Community", "Email", "Priority email", "SLA"] },
     ],
@@ -104,8 +104,8 @@ export default function PricingPage() {
         <PlanCards />
         <p className="mt-6 text-center text-xs text-muted-foreground">
           Cloud and Enterprise prices are proposals and may change before launch. Prices in USD, excluding
-          tax. Seats, projects, monthly reports and branding are enforced by the plans today; replay length,
-          retention tiers, extra-seat add-ons and the audit log are planned.
+          tax. Seats, projects, monthly reports, branding and the audit log are enforced by the plans today;
+          replay length, retention tiers and extra-seat add-ons are planned.
         </p>
       </section>
 

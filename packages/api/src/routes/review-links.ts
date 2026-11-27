@@ -1,3 +1,4 @@
+import { audit } from "../services/audit";
 import { isOriginAllowed, parseWidgetConfig, REVIEW_TOKEN_HEADER, reviewLinkCreate } from "@pinwren/core";
 import { getDb, project, reviewLink } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
@@ -76,6 +77,12 @@ export const reviewLinks = new Hono<{ Variables: SessionVars }>()
         })
         .returning();
       if (!row) throw new Error("review link insert failed");
+      await audit(
+        c,
+        "review_link.created",
+        { type: "review_link", id: row.id },
+        { label: body.label, projectId: p.id, expiresInDays: body.expiresInDays },
+      );
       return c.json({ link: linkOut(row), url: reviewUrl(body.url, token) }, 201);
     },
   )
@@ -93,6 +100,7 @@ export const reviewLinks = new Hono<{ Variables: SessionVars }>()
       )
       .returning();
     if (!row) throw notFound("Review link");
+    await audit(c, "review_link.revoked", { type: "review_link", id: row.id }, { projectId: row.projectId });
     return c.body(null, 204);
   });
 

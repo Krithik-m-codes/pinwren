@@ -1,3 +1,4 @@
+import { audit } from "../services/audit";
 import { afterOrgCommit } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
@@ -23,6 +24,7 @@ export const projectData = new Hono<{ Variables: SessionVars }>()
   .post("/projects/:id/export", requirePermission("projects.manage"), async (c) => {
     const projectId = c.req.param("id");
     const view = await requestExport(c.var.orgId, projectId, c.var.userId);
+    await audit(c, "project.exported", { type: "project", id: projectId });
     afterOrgCommit(() => enqueue(QUEUES.projectExport, { orgId: c.var.orgId, projectId }));
     return c.json({ export: view }, 202);
   })
@@ -31,8 +33,15 @@ export const projectData = new Hono<{ Variables: SessionVars }>()
   )
 
   // --- Erase a reporter's data (Admins) ---------------------------------------------------------------
-  .post("/privacy/erase", requirePermission("settings.manage"), zValidator("json", privacyErase), async (c) =>
-    c.json({ result: await eraseReporter(c.var.orgId, c.var.userId, c.req.valid("json")) }),
+  .post(
+    "/privacy/erase",
+    requirePermission("settings.manage"),
+    zValidator("json", privacyErase),
+    async (c) => {
+      const result = await eraseReporter(c.var.orgId, c.var.userId, c.req.valid("json"));
+      await audit(c, "data.erased", { type: "reporter" });
+      return c.json({ result });
+    },
   )
   .get("/privacy/erasures", requirePermission("settings.manage"), async (c) =>
     c.json({ erasures: await erasureLog(c.var.orgId) }),

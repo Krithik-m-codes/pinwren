@@ -1397,3 +1397,28 @@ export const slackMessage = pgTable(
     tenantReference("slack_message_feedback_tenant_fk", t.feedbackId, t.orgId, feedback.id, feedback.orgId),
   ],
 );
+
+/**
+ * Audit log (F-092, ADR 0044): who did what to the workspace's configuration and access. Append-only for the
+ * runtime role (SELECT/INSERT, plus DELETE only for retention — never UPDATE). The actor is snapshotted
+ * (`actor_label`) because users can be deleted; `data` never holds secrets (services/audit.ts redacts).
+ */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: orgId(),
+    actorId: text("actor_id").references(() => user.id, { onDelete: "set null" }),
+    actorLabel: text("actor_label").notNull(),
+    actorIp: text("actor_ip"),
+    action: text("action").notNull(),
+    targetType: text("target_type"),
+    targetId: text("target_id"),
+    data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("audit_log_org_created_idx").on(t.orgId, t.createdAt.desc()),
+    index("audit_log_org_action_idx").on(t.orgId, t.action),
+  ],
+);

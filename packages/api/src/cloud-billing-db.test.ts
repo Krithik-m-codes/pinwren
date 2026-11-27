@@ -360,7 +360,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud billing", () =>
       interval: "monthly",
       usage: { seats: { limit: 30 }, projects: { limit: null }, reports: { limit: 20000 } },
     });
-    expect(await entitlements()).toMatchObject({ plan: "business", features: ["white_label"] });
+    expect(await entitlements()).toMatchObject({ plan: "business", features: ["white_label", "audit_log"] });
     // A product that is not one of ours never grants a plan, even on a plan-change event.
     await webhook(
       "msg_foreign",

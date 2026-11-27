@@ -1,3 +1,4 @@
+import { audit } from "../services/audit";
 import {
   brandAssetUpload,
   type EmailTemplateKey,
@@ -85,9 +86,12 @@ async function preview(
 export const branding = new Hono<{ Variables: SessionVars }>()
   .get("/branding", async (c) => c.json({ branding: await getOrgBranding(c.var.orgId) }))
 
-  .patch("/branding", requireOrgAdmin, zValidator("json", orgBrandingUpdate), async (c) =>
-    c.json({ branding: await updateOrgBranding(c.var.orgId, c.req.valid("json"), c.var.userId) }),
-  )
+  .patch("/branding", requireOrgAdmin, zValidator("json", orgBrandingUpdate), async (c) => {
+    const body = c.req.valid("json");
+    const updated = await updateOrgBranding(c.var.orgId, body, c.var.userId);
+    await audit(c, "branding.updated", { type: "branding" }, { fields: Object.keys(body) });
+    return c.json({ branding: updated });
+  })
 
   /** Upload a logo; returns `{ asset: { id, url } }` to set as `logoAssetId` or a widget `logoUrl`. */
   .post("/branding/assets", requireOrgAdmin, zValidator("json", brandAssetUpload), async (c) =>

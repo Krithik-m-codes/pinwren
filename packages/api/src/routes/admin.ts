@@ -1,3 +1,4 @@
+import { audit } from "../services/audit";
 import {
   EMAIL_DELIVERY_STATUSES,
   emailSettingsUpdate,
@@ -83,6 +84,7 @@ export const admin = new Hono<{ Variables: SessionVars }>()
         `Set by environment variables and locked: ${rejected.join(", ")}`,
       );
     }
+    await audit(c, "settings.email_updated", { type: "settings" }, { fields: Object.keys(patch) });
     return c.json({ email: await getEmailSettings() });
   })
 
@@ -144,7 +146,8 @@ export const admin = new Hono<{ Variables: SessionVars }>()
   .get("/settings/security", async (c) => c.json({ security: await getSecuritySettings() }))
 
   .patch("/settings/security", zValidator("json", securitySettingsUpdate), async (c) => {
-    const rejected = await updateSecuritySettings(c.req.valid("json"), c.var.userId);
+    const patch = c.req.valid("json");
+    const rejected = await updateSecuritySettings(patch, c.var.userId);
     if (rejected.length) {
       throw new ApiError(
         409,
@@ -152,6 +155,7 @@ export const admin = new Hono<{ Variables: SessionVars }>()
         `Set by environment variables and locked: ${rejected.join(", ")}`,
       );
     }
+    await audit(c, "settings.security_updated", { type: "settings" }, { fields: Object.keys(patch) });
     return c.json({ security: await getSecuritySettings() });
   })
 
@@ -159,11 +163,22 @@ export const admin = new Hono<{ Variables: SessionVars }>()
   .get("/license", async (c) => c.json({ license: licenseOut(await resolveEntitlements()) }))
 
   /** Upload a `.lic` file's text. Invalid or tampered → 400 INVALID_LICENSE; env-set → 409 LICENSE_LOCKED. */
-  .post("/license", zValidator("json", licenseUpload), async (c) =>
-    c.json({ license: licenseOut(await installLicense(c.req.valid("json").license, c.var.userId)) }),
-  )
+  .post("/license", zValidator("json", licenseUpload), async (c) => {
+    const installed = await installLicense(c.req.valid("json").license, c.var.userId);
+    await audit(
+      c,
+      "license.installed",
+      { type: "license", id: installed.license?.lid },
+      { customer: installed.license?.customer },
+    );
+    return c.json({ license: licenseOut(installed) });
+  })
 
-  .delete("/license", async (c) => c.json({ license: licenseOut(await removeLicense()) }))
+  .delete("/license", async (c) => {
+    const removed = await removeLicense();
+    await audit(c, "license.removed", { type: "license" });
+    return c.json({ license: licenseOut(removed) });
+  })
 
   /** Run the update check now: `{ checked: true, state }` or `{ checked: false, reason }`. */
   .post("/update-check", async (c) => c.json(await runUpdateCheck()));

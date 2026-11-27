@@ -15,6 +15,7 @@
     "saved-views",
     "notifications",
     "accounts",
-    "settings"
+    "settings",
+    "audit-log"
   ]
 }

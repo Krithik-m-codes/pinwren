@@ -1,3 +1,4 @@
+import { audit } from "../services/audit";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -26,6 +27,8 @@ export const signInSettings = new Hono<{ Variables: SessionVars }>()
   .use(requireInstanceAdmin)
   .get("/settings/sign-in", async (c) => c.json({ signIn: await getSignInSettings() }))
   .patch("/settings/sign-in", zValidator("json", signInSettingsUpdate), async (c) => {
-    await updateSignInSettings(c.req.valid("json"), c.var.userId);
+    const patch = c.req.valid("json");
+    await updateSignInSettings(patch, c.var.userId);
+    await audit(c, "settings.sign_in_updated", { type: "settings" }, { fields: Object.keys(patch) });
     return c.json({ signIn: await getSignInSettings() });
   });

@@ -50,6 +50,7 @@ describe.skipIf(!adminUrl)("PostgreSQL tenant row security", () => {
       page: { id: id(), org_id: org, project_id: projectId, url: "https://example.invalid/" },
       review_round: { id: roundId, org_id: org, project_id: projectId, name: org },
       project_release: { id: releaseId, org_id: org, project_id: projectId, version: org },
+      audit_log: { id: id(), org_id: org, actor_label: org, action: "member.invited" },
       review_link: { id: id(), org_id: org, project_id: projectId, label: org, token_hash: org },
       feedback: {
         id: feedbackId,

@@ -27,6 +27,7 @@ import { share } from "./en/share";
 import { trackers } from "./en/trackers";
 import { releases } from "./en/releases";
 import { slack } from "./en/slack";
+import { audit } from "./en/audit";
 
 // The dashboard's English strings: the source of every translation key. They are split by area (en/*.ts) so
 // that work on one area never touches another. Keys are `area.name`; plural forms are `<stem>_one` and
@@ -64,6 +65,7 @@ export const en = {
   ...trackers,
   ...releases,
   ...slack,
+  ...audit,
 } as const;
 
 export type Key = keyof typeof en;
