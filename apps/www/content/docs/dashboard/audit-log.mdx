@@ -1,0 +1,55 @@
+---
+title: Audit log
+description: A tamper-resistant record of who changed members, access, integrations, projects and settings, with filters and CSV or JSON Lines export.
+---
+
+The audit log answers "who changed what, and when?" for your workspace. It records the administrative and security
+actions below, who did them, from which address, and what they touched. It is an Enterprise feature: it comes with
+the **Business** plan on Pinwren Cloud (30 days of history) and with an [Enterprise licence](/docs/licensing) that
+includes `audit_log` when you self-host (history is kept in full).
+
+Open **Settings → Audit log**. Only workspace admins see it; editors and viewers are told it is admins only. On a plan
+or licence without the feature the page explains how to get it, and nothing is recorded.
+
+## What is recorded
+
+| Area             | Actions                                                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Members          | invited, added, role changed, removed; workspace ownership transferred                                                    |
+| API tokens       | created, revoked                                                                                                          |
+| Integrations     | issue-tracker integrations connected, changed, removed; Slack connected, disconnected; webhooks created, changed, removed |
+| Projects         | created, settings changed (including retention and archiving), project key rotated, data exported                         |
+| Licence, billing | licence installed or removed; plan checkout started                                                                       |
+| Settings         | branding, sign-in methods, email (SMTP), security                                                                         |
+| Links and data   | share links and review links created or revoked; a reporter's data erased                                                 |
+| The log itself   | audit log exported                                                                                                        |
+
+Each entry has the time, the person (their name and email as they were when it happened, so it stays readable if the
+account is later deleted), their IP address, the action, the target and a few details such as which fields changed.
+**Secrets are never stored**: tokens, passwords, webhook secrets, cookies and signatures are not written, and an
+action that fails or is refused leaves no entry.
+
+## Filter and page
+
+Filter by action, by actor (name, email or user id), and by date range, then **Apply**. The list is newest first;
+**Load more** fetches the next page.
+
+## Export
+
+**Export CSV** and **Export JSON lines** download the entries that match the current filters, newest first, up to
+10,000 rows (narrow the date range for more). In the CSV, cells that a spreadsheet could read as a formula (starting
+with `=`, `+`, `-` or `@`) are prefixed with an apostrophe, so opening a file in Excel never runs anything. Exporting
+is itself recorded.
+
+The same data is available at `GET /api/audit` and `GET /api/audit/export?format=csv|jsonl` to a signed-in admin
+(not by API token yet).
+
+## Plans, downgrades and retention
+
+- **Cloud Business:** 30 days of history; older entries are deleted daily.
+- **Enterprise (self-host):** nothing is deleted.
+- Entries are written only while the feature is active. If a Cloud workspace drops below Business, the page and
+  exports return to the upgrade message and nothing new is recorded; history written earlier is not exposed again
+  until the feature returns (and the 30-day limit still applies).
+
+See [ADR 0044](https://github.com/Krithik-m-codes/pinwren/blob/main/docs/adr/0044-audit-log.md) for the design.

@@ -1,3 +1,4 @@
+import { recordAudit } from "./services/audit";
 import { assertSeatQuota } from "./billing/service";
 import { cloudSignupRefusal, discardUser, provisionPersonalWorkspace, recordConsent } from "./cloud-signup";
 import { identityDatabase } from "@pinwren/db/identity";
@@ -295,6 +296,13 @@ function createAuth() {
         requireEmailVerificationOnInvitation: false,
         // Queued, so a slow or missing SMTP server never fails the invite itself.
         async sendInvitationEmail(data) {
+          await recordAudit({
+            orgId: data.organization.id,
+            actorId: data.inviter.user.id,
+            action: "member.invited",
+            target: { type: "invitation", id: data.id },
+            data: { email: data.email, role: data.role },
+          });
           await enqueue(QUEUES.email, {
             to: data.email,
             ...(await withOrg(data.organization.id, () =>

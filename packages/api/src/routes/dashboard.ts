@@ -1,3 +1,4 @@
+import { audit } from "../services/audit";
 import { assertProjectQuota } from "../billing/service";
 import { accountProfileFor } from "../db/identity";
 import { randomBytes } from "node:crypto";
@@ -53,6 +54,7 @@ import { getSecuritySettings } from "../settings/instance";
 import { resolveSmtp } from "../email/config";
 import { setupNeeded, signupOpen } from "../services/setup";
 import { admin } from "./admin";
+import { auditRoutes } from "./audit";
 import { branding } from "./branding";
 import { integrations } from "./integrations";
 import { labels } from "./labels";
@@ -238,6 +240,7 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
         })
         .returning();
       if (!created) throw new Error("project insert failed");
+      await audit(c, "project.created", { type: "project", id: created.id }, { name: created.name });
       return c.json({ project: projectOut(created, c.var.role) }, 201);
     },
   )
@@ -310,6 +313,12 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       if (!p) throw notFound("Project");
       return p;
     });
+    await audit(
+      c,
+      "project.updated",
+      { type: "project", id: saved.id },
+      { fields: Object.keys(c.req.valid("json")) },
+    );
     return c.json({ project: projectOut(saved, c.var.role) });
   })
 
@@ -320,6 +329,7 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       .where(and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId)))
       .returning();
     if (!p) throw notFound("Project");
+    await audit(c, "project.key_rotated", { type: "project", id: p.id });
     return c.json({ project: projectOut(p, c.var.role) });
   })
 
@@ -542,6 +552,7 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
   .route("/", labels)
   .route("/", webhooks)
   .route("/", tokens)
+  .route("/", auditRoutes)
   .route("/", integrations)
   .route("/", branding)
   .route("/admin", admin);

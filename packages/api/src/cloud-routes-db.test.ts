@@ -219,6 +219,8 @@ const cases: Record<string, Spec> = {
   "GET /api/feedback/:id/brief": foreign(),
   "GET /api/feedback/:id/repro-test": foreign(),
   "GET /api/feedback/export": scoped({ path: (ids) => `/api/feedback/export?projectId=${project(ids)}` }),
+  "GET /api/audit": scoped({ status: [200, 403] }),
+  "GET /api/audit/export": scoped({ status: [200, 403] }),
   "GET /api/billing": scoped(),
   "GET /api/integrations/:id/webhook-secret": foreign(),
   "GET /api/invitations": scoped(),

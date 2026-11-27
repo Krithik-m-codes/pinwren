@@ -1,10 +1,10 @@
-import { customFieldsApi } from "./custom-fields";
+import { auditApi } from "./audit";
 
 /**
  * The dashboard's RTK Query API with every endpoint (base → account → projects → feedback → rounds →
  * admin; each module injects into the previous one). Import hooks from here.
  */
-export const api = customFieldsApi;
+export const api = auditApi;
 
 export const {
   // account
@@ -136,6 +136,7 @@ export type HydrationEntries = {
   value: unknown;
 }[];
 
+export { useAuditLogQuery } from "./audit";
 export { type ApiError, errorMessage, isApiError, isForbidden } from "./base";
 export type {
   AutomationRule,

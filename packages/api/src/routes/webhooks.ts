@@ -1,3 +1,4 @@
+import { audit } from "../services/audit";
 import { withOrg } from "@pinwren/db";
 import { webhookCreate, webhookUpdate } from "@pinwren/core";
 import { getDb, project, webhookDelivery, webhookEndpoint } from "@pinwren/db";
@@ -168,6 +169,12 @@ export const webhooks = new Hono<{ Variables: SessionVars }>()
       })
       .returning();
     if (!e) throw new Error("webhook insert failed");
+    await audit(
+      c,
+      "webhook.created",
+      { type: "webhook", id: e.id },
+      { kind: e.kind, projectId: e.projectId },
+    );
     // The signing secret is shown exactly once.
     return c.json({ webhook: endpointOut(e), secret }, 201);
   })
@@ -220,12 +227,24 @@ export const webhooks = new Hono<{ Variables: SessionVars }>()
       .where(eq(webhookEndpoint.id, current.id))
       .returning();
     if (!e) throw notFound("Webhook");
+    await audit(
+      c,
+      "webhook.updated",
+      { type: "webhook", id: e.id },
+      { kind: e.kind, fields: Object.keys(set) },
+    );
     return c.json({ webhook: endpointOut(e) });
   })
 
   .delete("/webhooks/:id", requireOrgAdmin, async (c) => {
     const e = await ownEndpoint(c.var.orgId, c.req.param("id"));
     await getDb().delete(webhookEndpoint).where(eq(webhookEndpoint.id, e.id));
+    await audit(
+      c,
+      "webhook.removed",
+      { type: "webhook", id: e.id },
+      { kind: e.kind, projectId: e.projectId },
+    );
     return c.body(null, 204);
   })
 

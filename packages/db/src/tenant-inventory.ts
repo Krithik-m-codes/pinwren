@@ -7,6 +7,8 @@ export type TenantTable = {
   runtimeColumns?: readonly string[];
   bootstrapColumns?: readonly string[];
   systemNull?: boolean;
+  /** Runtime gets SELECT/INSERT/DELETE (retention) but never UPDATE: rows are history (audit_log, ADR 0044). */
+  appendOnly?: boolean;
 };
 
 export const PROFILE_PARTICIPANTS = [
@@ -35,6 +37,7 @@ export const tenantInventory: readonly TenantTable[] = [
   },
   { table: "page", ownership: "direct", parents: ["project"] },
   { table: "project_release", ownership: "direct", parents: ["project"] },
+  { table: "audit_log", ownership: "direct", parents: [], appendOnly: true },
   { table: "review_round", ownership: "direct", parents: ["project"] },
   {
     table: "feedback",

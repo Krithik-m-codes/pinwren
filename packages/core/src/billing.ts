@@ -59,13 +59,13 @@ export const BILLING_PLANS: Readonly<Record<BillingPlanId, BillingPlan>> = {
     features: ["white_label"],
     price: { monthly: 29, annualPerMonth: 24 },
   },
-  // Blueprint 07 §3. Extra-seat add-ons, replay retention and the audit log are separate work items:
-  // what is listed here is exactly what the API enforces today (seats, projects, reports, white-label).
+  // Blueprint 07 §3. Extra-seat add-ons and replay retention are separate work items: what is listed here is
+  // exactly what the API enforces today (seats, projects, reports, white-label, audit log: 30 days, ADR 0044).
   business: {
     id: "business",
     name: "Business",
     limits: { seats: 30, projects: null, reportsPerMonth: 20_000 },
-    features: ["white_label"],
+    features: ["white_label", "audit_log"],
     price: { monthly: 99, annualPerMonth: 79 },
   },
 };

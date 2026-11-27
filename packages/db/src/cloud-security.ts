@@ -62,6 +62,7 @@ export async function validateCloudCatalog(
       content: boolean;
       complete: boolean;
       deletes: boolean;
+      append_only: boolean;
     }[]
   >`
     select c.relname as name,c.relrowsecurity as enabled,c.relforcerowsecurity as forced,
@@ -70,7 +71,10 @@ export async function validateCloudCatalog(
        or has_any_column_privilege(current_user,c.oid,'UPDATE') or has_table_privilege(current_user,c.oid,'DELETE')) as content,
       (has_table_privilege(current_user,c.oid,'SELECT') and has_table_privilege(current_user,c.oid,'INSERT')
        and has_table_privilege(current_user,c.oid,'UPDATE') and has_table_privilege(current_user,c.oid,'DELETE')) as complete,
-      has_table_privilege(current_user,c.oid,'DELETE') as deletes
+      has_table_privilege(current_user,c.oid,'DELETE') as deletes,
+      (has_table_privilege(current_user,c.oid,'SELECT') and has_table_privilege(current_user,c.oid,'INSERT')
+       and has_table_privilege(current_user,c.oid,'DELETE')
+       and not has_any_column_privilege(current_user,c.oid,'UPDATE')) as append_only
     from pg_class c where c.relnamespace='public'::regnamespace and c.relkind in ('r','p')`;
   const expectedNames = new Set(tenantInventory.map((entry) => entry.table));
   if (tables.length !== expectedNames.size || tables.some((table) => !expectedNames.has(table.name))) {
@@ -107,7 +111,9 @@ export async function validateCloudCatalog(
   for (const entry of tenantInventory.filter(isTenantProtected)) {
     const table = tables.find((value) => value.name === entry.table);
     if (!table?.enabled || !table.forced) throw new Error(`Cloud FORCE RLS is missing for ${entry.table}`);
-    if (kind === "runtime" && !entry.runtimeColumns && !table.complete)
+    if (kind === "runtime" && entry.appendOnly && !table.append_only)
+      throw new Error(`Cloud runtime must be append-only (no UPDATE) on ${entry.table}`);
+    if (kind === "runtime" && !entry.runtimeColumns && !entry.appendOnly && !table.complete)
       throw new Error(`Cloud runtime CRUD grant privileges are missing for ${entry.table}`);
     if (table.truncates) throw new Error(`Cloud ${kind} has unsafe TRUNCATE privileges on ${entry.table}`);
     if (

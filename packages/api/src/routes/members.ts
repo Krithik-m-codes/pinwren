@@ -1,3 +1,4 @@
+import { audit } from "../services/audit";
 import { assertSeatQuota } from "../billing/service";
 import { appRoleOf, memberCreate, memberUpdate, ORG_ROLE_FOR } from "@pinwren/core";
 import { getDb, invitation, member, user } from "@pinwren/db";
@@ -134,6 +135,7 @@ export const members = new Hono<{ Variables: SessionVars }>()
       })
       .returning({ id: member.id, createdAt: member.createdAt });
     if (!m) throw new Error("member insert failed");
+    await audit(c, "member.created", { type: "member", id: created.id }, { email, role: body.role });
     return c.json(
       {
         member: {
@@ -168,6 +170,12 @@ export const members = new Hono<{ Variables: SessionVars }>()
         }),
       );
       await getDb().update(member).set({ role: ORG_ROLE_FOR[role] }).where(eq(member.id, target.id));
+      await audit(
+        c,
+        "member.role_changed",
+        { type: "member", id: userId },
+        { from: appRoleOf(target.role), to: role },
+      );
       const [row] = await getDb()
         .select(memberRow)
         .from(member)
@@ -192,6 +200,7 @@ export const members = new Hono<{ Variables: SessionVars }>()
       }),
     );
     await getDb().delete(member).where(eq(member.id, target.id));
+    await audit(c, "member.removed", { type: "member", id: userId }, { role: appRoleOf(target.role) });
     return c.body(null, 204);
   })
 

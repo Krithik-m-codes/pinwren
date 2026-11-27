@@ -110,7 +110,7 @@ export function MoreFeatures() {
           ))}
         </ul>
         <p className="mt-8 text-center text-sm text-muted-foreground">
-          Need SSO, SCIM or an audit log for your organisation? They are on the{" "}
+          Need SSO or SCIM for your organisation? They are on the{" "}
           <Link href="/docs/licensing" className="font-medium text-foreground underline underline-offset-4">
             Enterprise roadmap
           </Link>

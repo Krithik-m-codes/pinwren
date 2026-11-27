@@ -49,6 +49,7 @@ const FEATURE_NAMES: Record<LicenseFeature, Key> = {
 /** What an implemented entitlement does, next to its name. */
 const FEATURE_HINTS: Record<(typeof IMPLEMENTED_LICENSE_FEATURES)[number], Key> = {
   white_label: "settings1.hintWhiteLabel",
+  audit_log: "settings1.hintAuditLog",
   jira: "settings1.hintJira",
 };
 

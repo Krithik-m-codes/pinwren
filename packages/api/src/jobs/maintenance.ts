@@ -8,9 +8,12 @@ import {
   notification,
   project,
 } from "@pinwren/db";
+import { AUDIT_CLOUD_RETENTION_DAYS } from "@pinwren/core";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { organizationIds, pruneSystemRateLimits, pruneSystemEmailDeliveries } from "../db/system";
 import { DELIVERY_RETENTION_DAYS, pruneDeliveries as pruneEmailDeliveries } from "../email/deliveries";
+import { env } from "../env";
+import { pruneAudit } from "../services/audit";
 import { storage } from "../storage";
 import { pruneDeliveries } from "../webhooks/deliver";
 
@@ -110,6 +113,12 @@ export async function applyRetention(): Promise<{ feedback: number; deliveries: 
         ).length;
       }),
     );
+    // Cloud keeps 30 days of audit history (ADR 0044); self-hosted Enterprise keeps everything.
+    if (env().PINWREN_MODE === "cloud") {
+      await runMaintenanceBatches(() =>
+        maintenanceBatch(orgId, () => pruneAudit(orgId, AUDIT_CLOUD_RETENTION_DAYS, BATCH)),
+      );
+    }
   }
   emails += await pruneSystemEmailDeliveries(new Date(Date.now() - DELIVERY_RETENTION_DAYS * 86_400_000));
   await pruneSystemRateLimits();

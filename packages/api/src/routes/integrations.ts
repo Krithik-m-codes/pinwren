@@ -1,3 +1,4 @@
+import { audit } from "../services/audit";
 import { withOrg } from "@pinwren/db";
 import {
   cleanTrackerSettings,
@@ -197,6 +198,12 @@ export const integrations = new Hono<{ Variables: SessionVars }>()
           "This project already has that integration — edit it instead",
         );
       }
+      await audit(
+        c,
+        "integration.connected",
+        { type: "integration", id: i.id },
+        { provider: i.provider, projectId: i.projectId },
+      );
       // The inbound webhook secret is also revealable later; the token never is.
       return c.json({ integration: integrationOut(i), webhookSecret: secret }, 201);
     },
@@ -280,6 +287,12 @@ export const integrations = new Hono<{ Variables: SessionVars }>()
       .where(eq(issueIntegration.id, current.id))
       .returning();
     if (!i) throw notFound("Integration");
+    await audit(
+      c,
+      "integration.updated",
+      { type: "integration", id: i.id },
+      { provider: i.provider, fields: Object.keys(body) },
+    );
     return c.json({ integration: integrationOut(i) });
   })
 
@@ -287,6 +300,12 @@ export const integrations = new Hono<{ Variables: SessionVars }>()
     const i = await ownIntegration(c.var.orgId, c.req.param("id"));
     await unregisterWebhook(i);
     await getDb().delete(issueIntegration).where(eq(issueIntegration.id, i.id));
+    await audit(
+      c,
+      "integration.removed",
+      { type: "integration", id: i.id },
+      { provider: i.provider, projectId: i.projectId },
+    );
     return c.body(null, 204);
   })
 

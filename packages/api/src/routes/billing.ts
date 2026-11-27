@@ -1,3 +1,4 @@
+import { audit } from "../services/audit";
 import { checkoutRequest } from "@pinwren/core";
 import { getDb, user } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
@@ -38,7 +39,9 @@ export const billing = new Hono<{ Variables: SessionVars }>()
       .where(eq(user.id, c.var.userId));
     if (!u) throw new ApiError(403, "FORBIDDEN", "Not allowed");
     const { interval, plan } = c.req.valid("json");
-    return c.json(await startCheckout({ orgId: c.var.orgId, interval, plan, user: u }));
+    const started = await startCheckout({ orgId: c.var.orgId, interval, plan, user: u });
+    await audit(c, "billing.checkout_started", { type: "billing" }, { plan, interval });
+    return c.json(started);
   })
   .post("/billing/portal", cloudOnly, requireOrgAdmin, async (c) => c.json(await portalLink(c.var.orgId)));
 

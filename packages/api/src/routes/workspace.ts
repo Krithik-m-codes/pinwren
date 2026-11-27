@@ -1,3 +1,4 @@
+import { audit } from "../services/audit";
 import { getDb, member, organization, user } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq, inArray } from "drizzle-orm";
@@ -81,6 +82,7 @@ export const workspace = new Hono<{ Variables: SessionVars }>()
         .set({ role: "admin" })
         .where(and(eq(member.organizationId, c.var.orgId), eq(member.userId, c.var.userId)));
     });
+    await audit(c, "workspace.ownership_transferred", { type: "member", id: userId });
     return c.json({ ownerId: userId });
   })
 

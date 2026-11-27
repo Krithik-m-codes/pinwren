@@ -169,6 +169,16 @@
     "databaseLifetime": "external",
     "check": "foreign tenant: GET /api/assets/:id"
   },
+  "GET /api/audit": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/audit"
+  },
+  "GET /api/audit/export": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/audit/export"
+  },
   "GET /api/auth/*": {
     "boundary": "identity",
     "databaseLifetime": "finite",

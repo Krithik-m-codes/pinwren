@@ -1,3 +1,4 @@
+import { audit } from "../services/audit";
 import { shareLinkCreate, type RoundSignoffs, signoffState } from "@pinwren/core";
 import { feedback, getDb, project, reviewRound, shareLink } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
@@ -122,6 +123,19 @@ export const shareLinks = new Hono<{ Variables: SessionVars }>()
         })
         .returning();
       if (!row) throw new Error("share link insert failed");
+      await audit(
+        c,
+        "share_link.created",
+        { type: "share_link", id: row.id },
+        {
+          label: body.label,
+          projectId,
+          feedbackId: body.feedbackId,
+          roundId: body.roundId,
+          expiresInDays: body.expiresInDays,
+          passwordProtected: !!body.password,
+        },
+      );
       return c.json({ link: shareLinkOut(row), url: shareUrl(p.publicKey, token) }, 201);
     },
   )
@@ -135,5 +149,6 @@ export const shareLinks = new Hono<{ Variables: SessionVars }>()
       .where(and(eq(shareLink.id, id), eq(shareLink.orgId, c.var.orgId), isNull(shareLink.revokedAt)))
       .returning({ id: shareLink.id });
     if (!row) throw notFound("Share link");
+    await audit(c, "share_link.revoked", { type: "share_link", id: row.id });
     return c.body(null, 204);
   });

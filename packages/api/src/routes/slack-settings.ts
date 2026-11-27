@@ -1,3 +1,4 @@
+import { audit } from "../services/audit";
 import {
   MAX_SLACK_ROUTES,
   slackConnectionUpdate,
@@ -200,6 +201,16 @@ export const slackSettings = new Hono<{ Variables: SessionVars }>()
         return w;
       });
       if (!saved) throw notFound("Slack connection");
+      await audit(
+        c,
+        "slack.connected",
+        { type: "slack", id: saved.id },
+        {
+          team: saved.teamName,
+          created: !current,
+          rotated: { signingSecret: !!body.signingSecret, botToken: !!body.botToken },
+        },
+      );
       return c.json({ connection: connectionOut(saved) }, current ? 200 : 201);
     } catch (err) {
       // `team_id` is unique across organisations: another workspace already owns this Slack team.
@@ -218,6 +229,7 @@ export const slackSettings = new Hono<{ Variables: SessionVars }>()
   /** Disconnect: routes, mappings and message links go with it. */
   .delete("/slack", requireOrgAdmin, async (c) => {
     await getDb().delete(slackWorkspace).where(eq(slackWorkspace.orgId, c.var.orgId));
+    await audit(c, "slack.disconnected", { type: "slack" });
     return c.body(null, 204);
   })
 

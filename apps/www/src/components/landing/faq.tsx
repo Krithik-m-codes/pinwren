@@ -23,12 +23,12 @@ const A = ({
 export const FAQ: { q: string; a: ReactNode; text: string }[] = [
   {
     q: "Is it really free?",
-    text: "Yes. The self-hosted Community edition has every collection, triage and routing feature, for unlimited projects, seats and reports. An Enterprise licence adds white-label and Jira Cloud sync today, with SSO and audit log planned; a hosted Cloud is coming.",
+    text: "Yes. The self-hosted Community edition has every collection, triage and routing feature, for unlimited projects, seats and reports. An Enterprise licence adds white-label, Jira Cloud sync and an audit log today, with SSO planned; a hosted Cloud is coming.",
     a: (
       <>
         Yes. The self-hosted Community edition has every collection, triage and routing feature — for
-        unlimited projects, seats and reports. An Enterprise licence adds white-label and Jira Cloud sync
-        today, with SSO and audit log planned; a hosted Cloud is coming. See <A href="/pricing">pricing</A>.
+        unlimited projects, seats and reports. An Enterprise licence adds white-label, Jira Cloud sync and an
+        audit log today, with SSO planned; a hosted Cloud is coming. See <A href="/pricing">pricing</A>.
       </>
     ),
   },

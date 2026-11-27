@@ -1,4 +1,5 @@
 export * from "./api-types";
+export * from "./audit";
 export * from "./automation";
 export * from "./billing";
 export * from "./config";
