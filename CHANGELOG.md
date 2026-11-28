@@ -8,6 +8,23 @@ From the first release on, release-please adds a section per version from the Co
 `main`; the widget's own changes are also listed in [`packages/widget/CHANGELOG.md`](packages/widget/CHANGELOG.md)
 once it is published.
 
+## [0.7.0](https://github.com/Krithik-m-codes/pinwren/compare/v0.6.0...v0.7.0) (2026-11-28)
+
+
+### Features
+
+* **api:** audit log for admin and security actions (F-092) ([#109](https://github.com/Krithik-m-codes/pinwren/issues/109)) ([d416c88](https://github.com/Krithik-m-codes/pinwren/commit/d416c883efbe977e7c39cc5c5a443baef4103312))
+* **api:** custom roles and granular permissions (F-093) ([#110](https://github.com/Krithik-m-codes/pinwren/issues/110)) ([f70fd9f](https://github.com/Krithik-m-codes/pinwren/commit/f70fd9f73a0545bfe9c38efea5acd8727a183a25))
+* **api:** make over-limit projects read-only after a downgrade ([#105](https://github.com/Krithik-m-codes/pinwren/issues/105)) ([3726fc0](https://github.com/Krithik-m-codes/pinwren/commit/3726fc03de005b7818fde9b5b9de2c3472043181))
+* **api:** pinwren doctor checks database, migrations, storage and SMTP ([#104](https://github.com/Krithik-m-codes/pinwren/issues/104)) ([bd40f86](https://github.com/Krithik-m-codes/pinwren/commit/bd40f869c04a58a25eae5d6f0959bb52dc2b60ad))
+* **api:** sell a business plan and show the whole product on the site ([#106](https://github.com/Krithik-m-codes/pinwren/issues/106)) ([24fa5a8](https://github.com/Krithik-m-codes/pinwren/commit/24fa5a8df2f2c9afcc4ba06bd65512b66e0f6e57))
+
+
+### Bug Fixes
+
+* deflake the widget comment e2e and the forgot-password lookup ([#76](https://github.com/Krithik-m-codes/pinwren/issues/76)) ([61240c6](https://github.com/Krithik-m-codes/pinwren/commit/61240c6b0601469fdef0d4e682b5c39103de8d84))
+* **www:** stop Vercel deployments from piling up in storage ([#100](https://github.com/Krithik-m-codes/pinwren/issues/100)) ([a174ab0](https://github.com/Krithik-m-codes/pinwren/commit/a174ab0651c289006861bee0560afd44e6f341c3))
+
 ## [0.6.0](https://github.com/Krithik-m-codes/pinwren/compare/v0.5.0...v0.6.0) (2026-11-11)
 
 

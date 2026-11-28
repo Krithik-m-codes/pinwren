@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/Krithik-m-codes/pinwren/compare/cli-v0.4.0...cli-v0.5.0) (2026-11-28)
+
+
+### Features
+
+* **api:** pinwren doctor checks database, migrations, storage and SMTP ([#104](https://github.com/Krithik-m-codes/pinwren/issues/104)) ([bd40f86](https://github.com/Krithik-m-codes/pinwren/commit/bd40f869c04a58a25eae5d6f0959bb52dc2b60ad))
+
 ## [0.4.0](https://github.com/Krithik-m-codes/pinwren/compare/cli-v0.3.0...cli-v0.4.0) (2026-11-11)
 
 
