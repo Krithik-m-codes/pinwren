@@ -2930,7 +2930,7 @@ console.log("\n— security (ADR 0021)");
     });
     check(
       "members can't change project settings (webhook actions)",
-      r.status === 403 && r.body.code === "ADMIN_REQUIRED",
+      r.status === 403 && r.body.code === "FORBIDDEN_ROLE",
       r.status,
     );
     r = await call(`/api/projects/${secProject.id}/rotate-key`, { method: "POST", jar: memberJar });

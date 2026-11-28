@@ -92,6 +92,7 @@ const resourceOf: Record<string, string> = {
   labels: "labelB",
   automations: "automationB",
   releases: "releaseB",
+  roles: "roleB",
   routes: "slackRouteB",
   links: "slackLinkB",
   "review-links": "reviewLinkB",
@@ -219,6 +220,13 @@ const cases: Record<string, Spec> = {
   "GET /api/feedback/:id/brief": foreign(),
   "GET /api/feedback/:id/repro-test": foreign(),
   "GET /api/feedback/export": scoped({ path: (ids) => `/api/feedback/export?projectId=${project(ids)}` }),
+  "DELETE /api/roles/:id": foreign(),
+  "GET /api/roles": scoped(),
+  "PATCH /api/roles/:id": foreign({ body: () => ({ name: "foreign edit" }) }),
+  "POST /api/roles": scoped({
+    status: [403],
+    body: () => ({ name: "new role", permissions: ["feedback.read"] }),
+  }),
   "GET /api/audit": scoped({ status: [200, 403] }),
   "GET /api/audit/export": scoped({ status: [200, 403] }),
   "GET /api/billing": scoped(),
@@ -901,6 +909,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
         rule: randomUUID(),
         dashboard: randomUUID(),
         release: randomUUID(),
+        role: randomUUID(),
         slackRoute: "",
         slackLink: "",
       };
@@ -909,6 +918,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
       await db`insert into automation_rule (id,org_id,project_id,name,trigger,conditions,actions) values (${row.rule},${org ?? ""},${projectId},${mark},${db.json({ event: "feedback_created", toStatuses: [], labelId: null })},${db.json([])},${db.json([{ type: "set_priority", priority: "high" }])})`;
       await db`insert into custom_field (org_id,project_id,key,type,label,position) values (${org ?? ""},${projectId},'marker','text',${mark},0)`;
       await db`insert into automation_run (org_id,rule_id,project_id,feedback_id,event,status) values (${org ?? ""},${row.rule},${projectId},${feedbackId},'feedback_created','success')`;
+      await db`insert into custom_role (id,org_id,name,permissions) values (${row.role},${org ?? ""},${mark},${["feedback.read"]})`;
       await db`insert into project_release (id,org_id,project_id,version,notes) values (${row.release},${org ?? ""},${projectId},${mark},${mark})`;
       await db`update feedback set status='resolved', fixed_in_release_id=${row.release} where id=${feedbackId}`;
       await db`insert into label_suggestion (org_id,feedback_id,label_id,name) values (${org ?? ""},${feedbackId},${row.label},${mark})`;
@@ -958,6 +968,7 @@ describe.skipIf(!process.env.PINWREN_ISOLATION_ADMIN_URL)("Cloud route-wide isol
           labelB: row.label,
           automationB: row.rule,
           releaseB: row.release,
+          roleB: row.role,
           slackRouteB: row.slackRoute,
           slackLinkB: row.slackLink,
           roundB: row.round,
