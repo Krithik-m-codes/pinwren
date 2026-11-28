@@ -1,3 +1,4 @@
+import { requirePermission } from "../permissions";
 import { audit } from "../services/audit";
 import {
   brandAssetUpload,
@@ -11,7 +12,7 @@ import { emailTemplate, getDb, user, withOrg } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { requireOrgAdmin, type SessionVars } from "../context";
+import { type SessionVars } from "../context";
 import { templateOverride } from "../email/render";
 import { sendEmail } from "../email/send";
 import {
@@ -86,42 +87,56 @@ async function preview(
 export const branding = new Hono<{ Variables: SessionVars }>()
   .get("/branding", async (c) => c.json({ branding: await getOrgBranding(c.var.orgId) }))
 
-  .patch("/branding", requireOrgAdmin, zValidator("json", orgBrandingUpdate), async (c) => {
-    const body = c.req.valid("json");
-    const updated = await updateOrgBranding(c.var.orgId, body, c.var.userId);
-    await audit(c, "branding.updated", { type: "branding" }, { fields: Object.keys(body) });
-    return c.json({ branding: updated });
-  })
-
-  /** Upload a logo; returns `{ asset: { id, url } }` to set as `logoAssetId` or a widget `logoUrl`. */
-  .post("/branding/assets", requireOrgAdmin, zValidator("json", brandAssetUpload), async (c) =>
-    c.json({ asset: await saveBrandAsset(c.var.orgId, c.req.valid("json").dataUrl, c.var.userId) }, 201),
+  .patch(
+    "/branding",
+    requirePermission("branding.manage"),
+    zValidator("json", orgBrandingUpdate),
+    async (c) => {
+      const body = c.req.valid("json");
+      const updated = await updateOrgBranding(c.var.orgId, body, c.var.userId);
+      await audit(c, "branding.updated", { type: "branding" }, { fields: Object.keys(body) });
+      return c.json({ branding: updated });
+    },
   )
 
-  .get("/email-templates", requireOrgAdmin, async (c) =>
+  /** Upload a logo; returns `{ asset: { id, url } }` to set as `logoAssetId` or a widget `logoUrl`. */
+  .post(
+    "/branding/assets",
+    requirePermission("branding.manage"),
+    zValidator("json", brandAssetUpload),
+    async (c) =>
+      c.json({ asset: await saveBrandAsset(c.var.orgId, c.req.valid("json").dataUrl, c.var.userId) }, 201),
+  )
+
+  .get("/email-templates", requirePermission("branding.manage"), async (c) =>
     c.json({ templates: await Promise.all(ORG_TEMPLATE_KEYS.map((k) => templateOut(c.var.orgId, k))) }),
   )
 
-  .get("/email-templates/:key", requireOrgAdmin, async (c) =>
+  .get("/email-templates/:key", requirePermission("branding.manage"), async (c) =>
     c.json({ template: await templateOut(c.var.orgId, templateKey(c.req.param("key"))) }),
   )
 
-  .put("/email-templates/:key", requireOrgAdmin, zValidator("json", emailTemplateUpdate), async (c) => {
-    const key = templateKey(c.req.param("key"));
-    const { subject, body } = c.req.valid("json");
-    assertVariables(key, subject, body);
-    await getDb()
-      .insert(emailTemplate)
-      .values({ orgId: c.var.orgId, key, subject, body, updatedBy: c.var.userId })
-      .onConflictDoUpdate({
-        target: [emailTemplate.orgId, emailTemplate.key],
-        set: { subject, body, updatedBy: c.var.userId, updatedAt: new Date() },
-      });
-    return c.json({ template: await templateOut(c.var.orgId, key) });
-  })
+  .put(
+    "/email-templates/:key",
+    requirePermission("branding.manage"),
+    zValidator("json", emailTemplateUpdate),
+    async (c) => {
+      const key = templateKey(c.req.param("key"));
+      const { subject, body } = c.req.valid("json");
+      assertVariables(key, subject, body);
+      await getDb()
+        .insert(emailTemplate)
+        .values({ orgId: c.var.orgId, key, subject, body, updatedBy: c.var.userId })
+        .onConflictDoUpdate({
+          target: [emailTemplate.orgId, emailTemplate.key],
+          set: { subject, body, updatedBy: c.var.userId, updatedAt: new Date() },
+        });
+      return c.json({ template: await templateOut(c.var.orgId, key) });
+    },
+  )
 
   /** Reset to the built-in wording. */
-  .delete("/email-templates/:key", requireOrgAdmin, async (c) => {
+  .delete("/email-templates/:key", requirePermission("branding.manage"), async (c) => {
     const key = templateKey(c.req.param("key"));
     await getDb()
       .delete(emailTemplate)
@@ -131,7 +146,7 @@ export const branding = new Hono<{ Variables: SessionVars }>()
 
   .post(
     "/email-templates/:key/preview",
-    requireOrgAdmin,
+    requirePermission("branding.manage"),
     zValidator("json", emailTemplatePreview),
     async (c) =>
       c.json({ preview: await preview(c.var.orgId, templateKey(c.req.param("key")), c.req.valid("json")) }),
@@ -142,33 +157,40 @@ export const branding = new Hono<{ Variables: SessionVars }>()
    * the instance's mail server would relay arbitrary content (ADR 0021). Unconfigured SMTP →
    * `{ sent: false, skipped }`.
    */
-  .post("/email-templates/:key/test", requireOrgAdmin, zValidator("json", emailTemplateTest), async (c) => {
-    const { to: given, ...draft } = c.req.valid("json");
-    const [u] = await withOrg(c.var.orgId, (db) =>
-      db.select({ email: user.email }).from(user).where(eq(user.id, c.var.userId)),
-    );
-    const to = u?.email;
-    if (!to) throw new ApiError(400, "NO_RECIPIENT", "No recipient address");
-    if (given && given.trim().toLowerCase() !== to.toLowerCase()) {
-      throw new ApiError(400, "RECIPIENT_NOT_ALLOWED", "Test emails go to your own address only");
-    }
-    if (
-      !(await consume(`mailtest:u:${c.var.userId}`, TEST_SENDS_PER_HOUR, 3600)) ||
-      !(await consume(`mailtest:o:${c.var.orgId}`, TEST_SENDS_PER_HOUR * 3, 3600))
-    ) {
-      throw new ApiError(429, "RATE_LIMITED", "Too many test emails — try again later");
-    }
-    const rendered = await withOrg(c.var.orgId, () =>
-      preview(c.var.orgId, templateKey(c.req.param("key")), draft),
-    );
-    try {
-      const result = await sendEmail({ to, ...rendered, subject: `[Test] ${rendered.subject}` });
-      return c.json(result.sent ? { sent: true, to } : { sent: false, skipped: true, reason: result.reason });
-    } catch (err) {
-      return c.json({
-        sent: false,
-        skipped: false,
-        reason: err instanceof Error ? err.message : "Send failed",
-      });
-    }
-  });
+  .post(
+    "/email-templates/:key/test",
+    requirePermission("branding.manage"),
+    zValidator("json", emailTemplateTest),
+    async (c) => {
+      const { to: given, ...draft } = c.req.valid("json");
+      const [u] = await withOrg(c.var.orgId, (db) =>
+        db.select({ email: user.email }).from(user).where(eq(user.id, c.var.userId)),
+      );
+      const to = u?.email;
+      if (!to) throw new ApiError(400, "NO_RECIPIENT", "No recipient address");
+      if (given && given.trim().toLowerCase() !== to.toLowerCase()) {
+        throw new ApiError(400, "RECIPIENT_NOT_ALLOWED", "Test emails go to your own address only");
+      }
+      if (
+        !(await consume(`mailtest:u:${c.var.userId}`, TEST_SENDS_PER_HOUR, 3600)) ||
+        !(await consume(`mailtest:o:${c.var.orgId}`, TEST_SENDS_PER_HOUR * 3, 3600))
+      ) {
+        throw new ApiError(429, "RATE_LIMITED", "Too many test emails — try again later");
+      }
+      const rendered = await withOrg(c.var.orgId, () =>
+        preview(c.var.orgId, templateKey(c.req.param("key")), draft),
+      );
+      try {
+        const result = await sendEmail({ to, ...rendered, subject: `[Test] ${rendered.subject}` });
+        return c.json(
+          result.sent ? { sent: true, to } : { sent: false, skipped: true, reason: result.reason },
+        );
+      } catch (err) {
+        return c.json({
+          sent: false,
+          skipped: false,
+          reason: err instanceof Error ? err.message : "Send failed",
+        });
+      }
+    },
+  );

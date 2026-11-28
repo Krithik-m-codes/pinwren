@@ -6,7 +6,8 @@ import {
   feedbackUpdate,
   releaseCreate,
   reviewRoundUpdate,
-  roleCan,
+  can,
+  type Permission,
 } from "@pinwren/core";
 import { apiToken, feedback, getDb, project, user, withOrg } from "@pinwren/db";
 import { membershipFor, tokenForVerification } from "../db/identity";
@@ -21,6 +22,7 @@ import { ApiError } from "../errors";
 import { clientIp, isInternalRequest } from "../net";
 import { consume, exhausted } from "../rate-limit";
 import { audienceOf, isReadOnlyRole, readOnlyError } from "../permissions";
+import { resolveAccess } from "../services/custom-roles";
 import { assetResponse } from "../services/assets";
 import { listFieldsOfProject } from "../services/custom-fields";
 import { addTeamComment, getFeedbackDetail, listFeedback, updateFeedback } from "../services/feedback";
@@ -33,7 +35,14 @@ import { listProjectLabels } from "./labels";
 import { listViews } from "./rounds";
 import { TOKEN_LOOKUP_LENGTH, TOKEN_PREFIX } from "./tokens";
 
-type TokenVars = { orgId: string; userId: string; scopes: string[]; tokenId: string; role: string };
+type TokenVars = {
+  orgId: string;
+  userId: string;
+  scopes: string[];
+  tokenId: string;
+  role: string;
+  customPermissions?: string[] | null;
+};
 
 // scrypt is deliberately slow; remember which presented secrets already verified (by SHA-256, never
 // the secret itself) so a busy integration doesn't pay it per request. The row is still re-read
@@ -105,7 +114,10 @@ async function checkToken(c: Context<{ Variables: TokenVars }>) {
   c.set("userId", t.userId);
   c.set("scopes", t.scopes);
   c.set("tokenId", t.id);
-  c.set("role", m.role);
+  // A token never has more rights than its owner, custom role included (ADR 0045).
+  const access = await resolveAccess(t.orgId, m.customRoleId, m.role);
+  c.set("role", access.role);
+  c.set("customPermissions", access.customPermissions);
 }
 
 /** A viewer's token reads like the viewer and writes nothing (wave-4 contract §4). */
@@ -113,6 +125,21 @@ const forbidViewerWrites = createMiddleware<{ Variables: TokenVars }>(async (c, 
   if (c.req.method !== "GET" && c.req.method !== "HEAD" && isReadOnlyRole(c.var.role)) throw readOnlyError();
   await next();
 });
+
+/**
+ * A custom-role member's token also needs the named permission (built-in roles keep the scope-only rules, so
+ * nothing changes for them): the token acts as its owner, never as a wider Editor.
+ */
+const needs = (permission: Permission) =>
+  createMiddleware<{ Variables: TokenVars }>(async (c, next) => {
+    if (
+      c.var.customPermissions &&
+      !can({ role: c.var.role, customPermissions: c.var.customPermissions }, permission)
+    ) {
+      throw new ApiError(403, "FORBIDDEN_ROLE", "Your role doesn't allow this. Ask a workspace Admin.");
+    }
+    await next();
+  });
 
 const scope = (s: ApiTokenScope) =>
   createMiddleware<{ Variables: TokenVars }>(async (c, next) => {
@@ -166,7 +193,10 @@ export const v1 = new Hono<{ Variables: TokenVars }>()
   .get("/feedback", scope("feedback:read"), zValidator("query", feedbackListQuery), async (c) => {
     const q = c.req.valid("query");
     // The trash is for Admins (wave-5 contract §3.7), whichever way it is asked for.
-    if (q.trash && !roleCan(c.var.role, "feedback.restore")) {
+    if (
+      q.trash &&
+      !can({ role: c.var.role, customPermissions: c.var.customPermissions }, "feedback.restore")
+    ) {
       throw new ApiError(403, "FORBIDDEN_ROLE", "Your role doesn't allow this. Ask a workspace Admin.");
     }
     return c.json(await listFeedback(c.var.orgId, q));
@@ -183,18 +213,25 @@ export const v1 = new Hono<{ Variables: TokenVars }>()
   .get("/feedback/:id/repro-test", scope("feedback:read"), async (c) =>
     c.json(await reproTest(c.var.orgId, c.req.param("id"))),
   )
-  .patch("/feedback/:id", scope("feedback:write"), zValidator("json", feedbackUpdate), async (c) => {
-    const updated = await updateFeedback(
-      c.var.orgId,
-      { kind: "api", userId: c.var.userId },
-      c.req.param("id"),
-      c.req.valid("json"),
-    );
-    return c.json({ feedback: updated });
-  })
+  .patch(
+    "/feedback/:id",
+    scope("feedback:write"),
+    needs("feedback.update"),
+    zValidator("json", feedbackUpdate),
+    async (c) => {
+      const updated = await updateFeedback(
+        c.var.orgId,
+        { kind: "api", userId: c.var.userId },
+        c.req.param("id"),
+        c.req.valid("json"),
+      );
+      return c.json({ feedback: updated });
+    },
+  )
   .post(
     "/feedback/:id/comments",
     scope("comments:write"),
+    needs("feedback.comment"),
     zValidator("json", apiCommentCreate),
     async (c) => {
       const created = await addTeamComment(
@@ -217,10 +254,16 @@ export const v1 = new Hono<{ Variables: TokenVars }>()
     c.json({ releases: await listReleases(c.var.orgId, c.req.param("id")) }),
   )
   // CI: record a release when a deploy goes out. Re-posting the same version updates it (a re-run is safe).
-  .post("/projects/:id/releases", scope("releases:write"), zValidator("json", releaseCreate), async (c) => {
-    const out = await recordRelease(c.var.orgId, c.var.userId, c.req.param("id"), c.req.valid("json"));
-    return c.json(out, out.created ? 201 : 200);
-  })
+  .post(
+    "/projects/:id/releases",
+    scope("releases:write"),
+    needs("projects.manage"),
+    zValidator("json", releaseCreate),
+    async (c) => {
+      const out = await recordRelease(c.var.orgId, c.var.userId, c.req.param("id"), c.req.valid("json"));
+      return c.json(out, out.created ? 201 : 200);
+    },
+  )
   .get("/projects/:id/custom-fields", scope("feedback:read"), async (c) =>
     c.json({ fields: await listFieldsOfProject(c.var.orgId, c.req.param("id")) }),
   )
@@ -238,6 +281,10 @@ export const v1 = new Hono<{ Variables: TokenVars }>()
   .get("/rounds/:id", scope("feedback:read"), async (c) =>
     c.json({ round: await getRound(c.var.orgId, c.req.param("id")) }),
   )
-  .patch("/rounds/:id", scope("feedback:write"), zValidator("json", reviewRoundUpdate), async (c) =>
-    c.json({ round: await updateRound(c.var.orgId, c.req.param("id"), c.req.valid("json")) }),
+  .patch(
+    "/rounds/:id",
+    scope("feedback:write"),
+    needs("feedback.update"),
+    zValidator("json", reviewRoundUpdate),
+    async (c) => c.json({ round: await updateRound(c.var.orgId, c.req.param("id"), c.req.valid("json")) }),
   );

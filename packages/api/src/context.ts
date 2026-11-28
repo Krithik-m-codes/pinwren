@@ -4,12 +4,16 @@ import { createMiddleware } from "hono/factory";
 import { getAuth } from "./auth";
 import { env } from "./env";
 import { ApiError, unauthorized } from "./errors";
+import { resolveAccess } from "./services/custom-roles";
 import { isInstanceAdmin } from "./services/setup";
 
 export type SessionVars = {
   userId: string;
   orgId: string;
+  /** The effective base role: the stored one, or the one derived from a custom role (ADR 0045). */
   role: string;
+  /** The custom role's permissions when one applies (entitled workspace, non-Admin); absent otherwise. */
+  customPermissions?: string[] | null;
 };
 
 /**
@@ -28,7 +32,9 @@ export const requireSession = createMiddleware<{ Variables: SessionVars }>(async
   if (!m) throw new ApiError(403, "NOT_A_MEMBER", "You are not a member of this organisation");
   c.set("userId", session.user.id);
   c.set("orgId", orgId);
-  c.set("role", m.role);
+  const access = await resolveAccess(orgId, m.customRoleId, m.role);
+  c.set("role", access.role);
+  c.set("customPermissions", access.customPermissions);
   await tenantRequestScope(c, next);
 });
 

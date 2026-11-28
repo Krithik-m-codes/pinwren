@@ -50,6 +50,7 @@ const FEATURE_NAMES: Record<LicenseFeature, Key> = {
 const FEATURE_HINTS: Record<(typeof IMPLEMENTED_LICENSE_FEATURES)[number], Key> = {
   white_label: "settings1.hintWhiteLabel",
   audit_log: "settings1.hintAuditLog",
+  custom_roles: "settings1.hintCustomRoles",
   jira: "settings1.hintJira",
 };
 

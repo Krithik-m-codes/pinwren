@@ -1,6 +1,5 @@
 "use client";
 
-import { roleCan } from "@pinwren/core";
 import { Crown, LogOut, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -48,7 +47,7 @@ export function WorkspaceSettings() {
   const members = useMembersQuery(undefined);
   const current = workspaces.data?.find((w) => w.id === me?.orgId);
   const owner = isOwner(me?.role);
-  const canRename = !!me && roleCan(me.role, "settings.manage");
+  const canRename = !!me?.permissions.includes("settings.manage");
 
   if (workspaces.isLoading || !me) return <Skeleton className="h-96 rounded-xl" />;
   if (!current) return <ErrorState error={workspaces.error} retry={() => void workspaces.refetch()} />;

@@ -1,0 +1,67 @@
+---
+title: Roles and permissions
+description: Define custom roles from a catalogue of permissions, assign them per person, and how they behave on downgrade. An Enterprise licence feature.
+---
+
+Admin, Editor and Viewer cover most teams. When someone needs a different mix, such as "can triage and comment but
+cannot delete", "can read the audit log" or "can add users but only Viewers", define a **custom role**. Custom roles
+are an Enterprise feature: you need an [Enterprise licence](/docs/licensing) that includes `custom_roles` when you
+self-host. They are not part of any Pinwren Cloud plan. The built-in roles are always there and work the same with or
+without a licence.
+
+## Create a role
+
+Open **Settings → Roles** (workspace Admins only). Choose **New role**, name it, and tick the permissions it grants.
+Names are unique per workspace, ignoring case. Reading feedback is always included.
+
+| Group              | Permissions                                                                                              |
+| ------------------ | -------------------------------------------------------------------------------------------------------- |
+| Feedback           | view, create manually, edit/assign/bulk-update, comment, delete (and rounds), restore and view the trash |
+| Workspace          | manage projects, labels, integrations and webhooks, workspace settings, branding and email templates     |
+| Access and billing | manage users, read the audit log, manage billing                                                         |
+
+Only permissions the server actually enforces are listed. Two things can never be granted to a custom role:
+managing roles (Admins only) and instance administration (the `/api/admin` area and the licence). Your own
+workspace **owner** and Admins are never affected by a custom role.
+
+## Assign a role
+
+On **Settings → Users**, the role picker of each person (and the one in **Add user**) lists the built-in roles and
+your custom ones. Invitations by email still offer the three built-in roles; assign a custom role after the person
+joins. Changing someone back to Admin, Editor or Viewer removes their custom role.
+
+**Nobody can grant what they do not hold.** A person with the _manage users_ permission can assign a role only if
+they hold every permission in it, and can change or remove someone only if they hold everything that person can do.
+So a users manager cannot create an Admin or demote one. The owner can never be demoted or removed, you cannot change
+your own role, and a workspace always keeps at least one Admin.
+
+## How it is enforced
+
+Every check goes through one resolver on the server. A member with a custom role gets exactly the listed permissions,
+and a route that does not name a permission is closed to them. Their API tokens, the MCP server and Slack actions act
+as the same person and are limited the same way. The dashboard hides what a role cannot do (it reads the resolved
+list from `GET /api/me`), but the server is the authority.
+
+Behind the scenes a custom-role member keeps a built-in base role: **Viewer** if the role only reads (feedback and the
+audit log), **Editor** otherwise. It is updated whenever the role changes.
+
+## Editing, deleting and downgrades
+
+- Editing a role changes its members' access at once.
+- A role that people still hold cannot be deleted; give them another role first (`409 ROLE_IN_USE`).
+- If the licence lapses or the feature is removed, custom roles stay stored but stop applying: their members fall
+  back to the permissions of their Editor or Viewer base role, nobody is locked out, and Admins are untouched. You
+  cannot create, edit or assign roles until the feature returns (an expired licence in its read-only period keeps
+  roles working but frozen). Moving a person to a built-in role always works.
+
+## Audit trail
+
+With the [audit log](/docs/dashboard/audit-log) active, creating, changing and deleting a role and assigning one to a
+person are recorded, including which permissions were added or removed.
+
+## API
+
+`GET /api/roles` (admins and users managers), `POST /api/roles`, `PATCH /api/roles/:id` and `DELETE /api/roles/:id`
+(admins). Assign with `PATCH /api/members/:userId` and `{ "customRoleId": "…" }` (or `{ "role": "editor" }` to go
+back to a built-in role), or `customRoleId` on `POST /api/members`. See
+[ADR 0045](https://github.com/Krithik-m-codes/pinwren/blob/main/docs/adr/0045-custom-roles.md) for the design.

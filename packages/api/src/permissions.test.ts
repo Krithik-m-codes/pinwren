@@ -10,6 +10,9 @@ beforeAll(() => {
   process.env.PINWREN_SECRET ??= "x".repeat(48);
 });
 
+// What the mocked session holds: a viewer by default, or a custom-role member (F-093) in a test.
+const session = vi.hoisted(() => ({ role: "viewer", customPermissions: null as string[] | null }));
+
 vi.mock("./context", async (importOriginal) => {
   const actual = await importOriginal<typeof Context>();
   const { createMiddleware } = await import("hono/factory");
@@ -19,7 +22,8 @@ vi.mock("./context", async (importOriginal) => {
     requireSession: createMiddleware(async (c, next) => {
       c.set("userId", "viewer-user");
       c.set("orgId", "org-1");
-      c.set("role", "viewer");
+      c.set("role", session.role);
+      c.set("customPermissions", session.customPermissions);
       await next();
     }),
   };
@@ -86,6 +90,67 @@ describe("viewer role", () => {
     );
     expect(refused).toContain("PATCH /api/feedback/:id");
     expect(refused).toContain("POST /api/projects/:id/rounds");
+  }, 60_000);
+
+  it("lets a custom-role member write only through routes that name their permission", async () => {
+    // A stale Editor base on purpose: the guard must hold even if the stored base role is wider than the role.
+    session.role = "member";
+    session.customPermissions = ["feedback.read", "labels.manage"];
+    try {
+      const { app } = await import("./index");
+      const { dashboard } = await import("./routes/dashboard");
+      const { viewerMayCall } = await import("./permissions");
+      const seen = new Set<string>();
+      const reached: string[] = [];
+      for (const r of dashboard.routes) {
+        const key = `${r.method} ${r.path}`;
+        if (!MUTATING.has(r.method) || seen.has(key)) continue;
+        seen.add(key);
+        const path = `/api${r.path}`;
+        if (viewerMayCall(r.method, path)) continue;
+        const res = await app.request(concrete(path), {
+          method: r.method,
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        });
+        if (res.status !== 403) reached.push(key);
+      }
+      // Only the label routes (their own permission) get past the guard; everything else is a 403.
+      expect(reached.every((k) => k.includes("/labels"))).toBe(true);
+      expect(reached.length).toBeGreaterThan(0);
+    } finally {
+      session.role = "viewer";
+      session.customPermissions = null;
+    }
+  }, 60_000);
+
+  it("resolves a custom role's permissions per route", async () => {
+    session.role = "member";
+    session.customPermissions = ["feedback.read", "feedback.update"];
+    try {
+      const { app } = await import("./index");
+      const call = async (method: string, path: string) =>
+        (
+          await app.request(path, {
+            method,
+            headers: { "content-type": "application/json" },
+            ...(method === "GET" ? {} : { body: "{}" }),
+          })
+        ).status;
+      // Held: reaches validation (400), not the role check.
+      expect(await call("PATCH", `/api/feedback/${ID}`)).not.toBe(403);
+      // Not held although the Editor base would allow it.
+      expect(await call("POST", `/api/feedback/${ID}/comments`)).toBe(403);
+      expect(await call("DELETE", `/api/feedback/${ID}`)).toBe(403);
+      // Never grantable: role management and Admin-only areas.
+      expect(await call("POST", "/api/roles")).toBe(403);
+      expect(await call("PATCH", "/api/members/someone")).toBe(403);
+      expect(await call("PATCH", "/api/branding")).toBe(403);
+      expect(await call("GET", "/api/audit")).toBe(403);
+    } finally {
+      session.role = "viewer";
+      session.customPermissions = null;
+    }
   }, 60_000);
 
   it("parses Better Auth role strings", async () => {

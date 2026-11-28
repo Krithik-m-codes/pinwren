@@ -16,7 +16,12 @@ export function SettingsShell({ children }: { children: React.ReactNode }) {
   // Hide what the user can't change: branding and templates are for workspace admins, SMTP and
   // security for instance admins. The command palette uses the same list and filter (lib/settings-nav).
   const cloud = useEntitlementsQuery(undefined).data?.edition === "cloud";
-  const nav = visibleSettingsPages({ role: me?.role, instanceAdmin: !!me?.instanceAdmin, cloud });
+  const nav = visibleSettingsPages({
+    role: me?.role,
+    instanceAdmin: !!me?.instanceAdmin,
+    cloud,
+    permissions: me?.permissions,
+  });
   const current = SETTINGS_PAGES.find((n) => n.href === pathname) ?? SETTINGS_PAGES[0];
 
   return (

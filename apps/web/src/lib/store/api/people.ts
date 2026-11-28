@@ -64,18 +64,22 @@ export const peopleApi = baseApi.injectEndpoints({
 
     addMember: build.mutation<
       { member: AddedMember },
-      { name: string; email: string; password: string; role: AppRole }
+      { name: string; email: string; password: string; role: AppRole; customRoleId?: string | undefined }
     >({
       query: (body) => ({ url: "/members", method: "POST", body }),
       invalidatesTags: [{ type: "Member", id: LIST }, "Org"],
     }),
-    setMemberRole: build.mutation<{ member: Member }, { userId: string; role: AppRole }>({
-      query: ({ userId, role }) => ({
+    /** A built-in role, or a custom role by id (F-093; setting a built-in one clears the custom role). */
+    setMemberRole: build.mutation<
+      { member: Member },
+      { userId: string } & ({ role: AppRole } | { customRoleId: string })
+    >({
+      query: ({ userId, ...body }) => ({
         url: `/members/${encodeURIComponent(userId)}`,
         method: "PATCH",
-        body: { role },
+        body,
       }),
-      invalidatesTags: [{ type: "Member", id: LIST }, "Org"],
+      invalidatesTags: [{ type: "Member", id: LIST }, { type: "Role", id: LIST }, "Org"],
     }),
     removeMemberById: build.mutation<null, string>({
       query: (userId) => ({ url: `/members/${encodeURIComponent(userId)}`, method: "DELETE" }),

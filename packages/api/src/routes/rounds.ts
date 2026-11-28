@@ -44,15 +44,22 @@ export const rounds = new Hono<{ Variables: SessionVars }>()
   .get("/projects/:id/rounds", async (c) =>
     c.json({ rounds: await listRounds(c.var.orgId, c.req.param("id")) }),
   )
-  .post("/projects/:id/rounds", zValidator("json", reviewRoundCreate), async (c) =>
-    c.json(
-      { round: await createRound(c.var.orgId, c.req.param("id"), c.var.userId, c.req.valid("json")) },
-      201,
-    ),
+  .post(
+    "/projects/:id/rounds",
+    requirePermission("feedback.update"),
+    zValidator("json", reviewRoundCreate),
+    async (c) =>
+      c.json(
+        { round: await createRound(c.var.orgId, c.req.param("id"), c.var.userId, c.req.valid("json")) },
+        201,
+      ),
   )
   .get("/rounds/:id", async (c) => c.json({ round: await getRound(c.var.orgId, c.req.param("id")) }))
-  .patch("/rounds/:id", zValidator("json", reviewRoundUpdate), async (c) =>
-    c.json({ round: await updateRound(c.var.orgId, c.req.param("id"), c.req.valid("json")) }),
+  .patch(
+    "/rounds/:id",
+    requirePermission("feedback.update"),
+    zValidator("json", reviewRoundUpdate),
+    async (c) => c.json({ round: await updateRound(c.var.orgId, c.req.param("id"), c.req.valid("json")) }),
   )
   // Deleting is Admin-only (wave-5 contract §3.7); the round's items stay, outside any round.
   .delete("/rounds/:id", requirePermission("feedback.delete"), async (c) => {

@@ -1,14 +1,28 @@
 import { audit } from "../services/audit";
 import { assertSeatQuota } from "../billing/service";
-import { appRoleOf, memberCreate, memberUpdate, ORG_ROLE_FOR } from "@pinwren/core";
-import { getDb, invitation, member, user } from "@pinwren/db";
+import {
+  appRoleOf,
+  baseRoleForPermissions,
+  holdsAll,
+  memberCreate,
+  memberUpdate,
+  normalizePermissions,
+  ORG_ROLE_FOR,
+  permissionsOf,
+  permissionsOfAppRole,
+  type AppRole,
+  type Permission,
+} from "@pinwren/core";
+import { customRole, getDb, invitation, member, user } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, desc, eq, gt } from "drizzle-orm";
 import { Hono } from "hono";
 import { getAuth, resetPasswordUrl } from "../auth";
 import { requireInstanceAdmin, type SessionVars } from "../context";
 import { ApiError, notFound } from "../errors";
-import { requirePermission } from "../permissions";
+import { hasFeature } from "../license";
+import { accessOf, requirePermission } from "../permissions";
+import { assertCustomRolesEntitled, escalation, getRole, resolveAccess } from "../services/custom-roles";
 import { isAdminRole, memberChangeVerdict } from "../services/workspace";
 
 // Users (BugPin model, wave-5 contract §3.1): Admins add accounts directly (name, email, password, role),
@@ -26,16 +40,37 @@ const memberRow = {
   email: user.email,
   image: user.image,
   role: member.role,
+  customRoleId: member.customRoleId,
+  customRoleName: customRole.name,
   createdAt: member.createdAt,
 };
 
 async function membership(orgId: string, userId: string) {
   const [m] = await getDb()
-    .select({ id: member.id, role: member.role })
+    .select({ id: member.id, role: member.role, customRoleId: member.customRoleId })
     .from(member)
     .where(and(eq(member.organizationId, orgId), eq(member.userId, userId)));
   return m ?? null;
 }
+
+/** What the target can do today (custom role included), so nobody edits or removes someone above them. */
+async function permissionsOfMember(orgId: string, target: { role: string; customRoleId: string | null }) {
+  const access = await resolveAccess(orgId, target.customRoleId, target.role);
+  return permissionsOf(access);
+}
+
+/** The custom role an assignment names: it must exist here, and the actor must hold everything it grants. */
+async function assignableRole(c: { var: { orgId: string } } & Parameters<typeof accessOf>[0], id: string) {
+  await assertCustomRolesEntitled();
+  const role = await getRole(c.var.orgId, id);
+  if (!role) throw new ApiError(400, "ROLE_NOT_FOUND", "That role doesn't exist in this workspace");
+  const permissions: Permission[] = normalizePermissions(role.permissions);
+  if (!holdsAll(accessOf(c), permissions)) throw escalation();
+  return { role, permissions };
+}
+
+/** A member row as the API returns it. */
+const withApp = <R extends { role: string }>(r: R) => ({ ...r, appRole: appRoleOf(r.role) });
 
 async function adminCount(orgId: string) {
   const rows = await getDb()
@@ -56,9 +91,17 @@ export const members = new Hono<{ Variables: SessionVars }>()
       .select(memberRow)
       .from(member)
       .innerJoin(user, eq(user.id, member.userId))
+      .leftJoin(
+        customRole,
+        and(eq(customRole.id, member.customRoleId), eq(customRole.orgId, member.organizationId)),
+      )
       .where(eq(member.organizationId, c.var.orgId))
       .orderBy(asc(user.name));
-    return c.json({ members: rows.map((r) => ({ ...r, appRole: appRoleOf(r.role) })) });
+    // Without the licence feature a custom role isn't in force, so it isn't shown as the member's role.
+    const entitled = await hasFeature("custom_roles");
+    return c.json({
+      members: rows.map((r) => withApp(entitled ? r : { ...r, customRoleId: null, customRoleName: null })),
+    });
   })
 
   /** Pending, unexpired invitations of the active organisation. Create/cancel via Better Auth. */
@@ -96,6 +139,11 @@ export const members = new Hono<{ Variables: SessionVars }>()
   .post("/members", requirePermission("users.manage"), zValidator("json", memberCreate), async (c) => {
     const body = c.req.valid("json");
     const email = body.email.trim().toLowerCase();
+    // Never hand out more than you hold: a custom `users.manage` holder can't add an Admin.
+    let custom: Awaited<ReturnType<typeof assignableRole>> | null = null;
+    if (body.customRoleId) custom = await assignableRole(c, body.customRoleId);
+    else if (!holdsAll(accessOf(c), permissionsOfAppRole(body.role))) throw escalation();
+    const baseRole: AppRole = custom ? baseRoleForPermissions(custom.permissions) : body.role;
     await assertSeatQuota(getDb(), c.var.orgId);
     const ctx = await getAuth().$context;
     if (await ctx.internalAdapter.findUserByEmail(email)) {
@@ -131,11 +179,17 @@ export const members = new Hono<{ Variables: SessionVars }>()
         id: crypto.randomUUID(),
         organizationId: c.var.orgId,
         userId: created.id,
-        role: ORG_ROLE_FOR[body.role],
+        role: ORG_ROLE_FOR[baseRole],
+        customRoleId: custom?.role.id ?? null,
       })
       .returning({ id: member.id, createdAt: member.createdAt });
     if (!m) throw new Error("member insert failed");
-    await audit(c, "member.created", { type: "member", id: created.id }, { email, role: body.role });
+    await audit(
+      c,
+      "member.created",
+      { type: "member", id: created.id },
+      { email, role: baseRole, ...(custom && { customRole: custom.role.name }) },
+    );
     return c.json(
       {
         member: {
@@ -143,7 +197,9 @@ export const members = new Hono<{ Variables: SessionVars }>()
           userId: created.id,
           name: created.name,
           email: created.email,
-          appRole: body.role,
+          appRole: baseRole,
+          customRoleId: custom?.role.id ?? null,
+          customRoleName: custom?.role.name ?? null,
           createdAt: m.createdAt,
         },
       },
@@ -151,38 +207,75 @@ export const members = new Hono<{ Variables: SessionVars }>()
     );
   })
 
-  /** Change someone's role (not your own, never the owner's, never the last Admin's). */
+  /**
+   * Change someone's role: a built-in one, or a custom role (F-093). Not your own, never the owner's, never the
+   * last Admin's, and never above yourself: you must hold the new role's permissions and the target's current
+   * ones (a custom `users.manage` holder can't demote an Admin or mint one).
+   */
   .patch(
     "/members/:userId",
     requirePermission("users.manage"),
     zValidator("json", memberUpdate),
     async (c) => {
       const userId = c.req.param("userId");
-      const { role } = c.req.valid("json");
+      const body = c.req.valid("json");
       const target = await membership(c.var.orgId, userId);
       if (!target) throw notFound("Member");
+      const custom = "customRoleId" in body ? await assignableRole(c, body.customRoleId) : null;
+      const nextRole: AppRole = custom
+        ? baseRoleForPermissions(custom.permissions)
+        : "role" in body
+          ? body.role
+          : "viewer";
       assertChange(
         memberChangeVerdict({
           actorId: c.var.userId,
           target: { userId, role: target.role },
           adminCount: await adminCount(c.var.orgId),
-          nextRole: role,
+          nextRole,
         }),
       );
-      await getDb().update(member).set({ role: ORG_ROLE_FOR[role] }).where(eq(member.id, target.id));
-      await audit(
-        c,
-        "member.role_changed",
-        { type: "member", id: userId },
-        { from: appRoleOf(target.role), to: role },
-      );
+      const actor = accessOf(c);
+      if (
+        !holdsAll(actor, await permissionsOfMember(c.var.orgId, target)) ||
+        (!custom && !holdsAll(actor, permissionsOfAppRole(nextRole)))
+      ) {
+        throw escalation();
+      }
+      const [from] = await getDb()
+        .select({ name: customRole.name })
+        .from(customRole)
+        .where(eq(customRole.id, target.customRoleId ?? "00000000-0000-0000-0000-000000000000"));
+      await getDb()
+        .update(member)
+        .set({ role: ORG_ROLE_FOR[nextRole], customRoleId: custom?.role.id ?? null })
+        .where(eq(member.id, target.id));
+      if (custom) {
+        await audit(
+          c,
+          "member.custom_role_assigned",
+          { type: "member", id: userId },
+          { from: from?.name ?? appRoleOf(target.role), to: custom.role.name, roleId: custom.role.id },
+        );
+      } else {
+        await audit(
+          c,
+          "member.role_changed",
+          { type: "member", id: userId },
+          { from: from?.name ?? appRoleOf(target.role), to: nextRole },
+        );
+      }
       const [row] = await getDb()
         .select(memberRow)
         .from(member)
         .innerJoin(user, eq(user.id, member.userId))
+        .leftJoin(
+          customRole,
+          and(eq(customRole.id, member.customRoleId), eq(customRole.orgId, member.organizationId)),
+        )
         .where(eq(member.id, target.id));
       if (!row) throw notFound("Member");
-      return c.json({ member: { ...row, appRole: appRoleOf(row.role) } });
+      return c.json({ member: withApp(row) });
     },
   )
 
@@ -199,6 +292,7 @@ export const members = new Hono<{ Variables: SessionVars }>()
         nextRole: null,
       }),
     );
+    if (!holdsAll(accessOf(c), await permissionsOfMember(c.var.orgId, target))) throw escalation();
     await getDb().delete(member).where(eq(member.id, target.id));
     await audit(c, "member.removed", { type: "member", id: userId }, { role: appRoleOf(target.role) });
     return c.body(null, 204);

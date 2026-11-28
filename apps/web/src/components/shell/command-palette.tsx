@@ -84,7 +84,7 @@ export function CommandPalette() {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const { setTheme } = useTheme();
-  const { isAdmin, role, instanceAdmin, userId } = useViewer();
+  const { isAdmin, role, instanceAdmin, userId, me } = useViewer();
   const [query, setQuery] = useState("");
   const typed = query.trim();
   const settled = useDebounced(typed, SEARCH_DELAY_MS);
@@ -95,7 +95,7 @@ export function CommandPalette() {
   const recent = useRecentItems(userId).items;
   // Settings pages with the same access filter as the settings rail (lib/settings-nav).
   const cloud = useEntitlementsQuery(undefined).data?.edition === "cloud";
-  const settings = visibleSettingsPages({ role, instanceAdmin, cloud });
+  const settings = visibleSettingsPages({ role, instanceAdmin, cloud, permissions: me?.permissions });
   const projects = useProjectsQuery(undefined, { skip: !open });
   const views = useViewsQuery(undefined, { skip: !open });
 

@@ -20,6 +20,8 @@ describe("licence features", () => {
     expect(isImplementedLicenseFeature("jira")).toBe(true);
     // The audit log is built and gated on this feature (services/audit.ts, ADR 0044).
     expect(isImplementedLicenseFeature("audit_log")).toBe(true);
+    // Custom roles are built and gated on this feature (services/custom-roles.ts, ADR 0045).
+    expect(isImplementedLicenseFeature("custom_roles")).toBe(true);
     expect(isImplementedLicenseFeature("sso")).toBe(false);
   });
 

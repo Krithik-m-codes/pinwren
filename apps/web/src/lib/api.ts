@@ -1,4 +1,5 @@
 import type {
+  Permission,
   AppRole,
   Entitlements,
   ViewFilters,
@@ -124,6 +125,9 @@ export type Member = {
   userId?: string;
   memberId?: string;
   appRole?: AppRole;
+  /** F-093: the custom role the member holds, if any. */
+  customRoleId?: string | null;
+  customRoleName?: string | null;
   createdAt?: string;
 };
 
@@ -461,6 +465,10 @@ export type MeResponse = {
   role: string;
   /** Wave-5 §3.1: Admin / Editor / Viewer, for `roleCan` from @pinwren/core. */
   appRole: AppRole;
+  /** F-093: every permission the caller holds (custom role included); hide what is not listed. */
+  permissions: Permission[];
+  /** The custom role in force for the caller, if any. */
+  customRole: { id: string; name: string } | null;
   instanceAdmin: boolean;
   /** Nobody administers the instance yet (only before the first account exists). */
   setupNeeded: boolean;

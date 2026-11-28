@@ -59,6 +59,7 @@ const MATRIX: { group: string; rows: { label: string; cells: Cell[] }[] }[] = [
         cells: [false, false, "Remove badge", "Full", true],
       },
       { label: "Audit log", cells: [false, false, false, "30 days", "Full history (SIEM stream planned)"] },
+      { label: "Custom roles and permissions", cells: [false, false, false, false, true] },
       { label: "SSO (SAML/OIDC), SCIM", cells: [false, false, false, false, "Planned"] },
       { label: "Support", cells: ["Community", "Community", "Email", "Priority email", "SLA"] },
     ],

@@ -15,7 +15,7 @@ import { getDb, issueIntegration, project } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { requireOrgAdmin, type SessionVars } from "../context";
+import { type SessionVars } from "../context";
 import { requirePermission } from "../permissions";
 import { decryptSecret, encryptSecret, randomToken } from "../crypto";
 import { ApiError, notFound } from "../errors";
@@ -131,7 +131,7 @@ async function unregisterWebhook(i: Integration): Promise<void> {
  * (`feedback.update`).
  */
 export const integrations = new Hono<{ Variables: SessionVars }>()
-  .get("/projects/:id/integrations", requireOrgAdmin, async (c) => {
+  .get("/projects/:id/integrations", requirePermission("integrations.manage"), async (c) => {
     const db = getDb();
     const [p] = await db
       .select({ id: project.id })
@@ -148,7 +148,7 @@ export const integrations = new Hono<{ Variables: SessionVars }>()
 
   .post(
     "/projects/:id/integrations",
-    requireOrgAdmin,
+    requirePermission("integrations.manage"),
     zValidator("json", issueIntegrationCreate),
     async (c) => {
       const body = c.req.valid("json");
@@ -209,94 +209,101 @@ export const integrations = new Hono<{ Variables: SessionVars }>()
     },
   )
 
-  .patch("/integrations/:id", requireOrgAdmin, zValidator("json", issueIntegrationUpdate), async (c) => {
-    const body = c.req.valid("json");
-    const current = await ownIntegration(c.var.orgId, c.req.param("id"));
-    const provider = current.provider;
-    // Pausing an unlicensed Jira integration is always allowed; anything else needs the licence.
-    const onlyPausing = Object.keys(body).every((k) => k === "active") && body.active === false;
-    if (!onlyPausing) await assertProviderWritable(provider);
-    if (body.repo !== undefined) {
-      const repoError = trackerRepoError(provider, body.repo);
-      if (repoError) throw badRequest(repoError);
-    }
-    if (body.email !== undefined && provider !== "jira") throw badRequest("Only Jira takes an account email");
-    if (body.apiKey !== undefined && provider !== "trello") throw badRequest("Only Trello takes an API key");
-    if (
-      body.apiUrl !== undefined &&
-      body.apiUrl !== null &&
-      !["github", "gitlab", "jira"].includes(provider)
-    ) {
-      throw badRequest("This tracker has no self-hosted URL");
-    }
-    if (body.apiUrl === null && provider === "jira") throw badRequest("Jira needs the site URL");
-    if (body.webhookSecret !== undefined && !PASTED_SECRET.includes(provider)) {
-      throw badRequest("This tracker provides its own signing secret");
-    }
-    let settings: Record<string, string> | undefined;
-    if (body.settings !== undefined) {
-      settings = cleanTrackerSettings(body.settings);
-      const settingsError = trackerSettingsError(provider, settings);
-      if (settingsError) throw badRequest(settingsError);
-    }
-    const set: Partial<typeof issueIntegration.$inferInsert> = {};
-    const pair = provider === "jira" ? "email" : provider === "trello" ? "apiKey" : null;
-    if (pair && (body.token !== undefined || body[pair] !== undefined)) {
-      // Jira keeps `email:token`, Trello `apiKey:token`: changing either half re-seals both.
-      let prev: { half: string; token: string };
-      try {
-        const stored = decryptSecret(current.token);
-        const c2 = splitJiraCredential(stored);
-        prev = { half: c2.email, token: c2.token };
-      } catch {
-        if (body.token === undefined || body[pair] === undefined) {
-          throw new ApiError(
-            409,
-            "SECRET_UNREADABLE",
-            `The stored token can't be decrypted — enter the ${pair === "email" ? "email" : "API key"} and token again`,
-          );
-        }
-        prev = { half: "", token: "" };
+  .patch(
+    "/integrations/:id",
+    requirePermission("integrations.manage"),
+    zValidator("json", issueIntegrationUpdate),
+    async (c) => {
+      const body = c.req.valid("json");
+      const current = await ownIntegration(c.var.orgId, c.req.param("id"));
+      const provider = current.provider;
+      // Pausing an unlicensed Jira integration is always allowed; anything else needs the licence.
+      const onlyPausing = Object.keys(body).every((k) => k === "active") && body.active === false;
+      if (!onlyPausing) await assertProviderWritable(provider);
+      if (body.repo !== undefined) {
+        const repoError = trackerRepoError(provider, body.repo);
+        if (repoError) throw badRequest(repoError);
       }
-      const token = body.token ?? prev.token;
-      const half = body[pair] ?? prev.half;
-      set.token = encryptSecret(
-        pair === "email" ? jiraCredential(half, token) : trelloCredential(half, token),
+      if (body.email !== undefined && provider !== "jira")
+        throw badRequest("Only Jira takes an account email");
+      if (body.apiKey !== undefined && provider !== "trello")
+        throw badRequest("Only Trello takes an API key");
+      if (
+        body.apiUrl !== undefined &&
+        body.apiUrl !== null &&
+        !["github", "gitlab", "jira"].includes(provider)
+      ) {
+        throw badRequest("This tracker has no self-hosted URL");
+      }
+      if (body.apiUrl === null && provider === "jira") throw badRequest("Jira needs the site URL");
+      if (body.webhookSecret !== undefined && !PASTED_SECRET.includes(provider)) {
+        throw badRequest("This tracker provides its own signing secret");
+      }
+      let settings: Record<string, string> | undefined;
+      if (body.settings !== undefined) {
+        settings = cleanTrackerSettings(body.settings);
+        const settingsError = trackerSettingsError(provider, settings);
+        if (settingsError) throw badRequest(settingsError);
+      }
+      const set: Partial<typeof issueIntegration.$inferInsert> = {};
+      const pair = provider === "jira" ? "email" : provider === "trello" ? "apiKey" : null;
+      if (pair && (body.token !== undefined || body[pair] !== undefined)) {
+        // Jira keeps `email:token`, Trello `apiKey:token`: changing either half re-seals both.
+        let prev: { half: string; token: string };
+        try {
+          const stored = decryptSecret(current.token);
+          const c2 = splitJiraCredential(stored);
+          prev = { half: c2.email, token: c2.token };
+        } catch {
+          if (body.token === undefined || body[pair] === undefined) {
+            throw new ApiError(
+              409,
+              "SECRET_UNREADABLE",
+              `The stored token can't be decrypted — enter the ${pair === "email" ? "email" : "API key"} and token again`,
+            );
+          }
+          prev = { half: "", token: "" };
+        }
+        const token = body.token ?? prev.token;
+        const half = body[pair] ?? prev.half;
+        set.token = encryptSecret(
+          pair === "email" ? jiraCredential(half, token) : trelloCredential(half, token),
+        );
+        set.tokenHint = hint(token);
+        set.lastError = null;
+      } else if (body.token !== undefined) {
+        set.token = encryptSecret(body.token);
+        set.tokenHint = hint(body.token);
+        set.lastError = null;
+      }
+      if (body.repo !== undefined) set.repo = normalizeTrackerRepo(provider, body.repo);
+      if (body.apiUrl !== undefined) set.apiUrl = body.apiUrl;
+      if (body.webhookSecret !== undefined) {
+        set.webhookSecret = encryptSecret(body.webhookSecret);
+        set.webhookPending = false;
+      }
+      if (settings !== undefined) set.settings = settings;
+      if (body.labels !== undefined) set.labels = [...new Set(body.labels)];
+      if (body.autoCreate !== undefined) set.autoCreate = body.autoCreate;
+      if (body.active !== undefined) set.active = body.active;
+      if (!Object.keys(set).length) return c.json({ integration: integrationOut(current) });
+      const [i] = await getDb()
+        .update(issueIntegration)
+        .set(set)
+        .where(eq(issueIntegration.id, current.id))
+        .returning();
+      if (!i) throw notFound("Integration");
+      await audit(
+        c,
+        "integration.updated",
+        { type: "integration", id: i.id },
+        { provider: i.provider, fields: Object.keys(body) },
       );
-      set.tokenHint = hint(token);
-      set.lastError = null;
-    } else if (body.token !== undefined) {
-      set.token = encryptSecret(body.token);
-      set.tokenHint = hint(body.token);
-      set.lastError = null;
-    }
-    if (body.repo !== undefined) set.repo = normalizeTrackerRepo(provider, body.repo);
-    if (body.apiUrl !== undefined) set.apiUrl = body.apiUrl;
-    if (body.webhookSecret !== undefined) {
-      set.webhookSecret = encryptSecret(body.webhookSecret);
-      set.webhookPending = false;
-    }
-    if (settings !== undefined) set.settings = settings;
-    if (body.labels !== undefined) set.labels = [...new Set(body.labels)];
-    if (body.autoCreate !== undefined) set.autoCreate = body.autoCreate;
-    if (body.active !== undefined) set.active = body.active;
-    if (!Object.keys(set).length) return c.json({ integration: integrationOut(current) });
-    const [i] = await getDb()
-      .update(issueIntegration)
-      .set(set)
-      .where(eq(issueIntegration.id, current.id))
-      .returning();
-    if (!i) throw notFound("Integration");
-    await audit(
-      c,
-      "integration.updated",
-      { type: "integration", id: i.id },
-      { provider: i.provider, fields: Object.keys(body) },
-    );
-    return c.json({ integration: integrationOut(i) });
-  })
+      return c.json({ integration: integrationOut(i) });
+    },
+  )
 
-  .delete("/integrations/:id", requireOrgAdmin, async (c) => {
+  .delete("/integrations/:id", requirePermission("integrations.manage"), async (c) => {
     const i = await ownIntegration(c.var.orgId, c.req.param("id"));
     await unregisterWebhook(i);
     await getDb().delete(issueIntegration).where(eq(issueIntegration.id, i.id));
@@ -310,7 +317,7 @@ export const integrations = new Hono<{ Variables: SessionVars }>()
   })
 
   /** Can the token see the repository / board / list / database? Always 200; `{ ok, message }`. */
-  .post("/integrations/:id/test", requireOrgAdmin, async (c) => {
+  .post("/integrations/:id/test", requirePermission("integrations.manage"), async (c) => {
     const i = await withOrg(c.var.orgId, () => ownIntegration(c.var.orgId, c.req.param("id")));
     let result: Awaited<ReturnType<typeof checkAccess>>;
     try {
@@ -335,7 +342,7 @@ export const integrations = new Hono<{ Variables: SessionVars }>()
    * Register the webhook at the tracker (Trello, Asana, ClickUp), replacing a previous one. Notion has no API
    * for it: the admin adds the URL in the integration's settings and Pinwren captures the verification token.
    */
-  .post("/integrations/:id/register-webhook", requireOrgAdmin, async (c) => {
+  .post("/integrations/:id/register-webhook", requirePermission("integrations.manage"), async (c) => {
     const i = await ownIntegration(c.var.orgId, c.req.param("id"));
     const hooks = adapterFor(i.provider).webhooks;
     if (!hooks?.register) {
@@ -388,7 +395,7 @@ export const integrations = new Hono<{ Variables: SessionVars }>()
    * shown (once it has arrived): Notion asks the admin to type its own verification token back. The others'
    * secrets are the tracker's, or the admin's, and are never needed again.
    */
-  .get("/integrations/:id/webhook-secret", requireOrgAdmin, async (c) => {
+  .get("/integrations/:id/webhook-secret", requirePermission("integrations.manage"), async (c) => {
     const i = await ownIntegration(c.var.orgId, c.req.param("id"));
     if (isBoardProvider(i.provider) && (i.provider !== "notion" || i.webhookPending)) {
       return c.json({ secret: null, url: webhookUrlFor(i.provider, i.id), pending: i.webhookPending });
@@ -402,7 +409,7 @@ export const integrations = new Hono<{ Variables: SessionVars }>()
     return c.json({ secret, url: webhookUrlFor(i.provider, i.id), pending: false });
   })
 
-  .post("/integrations/:id/rotate-webhook-secret", requireOrgAdmin, async (c) => {
+  .post("/integrations/:id/rotate-webhook-secret", requirePermission("integrations.manage"), async (c) => {
     const i = await ownIntegration(c.var.orgId, c.req.param("id"));
     if (isBoardProvider(i.provider) && i.provider !== "notion") {
       // Asana / ClickUp / Trello hand over or are given their secret: registering the webhook again replaces it.

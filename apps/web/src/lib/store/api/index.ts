@@ -1,10 +1,10 @@
-import { auditApi } from "./audit";
+import { rolesApi } from "./roles";
 
 /**
  * The dashboard's RTK Query API with every endpoint (base → account → projects → feedback → rounds →
  * admin; each module injects into the previous one). Import hooks from here.
  */
-export const api = auditApi;
+export const api = rolesApi;
 
 export const {
   // account
@@ -137,6 +137,7 @@ export type HydrationEntries = {
 }[];
 
 export { useAuditLogQuery } from "./audit";
+export { useCreateRoleMutation, useDeleteRoleMutation, useRolesQuery, useUpdateRoleMutation } from "./roles";
 export { type ApiError, errorMessage, isApiError, isForbidden } from "./base";
 export type {
   AutomationRule,

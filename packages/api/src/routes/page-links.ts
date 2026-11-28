@@ -1,4 +1,4 @@
-import { anchorBundle, roleCan } from "@pinwren/core";
+import { anchorBundle, can } from "@pinwren/core";
 import { feedback, getDb, page, project, withOrg } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq, isNull } from "drizzle-orm";
@@ -6,7 +6,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { SessionVars } from "../context";
 import { ApiError, notFound, unauthorized } from "../errors";
-import { requirePermission } from "../permissions";
+import { accessOf, requirePermission } from "../permissions";
 import { updateAnchor } from "../services/anchor";
 import { pageLinkUrl, REPIN_LINK_TTL_HOURS } from "../services/page-link";
 import { mergeProjectPages } from "../services/page-merge";
@@ -33,7 +33,7 @@ export const pageLinks = new Hono<{ Variables: SessionVars }>()
   /** Any member who can read the item, viewers included (it changes nothing). */
   .post("/feedback/:id/page-link", zValidator("json", pageLinkRequest), async (c) => {
     const { repin } = c.req.valid("json");
-    if (repin && !roleCan(c.var.role, "feedback.update")) {
+    if (repin && !can(accessOf(c), "feedback.update")) {
       throw new ApiError(403, "FORBIDDEN_ROLE", "Your role doesn't allow this. Ask a workspace Admin.");
     }
     const [row] = await getDb()

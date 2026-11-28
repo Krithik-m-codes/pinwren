@@ -1,6 +1,6 @@
 "use client";
 
-import { IGNORED_QUERY_PARAMS, isClosedStatus, roleCan, safeHref } from "@pinwren/core";
+import { IGNORED_QUERY_PARAMS, isClosedStatus, safeHref } from "@pinwren/core";
 import {
   ArrowLeft,
   Crosshair,
@@ -566,7 +566,7 @@ function OnPageActions({ id, anchored, hasPage }: { id: string; anchored: boolea
   const [pageLink, linking] = usePageLinkMutation();
   const [repinLink, repinning] = useRepinLinkMutation();
   if (!hasPage) return null;
-  const canRepin = !!me && roleCan(me.role, "feedback.update");
+  const canRepin = !!me?.permissions.includes("feedback.update");
   const go = (make: () => Promise<{ url: string }>, failed: string) => {
     // Open the tab inside the click so the browser doesn't block it, then point it at the link.
     const tab = window.open("about:blank", "_blank");
@@ -627,7 +627,7 @@ function UrlGrouping({ projectId, ignored }: { projectId: string; ignored: strin
   const [error, setError] = useState<string | null>(null);
   const [update, updating] = useUpdateProjectMutation();
   const [regroup, regrouping] = useRegroupPagesMutation();
-  if (!me || !roleCan(me.role, "projects.manage")) return null;
+  if (!me?.permissions.includes("projects.manage")) return null;
   const busy = updating.isLoading || regrouping.isLoading;
 
   const add = () => {
