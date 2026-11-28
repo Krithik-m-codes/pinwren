@@ -3,6 +3,7 @@ export * from "./audit";
 export * from "./automation";
 export * from "./billing";
 export * from "./config";
+export * from "./custom-roles";
 export * from "./custom-fields";
 export * from "./dashboard-stats";
 export * from "./dashboards";

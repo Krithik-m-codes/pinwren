@@ -1,6 +1,7 @@
 import { getDb, member, slackUserLink, user, withOrg } from "@pinwren/db";
 import { and, eq } from "drizzle-orm";
 import { verifiedMemberByEmail } from "../db/identity";
+import { resolveAccess } from "../services/custom-roles";
 import type { SlackApi } from "./client";
 import type { SlackWorkspaceRow } from "./workspace";
 
@@ -8,7 +9,7 @@ import type { SlackWorkspaceRow } from "./workspace";
 // and the Pinwren account's email must be confirmed too), and stored. A Slack user that can't be matched
 // gets a "link your account" message instead of any access; guests, bots and deactivated users never map.
 
-export type SlackActor = { userId: string; role: string; name: string };
+export type SlackActor = { userId: string; role: string; name: string; customPermissions?: string[] | null };
 
 export type ActorResult =
   | { ok: true; actor: SlackActor }
@@ -21,7 +22,13 @@ async function linkedActor(ws: Ws, slackUserId: string): Promise<SlackActor | nu
   return withOrg(ws.orgId, async () => {
     const db = getDb();
     const [row] = await db
-      .select({ linkId: slackUserLink.id, userId: user.id, name: user.name, role: member.role })
+      .select({
+        linkId: slackUserLink.id,
+        userId: user.id,
+        name: user.name,
+        role: member.role,
+        customRoleId: member.customRoleId,
+      })
       .from(slackUserLink)
       .innerJoin(user, eq(user.id, slackUserLink.userId))
       .leftJoin(member, and(eq(member.userId, user.id), eq(member.organizationId, ws.orgId)))
@@ -38,13 +45,17 @@ async function linkedActor(ws: Ws, slackUserId: string): Promise<SlackActor | nu
       await db.delete(slackUserLink).where(eq(slackUserLink.id, row.linkId));
       return null;
     }
-    return { userId: row.userId, role: row.role, name: row.name };
+    const access = await resolveAccess(ws.orgId, row.customRoleId, row.role);
+    return { userId: row.userId, name: row.name, ...access };
   });
 }
 
 /** The member of this organisation whose confirmed email is `email`. */
 export async function memberByEmail(orgId: string, email: string): Promise<SlackActor | null> {
-  return (await verifiedMemberByEmail(orgId, email)) ?? null;
+  const row = await verifiedMemberByEmail(orgId, email);
+  if (!row) return null;
+  const access = await resolveAccess(orgId, row.customRoleId, row.role);
+  return { userId: row.userId, name: row.name, ...access };
 }
 
 /** Store a mapping; an existing one for that Slack user is kept (first writer wins, races are harmless). */

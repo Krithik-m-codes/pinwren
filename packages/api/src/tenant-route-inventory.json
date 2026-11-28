@@ -79,6 +79,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: DELETE /api/review-links/:id"
   },
+  "DELETE /api/roles/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: DELETE /api/roles/:id"
+  },
   "DELETE /api/rounds/:id": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -429,6 +434,11 @@
     "databaseLifetime": "finite",
     "check": "foreign tenant: GET /api/projects/:id/rounds"
   },
+  "GET /api/roles": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: GET /api/roles"
+  },
   "GET /api/rounds/:id": {
     "boundary": "tenant",
     "databaseLifetime": "finite",
@@ -743,6 +753,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: PATCH /api/releases/:id"
+  },
+  "PATCH /api/roles/:id": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: PATCH /api/roles/:id"
   },
   "PATCH /api/rounds/:id": {
     "boundary": "tenant",
@@ -1083,6 +1098,11 @@
     "boundary": "tenant",
     "databaseLifetime": "finite",
     "check": "foreign tenant: POST /api/projects/:id/rounds"
+  },
+  "POST /api/roles": {
+    "boundary": "tenant",
+    "databaseLifetime": "finite",
+    "check": "foreign tenant: POST /api/roles"
   },
   "POST /api/settings/ai/test": {
     "boundary": "tenant",

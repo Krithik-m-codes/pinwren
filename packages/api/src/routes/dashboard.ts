@@ -1,4 +1,5 @@
 import { audit } from "../services/audit";
+import { customRoleOf } from "../services/custom-roles";
 import { assertProjectQuota } from "../billing/service";
 import { accountProfileFor } from "../db/identity";
 import { randomBytes } from "node:crypto";
@@ -16,7 +17,8 @@ import {
   parseWidgetConfig,
   appRoleOf,
   projectUpdate,
-  roleCan,
+  can,
+  permissionsOf,
   trimTrailingSlashes,
   widgetBranding,
   widgetConfig,
@@ -30,7 +32,7 @@ import { isInstanceAdmin, isOrgAdmin, requireOrgAdmin, requireSession, type Sess
 import { ApiError, forbidden, notFound } from "../errors";
 import { assertFeatureWritable, publicEntitlements, resolveEntitlements } from "../license";
 import { env } from "../env";
-import { audienceOf, forbidViewerWrites, requirePermission } from "../permissions";
+import { accessOf, audienceOf, forbidViewerWrites, requirePermission } from "../permissions";
 import { ensureActionSecret, rotateActionSecret, runPanelAction } from "../services/actions";
 import { assetResponse } from "../services/assets";
 import { checkInstall } from "../services/install-check";
@@ -55,6 +57,7 @@ import { resolveSmtp } from "../email/config";
 import { setupNeeded, signupOpen } from "../services/setup";
 import { admin } from "./admin";
 import { auditRoutes } from "./audit";
+import { rolesRoutes } from "./roles";
 import { branding } from "./branding";
 import { integrations } from "./integrations";
 import { labels } from "./labels";
@@ -167,6 +170,9 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       role: c.var.role,
       // Wave-5 §3.1: the BugPin role (Admin / Editor / Viewer) for `roleCan` in the dashboard.
       appRole: appRoleOf(c.var.role),
+      // F-093: everything the caller may do (custom role included), so the dashboard hides the rest.
+      permissions: permissionsOf(accessOf(c)),
+      customRole: c.var.customPermissions ? await customRoleOf(c.var.orgId, c.var.userId) : null,
       instanceAdmin,
       setupNeeded: needed,
       emailConfigured: smtp !== null,
@@ -256,73 +262,78 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
 
   // Project settings (origins, widget config, panel actions, retention…) are configuration: org admins
   // only (ADR 0021) — a webhook panel action is an outbound request the server makes.
-  .patch("/projects/:id", requireOrgAdmin, zValidator("json", projectUpdate), async (c) => {
-    const db = getDb();
-    const {
-      widgetConfig: widgetPatch,
-      captureConfig: capturePatch,
-      widgetBranding: brandingPatch,
-      archived,
-      ...rest
-    } = c.req.valid("json");
-    const where = and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId));
-    // Read-merge-write under a row lock: two saves of different settings at the same moment (e.g. two
-    // toggles in quick succession) must both land, not the last one overwrite the other's merge.
-    const saved = await db.transaction(async (tx) => {
-      const [current] = await tx.select().from(project).where(where).for("update");
-      if (!current) throw notFound("Project");
-      const set: Partial<typeof project.$inferInsert> = withoutUndefined(rest);
-      // "Allow" on a refused origin is this same PATCH: what the new list lets through leaves the list.
-      if (rest.allowedOrigins) {
-        const pruned = pruneRejected(current.rejectedOrigins, rest.allowedOrigins);
-        if (pruned.length !== current.rejectedOrigins.length) set.rejectedOrigins = pruned;
-      }
-      if (archived !== undefined) set.archivedAt = archived ? (current.archivedAt ?? new Date()) : null;
-      if (widgetPatch) {
-        const before = parseWidgetConfig(current.widgetConfig);
-        const next = mergeAndValidate(widgetConfig, before, widgetPatch, "INVALID_WIDGET_CONFIG");
-        set.widgetConfig = next;
-        // Turning privacy mode on shortens "keep forever" to 90 days, unless this request sets it.
-        if (
-          next.privacyMode &&
-          !before.privacyMode &&
-          rest.retentionDays === undefined &&
-          current.retentionDays === null
-        ) {
-          set.retentionDays = PRIVACY_RETENTION_DAYS;
+  .patch(
+    "/projects/:id",
+    requirePermission("projects.manage"),
+    zValidator("json", projectUpdate),
+    async (c) => {
+      const db = getDb();
+      const {
+        widgetConfig: widgetPatch,
+        captureConfig: capturePatch,
+        widgetBranding: brandingPatch,
+        archived,
+        ...rest
+      } = c.req.valid("json");
+      const where = and(eq(project.id, c.req.param("id")), eq(project.orgId, c.var.orgId));
+      // Read-merge-write under a row lock: two saves of different settings at the same moment (e.g. two
+      // toggles in quick succession) must both land, not the last one overwrite the other's merge.
+      const saved = await db.transaction(async (tx) => {
+        const [current] = await tx.select().from(project).where(where).for("update");
+        if (!current) throw notFound("Project");
+        const set: Partial<typeof project.$inferInsert> = withoutUndefined(rest);
+        // "Allow" on a refused origin is this same PATCH: what the new list lets through leaves the list.
+        if (rest.allowedOrigins) {
+          const pruned = pruneRejected(current.rejectedOrigins, rest.allowedOrigins);
+          if (pruned.length !== current.rejectedOrigins.length) set.rejectedOrigins = pruned;
         }
-      }
-      if (brandingPatch) {
-        const before = parseWidgetBranding(current.widgetBranding);
-        const next = mergeAndValidate(widgetBranding, before, brandingPatch, "INVALID_WIDGET_BRANDING");
-        // "Hide Powered by" is white-label: stored either way (it only applies with the entitlement),
-        // but frozen once an Enterprise licence is past its grace period.
-        if (next.hidePoweredBy !== before.hidePoweredBy) await assertFeatureWritable("white_label");
-        set.widgetBranding = next;
-      }
-      if (capturePatch) {
-        set.captureConfig = mergeAndValidate(
-          captureConfig,
-          parseCaptureConfig(current.captureConfig),
-          capturePatch,
-          "INVALID_CAPTURE_CONFIG",
-        );
-      }
-      if (!Object.keys(set).length) return current;
-      const [p] = await tx.update(project).set(set).where(where).returning();
-      if (!p) throw notFound("Project");
-      return p;
-    });
-    await audit(
-      c,
-      "project.updated",
-      { type: "project", id: saved.id },
-      { fields: Object.keys(c.req.valid("json")) },
-    );
-    return c.json({ project: projectOut(saved, c.var.role) });
-  })
+        if (archived !== undefined) set.archivedAt = archived ? (current.archivedAt ?? new Date()) : null;
+        if (widgetPatch) {
+          const before = parseWidgetConfig(current.widgetConfig);
+          const next = mergeAndValidate(widgetConfig, before, widgetPatch, "INVALID_WIDGET_CONFIG");
+          set.widgetConfig = next;
+          // Turning privacy mode on shortens "keep forever" to 90 days, unless this request sets it.
+          if (
+            next.privacyMode &&
+            !before.privacyMode &&
+            rest.retentionDays === undefined &&
+            current.retentionDays === null
+          ) {
+            set.retentionDays = PRIVACY_RETENTION_DAYS;
+          }
+        }
+        if (brandingPatch) {
+          const before = parseWidgetBranding(current.widgetBranding);
+          const next = mergeAndValidate(widgetBranding, before, brandingPatch, "INVALID_WIDGET_BRANDING");
+          // "Hide Powered by" is white-label: stored either way (it only applies with the entitlement),
+          // but frozen once an Enterprise licence is past its grace period.
+          if (next.hidePoweredBy !== before.hidePoweredBy) await assertFeatureWritable("white_label");
+          set.widgetBranding = next;
+        }
+        if (capturePatch) {
+          set.captureConfig = mergeAndValidate(
+            captureConfig,
+            parseCaptureConfig(current.captureConfig),
+            capturePatch,
+            "INVALID_CAPTURE_CONFIG",
+          );
+        }
+        if (!Object.keys(set).length) return current;
+        const [p] = await tx.update(project).set(set).where(where).returning();
+        if (!p) throw notFound("Project");
+        return p;
+      });
+      await audit(
+        c,
+        "project.updated",
+        { type: "project", id: saved.id },
+        { fields: Object.keys(c.req.valid("json")) },
+      );
+      return c.json({ project: projectOut(saved, c.var.role) });
+    },
+  )
 
-  .post("/projects/:id/rotate-key", requireOrgAdmin, async (c) => {
+  .post("/projects/:id/rotate-key", requirePermission("projects.manage"), async (c) => {
     const [p] = await getDb()
       .update(project)
       .set({ publicKey: newPublicKey() })
@@ -334,7 +345,7 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
   })
 
   /** Fetches the project's allowed sites and looks for its widget tag (SSRF-safe; org admins only). */
-  .post("/projects/:id/check-install", requireOrgAdmin, async (c) => {
+  .post("/projects/:id/check-install", requirePermission("projects.manage"), async (c) => {
     const [p] = await getDb()
       .select({
         publicKey: project.publicKey,
@@ -391,14 +402,14 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
   // `?trash=1` lists the trash (Admins only, wave-5 contract §3.7).
   .get("/feedback", zValidator("query", feedbackListQuery), async (c) => {
     const q = c.req.valid("query");
-    if (q.trash && !roleCan(c.var.role, "feedback.restore")) throw forbiddenRole();
+    if (q.trash && !can(accessOf(c), "feedback.restore")) throw forbiddenRole();
     return c.json(await listFeedback(c.var.orgId, forCaller(q, c.var.userId)));
   })
 
   /** Every item matching the inbox filters (or `ids`), as CSV / JSON (streamed) or PDF. Before `/:id`. */
   .get("/feedback/export", zValidator("query", feedbackExportQuery), async (c) => {
     const q = c.req.valid("query");
-    if (q.trash && !roleCan(c.var.role, "feedback.restore")) throw forbiddenRole();
+    if (q.trash && !can(accessOf(c), "feedback.restore")) throw forbiddenRole();
     return exportFeedback(c.var.orgId, forCaller(q, c.var.userId));
   })
 
@@ -407,7 +418,7 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
       await getFeedbackDetail(c.var.orgId, c.req.param("id"), audienceOf(c.var.role), {
         userId: c.var.userId,
         // Admins can open an item in the trash (to restore it); for everyone else it's gone.
-        includeDeleted: roleCan(c.var.role, "feedback.restore"),
+        includeDeleted: can(accessOf(c), "feedback.restore"),
       }),
     ),
   )
@@ -553,6 +564,7 @@ export const dashboard = new Hono<{ Variables: SessionVars }>()
   .route("/", webhooks)
   .route("/", tokens)
   .route("/", auditRoutes)
+  .route("/", rolesRoutes)
   .route("/", integrations)
   .route("/", branding)
   .route("/admin", admin);

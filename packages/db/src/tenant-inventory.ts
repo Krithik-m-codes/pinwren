@@ -38,6 +38,7 @@ export const tenantInventory: readonly TenantTable[] = [
   { table: "page", ownership: "direct", parents: ["project"] },
   { table: "project_release", ownership: "direct", parents: ["project"] },
   { table: "audit_log", ownership: "direct", parents: [], appendOnly: true },
+  { table: "custom_role", ownership: "direct", parents: [] },
   { table: "review_round", ownership: "direct", parents: ["project"] },
   {
     table: "feedback",
@@ -131,7 +132,7 @@ export const tenantInventory: readonly TenantTable[] = [
   { table: "account", ownership: "identity", parents: [] },
   { table: "verification", ownership: "identity", parents: [] },
   { table: "organization", ownership: "identity", parents: [], scopeColumn: "id" },
-  { table: "member", ownership: "identity", parents: [], scopeColumn: "organization_id" },
+  { table: "member", ownership: "identity", parents: ["custom_role"], scopeColumn: "organization_id" },
   { table: "invitation", ownership: "identity", parents: [], scopeColumn: "organization_id" },
   { table: "auth_rate_limit", ownership: "system", parents: [] },
   { table: "two_factor", ownership: "identity", parents: [] },

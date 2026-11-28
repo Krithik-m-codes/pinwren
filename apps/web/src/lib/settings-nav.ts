@@ -10,6 +10,7 @@ import {
   ScrollText,
   ShieldCheck,
   Sparkles,
+  UserCog,
   UserRound,
   Users,
   Webhook,
@@ -24,7 +25,7 @@ import { tEn } from "@/lib/i18n/english";
  * (`instance`, self-host settings such as security and the licence), or either (`email`: SMTP for the
  * instance admin, the email templates for workspace Admins).
  */
-export type SettingsAccess = "org" | "instance" | "email" | "cloud-org";
+export type SettingsAccess = "org" | "instance" | "email" | "cloud-org" | "audit";
 
 export type SettingsPage = {
   href: Route;
@@ -109,9 +110,18 @@ const PAGES: readonly Omit<SettingsPage, "label">[] = [
     href: "/settings/audit",
     labelKey: "audit.title",
     icon: ScrollText,
-    // Workspace Admins; the page itself explains when the plan or licence lacks the feature (ADR 0044).
-    access: "org",
+    // Workspace Admins and roles holding `audit.read`; the page itself explains when the plan or licence
+    // lacks the feature (ADR 0044).
+    access: "audit",
     keywords: ["history", "log", "who changed", "compliance", "export", "security"],
+  },
+  {
+    href: "/settings/roles",
+    labelKey: "roles.title",
+    icon: UserCog,
+    // Workspace Admins (`roles.manage`, never grantable); the page explains when the licence lacks the feature.
+    access: "org",
+    keywords: ["custom roles", "permissions", "access", "editor", "viewer", "rbac"],
   },
   {
     href: "/settings/billing",
@@ -136,6 +146,8 @@ export type SettingsViewer = {
   instanceAdmin: boolean;
   /** Pinwren Cloud (billing exists only there). */
   cloud?: boolean;
+  /** What the caller may do (custom roles, F-093): the audit log follows `audit.read`, not just Admin. */
+  permissions?: readonly string[] | undefined;
 };
 
 /**
@@ -148,6 +160,7 @@ export function canSeeSettingsPage(page: Pick<SettingsPage, "access">, viewer: S
   if (page.access === "instance") return viewer.instanceAdmin;
   if (page.access === "email") return orgAdmin || viewer.instanceAdmin;
   if (page.access === "cloud-org") return orgAdmin && viewer.cloud === true;
+  if (page.access === "audit") return orgAdmin || viewer.permissions?.includes("audit.read") === true;
   return true;
 }
 

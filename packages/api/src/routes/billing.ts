@@ -1,3 +1,4 @@
+import { requirePermission } from "../permissions";
 import { audit } from "../services/audit";
 import { checkoutRequest } from "@pinwren/core";
 import { getDb, user } from "@pinwren/db";
@@ -15,7 +16,7 @@ import {
   processWebhook,
   startCheckout,
 } from "../billing/service";
-import { requireOrgAdmin, type SessionVars } from "../context";
+import { type SessionVars } from "../context";
 import { env } from "../env";
 import { ApiError } from "../errors";
 import { clientIp } from "../net";
@@ -31,19 +32,29 @@ const cloudOnly = createMiddleware(async (_c, next) => {
 
 /** Mounted after the dashboard router: its session and viewer guards have already run. */
 export const billing = new Hono<{ Variables: SessionVars }>()
-  .get("/billing", cloudOnly, requireOrgAdmin, async (c) => c.json(await getBillingInfo(c.var.orgId)))
-  .post("/billing/checkout", cloudOnly, requireOrgAdmin, zValidator("json", checkoutRequest), async (c) => {
-    const [u] = await getDb()
-      .select({ email: user.email, name: user.name })
-      .from(user)
-      .where(eq(user.id, c.var.userId));
-    if (!u) throw new ApiError(403, "FORBIDDEN", "Not allowed");
-    const { interval, plan } = c.req.valid("json");
-    const started = await startCheckout({ orgId: c.var.orgId, interval, plan, user: u });
-    await audit(c, "billing.checkout_started", { type: "billing" }, { plan, interval });
-    return c.json(started);
-  })
-  .post("/billing/portal", cloudOnly, requireOrgAdmin, async (c) => c.json(await portalLink(c.var.orgId)));
+  .get("/billing", cloudOnly, requirePermission("billing.manage"), async (c) =>
+    c.json(await getBillingInfo(c.var.orgId)),
+  )
+  .post(
+    "/billing/checkout",
+    cloudOnly,
+    requirePermission("billing.manage"),
+    zValidator("json", checkoutRequest),
+    async (c) => {
+      const [u] = await getDb()
+        .select({ email: user.email, name: user.name })
+        .from(user)
+        .where(eq(user.id, c.var.userId));
+      if (!u) throw new ApiError(403, "FORBIDDEN", "Not allowed");
+      const { interval, plan } = c.req.valid("json");
+      const started = await startCheckout({ orgId: c.var.orgId, interval, plan, user: u });
+      await audit(c, "billing.checkout_started", { type: "billing" }, { plan, interval });
+      return c.json(started);
+    },
+  )
+  .post("/billing/portal", cloudOnly, requirePermission("billing.manage"), async (c) =>
+    c.json(await portalLink(c.var.orgId)),
+  );
 
 const MAX_BODY = 256 * 1024;
 const WEBHOOKS_PER_MIN = 300;

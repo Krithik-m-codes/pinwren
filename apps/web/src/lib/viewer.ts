@@ -1,5 +1,6 @@
 "use client";
 
+import type { Permission } from "@pinwren/core";
 import { isAdminRole, isViewerRole } from "@/lib/api";
 import { useMeQuery, useMembersQuery } from "@/lib/store/api";
 
@@ -20,6 +21,8 @@ export function useViewer() {
     canWrite: !!me && !isViewerRole(role),
     isViewer: isViewerRole(role),
     instanceAdmin: !!me?.instanceAdmin,
+    /** Whether the caller holds `permission` (their custom role included); the API enforces the same. */
+    can: (permission: Permission) => !!me?.permissions.includes(permission),
   };
 }
 

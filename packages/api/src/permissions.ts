@@ -1,5 +1,6 @@
-import { type Permission, roleCan, trimTrailingSlashes } from "@pinwren/core";
+import { type Access, can, type Permission, trimTrailingSlashes } from "@pinwren/core";
 import { createMiddleware } from "hono/factory";
+import { matchedRoutes } from "hono/route";
 import type { SessionVars } from "./context";
 import { ApiError } from "./errors";
 
@@ -82,20 +83,54 @@ export function viewerMayCall(method: string, path: string): boolean {
 export const readOnlyError = () =>
   new ApiError(403, "READ_ONLY_ROLE", "Your role (viewer) can read but not change anything");
 
-/** Runs after `requireSession`. */
+/** The caller as the permission resolver (`can`) wants them. */
+export const accessOf = (c: { var: SessionVars }): Access => ({
+  role: c.var.role,
+  customPermissions: c.var.customPermissions ?? null,
+});
+
+/** Marks middleware that names the permission a route needs (see `forbidViewerWrites`). */
+const GUARD = Symbol("pinwren.permissionGuard");
+const isGuard = (fn: unknown) =>
+  typeof fn === "function" && (fn as unknown as Record<symbol, unknown>)[GUARD] === true;
+const tagged = <T extends object>(fn: T): T => Object.assign(fn, { [GUARD]: true });
+
+/**
+ * Runs after `requireSession`. A custom-role member (F-093) may only write through routes that name the
+ * permission they need (`requirePermission`) or the personal-state exemptions above: a route that is merely
+ * "not for viewers" would otherwise hand them everything an Editor can do. Fail closed.
+ */
 export const forbidViewerWrites = createMiddleware<{ Variables: SessionVars }>(async (c, next) => {
-  if (isReadOnlyRole(c.var.role) && !viewerMayCall(c.req.method, c.req.path)) throw readOnlyError();
+  if (!viewerMayCall(c.req.method, c.req.path)) {
+    if (isReadOnlyRole(c.var.role)) throw readOnlyError();
+    if (c.var.customPermissions && !matchedRoutes(c).some((r) => isGuard(r.handler))) {
+      throw new ApiError(403, "FORBIDDEN_ROLE", "Your role doesn't allow this. Ask a workspace Admin.");
+    }
+  }
   await next();
 });
 
+const forbiddenRole = () =>
+  new ApiError(403, "FORBIDDEN_ROLE", "Your role doesn't allow this. Ask a workspace Admin.");
+
 /**
- * BugPin roles (wave-5 contract §2): Admin / Editor / Viewer over `member.role`. Put it in front of a route
- * whose permission is narrower than "not a viewer", e.g. `requirePermission("feedback.delete")` (Admins only).
+ * BugPin roles (wave-5 contract §2) and custom roles (F-093): put it in front of a route whose permission is
+ * narrower than "not a viewer", e.g. `requirePermission("feedback.delete")` (Admins only, unless a custom role
+ * grants it). The only place a route's permission is decided, through `can`.
  */
 export const requirePermission = (permission: Permission) =>
-  createMiddleware<{ Variables: SessionVars }>(async (c, next) => {
-    if (!roleCan(c.var.role, permission)) {
-      throw new ApiError(403, "FORBIDDEN_ROLE", "Your role doesn't allow this. Ask a workspace Admin.");
-    }
-    await next();
-  });
+  tagged(
+    createMiddleware<{ Variables: SessionVars }>(async (c, next) => {
+      if (!can(accessOf(c), permission)) throw forbiddenRole();
+      await next();
+    }),
+  );
+
+/** Like `requirePermission`, satisfied by any one of the listed permissions. */
+export const requireAnyPermission = (...permissions: Permission[]) =>
+  tagged(
+    createMiddleware<{ Variables: SessionVars }>(async (c, next) => {
+      if (!permissions.some((p) => can(accessOf(c), p))) throw forbiddenRole();
+      await next();
+    }),
+  );

@@ -53,7 +53,8 @@ Feedback data, your website and the code of the sites the widget runs on are nev
 | Storage                                                    | Disk or any S3 bucket     | Included                      | Included          | Included           | Customer bucket option         |
 | White-label                                                | —                         | —                             | Remove badge      | Full white-label   | ✓                              |
 | Audit log (30 days on Business)                            | —                         | —                             | —                 | 30 days            | ✓ (kept in full)               |
-| SSO, SCIM, custom roles                                    | —                         | —                             | —                 | —                  | Planned                        |
+| Custom roles and permissions                               | —                         | —                             | —                 | —                  | ✓                              |
+| SSO, SCIM                                                  | —                         | —                             | —                 | —                  | Planned                        |
 | Support                                                    | Community (GitHub)        | Community                     | Email             | Priority email     | SLA                            |
 
 The full proposal is on the [pricing page](/pricing).
@@ -107,7 +108,10 @@ In this release a licence unlocks two features:
 - **Audit log** (`audit_log`): an append-only record of who changed members, access, integrations, projects and
   settings, with filters and CSV or JSON Lines export. See [Audit log](/docs/dashboard/audit-log).
 
-SSO, SCIM, custom roles, legal hold and the SIEM stream are planned: licences may already name them, and
+- **Custom roles** (`custom_roles`): your own roles built from a catalogue of permissions, assigned per person. See
+  [Roles and permissions](/docs/dashboard/roles).
+
+SSO, SCIM, legal hold and the SIEM stream are planned: licences may already name them, and
 Settings › Licence lists them under **Coming soon** until they ship.
 
 An Enterprise licence is a single `.lic` text file: a JSON payload and an Ed25519 signature, each

@@ -23,6 +23,7 @@ export async function membershipFor(orgId: string, userId: string) {
     .select({
       id: member.id,
       role: member.role,
+      customRoleId: member.customRoleId,
       organizationId: member.organizationId,
       userId: member.userId,
     })
@@ -83,7 +84,7 @@ export async function tokenForVerification(prefix: string) {
  */
 export async function verifiedMemberByEmail(orgId: string, email: string) {
   const [row] = await identityDatabase()
-    .select({ userId: user.id, name: user.name, role: member.role })
+    .select({ userId: user.id, name: user.name, role: member.role, customRoleId: member.customRoleId })
     .from(member)
     .innerJoin(user, eq(user.id, member.userId))
     .where(

@@ -1,4 +1,16 @@
-import { bigint, boolean, index, integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  foreignKey,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // Tables owned by Better Auth (core + organization plugin). Column names follow its defaults so
 // the drizzle adapter maps them without overrides. Ids are Better Auth's text ids.
@@ -73,6 +85,35 @@ export const organization = pgTable("organization", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Custom roles (F-093, ADR 0045): workspace-defined permission bundles. A member holds at most one, through
+ * `member.custom_role_id`; their Better Auth `role` stays a built-in one (the fail-closed fallback).
+ * Lives here, not in app.ts, because `member` references it and app.ts already imports this file.
+ */
+export const customRole = pgTable(
+  "custom_role",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: text("org_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    /** Keys of the fixed catalogue in @pinwren/core (`CUSTOM_ROLE_PERMISSIONS`); unknown keys grant nothing. */
+    permissions: text("permissions")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("custom_role_org_name_uq").on(t.orgId, sql`lower(${t.name})`),
+    uniqueIndex("custom_role_id_org_uq").on(t.id, t.orgId),
+  ],
+);
+
 export const member = pgTable(
   "member",
   {
@@ -84,9 +125,20 @@ export const member = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     role: text("role").notNull().default("member"),
+    /** F-093: the custom role this member holds, if any. Null for everyone on a built-in role. */
+    customRoleId: uuid("custom_role_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("member_org_user_uq").on(t.organizationId, t.userId)],
+  (t) => [
+    uniqueIndex("member_org_user_uq").on(t.organizationId, t.userId),
+    // Same organisation only, and a role in use can't be deleted from under its members (NO ACTION is
+    // checked at statement end, so deleting a whole organisation still cascades cleanly).
+    foreignKey({
+      name: "member_custom_role_tenant_fk",
+      columns: [t.customRoleId, t.organizationId],
+      foreignColumns: [customRole.id, customRole.orgId],
+    }),
+  ],
 );
 
 export const invitation = pgTable(

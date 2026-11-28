@@ -1,3 +1,4 @@
+import { requirePermission } from "../permissions";
 import { audit } from "../services/audit";
 import { withOrg } from "@pinwren/db";
 import { webhookCreate, webhookUpdate } from "@pinwren/core";
@@ -5,7 +6,7 @@ import { getDb, project, webhookDelivery, webhookEndpoint } from "@pinwren/db";
 import { zValidator } from "@hono/zod-validator";
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { requireOrgAdmin, type SessionVars } from "../context";
+import { type SessionVars } from "../context";
 import { encryptSecret, randomToken } from "../crypto";
 import { env } from "../env";
 import { ApiError, notFound } from "../errors";
@@ -136,7 +137,7 @@ async function deliverNow(e: Endpoint, payload: WebhookPayload) {
 
 /** Outbound webhooks (F-075, Slack F-071, Discord F-072). Org admins only. */
 export const webhooks = new Hono<{ Variables: SessionVars }>()
-  .get("/webhooks", requireOrgAdmin, async (c) => {
+  .get("/webhooks", requirePermission("integrations.manage"), async (c) => {
     const rows = await getDb()
       .select()
       .from(webhookEndpoint)
@@ -145,98 +146,108 @@ export const webhooks = new Hono<{ Variables: SessionVars }>()
     return c.json({ webhooks: rows.map(endpointOut) });
   })
 
-  .post("/webhooks", requireOrgAdmin, zValidator("json", webhookCreate), async (c) => {
-    const body = c.req.valid("json");
-    await assertProject(c.var.orgId, body.projectId);
-    // Telegram is built from its bot token and chat id; every other kind has a URL (the schema checks both).
-    const target =
-      body.kind === "telegram" ? telegramTarget(body.botToken ?? "", body.chatId ?? "") : (body.url ?? "");
-    if (body.kind === "ntfy") assertNtfyUrl(target);
-    const secret = body.kind === "generic" ? newSecret() : null;
-    const stored = secret ?? (body.kind === "ntfy" ? (body.accessToken ?? null) : null);
-    const [e] = await getDb()
-      .insert(webhookEndpoint)
-      .values({
-        orgId: c.var.orgId,
-        projectId: body.projectId ?? null,
-        name: body.name ?? null,
-        url: storedWebhookUrl(body.kind, target),
-        kind: body.kind,
-        events: [...new Set(body.events)],
-        secret: stored ? encryptSecret(stored) : null,
-        active: body.active,
-        createdBy: c.var.userId,
-      })
-      .returning();
-    if (!e) throw new Error("webhook insert failed");
-    await audit(
-      c,
-      "webhook.created",
-      { type: "webhook", id: e.id },
-      { kind: e.kind, projectId: e.projectId },
-    );
-    // The signing secret is shown exactly once.
-    return c.json({ webhook: endpointOut(e), secret }, 201);
-  })
+  .post(
+    "/webhooks",
+    requirePermission("integrations.manage"),
+    zValidator("json", webhookCreate),
+    async (c) => {
+      const body = c.req.valid("json");
+      await assertProject(c.var.orgId, body.projectId);
+      // Telegram is built from its bot token and chat id; every other kind has a URL (the schema checks both).
+      const target =
+        body.kind === "telegram" ? telegramTarget(body.botToken ?? "", body.chatId ?? "") : (body.url ?? "");
+      if (body.kind === "ntfy") assertNtfyUrl(target);
+      const secret = body.kind === "generic" ? newSecret() : null;
+      const stored = secret ?? (body.kind === "ntfy" ? (body.accessToken ?? null) : null);
+      const [e] = await getDb()
+        .insert(webhookEndpoint)
+        .values({
+          orgId: c.var.orgId,
+          projectId: body.projectId ?? null,
+          name: body.name ?? null,
+          url: storedWebhookUrl(body.kind, target),
+          kind: body.kind,
+          events: [...new Set(body.events)],
+          secret: stored ? encryptSecret(stored) : null,
+          active: body.active,
+          createdBy: c.var.userId,
+        })
+        .returning();
+      if (!e) throw new Error("webhook insert failed");
+      await audit(
+        c,
+        "webhook.created",
+        { type: "webhook", id: e.id },
+        { kind: e.kind, projectId: e.projectId },
+      );
+      // The signing secret is shown exactly once.
+      return c.json({ webhook: endpointOut(e), secret }, 201);
+    },
+  )
 
-  .get("/webhooks/:id", requireOrgAdmin, async (c) =>
+  .get("/webhooks/:id", requirePermission("integrations.manage"), async (c) =>
     c.json({ webhook: endpointOut(await ownEndpoint(c.var.orgId, c.req.param("id"))) }),
   )
 
-  .patch("/webhooks/:id", requireOrgAdmin, zValidator("json", webhookUpdate), async (c) => {
-    const body = c.req.valid("json");
-    const current = await ownEndpoint(c.var.orgId, c.req.param("id"));
-    await assertProject(c.var.orgId, body.projectId);
-    const set: Partial<typeof webhookEndpoint.$inferInsert> = {};
-    if (body.name !== undefined) set.name = body.name;
-    if (current.kind === "telegram") {
-      if (body.url !== undefined)
-        throw badRequest("Telegram webhooks take a bot token and chat id, not a URL");
-      if (body.botToken !== undefined || body.chatId !== undefined) {
-        const plain = webhookTargetUrl(current);
-        const prev = plain ? parseTelegramTarget(plain) : null;
-        const botToken = body.botToken ?? prev?.botToken;
-        const chatId = body.chatId ?? prev?.chatId;
-        if (!botToken || !chatId)
-          throw badRequest("The stored bot token can't be read — enter the bot token and chat id");
-        set.url = storedWebhookUrl("telegram", telegramTarget(botToken, chatId));
+  .patch(
+    "/webhooks/:id",
+    requirePermission("integrations.manage"),
+    zValidator("json", webhookUpdate),
+    async (c) => {
+      const body = c.req.valid("json");
+      const current = await ownEndpoint(c.var.orgId, c.req.param("id"));
+      await assertProject(c.var.orgId, body.projectId);
+      const set: Partial<typeof webhookEndpoint.$inferInsert> = {};
+      if (body.name !== undefined) set.name = body.name;
+      if (current.kind === "telegram") {
+        if (body.url !== undefined)
+          throw badRequest("Telegram webhooks take a bot token and chat id, not a URL");
+        if (body.botToken !== undefined || body.chatId !== undefined) {
+          const plain = webhookTargetUrl(current);
+          const prev = plain ? parseTelegramTarget(plain) : null;
+          const botToken = body.botToken ?? prev?.botToken;
+          const chatId = body.chatId ?? prev?.chatId;
+          if (!botToken || !chatId)
+            throw badRequest("The stored bot token can't be read — enter the bot token and chat id");
+          set.url = storedWebhookUrl("telegram", telegramTarget(botToken, chatId));
+        }
+      } else {
+        if (body.botToken !== undefined || body.chatId !== undefined) {
+          throw badRequest("Only Telegram webhooks take a bot token and chat id");
+        }
+        if (body.url !== undefined) {
+          if (current.kind === "ntfy") assertNtfyUrl(body.url);
+          set.url = storedWebhookUrl(current.kind, body.url);
+        }
       }
-    } else {
-      if (body.botToken !== undefined || body.chatId !== undefined) {
-        throw badRequest("Only Telegram webhooks take a bot token and chat id");
+      if (body.accessToken !== undefined) {
+        if (current.kind !== "ntfy") throw badRequest("Only ntfy webhooks take an access token");
+        set.secret = body.accessToken === null ? null : encryptSecret(body.accessToken);
       }
-      if (body.url !== undefined) {
-        if (current.kind === "ntfy") assertNtfyUrl(body.url);
-        set.url = storedWebhookUrl(current.kind, body.url);
+      if (body.events !== undefined) set.events = [...new Set(body.events)];
+      if (body.projectId !== undefined) set.projectId = body.projectId;
+      if (body.active !== undefined) {
+        set.active = body.active;
+        if (body.active) set.failingSince = null; // re-enabling starts a fresh failure window
       }
-    }
-    if (body.accessToken !== undefined) {
-      if (current.kind !== "ntfy") throw badRequest("Only ntfy webhooks take an access token");
-      set.secret = body.accessToken === null ? null : encryptSecret(body.accessToken);
-    }
-    if (body.events !== undefined) set.events = [...new Set(body.events)];
-    if (body.projectId !== undefined) set.projectId = body.projectId;
-    if (body.active !== undefined) {
-      set.active = body.active;
-      if (body.active) set.failingSince = null; // re-enabling starts a fresh failure window
-    }
-    if (!Object.keys(set).length) return c.json({ webhook: endpointOut(current) });
-    const [e] = await getDb()
-      .update(webhookEndpoint)
-      .set(set)
-      .where(eq(webhookEndpoint.id, current.id))
-      .returning();
-    if (!e) throw notFound("Webhook");
-    await audit(
-      c,
-      "webhook.updated",
-      { type: "webhook", id: e.id },
-      { kind: e.kind, fields: Object.keys(set) },
-    );
-    return c.json({ webhook: endpointOut(e) });
-  })
+      if (!Object.keys(set).length) return c.json({ webhook: endpointOut(current) });
+      const [e] = await getDb()
+        .update(webhookEndpoint)
+        .set(set)
+        .where(eq(webhookEndpoint.id, current.id))
+        .returning();
+      if (!e) throw notFound("Webhook");
+      await audit(
+        c,
+        "webhook.updated",
+        { type: "webhook", id: e.id },
+        { kind: e.kind, fields: Object.keys(set) },
+      );
+      return c.json({ webhook: endpointOut(e) });
+    },
+  )
 
-  .delete("/webhooks/:id", requireOrgAdmin, async (c) => {
+  .delete("/webhooks/:id", requirePermission("integrations.manage"), async (c) => {
     const e = await ownEndpoint(c.var.orgId, c.req.param("id"));
     await getDb().delete(webhookEndpoint).where(eq(webhookEndpoint.id, e.id));
     await audit(
@@ -248,7 +259,7 @@ export const webhooks = new Hono<{ Variables: SessionVars }>()
     return c.body(null, 204);
   })
 
-  .post("/webhooks/:id/rotate-secret", requireOrgAdmin, async (c) => {
+  .post("/webhooks/:id/rotate-secret", requirePermission("integrations.manage"), async (c) => {
     const e = await ownEndpoint(c.var.orgId, c.req.param("id"));
     if (e.kind !== "generic") throw new ApiError(400, "NO_SECRET", "Only generic webhooks are signed");
     const secret = newSecret();
@@ -260,12 +271,12 @@ export const webhooks = new Hono<{ Variables: SessionVars }>()
   })
 
   /** Send a `ping` event now and return the recorded attempt. */
-  .post("/webhooks/:id/test", requireOrgAdmin, async (c) => {
+  .post("/webhooks/:id/test", requirePermission("integrations.manage"), async (c) => {
     const e = await withOrg(c.var.orgId, () => ownEndpoint(c.var.orgId, c.req.param("id")));
     return c.json({ delivery: await deliverNow(e, pingPayload()) });
   })
 
-  .get("/webhooks/:id/deliveries", requireOrgAdmin, async (c) => {
+  .get("/webhooks/:id/deliveries", requirePermission("integrations.manage"), async (c) => {
     const e = await ownEndpoint(c.var.orgId, c.req.param("id"));
     const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 50) || 50, 1), 100);
     const rows = await getDb()
@@ -278,7 +289,7 @@ export const webhooks = new Hono<{ Variables: SessionVars }>()
   })
 
   /** Re-send a recorded delivery's payload now (same event id, so receivers can de-duplicate). */
-  .post("/webhook-deliveries/:id/redeliver", requireOrgAdmin, async (c) => {
+  .post("/webhook-deliveries/:id/redeliver", requirePermission("integrations.manage"), async (c) => {
     const { d, e } = await withOrg(c.var.orgId, async (db) => {
       const [d] = await db
         .select()

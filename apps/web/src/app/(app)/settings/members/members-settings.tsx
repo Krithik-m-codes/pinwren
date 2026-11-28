@@ -1,6 +1,6 @@
 "use client";
 
-import { type AppRole, appRoleOf, roleCan } from "@pinwren/core";
+import { type AppRole, appRoleOf } from "@pinwren/core";
 import { KeyRound, Link2, MailPlus, MoreHorizontal, UserMinus, UserPlus, Users, Wand2 } from "lucide-react";
 import { useState } from "react";
 import { Controller, useWatch } from "react-hook-form";
@@ -40,6 +40,7 @@ import {
   useInvitationsQuery,
   useInviteMemberMutation,
   useMembersQuery,
+  useRolesQuery,
 } from "@/lib/store/api";
 import {
   useAddMemberMutation,
@@ -91,7 +92,7 @@ export function MembersSettings() {
   const { me, userId, instanceAdmin } = useViewer();
   const members = useMembersQuery(undefined);
   const invitations = useInvitationsQuery(undefined);
-  const canManage = !!me && roleCan(me.role, "users.manage");
+  const canManage = !!me?.permissions.includes("users.manage");
   const [adding, setAdding] = useState(false);
   const [inviteEmail, setInviteEmail] = useState<string | null>(null);
   const list = members.data?.members ?? [];
@@ -146,7 +147,7 @@ export function MembersSettings() {
         </CardContent>
       </Card>
 
-      {canManage && <InviteCard prefill={inviteEmail} emailConfigured={me.emailConfigured} />}
+      {canManage && <InviteCard prefill={inviteEmail} emailConfigured={me?.emailConfigured === true} />}
 
       <Card>
         <CardHeader>
@@ -201,31 +202,51 @@ export function MembersSettings() {
   );
 }
 
+const CUSTOM_PREFIX = "custom:";
+const isAppRole = (v: string): v is AppRole => ROLES.some((r) => r.value === v);
+
+/**
+ * Built-in roles, plus the workspace's custom roles when `withCustom` and the licence allows them (F-093).
+ * The value is an app role, or `custom:<id>` for a custom one. Invitations stay built-in only.
+ */
 function RoleSelect({
   value,
   onChange,
   label,
   size,
+  withCustom = false,
 }: {
-  value: AppRole;
-  onChange: (role: AppRole) => void;
+  value: string;
+  onChange: (value: string) => void;
   label: string;
   size?: "sm";
+  withCustom?: boolean;
 }) {
   const t = useT();
+  const roles = useRolesQuery(undefined, { skip: !withCustom });
+  const custom = withCustom && roles.data?.entitled ? roles.data.roles : [];
+  const items = [
+    ...ROLES.map((r) => ({ value: r.value, label: t(r.label) })),
+    ...custom.map((r) => ({ value: `${CUSTOM_PREFIX}${r.id}`, label: r.name })),
+  ];
   return (
-    <Select
-      items={ROLES.map((r) => ({ ...r, label: t(r.label) }))}
-      value={value}
-      onValueChange={(v) => v && onChange(v)}
-    >
-      <SelectTrigger {...(size ? { size } : {})} className={size ? "w-28" : "sm:w-32"} aria-label={label}>
+    <Select items={items} value={value} onValueChange={(v) => v && onChange(v)}>
+      <SelectTrigger
+        {...(size ? { size } : {})}
+        className={size ? "w-28" : custom.length ? "sm:w-44" : "sm:w-32"}
+        aria-label={label}
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         {ROLES.map((r) => (
           <SelectItem key={r.value} value={r.value}>
             {t(r.label)}
+          </SelectItem>
+        ))}
+        {custom.map((r) => (
+          <SelectItem key={r.id} value={`${CUSTOM_PREFIX}${r.id}`}>
+            {r.name}
           </SelectItem>
         ))}
       </SelectContent>
@@ -247,6 +268,7 @@ function AddUserDialog({
   const [addMember] = useAddMemberMutation();
   const [created, setCreated] = useState<{ email: string; password: string; name: string } | null>(null);
   const [taken, setTaken] = useState<string | null>(null);
+  const [customRoleId, setCustomRoleId] = useState<string | null>(null);
   const form = useZodForm(addUserForm, {
     defaultValues: { name: "", email: "", password: "", role: "editor" },
   });
@@ -259,13 +281,14 @@ function AddUserDialog({
       form.reset();
       setCreated(null);
       setTaken(null);
+      setCustomRoleId(null);
     }
     onOpenChange(o);
   };
   const submit = form.handleSubmit(async (v) => {
     setTaken(null);
     try {
-      await addMember(v).unwrap();
+      await addMember({ ...v, ...(customRoleId ? { customRoleId } : {}) }).unwrap();
       toast.success(t("settings3.userAdded", { name: v.name }));
       setCreated({ email: v.email, password: v.password, name: v.name });
     } catch (e) {
@@ -368,10 +391,21 @@ function AddUserDialog({
                 control={form.control}
                 name="role"
                 render={({ field }) => (
-                  <RoleSelect value={field.value} onChange={field.onChange} label={t("settings3.role")} />
+                  <RoleSelect
+                    withCustom
+                    value={customRoleId ? `${CUSTOM_PREFIX}${customRoleId}` : field.value}
+                    onChange={(v) => {
+                      if (v.startsWith(CUSTOM_PREFIX)) setCustomRoleId(v.slice(CUSTOM_PREFIX.length));
+                      else if (isAppRole(v)) {
+                        setCustomRoleId(null);
+                        field.onChange(v);
+                      }
+                    }}
+                    label={t("settings3.role")}
+                  />
                 )}
               />
-              <p className="text-xs text-muted-foreground">{roleDescription(t, role)}.</p>
+              {!customRoleId && <p className="text-xs text-muted-foreground">{roleDescription(t, role)}.</p>}
             </div>
             <FormError message={errors.root?.message} />
             {taken && (
@@ -454,7 +488,11 @@ function InviteCard({ prefill, emailConfigured }: { prefill: string | null; emai
               control={form.control}
               name="role"
               render={({ field }) => (
-                <RoleSelect value={field.value} onChange={field.onChange} label={t("settings3.role")} />
+                <RoleSelect
+                  value={field.value}
+                  onChange={(v) => isAppRole(v) && field.onChange(v)}
+                  label={t("settings3.role")}
+                />
               )}
             />
             <Button type="submit" variant="outline" disabled={isSubmitting}>
@@ -491,11 +529,24 @@ function MemberRow({
   // Not your own role (another Admin changes it), never the owner's (transfer ownership instead).
   const editable = canManage && !isMe && !owner;
 
-  const changeRole = (role: AppRole) => {
-    if (role === appRole) return;
-    setRole({ userId: m.id, role })
+  const roles = useRolesQuery(undefined, { skip: !canManage });
+  // A custom role only counts while the workspace is entitled to it (otherwise the built-in role applies).
+  const custom = roles.data?.entitled ? roles.data.roles.find((r) => r.id === m.customRoleId) : undefined;
+  const current = custom ? `${CUSTOM_PREFIX}${custom.id}` : appRole;
+  const changeRole = (next: string) => {
+    if (next === current) return;
+    if (next.startsWith(CUSTOM_PREFIX)) {
+      const picked = roles.data?.roles.find((r) => `${CUSTOM_PREFIX}${r.id}` === next);
+      setRole({ userId: m.id, customRoleId: next.slice(CUSTOM_PREFIX.length) })
+        .unwrap()
+        .then(() => toast.success(t("roles.memberAssigned", { name: m.name, role: picked?.name ?? "" })))
+        .catch((e: unknown) => toast.error(errorMessage(e)));
+      return;
+    }
+    if (!isAppRole(next)) return;
+    setRole({ userId: m.id, role: next })
       .unwrap()
-      .then(() => toast.success(t("settings3.isNowRole", { name: m.name, role: t(ROLE_PHRASE[role]) })))
+      .then(() => toast.success(t("settings3.isNowRole", { name: m.name, role: t(ROLE_PHRASE[next]) })))
       .catch((e: unknown) => toast.error(errorMessage(e)));
   };
   const remove = () => {
@@ -532,13 +583,14 @@ function MemberRow({
       )}
       {editable ? (
         <RoleSelect
-          value={appRole}
+          withCustom
+          value={current}
           onChange={changeRole}
           label={t("settings3.roleOf", { name: m.name })}
           size="sm"
         />
       ) : (
-        <Badge variant="outline">{roleLabel(t, appRole)}</Badge>
+        <Badge variant="outline">{m.customRoleName ?? roleLabel(t, appRole)}</Badge>
       )}
       {menu ? (
         <DropdownMenu>

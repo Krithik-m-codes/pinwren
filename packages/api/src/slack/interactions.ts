@@ -1,7 +1,7 @@
 import {
   FEEDBACK_KINDS,
   feedbackStatus,
-  roleCan,
+  can,
   SLACK_ACTIONS,
   SLACK_CALLBACKS,
   SLACK_CHANNEL_ID,
@@ -100,7 +100,7 @@ export async function handleBlockActions(ctx: SlackCtx, p: Raw): Promise<void> {
 
   const who = await actorOrExplain(ctx, slackUser);
   if ("message" in who) return say(ctx, channel, slackUser, who.message);
-  if (!roleCan(who.actor.role, "feedback.update")) {
+  if (!can(who.actor, "feedback.update")) {
     return say(ctx, channel, slackUser, "Your role in this Pinwren workspace can't change feedback.");
   }
 
@@ -180,7 +180,7 @@ async function openCapture(
 ): Promise<string | null> {
   const who = await actorOrExplain(ctx, a.slackUser);
   if ("message" in who) return who.message;
-  if (!roleCan(who.actor.role, "feedback.create")) {
+  if (!can(who.actor, "feedback.create")) {
     return "Your role in this Pinwren workspace can't file feedback.";
   }
   const { projects, routed } = await withOrg(ctx.ws.orgId, async () => {
@@ -273,7 +273,7 @@ export async function handleViewSubmission(ctx: SlackCtx, p: Raw): Promise<Raw |
 
   const who = await actorOrExplain(ctx, slackUser);
   if ("message" in who) return errors(MODAL_BLOCKS.title, who.message.replace(/<[^|>]*\|([^>]*)>/g, "$1"));
-  if (!roleCan(who.actor.role, "feedback.create")) {
+  if (!can(who.actor, "feedback.create")) {
     return errors(MODAL_BLOCKS.title, "Your role in this Pinwren workspace can't file feedback.");
   }
   if (!(await consume(`slack:new:${ctx.ws.id}:${slackUser}`, CAPTURES_PER_HOUR, 3600))) {

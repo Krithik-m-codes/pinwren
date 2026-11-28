@@ -58,3 +58,23 @@ describe("billing page", () => {
     );
   });
 });
+
+describe("roles page and audit access for custom roles", () => {
+  const names = (role: string, permissions?: string[]) =>
+    visibleSettingsPages({ role, instanceAdmin: false, permissions }).map((p) => p.label);
+
+  it("shows Roles to workspace Admins only", () => {
+    expect(names("owner")).toContain("Roles");
+    expect(names("admin")).toContain("Roles");
+    expect(names("member")).not.toContain("Roles");
+    // roles.manage can never be granted to a custom role, so a permission list doesn't open the page.
+    expect(names("member", ["feedback.read", "users.manage"])).not.toContain("Roles");
+  });
+
+  it("shows the audit log to Admins and to anyone holding audit.read", () => {
+    expect(names("admin")).toContain("Audit log");
+    expect(names("viewer", ["feedback.read", "audit.read"])).toContain("Audit log");
+    expect(names("viewer", ["feedback.read"])).not.toContain("Audit log");
+    expect(names("member")).not.toContain("Audit log");
+  });
+});

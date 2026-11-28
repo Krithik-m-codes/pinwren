@@ -139,7 +139,10 @@ The initial documentation reconciliation above did not run tests; this follow-up
 - [x] **WP-24:** audit log (F-092): append-only `audit_log` with RLS, admin/security actions recorded, Settings › Audit log,
       `GET /api/audit` and CSV/JSONL export; Cloud Business (30 days) and the `audit_log` licence feature
       ([ADR 0044](adr/0044-audit-log.md), [DB tests](../packages/api/src/cloud-audit-db.test.ts)). Sign-in events and the SIEM stream are not part of it.
-- [ ] **WP-24:** custom roles/permissions.
+- [x] **WP-24:** custom roles and granular permissions (F-093): `custom_role` with RLS, one `can()` resolver, `/api/roles`,
+      assignment on Users, Settings › Roles, the `custom_roles` licence feature (Enterprise only)
+      ([ADR 0045](adr/0045-custom-roles.md), [DB tests](../packages/api/src/cloud-roles-db.test.ts)). Invitations by email stay
+      built-in roles; SSO and SCIM remain open above.
 - [ ] **WP-25:** customer custom-domain provisioning/verification/TLS and legal hold. White-label and
       Jira Cloud are already built; Jira Data Center remains unsupported.
 - [ ] **Enterprise follow-ups:** SIEM streaming and the planned priority-support entitlement/service.

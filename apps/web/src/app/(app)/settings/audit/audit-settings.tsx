@@ -21,7 +21,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { isAdminRole } from "@/lib/api";
 import type { Key } from "@/lib/i18n/en";
 import { useT } from "@/lib/i18n/provider";
 import { useAuditLogQuery, useEntitlementsQuery, useMeQuery } from "@/lib/store/api";
@@ -34,6 +33,10 @@ const ACTION_LABELS: Record<AuditAction, Key> = {
   "member.created": "audit.action_member_created",
   "member.role_changed": "audit.action_member_role_changed",
   "member.removed": "audit.action_member_removed",
+  "member.custom_role_assigned": "audit.action_member_custom_role_assigned",
+  "role.created": "audit.action_role_created",
+  "role.updated": "audit.action_role_updated",
+  "role.deleted": "audit.action_role_deleted",
   "workspace.ownership_transferred": "audit.action_workspace_ownership_transferred",
   "api_token.created": "audit.action_api_token_created",
   "api_token.revoked": "audit.action_api_token_revoked",
@@ -109,7 +112,7 @@ export function AuditSettings() {
   const [applied, setApplied] = useState<Filters>(NO_FILTERS);
 
   if (me.isLoading || entitlements.isLoading) return <Skeleton className="h-96 rounded-xl" />;
-  if (!isAdminRole(me.data?.role)) {
+  if (!me.data?.permissions.includes("audit.read")) {
     return (
       <Card>
         <CardContent>

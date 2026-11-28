@@ -227,6 +227,7 @@ export const settings1 = {
   "settings1.featurePrioritySupport": "Priority support",
   "settings1.hintWhiteLabel": "hide “Powered by Pinwren” in the widget and emails",
   "settings1.hintAuditLog": "Admin and security history",
+  "settings1.hintCustomRoles": "your own roles and permissions, under Settings › Roles",
   "settings1.hintJira": "two-way Jira Cloud issue sync in each project's Issue trackers tab",
   "settings1.expiredReadOnly": "Expired · read-only",
   "settings1.notValid": "Not valid",
